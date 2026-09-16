@@ -38,7 +38,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 | Phase | Task | Status |
 |-------|------|--------|
 | 0 | T0.1 Repository skeleton | [x] |
-| 0 | T0.2 Profile schema | [ ] |
+| 0 | T0.2 Profile schema | [x] |
 | 0 | T0.3 Job schema and store | [ ] |
 | 1 | T1.1 Worktree lifecycle | [ ] |
 | 1 | T1.2 Port allocation | [ ] |
@@ -73,12 +73,12 @@ Create the project layout and tooling.
 Define the project profile: the file that makes the engine project-agnostic.
 
 **Done when**
-- [ ] `slipwright/schemas/profile.py` defines a pydantic model with: language, package manager,
+- [x] `slipwright/schemas/profile.py` defines a pydantic model with: language, package manager,
   `build_cmd`, `test_cmd`, `run_cmd`, `port`, and a `roles` map where every role has
   `model`, `thinking_depth`, and `permissions`
-- [ ] A JSON Schema is exported to `schemas/profile.schema.json`
-- [ ] Round-trip tests: valid profile loads, invalid profile raises with a readable error
-- [ ] An example profile for a Python FastAPI project lives in `examples/`
+- [x] A JSON Schema is exported to `schemas/profile.schema.json`
+- [x] Round-trip tests: valid profile loads, invalid profile raises with a readable error
+- [x] An example profile for a Python FastAPI project lives in `examples/`
 
 ### T0.3 — Job schema and store
 Define job state and its persistence layer.

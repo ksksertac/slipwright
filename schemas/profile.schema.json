@@ -1,0 +1,121 @@
+{
+  "$defs": {
+    "Permission": {
+      "enum": [
+        "read_files",
+        "write_files",
+        "run_commands",
+        "network",
+        "git_push"
+      ],
+      "title": "Permission",
+      "type": "string"
+    },
+    "RoleConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "model": {
+          "description": "Model identifier passed to the provider.",
+          "minLength": 1,
+          "title": "Model",
+          "type": "string"
+        },
+        "thinking_depth": {
+          "$ref": "#/$defs/ThinkingDepth"
+        },
+        "permissions": {
+          "items": {
+            "$ref": "#/$defs/Permission"
+          },
+          "title": "Permissions",
+          "type": "array"
+        }
+      },
+      "required": [
+        "model",
+        "thinking_depth"
+      ],
+      "title": "RoleConfig",
+      "type": "object"
+    },
+    "RoleName": {
+      "enum": [
+        "analyst",
+        "planner",
+        "developer",
+        "qa",
+        "devops"
+      ],
+      "title": "RoleName",
+      "type": "string"
+    },
+    "ThinkingDepth": {
+      "enum": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "max"
+      ],
+      "title": "ThinkingDepth",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "language": {
+      "minLength": 1,
+      "title": "Language",
+      "type": "string"
+    },
+    "package_manager": {
+      "minLength": 1,
+      "title": "Package Manager",
+      "type": "string"
+    },
+    "build_cmd": {
+      "minLength": 1,
+      "title": "Build Cmd",
+      "type": "string"
+    },
+    "test_cmd": {
+      "minLength": 1,
+      "title": "Test Cmd",
+      "type": "string"
+    },
+    "run_cmd": {
+      "description": "Command that starts the project; must contain {port}.",
+      "minLength": 1,
+      "title": "Run Cmd",
+      "type": "string"
+    },
+    "port": {
+      "description": "Default port the project listens on.",
+      "maximum": 65535,
+      "minimum": 1024,
+      "title": "Port",
+      "type": "integer"
+    },
+    "roles": {
+      "additionalProperties": {
+        "$ref": "#/$defs/RoleConfig"
+      },
+      "propertyNames": {
+        "$ref": "#/$defs/RoleName"
+      },
+      "title": "Roles",
+      "type": "object"
+    }
+  },
+  "required": [
+    "language",
+    "package_manager",
+    "build_cmd",
+    "test_cmd",
+    "run_cmd",
+    "port",
+    "roles"
+  ],
+  "title": "Profile",
+  "type": "object"
+}
