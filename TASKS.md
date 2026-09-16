@@ -35,6 +35,10 @@ These hold at every point in the build. If a task seems to require breaking one,
 
 ## Progress
 
+> **Resume here:** Phases 0 and 1 are complete. Next task is **T2.1 — Orchestrator state machine**.
+> Design note for T1.3: `run_cmd` is executed as a subprocess in the worktree (Docker is used
+> only if the profile's `run_cmd` itself invokes it).
+
 | Phase | Task | Status |
 |-------|------|--------|
 | 0 | T0.1 Repository skeleton | [x] |
@@ -42,7 +46,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 | 0 | T0.3 Job schema and store | [x] |
 | 1 | T1.1 Worktree lifecycle | [x] |
 | 1 | T1.2 Port allocation | [x] |
-| 1 | T1.3 Live environment | [ ] |
+| 1 | T1.3 Live environment | [x] |
 | 2 | T2.1 Orchestrator state machine | [ ] |
 | 2 | T2.2 Agent invocation layer | [ ] |
 | 2 | T2.3 Analyst role | [ ] |
@@ -116,10 +120,10 @@ Give each job its own port.
 Bring up the project under test in isolation.
 
 **Done when**
-- [ ] `workspace.up(job)` runs the profile's `run_cmd` inside the worktree on the job's port
-- [ ] `workspace.down(job)` tears it down and frees the port
-- [ ] Logs are captured to a per-job file, not to stdout
-- [ ] A health check confirms the port answers before `up` returns
+- [x] `workspace.up(job)` runs the profile's `run_cmd` inside the worktree on the job's port
+- [x] `workspace.down(job)` tears it down and frees the port
+- [x] Logs are captured to a per-job file, not to stdout
+- [x] A health check confirms the port answers before `up` returns
 
 ---
 

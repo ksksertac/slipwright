@@ -18,7 +18,8 @@ def repo(tmp_path: Path) -> Path:
     _git(path, "init", "-q", "-b", "main")
     _git(path, "config", "user.email", "test@example.com")
     _git(path, "config", "user.name", "Test")
-    (path / "README.md").write_text("# fixture repo\n", encoding="utf-8")
+    _git(path, "config", "core.autocrlf", "false")
+    (path / "README.md").write_bytes(b"# fixture repo\n")  # bytes: no CRLF translation
     _git(path, "add", "README.md")
     _git(path, "commit", "-q", "-m", "initial")
     return path
