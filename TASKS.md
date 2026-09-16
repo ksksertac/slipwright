@@ -40,7 +40,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 | 0 | T0.1 Repository skeleton | [x] |
 | 0 | T0.2 Profile schema | [x] |
 | 0 | T0.3 Job schema and store | [x] |
-| 1 | T1.1 Worktree lifecycle | [ ] |
+| 1 | T1.1 Worktree lifecycle | [x] |
 | 1 | T1.2 Port allocation | [ ] |
 | 1 | T1.3 Live environment | [ ] |
 | 2 | T2.1 Orchestrator state machine | [ ] |
@@ -98,11 +98,11 @@ Define job state and its persistence layer.
 Give each job its own checkout.
 
 **Done when**
-- [ ] `workspace.create(job)` runs `git worktree add` on a new branch `slipwright/<job-id>`
-- [ ] `workspace.destroy(job)` removes the worktree and deletes the branch
-- [ ] Two jobs can be created against the same repo simultaneously without interfering
-- [ ] A test creates two jobs, writes a different file in each, and asserts isolation
-- [ ] Failure to create a worktree leaves no partial state behind
+- [x] `workspace.create(job)` runs `git worktree add` on a new branch `slipwright/<job-id>`
+- [x] `workspace.destroy(job)` removes the worktree and deletes the branch
+- [x] Two jobs can be created against the same repo simultaneously without interfering
+- [x] A test creates two jobs, writes a different file in each, and asserts isolation
+- [x] Failure to create a worktree leaves no partial state behind
 
 ### T1.2 — Port allocation
 Give each job its own port.
