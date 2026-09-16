@@ -39,7 +39,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 |-------|------|--------|
 | 0 | T0.1 Repository skeleton | [x] |
 | 0 | T0.2 Profile schema | [x] |
-| 0 | T0.3 Job schema and store | [ ] |
+| 0 | T0.3 Job schema and store | [x] |
 | 1 | T1.1 Worktree lifecycle | [ ] |
 | 1 | T1.2 Port allocation | [ ] |
 | 1 | T1.3 Live environment | [ ] |
@@ -84,11 +84,11 @@ Define the project profile: the file that makes the engine project-agnostic.
 Define job state and its persistence layer.
 
 **Done when**
-- [ ] A `Job` model exists with: id, repo path, worktree path, port, current state,
+- [x] A `Job` model exists with: id, repo path, worktree path, port, current state,
   profile, and an append-only `history` of phase transitions
-- [ ] `slipwright/store/` persists jobs to SQLite; `get`, `create`, `update_state`, `list`
-- [ ] Every state transition writes to `history` with a timestamp — never overwrites
-- [ ] Tests cover: create, read back after reopening the connection, transition appends
+- [x] `slipwright/store/` persists jobs to SQLite; `get`, `create`, `update_state`, `list`
+- [x] Every state transition writes to `history` with a timestamp — never overwrites
+- [x] Tests cover: create, read back after reopening the connection, transition appends
 
 ---
 
