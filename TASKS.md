@@ -41,7 +41,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 | 0 | T0.2 Profile schema | [x] |
 | 0 | T0.3 Job schema and store | [x] |
 | 1 | T1.1 Worktree lifecycle | [x] |
-| 1 | T1.2 Port allocation | [ ] |
+| 1 | T1.2 Port allocation | [x] |
 | 1 | T1.3 Live environment | [ ] |
 | 2 | T2.1 Orchestrator state machine | [ ] |
 | 2 | T2.2 Agent invocation layer | [ ] |
@@ -108,9 +108,9 @@ Give each job its own checkout.
 Give each job its own port.
 
 **Done when**
-- [ ] A free port is found and recorded on the job at creation
-- [ ] Ports are released on destroy and never double-allocated across concurrent jobs
-- [ ] A test allocates ports for 10 concurrent jobs and asserts all are distinct
+- [x] A free port is found and recorded on the job at creation
+- [x] Ports are released on destroy and never double-allocated across concurrent jobs
+- [x] A test allocates ports for 10 concurrent jobs and asserts all are distinct
 
 ### T1.3 — Live environment
 Bring up the project under test in isolation.
