@@ -36,7 +36,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 
 ## Progress
 
-> **Resume here:** Phases 0–6 and T7.1–T7.3 are complete. Next task is **T7.4 — Jira connection and issue sync**.
+> **Resume here:** Phases 0–6 and T7.1–T7.4 are complete. Next task is **T7.5 — Agents act in Jira**.
 > Design note for T1.3: `run_cmd` is executed as a subprocess in the worktree (Docker is used
 > only if the profile's `run_cmd` itself invokes it).
 > Design note for T2.2: `invoke_role` talks to a `ModelProvider` (`slipwright/providers/`);
@@ -75,6 +75,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 > Design note for T7.1: passwords are hashed with stdlib scrypt (memory-hard, no native dependency) instead of argon2/bcrypt; sessions and bearer tokens are random secrets stored as SHA-256 hashes (`slipwright/auth.py`, `store/users.py`). `create_app(require_auth=...)` attaches an app-wide dependency (`api/auth.py`) that exempts `/auth/login`, `/healthz` and the docs; tests pass `require_auth=False`. `slipwright user add` / `slipwright token new` work directly on the state dir.
 > Design note for T7.2: `slipwright/secrets.py` (Fernet) encrypts settings flagged secret; the key comes from `SLIPWRIGHT_SECRET_KEY` or `<state>/secret.key`. `store/settings.py` is a name→JSON table; GitHub lives under `github` (owner, base_branch) and `github.token` (secret). `slipwright/github.py` is an httpx client (`Engine.http_transport` lets tests answer locally, see `tests/fakes.py`); `GhHost` passes the token as `GH_TOKEN` and clones embed it as `x-access-token`.
 > Design note for T7.3: JSON routes are mounted on an `APIRouter` under `/api` (the old HTML dashboard stays at `/` and `/ui/...` until T8.7). `slipwright/events.py` is an in-process bus the store publishes to on every write; `GET /api/events` streams it as SSE (`project_id` filter, `limit` for scripts, keepalive pings). `schemas/openapi.json` is exported by `scripts/export_schema.py` and checked by `tests/test_phase7_api.py`; `SLIPWRIGHT_DEV=1` enables CORS for the Vite origin. The Phase 0–5 API tests were updated only in their URL prefixes.
+> Design note for T7.4: `slipwright/jira.py` is the REST v3 client (basic auth, ADF bodies built from text); `slipwright/jirasync.py` reconciles a job idempotently (issue keys in `job.data.jira_keys`, last pushed statuses in `jira_status`, one-shot comments in `jira_marks`, outage in `jira_last_error`). The engine reconciles on entry to `_run` and after every handler, so approvals, restarts and failures all retry; each pass that did something is one `jira: N update(s)` history entry. Default issue types are Epic/Story/Subtask/Bug and default transitions To Do/In Progress/Done (per-project overrides in `Project.jira_transitions`).
 
 | Phase | Task | Status |
 |-------|------|--------|
@@ -103,7 +104,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 | 7 | T7.1 Users and login | [x] |
 | 7 | T7.2 Settings store and GitHub connection | [x] |
 | 7 | T7.3 API namespace and live events | [x] |
-| 7 | T7.4 Jira connection and issue sync | [ ] |
+| 7 | T7.4 Jira connection and issue sync | [x] |
 | 7 | T7.5 Agents act in Jira | [ ] |
 | 8 | T8.1 React app skeleton | [ ] |
 | 8 | T8.2 Login and projects list | [ ] |
@@ -408,26 +409,26 @@ projection of Slipwright state, never the other way round: the engine does not r
 decide anything.
 
 **Done when**
-- [ ] Jira settings in the settings store (T7.2): site URL, account e-mail, API token
+- [x] Jira settings in the settings store (T7.2): site URL, account e-mail, API token
   (encrypted), default issue type names for epic / story / task
-- [ ] `GET /settings/jira` never returns the token; `PUT /settings/jira` stores it;
+- [x] `GET /settings/jira` never returns the token; `PUT /settings/jira` stores it;
   `POST /settings/jira/test` returns the authenticated account and the projects it can see
-- [ ] `GET /settings/jira/projects` lists Jira projects for the project creation / edit form;
+- [x] `GET /settings/jira/projects` lists Jira projects for the project creation / edit form;
   a Slipwright project stores `jira_project_key`
-- [ ] `slipwright/jira.py` client (Jira Cloud REST v3, `httpx`): create issue, set parent,
+- [x] `slipwright/jira.py` client (Jira Cloud REST v3, `httpx`): create issue, set parent,
   transition issue, add comment; tests use a fake Jira HTTP server, no network
-- [ ] When a plan is approved on a project with a Jira key, every epic / story / task is
+- [x] When a plan is approved on a project with a Jira key, every epic / story / task is
   created in Jira with parents set (epic → story → task); issue keys are stored on the
   breakdown items
-- [ ] Task status changes (T6.2) transition the matching Jira issue (`todo` → `in_progress`
+- [x] Task status changes (T6.2) transition the matching Jira issue (`todo` → `in_progress`
   → `done`); the transition names are configurable per project and an unknown transition is
   logged, not fatal
-- [ ] On job completion the DevOps PR URL is posted as a comment on every issue the job
+- [x] On job completion the DevOps PR URL is posted as a comment on every issue the job
   touched; on job failure the failing task gets a comment with the last build output
-- [ ] Sync is idempotent: re-running a job or re-approving a plan never creates duplicate
+- [x] Sync is idempotent: re-running a job or re-approving a plan never creates duplicate
   issues (matching on stored keys), and Jira being down never blocks a job — failures are
   recorded in the activity feed and retried on the next transition
-- [ ] Board rows (T6.2 / T8.3) show the Jira key as a link when synced
+- [x] Board rows (T6.2 / T8.3) show the Jira key as a link when synced
 
 ---
 

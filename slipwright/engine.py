@@ -30,6 +30,8 @@ from slipwright.gates import GateResult, build_gate, run_command
 from slipwright.githost import CiState, CiStatus, GitHost, GitHostError
 from slipwright.github import GitHubClient, GitHubError, GitHubSettings
 from slipwright.invoke import DEFAULT_TIMEOUT_S, RoleResult, get_default_provider
+from slipwright.jira import DEFAULT_ISSUE_TYPES, JiraClient, JiraError, JiraSettings
+from slipwright.jirasync import JiraSync
 from slipwright.orchestrator import IllegalTransitionError, Orchestrator
 from slipwright.providers import ModelProvider
 from slipwright.roles import analyst, developer, devops, planner, qa
@@ -207,6 +209,119 @@ class Engine:
         if token is None:
             raise GitHubError("no GitHub token configured")
         return GitHubClient(token, transport=self.http_transport)
+
+    # -- Jira connection -------------------------------------------------------------------
+
+    def jira_settings(self) -> JiraSettings:
+        data: dict[str, Any] = self.store.get_setting("jira", {}) or {}
+        token = self.store.get_setting("jira.token")
+        agent_token = self.store.get_setting("jira.agent_token")
+        return JiraSettings(
+            site_url=data.get("site_url"),
+            email=data.get("email"),
+            token_set=bool(token),
+            token_hint=f"…{str(token)[-4:]}" if token else None,
+            issue_types={**DEFAULT_ISSUE_TYPES, **(data.get("issue_types") or {})},
+            agent_email=data.get("agent_email"),
+            agent_token_set=bool(agent_token),
+            agent_token_hint=f"…{str(agent_token)[-4:]}" if agent_token else None,
+        )
+
+    def update_jira_settings(
+        self,
+        *,
+        site_url: str | None = None,
+        email: str | None = None,
+        token: str | None = None,
+        clear_token: bool = False,
+        issue_types: dict[str, str] | None = None,
+        agent_email: str | None = None,
+        agent_token: str | None = None,
+        clear_agent_token: bool = False,
+    ) -> JiraSettings:
+        """Change what is given; omitted tokens keep their stored values."""
+        current: dict[str, Any] = self.store.get_setting("jira", {}) or {}
+        if site_url is not None:
+            current["site_url"] = site_url.strip().rstrip("/") or None
+        if email is not None:
+            current["email"] = email.strip() or None
+        if issue_types is not None:
+            current["issue_types"] = {
+                k: v.strip()
+                for k, v in issue_types.items()
+                if k in DEFAULT_ISSUE_TYPES and v.strip()
+            }
+        if agent_email is not None:
+            current["agent_email"] = agent_email.strip() or None
+        self.store.set_setting("jira", current)
+        if clear_token:
+            self.store.delete_setting("jira.token")
+        elif token is not None and token.strip():
+            self.store.set_setting("jira.token", token.strip(), secret=True)
+        if clear_agent_token:
+            self.store.delete_setting("jira.agent_token")
+        elif agent_token is not None and agent_token.strip():
+            self.store.set_setting("jira.agent_token", agent_token.strip(), secret=True)
+        return self.jira_settings()
+
+    def jira_client(self, *, agent: bool = False) -> JiraClient:
+        """The human connection, or with ``agent=True`` the agent account when one is set
+        (falling back to the human connection otherwise)."""
+        settings = self.jira_settings()
+        site = settings.site_url or ""
+        if agent and settings.agent_email and settings.agent_token_set:
+            return JiraClient(
+                site,
+                settings.agent_email,
+                str(self.store.get_setting("jira.agent_token")),
+                transport=self.http_transport,
+            )
+        if not settings.configured:
+            raise JiraError("Jira is not configured (site URL, e-mail and token are needed)")
+        return JiraClient(
+            site,
+            settings.email or "",
+            str(self.store.get_setting("jira.token")),
+            transport=self.http_transport,
+        )
+
+    def _jira_sync_for(self, job: Job) -> JiraSync | None:
+        if job.project_id is None:
+            return None
+        try:
+            project = self.store.get_project(job.project_id)
+        except ProjectNotFound:
+            return None
+        if not project.jira_project_key:
+            return None
+        settings = self.jira_settings()
+        if not settings.configured:
+            return None
+        return JiraSync(self.jira_client(), project, settings.issue_types)
+
+    def _jira_reconcile(self, job: Job) -> Job:
+        """Mirror the job into Jira (no-op unless the project is linked and Jira is set up).
+        Never raises: a Jira outage is recorded on the job and retried next time."""
+        try:
+            sync = self._jira_sync_for(job)
+        except JiraError as exc:
+            log.warning("job %s: jira unavailable: %s", job.id, exc)
+            return job
+        if sync is None:
+            return job
+        report = sync.reconcile(job)
+        if not report.changed and report.error is None:
+            return job
+        job = self.store.save(job)
+        if report.error is not None:
+            note = "jira: sync failed, will retry"
+            detail = report.error
+        else:
+            note = f"jira: {len(report.notes)} update(s)"
+            detail = "\n".join(report.notes)
+        if report.notes or report.error:
+            self.store.update_state(job.id, job.state, note=note, detail=detail)
+        return self.store.get(job.id)
 
     # -- public API ----------------------------------------------------------------------
 
@@ -424,7 +539,7 @@ class Engine:
         persisted state so it never acts on a stale view.
         """
         with self._locks[job.id]:
-            job = self.store.get(job.id)
+            job = self._jira_reconcile(self.store.get(job.id))
             while job.state in WORKING_STATES:
                 handler = self.handlers.get(job.state)
                 if handler is None:
@@ -435,13 +550,15 @@ class Engine:
                     job = handler(job)
                 except Exception as exc:  # noqa: BLE001 - a crashed phase fails the job
                     log.exception("job %s: %s phase crashed", job.id, before.value)
-                    return self._fail(
+                    job = self._fail(
                         job,
                         f"{before.value} crashed: {type(exc).__name__}: {exc}",
                         detail=traceback.format_exc(),
                     )
+                    return self._jira_reconcile(job)
                 if job.state is before:  # a handler must always move the job
                     raise RuntimeError(f"handler for {before.value} did not change job {job.id}")
+                job = self._jira_reconcile(job)
             return job
 
     def _fail(self, job: Job, note: str, detail: str | None = None) -> Job:

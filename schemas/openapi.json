@@ -497,6 +497,264 @@
         "title": "IssuedToken",
         "type": "object"
       },
+      "JiraAccount": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "title": "Account Id",
+            "type": "string"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          }
+        },
+        "required": [
+          "account_id",
+          "display_name"
+        ],
+        "title": "JiraAccount",
+        "type": "object"
+      },
+      "JiraProject": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "name"
+        ],
+        "title": "JiraProject",
+        "type": "object"
+      },
+      "JiraSettings": {
+        "additionalProperties": false,
+        "description": "What the settings page reads and writes. Tokens are never returned.",
+        "properties": {
+          "agent_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Separate account the agents act as (T7.5).",
+            "title": "Agent Email"
+          },
+          "agent_token_hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Token Hint"
+          },
+          "agent_token_set": {
+            "default": false,
+            "title": "Agent Token Set",
+            "type": "boolean"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "issue_types": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Issue Types",
+            "type": "object"
+          },
+          "site_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "https://<site>.atlassian.net",
+            "title": "Site Url"
+          },
+          "token_hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Token Hint"
+          },
+          "token_set": {
+            "default": false,
+            "title": "Token Set",
+            "type": "boolean"
+          }
+        },
+        "title": "JiraSettings",
+        "type": "object"
+      },
+      "JiraSettingsIn": {
+        "properties": {
+          "agent_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Email"
+          },
+          "agent_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Token"
+          },
+          "clear_agent_token": {
+            "default": false,
+            "title": "Clear Agent Token",
+            "type": "boolean"
+          },
+          "clear_token": {
+            "default": false,
+            "title": "Clear Token",
+            "type": "boolean"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "issue_types": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issue Types"
+          },
+          "site_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Site Url"
+          },
+          "token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Omit to keep the stored token.",
+            "title": "Token"
+          }
+        },
+        "title": "JiraSettingsIn",
+        "type": "object"
+      },
+      "JiraTestResult": {
+        "properties": {
+          "account": {
+            "$ref": "#/components/schemas/JiraAccount"
+          },
+          "agent_account": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JiraAccount"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "projects": {
+            "items": {
+              "$ref": "#/components/schemas/JiraProject"
+            },
+            "title": "Projects",
+            "type": "array"
+          }
+        },
+        "required": [
+          "account",
+          "projects"
+        ],
+        "title": "JiraTestResult",
+        "type": "object"
+      },
       "Job": {
         "additionalProperties": false,
         "properties": {
@@ -643,6 +901,34 @@
             },
             "description": "Breakdown item id -> Jira issue key, once synced.",
             "title": "Jira Keys",
+            "type": "object"
+          },
+          "jira_last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the last Jira sync failed; cleared when it succeeds.",
+            "title": "Jira Last Error"
+          },
+          "jira_marks": {
+            "description": "One-shot Jira comments already posted.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Jira Marks",
+            "type": "array"
+          },
+          "jira_status": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Breakdown item id -> last status pushed to Jira.",
+            "title": "Jira Status",
             "type": "object"
           },
           "last_build_output": {
@@ -2850,6 +3136,113 @@
           }
         },
         "summary": "Test Github",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/settings/jira": {
+      "get": {
+        "operationId": "get_jira_api_settings_jira_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JiraSettings"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Jira",
+        "tags": [
+          "settings"
+        ]
+      },
+      "put": {
+        "operationId": "put_jira_api_settings_jira_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JiraSettingsIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JiraSettings"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Jira",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/settings/jira/projects": {
+      "get": {
+        "operationId": "jira_projects_api_settings_jira_projects_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/JiraProject"
+                  },
+                  "title": "Response Jira Projects Api Settings Jira Projects Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Jira Projects",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/settings/jira/test": {
+      "post": {
+        "description": "Call Jira with the stored credentials (and the agent account when set).",
+        "operationId": "test_jira_api_settings_jira_test_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JiraTestResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Test Jira",
         "tags": [
           "settings"
         ]

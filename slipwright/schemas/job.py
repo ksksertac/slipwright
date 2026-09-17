@@ -98,6 +98,15 @@ class JobData(BaseModel):
     jira_keys: dict[str, str] = Field(
         default_factory=dict, description="Breakdown item id -> Jira issue key, once synced."
     )
+    jira_status: dict[str, str] = Field(
+        default_factory=dict, description="Breakdown item id -> last status pushed to Jira."
+    )
+    jira_marks: list[str] = Field(
+        default_factory=list, description="One-shot Jira comments already posted."
+    )
+    jira_last_error: str | None = Field(
+        default=None, description="Why the last Jira sync failed; cleared when it succeeds."
+    )
 
 
 class Job(BaseModel):

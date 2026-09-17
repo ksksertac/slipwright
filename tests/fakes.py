@@ -139,12 +139,12 @@ class FakeJira:
             }
             self.statuses[key] = "To Do"
             return httpx.Response(201, json={"id": str(1000 + self._seq), "key": key})
-        parts = path.split("/")
-        if len(parts) >= 5 and parts[3] == "issue":
-            key = parts[4]
+        parts = path.split("/")  # ['', 'rest', 'api', '3', 'issue', KEY, ...]
+        if len(parts) >= 6 and parts[4] == "issue":
+            key = parts[5]
             if key not in self.issues:
                 return httpx.Response(404, json={"errorMessages": ["Issue does not exist"]})
-            rest = parts[5:]
+            rest = parts[6:]
             if rest == ["transitions"] and request.method == "GET":
                 return httpx.Response(200, json={"transitions": self.transitions})
             if rest == ["transitions"] and request.method == "POST":
