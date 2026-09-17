@@ -36,7 +36,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 
 ## Progress
 
-> **Resume here:** Phases 0–5 and T6.1–T6.3 are complete. Next task is **T6.4 — Test runs on demand**.
+> **Resume here:** Phases 0–6 are complete. Next task is **T7.1 — Users and login**.
 > Design note for T1.3: `run_cmd` is executed as a subprocess in the worktree (Docker is used
 > only if the profile's `run_cmd` itself invokes it).
 > Design note for T2.2: `invoke_role` talks to a `ModelProvider` (`slipwright/providers/`);
@@ -71,6 +71,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 > Design note for T6.1: `Job.project_id` is optional on the model so workspace-level code and its tests can build bare jobs, but every job the engine or API creates belongs to a project (`create_job` finds or creates one for a bare `repo_path`). Projects without a checkout are cloned into `<state>/repos/<id>`; `clone_url` overrides the GitHub URL (tests clone local bare repos). A project's `profile` is the seed for its jobs (`Engine.seed_for`).
 > Design note for T6.2: the breakdown lives inside `PlannerResult` (`breakdown.epics[].stories[].tasks[]`, task.phase is 1-based); a plan the model returns without one gets `default_breakdown` (one epic/story, one task per phase) before it is persisted. `slipwright/board.py` derives task/story/epic statuses from job state and `phase_index`; a job is on the board only once its plan is approved (`plan_is_active`).
 > Design note for T6.3: `slipwright/activity.py` projects progress (`/projects/{id}/progress`) and the feed (`/projects/{id}/activity`) from job history; entries are classified by note prefix (`ActivityKind`, role) and carry the history index for `GET /jobs/{id}/history/{index}`. Shared pipeline test helpers live in `tests/pipeline.py`; `store`/`seed` fixtures in `conftest.py`.
+> Design note for T6.4: `TestRun` rows live in `test_runs`; output goes to `<state>/test-runs/<id>.log`. `Engine.start_test_run` records a pending run and `execute_test_run` (background task in the API) runs `profile.test_cmd` under a per-checkout lock shared with the build gate; every gate execution is also recorded (`source=gate`). The main checkout's profile is the project's, else the newest approved job profile, else the seed (`Engine.project_profile`).
 
 | Phase | Task | Status |
 |-------|------|--------|
@@ -95,7 +96,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 | 6 | T6.1 Project entity | [x] |
 | 6 | T6.2 Work breakdown: epics, stories, tasks | [x] |
 | 6 | T6.3 Progress and activity feed | [x] |
-| 6 | T6.4 Test runs on demand | [ ] |
+| 6 | T6.4 Test runs on demand | [x] |
 | 7 | T7.1 Users and login | [ ] |
 | 7 | T7.2 Settings store and GitHub connection | [ ] |
 | 7 | T7.3 API namespace and live events | [ ] |
@@ -338,16 +339,16 @@ and its invariants are unchanged.
 Let the human run the project's tests and read the result without waiting for a build gate.
 
 **Done when**
-- [ ] `TestRun` model: id, project_id, optional job_id, command, started_at, finished_at,
+- [x] `TestRun` model: id, project_id, optional job_id, command, started_at, finished_at,
   exit_code, stdout/stderr (captured to a per-run file, path stored), status
   `running|passed|failed|error`
-- [ ] `POST /projects/{id}/test-runs` runs `profile.test_cmd` in the project's main checkout;
+- [x] `POST /projects/{id}/test-runs` runs `profile.test_cmd` in the project's main checkout;
   with `job_id` it runs in that job's worktree instead. Runs execute as background tasks,
   one at a time per checkout
-- [ ] `GET /projects/{id}/test-runs`, `GET /test-runs/{id}`, `GET /test-runs/{id}/output`
-- [ ] Build-gate runs from T3.3 are also recorded as `TestRun`s (source `gate`), so one list
+- [x] `GET /projects/{id}/test-runs`, `GET /test-runs/{id}`, `GET /test-runs/{id}/output`
+- [x] Build-gate runs from T3.3 are also recorded as `TestRun`s (source `gate`), so one list
   shows everything that ever ran
-- [ ] Test: trigger a run against a fixture repo with a failing test, assert exit code and
+- [x] Test: trigger a run against a fixture repo with a failing test, assert exit code and
   output are captured and the run is listed
 
 ---

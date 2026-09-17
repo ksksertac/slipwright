@@ -14,6 +14,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
 from slipwright.activity import ActivityItem, ProjectProgress, project_activity, project_progress
@@ -22,7 +23,8 @@ from slipwright.engine import Engine, NotAwaitingApproval, ProjectCloneError
 from slipwright.schemas.job import Job, Transition
 from slipwright.schemas.profile import Profile
 from slipwright.schemas.project import Project, ProjectPatch
-from slipwright.store import JobNotFound, ProjectInUse, ProjectNotFound
+from slipwright.schemas.testrun import TestRun
+from slipwright.store import JobNotFound, ProjectInUse, ProjectNotFound, TestRunNotFound
 
 log = logging.getLogger(__name__)
 
@@ -61,6 +63,10 @@ class TestCaseIn(BaseModel):
 
 class TestCases(BaseModel):
     test_cases: list[TestCaseIn]
+
+
+class NewTestRun(BaseModel):
+    job_id: str | None = Field(default=None, description="Run in this job's worktree.")
 
 
 def create_app(engine: Engine, *, resume_on_startup: bool = True) -> FastAPI:
@@ -185,6 +191,48 @@ def create_app(engine: Engine, *, resume_on_startup: bool = True) -> FastAPI:
         _get_project(eng, project_id)
         return project_activity(eng.store.list(project_id), limit=limit)
 
+    # -- test runs -----------------------------------------------------------------------
+
+    @app.post("/projects/{project_id}/test-runs", response_model=TestRun, status_code=202)
+    def start_test_run(
+        project_id: str, body: NewTestRun, request: Request, background: BackgroundTasks
+    ) -> TestRun:
+        """Run the profile's test command on the main checkout, or in a job's worktree."""
+        eng = _engine(request)
+        _get_project(eng, project_id)
+        if body.job_id is not None:
+            _get(eng, body.job_id)
+        try:
+            run = eng.start_test_run(project_id, body.job_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        if not run.terminal:
+            background.add_task(_execute_test_run, eng, run.id)
+        return run
+
+    @app.get("/projects/{project_id}/test-runs", response_model=list[TestRun])
+    def list_test_runs(
+        project_id: str, request: Request, job_id: str | None = None
+    ) -> list[TestRun]:
+        eng = _engine(request)
+        _get_project(eng, project_id)
+        return eng.store.list_test_runs(project_id, job_id)
+
+    def _get_run(eng: Engine, run_id: str) -> TestRun:
+        try:
+            return eng.store.get_test_run(run_id)
+        except TestRunNotFound as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    @app.get("/test-runs/{run_id}", response_model=TestRun)
+    def get_test_run(run_id: str, request: Request) -> TestRun:
+        return _get_run(_engine(request), run_id)
+
+    @app.get("/test-runs/{run_id}/output", response_class=PlainTextResponse)
+    def get_test_run_output(run_id: str, request: Request) -> str:
+        eng = _engine(request)
+        return eng.test_run_output(_get_run(eng, run_id))
+
     # -- jobs ----------------------------------------------------------------------------
 
     @app.post("/jobs", response_model=Job, status_code=201)
@@ -259,6 +307,13 @@ def _resume(engine: Engine, job_id: str) -> None:
         engine.resume(job_id)
     except Exception:  # noqa: BLE001 - a background thread has nobody to raise to
         log.exception("job %s: background run failed", job_id)
+
+
+def _execute_test_run(engine: Engine, run_id: str) -> None:
+    try:
+        engine.execute_test_run(run_id)
+    except Exception:  # noqa: BLE001 - a background thread has nobody to raise to
+        log.exception("test run %s: background run failed", run_id)
 
 
 def _resume_all(engine: Engine) -> None:

@@ -22,7 +22,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from slipwright.gates import GateResult, build_gate
+from slipwright.gates import DEFAULT_TIMEOUT_S as GATE_TIMEOUT_S
+from slipwright.gates import GateResult, build_gate, run_command
 from slipwright.githost import CiState, CiStatus, GitHost, GitHostError
 from slipwright.invoke import DEFAULT_TIMEOUT_S, RoleResult, get_default_provider
 from slipwright.orchestrator import IllegalTransitionError, Orchestrator
@@ -40,6 +41,7 @@ from slipwright.roles.results import (
 from slipwright.schemas.job import APPROVAL_STATES, Job, JobState, utcnow
 from slipwright.schemas.profile import Permission, Profile, RoleName
 from slipwright.schemas.project import Project
+from slipwright.schemas.testrun import TestRun, TestRunSource, TestRunStatus
 from slipwright.store import JobStore, ProjectNotFound
 from slipwright.workspace import Workspace
 from slipwright.workspace import git as g
@@ -112,6 +114,7 @@ class Engine:
         self.workspace = workspace
         # clones of remote repositories live next to the worktrees
         self.repos_root = repos_root or workspace.worktrees_root.parent / "repos"
+        self.test_runs_root = workspace.worktrees_root.parent / "test-runs"
         self.orchestrator = Orchestrator(store)
         self.seed_profile = seed_profile
         self._provider = provider
@@ -132,6 +135,8 @@ class Engine:
             JobState.DEVOPS: self._devops,
         }
         self._locks: defaultdict[str, threading.Lock] = defaultdict(threading.Lock)
+        # one test run at a time per checkout, so runs never trample each other's files
+        self._checkout_locks: defaultdict[str, threading.Lock] = defaultdict(threading.Lock)
         # ports held by jobs that outlived a previous process must stay taken
         self.workspace.reserve_ports(store.list())
 
@@ -262,6 +267,91 @@ class Engine:
         job.data.inbox.append(InboxMessage(text=text))
         return self.store.save(job)
 
+    # -- test runs -----------------------------------------------------------------------
+
+    def project_profile(self, project: Project) -> Profile:
+        """Best known profile for a project's main checkout: its own, else the newest
+        approved job profile, else the engine's seed."""
+        if project.profile is not None:
+            return project.profile
+        for job in reversed(self.store.list(project.id)):
+            if job.profile is not None:
+                return job.profile
+        return self.seed_profile
+
+    def start_test_run(self, project_id: str, job_id: str | None = None) -> TestRun:
+        """Record a pending run; ``execute_test_run`` does the work (usually in the background)."""
+        project = self.store.get_project(project_id)
+        if job_id is not None:
+            job = self.store.get(job_id)
+            if job.project_id != project.id:
+                raise ValueError(f"job {job_id} does not belong to project {project_id}")
+            profile = job.profile or self.project_profile(project)
+            cwd = job.worktree_path
+            note = f"job {job.id}: {job.request}"
+        else:
+            profile = self.project_profile(project)
+            cwd = project.repo_path
+            note = "main checkout"
+        run = TestRun(
+            project_id=project.id,
+            job_id=job_id,
+            command=profile.test_cmd,
+            cwd=cwd or Path("."),
+            note=note,
+        )
+        if cwd is None or not cwd.is_dir():
+            run.status = TestRunStatus.ERROR
+            run.finished_at = utcnow()
+            run.note = f"no checkout to run in ({cwd})"
+        return self.store.create_test_run(run)
+
+    def execute_test_run(self, run_id: str) -> TestRun:
+        run = self.store.get_test_run(run_id)
+        if run.terminal:
+            return run
+        with self._checkout_locks[str(run.cwd)]:
+            timeout = self.gate_timeout_s if self.gate_timeout_s is not None else GATE_TIMEOUT_S
+            try:
+                code, output = run_command(run.command, run.cwd, timeout)
+            except Exception as exc:  # noqa: BLE001 - recorded on the run, never raised
+                code, output = -1, f"{type(exc).__name__}: {exc}"
+                run.status = TestRunStatus.ERROR
+            else:
+                run.status = TestRunStatus.PASSED if code == 0 else TestRunStatus.FAILED
+            run.exit_code = code
+            run.finished_at = utcnow()
+            run.output_path = self._write_run_output(run, f"$ {run.command}\n{output}")
+        return self.store.update_test_run(run)
+
+    def record_gate_run(self, job: Job, gate: GateResult) -> TestRun:
+        """Keep a build-gate execution in the same list as on-demand runs."""
+        profile = self._profile(job)
+        run = TestRun(
+            project_id=job.project_id or "",
+            job_id=job.id,
+            source=TestRunSource.GATE,
+            command=f"{profile.build_cmd} && {profile.test_cmd}",
+            cwd=require_worktree(job),
+            status=TestRunStatus.PASSED if gate.ok else TestRunStatus.FAILED,
+            finished_at=utcnow(),
+            exit_code=0 if gate.ok else 1,
+            note=f"build gate, phase {job.data.phase_index + 1}",
+        )
+        run.output_path = self._write_run_output(run, gate.output)
+        return self.store.create_test_run(run)
+
+    def test_run_output(self, run: TestRun) -> str:
+        if run.output_path is None or not run.output_path.is_file():
+            return ""
+        return run.output_path.read_text(encoding="utf-8", errors="replace")
+
+    def _write_run_output(self, run: TestRun, text: str) -> Path:
+        self.test_runs_root.mkdir(parents=True, exist_ok=True)
+        path = self.test_runs_root / f"{run.id}.log"
+        path.write_text(text, encoding="utf-8", errors="replace")
+        return path
+
     # -- driver --------------------------------------------------------------------------
 
     def _run(self, job: Job) -> Job:
@@ -355,7 +445,11 @@ class Engine:
 
     def _run_gate(self, job: Job) -> GateResult:
         kwargs = {} if self.gate_timeout_s is None else {"timeout_s": self.gate_timeout_s}
-        return build_gate(self._profile(job), require_worktree(job), **kwargs)
+        with self._checkout_locks[str(require_worktree(job))]:
+            gate = build_gate(self._profile(job), require_worktree(job), **kwargs)
+        if job.project_id is not None:
+            self.record_gate_run(job, gate)
+        return gate
 
     @staticmethod
     def _phases(job: Job) -> list[dict[str, Any]]:

@@ -21,6 +21,7 @@ from typing import Self
 from slipwright.schemas.job import Job, JobData, JobState, Transition, utcnow
 from slipwright.schemas.profile import Profile
 from slipwright.schemas.project import Project
+from slipwright.schemas.testrun import TestRun
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS projects (
@@ -57,6 +58,16 @@ CREATE TABLE IF NOT EXISTS job_history (
 
 CREATE INDEX IF NOT EXISTS job_history_job_id ON job_history(job_id, seq);
 CREATE INDEX IF NOT EXISTS jobs_project_id ON jobs(project_id, created_at);
+
+CREATE TABLE IF NOT EXISTS test_runs (
+    id            TEXT PRIMARY KEY,
+    project_id    TEXT NOT NULL,
+    job_id        TEXT,
+    started_at    TEXT NOT NULL,
+    data_json     TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS test_runs_project ON test_runs(project_id, started_at);
 """
 
 # Columns added after the first release; applied to databases created before them.
@@ -83,6 +94,15 @@ class ProjectNotFound(KeyError):
 
     def __str__(self) -> str:
         return f"project not found: {self.project_id}"
+
+
+class TestRunNotFound(KeyError):
+    def __init__(self, run_id: str) -> None:
+        super().__init__(run_id)
+        self.run_id = run_id
+
+    def __str__(self) -> str:
+        return f"test run not found: {self.run_id}"
 
 
 class ProjectInUse(ValueError):
@@ -201,6 +221,57 @@ class JobStore:
             ).fetchall()
         return [Project.model_validate_json(r["data_json"]) for r in rows]
 
+    # -- test runs ---------------------------------------------------------------------
+
+    def create_test_run(self, run: TestRun) -> TestRun:
+        with self._tx() as conn:
+            conn.execute(
+                "INSERT INTO test_runs (id, project_id, job_id, started_at, data_json) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (
+                    run.id,
+                    run.project_id,
+                    run.job_id,
+                    run.started_at.isoformat(),
+                    run.model_dump_json(),
+                ),
+            )
+        return self.get_test_run(run.id)
+
+    def update_test_run(self, run: TestRun) -> TestRun:
+        with self._tx() as conn:
+            cur = conn.execute(
+                "UPDATE test_runs SET data_json = ? WHERE id = ?", (run.model_dump_json(), run.id)
+            )
+            if cur.rowcount == 0:
+                raise TestRunNotFound(run.id)
+        return self.get_test_run(run.id)
+
+    def get_test_run(self, run_id: str) -> TestRun:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT data_json FROM test_runs WHERE id = ?", (run_id,)
+            ).fetchone()
+        if row is None:
+            raise TestRunNotFound(run_id)
+        return TestRun.model_validate_json(row["data_json"])
+
+    def list_test_runs(self, project_id: str, job_id: str | None = None) -> builtins.list[TestRun]:
+        with self._lock:
+            if job_id is None:
+                rows = self._conn.execute(
+                    "SELECT data_json FROM test_runs WHERE project_id = ? "
+                    "ORDER BY started_at DESC, id",
+                    (project_id,),
+                ).fetchall()
+            else:
+                rows = self._conn.execute(
+                    "SELECT data_json FROM test_runs WHERE project_id = ? AND job_id = ? "
+                    "ORDER BY started_at DESC, id",
+                    (project_id, job_id),
+                ).fetchall()
+        return [TestRun.model_validate_json(r["data_json"]) for r in rows]
+
     def find_project_by_repo(self, repo_path: Path) -> Project | None:
         wanted = str(Path(repo_path).resolve())
         for project in self.list_projects():
@@ -234,6 +305,7 @@ class JobStore:
             active = sum(1 for r in rows if JobState(r["state"]) not in TERMINAL_STATES)
             if active:
                 raise ProjectInUse(project_id, active)
+            conn.execute("DELETE FROM test_runs WHERE project_id = ?", (project_id,))
             conn.execute("DELETE FROM jobs WHERE project_id = ?", (project_id,))
             conn.execute("DELETE FROM projects WHERE id = ?", (project_id,))
 
