@@ -21,13 +21,16 @@ PORT_PLACEHOLDER = "{port}"
 class RoleName(StrEnum):
     PO = "po"  # product owner: request -> epics, stories, tasks
     ARCHITECT = "architect"  # backlog + repository -> profile, decisions, phases
-    DEVELOPER = "developer"  # generic implementer; specialists below take tagged phases
-    BACKEND = "backend"
+    BACKEND = "backend"  # also takes phases without a specialist domain (general, docs)
     WEB_UI = "web_ui"
     MOBILE_UI = "mobile_ui"
     QA = "qa"
     DEVOPS = "devops"
     SUPERVISOR = "supervisor"  # recommends (or, in auto mode, gives) gate approvals
+
+
+# roles earlier versions wrote into profiles; ignored on load so old projects keep working
+RETIRED_ROLES: frozenset[str] = frozenset({"analyst", "planner", "tester", "developer"})
 
 
 class ThinkingDepth(StrEnum):
@@ -107,6 +110,15 @@ class Profile(BaseModel):
         missing = [r.value for r in RoleName if r not in value]
         if missing:
             raise ValueError(f"missing role configuration for: {', '.join(missing)}")
+        return value
+
+    @field_validator("roles", mode="before")
+    @classmethod
+    def _drop_retired_roles(cls, value: Any) -> Any:
+        """Profiles saved by older versions may still carry roles that no longer exist
+        (``developer`` was folded into ``backend``); they are ignored, not refused."""
+        if isinstance(value, dict):
+            return {k: v for k, v in value.items() if str(k) not in RETIRED_ROLES}
         return value
 
 

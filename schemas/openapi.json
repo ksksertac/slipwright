@@ -97,6 +97,14 @@
         "additionalProperties": false,
         "description": "One agent card: what it is and how much it has worked.",
         "properties": {
+          "effective_model": {
+            "title": "Effective Model",
+            "type": "string"
+          },
+          "effective_provider": {
+            "title": "Effective Provider",
+            "type": "string"
+          },
           "invocations": {
             "title": "Invocations",
             "type": "integer"
@@ -156,6 +164,8 @@
           }
         },
         "required": [
+          "effective_model",
+          "effective_provider",
           "invocations",
           "label",
           "last_used",
@@ -1653,6 +1663,57 @@
         "title": "Lane",
         "type": "object"
       },
+      "LocalRepo": {
+        "properties": {
+          "is_git": {
+            "title": "Is Git",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "is_git",
+          "name",
+          "path"
+        ],
+        "title": "LocalRepo",
+        "type": "object"
+      },
+      "LocalRepos": {
+        "properties": {
+          "repos": {
+            "items": {
+              "$ref": "#/components/schemas/LocalRepo"
+            },
+            "title": "Repos",
+            "type": "array"
+          },
+          "root": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Root"
+          }
+        },
+        "required": [
+          "repos",
+          "root"
+        ],
+        "title": "LocalRepos",
+        "type": "object"
+      },
       "Message": {
         "properties": {
           "text": {
@@ -2527,6 +2588,18 @@
             "title": "Default Base Url",
             "type": "string"
           },
+          "default_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What roles without a provider of their own run on here.",
+            "title": "Default Model"
+          },
           "docs_url": {
             "title": "Docs Url",
             "type": "string"
@@ -2570,6 +2643,7 @@
         "required": [
           "base_url",
           "default_base_url",
+          "default_model",
           "docs_url",
           "env_var",
           "is_default",
@@ -2612,6 +2686,18 @@
             "default": false,
             "title": "Clear Key",
             "type": "boolean"
+          },
+          "default_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Empty string clears it.",
+            "title": "Default Model"
           },
           "make_default": {
             "default": false,
@@ -2700,7 +2786,6 @@
         "enum": [
           "po",
           "architect",
-          "developer",
           "backend",
           "web_ui",
           "mobile_ui",
@@ -4559,6 +4644,25 @@
           }
         },
         "summary": "Undo"
+      }
+    },
+    "/api/local-repos": {
+      "get": {
+        "description": "Folders the server can register as local checkouts (the mounted repos root).",
+        "operationId": "local_repos_api_local_repos_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocalRepos"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Local Repos"
       }
     },
     "/api/overview": {

@@ -3,7 +3,6 @@ import type { AgentSummary } from "../api/client";
 import { useAgents } from "../api/hooks";
 import { Crumbs } from "../components/Crumbs";
 import { AgentIcon } from "../components/agents";
-import { JiraAgentAccount, ProjectJiraSetup } from "../components/JiraAgentSetup";
 import { ErrorBox, Loading, PageHead, timeAgo } from "../components/ui";
 
 export function AgentsPage() {
@@ -13,7 +12,7 @@ export function AgentsPage() {
       <Crumbs items={[{ label: "Agents" }]} />
       <PageHead
         title="Agents"
-        subtitle="Six specialists and a supervisor. Each card shows its default routing; open one for its setup, standards and activity."
+        subtitle="Each card shows the provider and model the agent runs on right now; open one for its setup, standards and activity."
       />
       <ErrorBox error={agents.error} />
       {agents.isLoading && <Loading />}
@@ -24,12 +23,6 @@ export function AgentsPage() {
           ))}
         </div>
       )}
-
-      <h2 style={{ marginTop: 28, marginBottom: 12 }}>Jira</h2>
-      <div className="grid-2" style={{ alignItems: "start" }}>
-        <JiraAgentAccount />
-        <ProjectJiraSetup />
-      </div>
     </div>
   );
 }
@@ -54,9 +47,16 @@ function AgentCard({ agent: a }: { agent: AgentSummary }) {
       </div>
       <dl className="kv" style={{ gridTemplateColumns: "90px 1fr" }}>
         <dt>Model</dt>
-        <dd className="mono truncate">
-          {a.model}
-          <span className="faint"> · {a.provider ?? "default"}</span>
+        <dd
+          className="mono truncate"
+          title={a.provider ? "pinned in the profile" : "follows Settings → Models"}
+        >
+          {a.effective_model}
+          <span className="faint">
+            {" "}
+            · {a.effective_provider}
+            {a.provider ? "" : " (default)"}
+          </span>
         </dd>
         <dt>Thinking</dt>
         <dd>{a.thinking_depth}</dd>

@@ -8,6 +8,7 @@ role or gate produced it so a page can render it without parsing notes itself.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from datetime import datetime
 from enum import StrEnum
 from typing import Any
@@ -17,7 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from slipwright.board import TaskStatus, job_epics
 from slipwright.roles.specialists import LABEL, SCOPE, STANDARDS_DOMAIN
 from slipwright.schemas.job import APPROVAL_STATES, TERMINAL_STATES, Job, JobState, Transition
-from slipwright.schemas.profile import Profile, RoleName
+from slipwright.schemas.profile import Profile, RoleConfig, RoleName
 
 
 class ActivityKind(StrEnum):
@@ -100,16 +101,24 @@ class AgentSummary(BaseModel):
     last_used: datetime | None
     model: str
     provider: str | None
+    effective_provider: str  # where the role runs right now (the default resolved)
+    effective_model: str
     thinking_depth: str
     permissions: list[str]
 
 
-def agent_summaries(jobs: list[Job], seed: Profile) -> list[AgentSummary]:
+Router = Callable[[RoleConfig], tuple[str, str]]
+
+
+def agent_summaries(
+    jobs: list[Job], seed: Profile, *, route: Router | None = None
+) -> list[AgentSummary]:
     items = [i for job in jobs for i in job_activity(job) if i.kind is ActivityKind.ROLE]
     out: list[AgentSummary] = []
     for role in RoleName:
         mine = [i for i in items if i.role is role]
         cfg = seed.roles[role]
+        provider, model = route(cfg) if route else (cfg.provider or "anthropic", cfg.model)
         out.append(
             AgentSummary(
                 role=role,
@@ -120,6 +129,8 @@ def agent_summaries(jobs: list[Job], seed: Profile) -> list[AgentSummary]:
                 last_used=max((i.at for i in mine), default=None),
                 model=cfg.model,
                 provider=cfg.provider,
+                effective_provider=provider,
+                effective_model=model,
                 thinking_depth=cfg.thinking_depth.value,
                 permissions=[p.value for p in cfg.permissions],
             )

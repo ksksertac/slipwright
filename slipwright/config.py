@@ -34,6 +34,8 @@ class Settings:
     require_auth: bool = True
     token: str | None = None
     dev: bool = False
+    # a folder whose sub-folders the UI offers as local checkouts (Docker mounts /repos)
+    local_repos: Path | None = None
 
     @property
     def db_path(self) -> Path:
@@ -65,6 +67,8 @@ class Settings:
         if "SLIPWRIGHT_AUTH" in env:
             settings.require_auth = env["SLIPWRIGHT_AUTH"].strip().lower() not in _OFF
         settings.token = env.get("SLIPWRIGHT_TOKEN") or None
+        if env.get("SLIPWRIGHT_LOCAL_REPOS"):
+            settings.local_repos = Path(env["SLIPWRIGHT_LOCAL_REPOS"])
         settings.dev = env.get("SLIPWRIGHT_DEV", "").strip().lower() not in ("", *_OFF)
         return settings
 
@@ -85,12 +89,14 @@ def build_engine(settings: Settings) -> Engine:
     settings.state_dir.mkdir(parents=True, exist_ok=True)
     seed = load_profile(settings.profile_path)
     lo, hi = settings.port_range
-    return Engine(
+    engine = Engine(
         JobStore(settings.db_path, secret_key=load_or_create_key(settings.state_dir)),
         Workspace(settings.worktrees_root, PortAllocator(start=lo, end=hi)),
         seed_profile=seed,
         provider=build_provider(settings.provider, seed),
     )
+    engine.local_repos_root = settings.local_repos
+    return engine
 
 
 __all__ = ["DEFAULT_PROFILE", "Settings", "build_engine", "build_provider"]

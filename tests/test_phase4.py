@@ -78,7 +78,7 @@ def _write_tests(_: ModelRequest) -> list[dict[str, Any]]:
 def _provider(seed: Profile, qa: Any = None) -> ScriptedProvider:
     p = canned(seed)
     set_plan(p, seed, [{"goal": "write OK", "files": ["OK"]}])
-    p.replies[RoleName.DEVELOPER] = lambda req: {
+    p.replies[RoleName.BACKEND] = lambda req: {
         "summary": "fixed" if '"ci_failure":' in req.prompt else "wrote OK",
         "phase_complete": True,
         "changes": [{"path": "OK", "content": "yes\n"}],
@@ -276,7 +276,7 @@ def test_devops_opens_pr_and_finishes_on_green_ci(
     assert '"draft":' in req.prompt and "write OK" in req.prompt
     # the small model named in the example profile is what got called - no fallback
     assert req.model == seed.roles[RoleName.DEVOPS].model
-    assert req.model != seed.roles[RoleName.DEVELOPER].model
+    assert req.model != seed.roles[RoleName.BACKEND].model
     assert req.thinking_depth is seed.roles[RoleName.DEVOPS].thinking_depth
 
 
@@ -311,7 +311,7 @@ def test_red_ci_is_fed_back_for_a_fix(
     assert job.data.ci_attempts == 1
     assert host.pushes == [job.branch, job.branch]
     assert len(host.prs) == 1
-    fixes = [r for r in _requests(provider, RoleName.DEVELOPER) if '"ci_failure":' in r.prompt]
+    fixes = [r for r in _requests(provider, RoleName.BACKEND) if '"ci_failure":' in r.prompt]
     assert len(fixes) == 1
     assert "lint: trailing whitespace" in fixes[0].prompt
 
@@ -327,11 +327,9 @@ def test_red_ci_bounded_to_three_fix_attempts(
 
     # the second identical fix is caught by the loop check before a third push (T9.7)
     assert job.state is JobState.AWAITING_DECISION
-    assert (
-        job.history[-1].note == "loop detected: developer produced the same output twice in a row"
-    )
+    assert job.history[-1].note == "loop detected: backend produced the same output twice in a row"
     assert job.data.resume_state == "devops" and job.data.ci_attempts == 2
-    fixes = [r for r in _requests(provider, RoleName.DEVELOPER) if '"ci_failure":' in r.prompt]
+    fixes = [r for r in _requests(provider, RoleName.BACKEND) if '"ci_failure":' in r.prompt]
     assert len(fixes) == 2
     assert host.pushes == [job.branch] * 2
 

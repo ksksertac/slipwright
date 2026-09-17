@@ -39,6 +39,7 @@ export type AgentSummary = Schemas["AgentSummary"];
 export type ProviderSettingsIn = Schemas["ProviderSettingsIn"];
 export type ProviderModels = Schemas["ProviderModels"];
 export type Pipeline = Schemas["Pipeline"];
+export type LocalRepos = Schemas["LocalRepos"];
 export type Lane = Schemas["Lane"];
 export type StepCard = Schemas["StepCard"];
 export type StepStatus = StepCard["status"];

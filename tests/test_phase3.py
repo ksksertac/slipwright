@@ -71,7 +71,7 @@ def _dev(answers: Callable[[ModelRequest], str]) -> Callable[[ModelRequest], dic
 def _provider(seed: Profile, plan: dict[str, Any], dev: Any) -> ScriptedProvider:
     p = canned(seed)
     set_plan(p, seed, plan["phases"])
-    p.replies[RoleName.DEVELOPER] = dev
+    p.replies[RoleName.BACKEND] = dev
     return p
 
 
@@ -146,9 +146,9 @@ def test_developer_runs_one_phase_per_invocation_and_records_diffs(
     job = engine.approve(job.id)
 
     assert job.state is JobState.QA
-    dev_reqs = [r for r in provider.requests if r.role is RoleName.DEVELOPER]
+    dev_reqs = [r for r in provider.requests if r.role is RoleName.BACKEND]
     assert [_phase_number(r) for r in dev_reqs] == [1, 2]
-    assert all(r.model == seed.roles[RoleName.DEVELOPER].model for r in dev_reqs)
+    assert all(r.model == seed.roles[RoleName.BACKEND].model for r in dev_reqs)
     assert job.data.phase_index == 2
 
     states = [(t.from_state, t.to_state) for t in job.history if t.from_state is not t.to_state]
@@ -198,7 +198,7 @@ def test_phase_progress_persists_so_restart_resumes_mid_plan(
     job = engine_b.resume(job.id)
 
     assert job.state is JobState.QA
-    dev_reqs = [r for r in provider.requests if r.role is RoleName.DEVELOPER]
+    dev_reqs = [r for r in provider.requests if r.role is RoleName.BACKEND]
     assert [_phase_number(r) for r in dev_reqs] == [1, 2]
 
 
@@ -206,7 +206,7 @@ def test_developer_without_write_permission_fails_job(
     store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
 ) -> None:
     data = seed.model_dump(mode="json")
-    data["roles"]["developer"]["permissions"] = ["read_files"]
+    data["roles"]["backend"]["permissions"] = ["read_files"]
     seed = Profile.model_validate(data)
     provider = _provider(seed, _plan("first"), _dev(lambda _: "yes"))
     engine = _engine(store, worktrees_root, seed, provider)
@@ -242,7 +242,7 @@ def test_gate_passes_first_try(
 
     assert job.state is JobState.QA
     assert job.data.build_attempts == 0
-    assert len([r for r in provider.requests if r.role is RoleName.DEVELOPER]) == 1
+    assert len([r for r in provider.requests if r.role is RoleName.BACKEND]) == 1
 
 
 def test_gate_failure_feeds_output_back_and_passes_on_retry(
@@ -256,7 +256,7 @@ def test_gate_failure_feeds_output_back_and_passes_on_retry(
     job = engine.approve(_to_plan_gate(engine, repo).id)
 
     assert job.state is JobState.QA
-    dev_reqs = [r for r in provider.requests if r.role is RoleName.DEVELOPER]
+    dev_reqs = [r for r in provider.requests if r.role is RoleName.BACKEND]
     assert len(dev_reqs) == 2
     assert "[test: exit 1]" in dev_reqs[1].prompt  # the captured gate output
     notes = [t.note or "" for t in job.history]
@@ -275,9 +275,9 @@ def test_gate_exhausts_retries_and_fails_with_output(
     # the scripted developer answers the same thing twice: the loop check stops the job
     # at the decision gate instead of a third identical attempt (T9.7)
     assert job.state is JobState.AWAITING_DECISION
-    assert len([r for r in provider.requests if r.role is RoleName.DEVELOPER]) == 2
+    assert len([r for r in provider.requests if r.role is RoleName.BACKEND]) == 2
     assert job.history[-1].note == (
-        "loop detected: developer produced the same output twice in a row"
+        "loop detected: backend produced the same output twice in a row"
     )
     assert job.data.build_attempts == 1
     assert job.data.resume_state == "developing"
@@ -287,6 +287,6 @@ def test_gate_exhausts_retries_and_fails_with_output(
 
     # one more (fresh) attempt, the gate fails again, the next identical answer stops it
     assert job.state is JobState.AWAITING_DECISION
-    assert len([r for r in provider.requests if r.role is RoleName.DEVELOPER]) == 4
+    assert len([r for r in provider.requests if r.role is RoleName.BACKEND]) == 4
     assert job.data.build_attempts == 2
     assert "approved: continue with developing" in [t.note for t in job.history]

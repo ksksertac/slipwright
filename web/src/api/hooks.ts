@@ -17,6 +17,7 @@ import {
   type JiraSettings,
   type JiraSettingsIn,
   type JiraTestResult,
+  type LocalRepos,
   type Job,
   type NewProject,
   type Overview,
@@ -96,6 +97,15 @@ export function useActivity_all(role: string, limit = 100) {
 }
 
 // -- projects --------------------------------------------------------------------------
+
+export function useLocalRepos(enabled: boolean) {
+  return useQuery({
+    queryKey: ["local-repos"],
+    queryFn: () => api.get<LocalRepos>("/api/local-repos"),
+    enabled,
+    staleTime: 30_000,
+  });
+}
 
 export function useProjects() {
   return useQuery({ queryKey: keys.projects, queryFn: () => api.get<Project[]>("/api/projects") });

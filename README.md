@@ -178,7 +178,6 @@ decision, never a model's. Engine code never names a model — a test greps for 
 "roles": {
   "po":        { "model": "claude-sonnet-5", "thinking_depth": "medium", "permissions": ["read_files", "jira"] },
   "architect": { "model": "claude-opus-5",   "thinking_depth": "high",   "permissions": ["read_files", "run_commands", "jira"] },
-  "developer": { "model": "claude-opus-5",   "thinking_depth": "high",   "permissions": ["read_files", "write_files", "run_commands"] },
   "backend":   { "model": "claude-opus-5",   "thinking_depth": "high",   "permissions": ["read_files", "write_files", "run_commands"] },
   "web_ui":    { "model": "claude-opus-5",   "thinking_depth": "high",   "permissions": ["read_files", "write_files", "run_commands"] },
   "mobile_ui": { "model": "claude-opus-5",   "thinking_depth": "high",   "permissions": ["read_files", "write_files", "run_commands"] },

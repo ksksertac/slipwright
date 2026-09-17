@@ -74,7 +74,7 @@ def canned(profile: Profile) -> ScriptedProvider:
                     {"goal": "record the request", "files": ["SLIPWRIGHT.md"], "task_id": "t1"}
                 ],
             },
-            RoleName.DEVELOPER: lambda req: {
+            RoleName.BACKEND: lambda req: {
                 "summary": "scripted development",
                 "phase_complete": True,
                 "changes": [
@@ -106,8 +106,8 @@ def canned(profile: Profile) -> ScriptedProvider:
             },
         }
     )
-    for specialist in (RoleName.BACKEND, RoleName.WEB_UI, RoleName.MOBILE_UI):
-        provider.replies[specialist] = provider.replies[RoleName.DEVELOPER]
+    for specialist in (RoleName.WEB_UI, RoleName.MOBILE_UI):
+        provider.replies[specialist] = provider.replies[RoleName.BACKEND]
     return provider
 
 

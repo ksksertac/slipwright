@@ -126,10 +126,13 @@ class RoutingProvider:
         resolve: CredentialsResolver,
         *,
         default: Callable[[], str] | None = None,
+        default_model: Callable[[str], str | None] | None = None,
         transport: httpx.BaseTransport | None = None,
     ) -> None:
         self._resolve = resolve
         self._default = default or (lambda: DEFAULT_PROVIDER)
+        # the model a "default" role runs on for a given provider (Settings -> Models)
+        self._default_model = default_model or (lambda _name: None)
         self._transport = transport
         self._clients: dict[Credentials, ModelProvider] = {}
         self._lock = threading.Lock()
@@ -152,9 +155,21 @@ class RoutingProvider:
                 self._clients[creds] = client
             return client
 
+    def route(self, provider: str | None, model: str) -> tuple[str, str]:
+        """Where a role's request goes. A role that names no provider follows the default
+        provider *and* that provider's default model when one is configured -- a model
+        name from another vendor's profile would only fail there."""
+        if provider:
+            return provider, model
+        name = self._default()
+        return name, self._default_model(name) or model
+
     def complete(self, request: ModelRequest) -> ModelResponse:
+        name, model = self.route(request.provider, request.model)
+        if (name, model) != (request.provider, request.model):
+            request = request.model_copy(update={"provider": name, "model": model})
         try:
-            client = self.client_for(request.provider)
+            client = self.client_for(name)
         except ProviderError:
             raise
         return client.complete(request)

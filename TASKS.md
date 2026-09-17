@@ -1023,6 +1023,21 @@ in bulk.
 > Selection is derived from the live lanes, so a job that moves on drops out by itself.
 > The supervisor chip waits for T9.8.
 
+### Follow-ups after Phase 9 (user feedback)
+
+- [x] **Default provider drives the agents.** Settings → Models has a *Default model* per
+  provider (picked from the vendor's `/models` list); every role without a pinned provider
+  runs on the default provider *and* its default model (`RoutingProvider.route`,
+  `Engine.effective_routing`); agent cards show the effective provider/model.
+- [x] **Generic Developer removed.** `general`/`docs` phases go to the Backend agent;
+  `RETIRED_ROLES` (`analyst`, `planner`, `tester`, `developer`) are ignored when an older
+  profile is loaded.
+- [x] **Jira agent account and project mapping** moved from the Agents page to Settings →
+  Jira.
+- [x] **Local checkout picker.** `SLIPWRIGHT_LOCAL_REPOS` (compose sets `/repos`) is listed
+  by `GET /api/local-repos`; the New project form offers the folders (non-git ones
+  disabled) instead of asking for a path blind.
+
 ### Definition of done for Phase 9
 
 - [x] A request touching backend and web is planned into domain-tagged phases, each phase

@@ -9,6 +9,7 @@ import {
   useGitHubSettings,
   useJiraProjects,
   useJiraSettings,
+  useLocalRepos,
 } from "../api/hooks";
 
 type Source = "local" | "github";
@@ -27,6 +28,9 @@ export function NewProjectPage() {
   const [description, setDescription] = useState("");
   const [source, setSource] = useState<Source>(githubReady ? "github" : "local");
   const [repoPath, setRepoPath] = useState("");
+  const [typing, setTyping] = useState(false); // type a path instead of picking a folder
+  const local = useLocalRepos(source === "local");
+  const folders = local.data?.repos ?? [];
   const [githubRepo, setGithubRepo] = useState("");
   const [jiraKey, setJiraKey] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -93,19 +97,67 @@ export function NewProjectPage() {
 
         {source === "local" ? (
           <div className="field">
-            <label htmlFor="repo_path">Path on the server</label>
-            <input
-              id="repo_path"
-              type="text"
-              className="mono"
-              value={repoPath}
-              onChange={(e) => setRepoPath(e.target.value)}
-              placeholder="/repos/my-service"
-            />
+            <label htmlFor="repo_path">
+              {folders.length > 0 && !typing ? "Checkout" : "Path on the server"}
+            </label>
+            {folders.length > 0 && !typing ? (
+              <select id="repo_path" value={repoPath} onChange={(e) => setRepoPath(e.target.value)}>
+                <option value="">Pick a folder under {local.data?.root}…</option>
+                {folders.map((r) => (
+                  <option key={r.path} value={r.path} disabled={!r.is_git}>
+                    {r.name}
+                    {r.is_git ? "" : " — not a git repository"}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                id="repo_path"
+                type="text"
+                className="mono"
+                value={repoPath}
+                onChange={(e) => setRepoPath(e.target.value)}
+                placeholder={
+                  local.data?.root ? `${local.data.root}/my-service` : "/repos/my-service"
+                }
+              />
+            )}
             <div className="help">
-              The path as the <em>server</em> sees it. In Docker only the mounted folder is visible:
-              put the checkout under <code>SLIPWRIGHT_REPOS</code> (default <code>./repos</code>)
-              and enter <code>/repos/&lt;name&gt;</code>.
+              {folders.length > 0 && !typing ? (
+                <>
+                  These are the folders under <code>{local.data?.root}</code> (your{" "}
+                  <code>SLIPWRIGHT_REPOS</code> folder); a project must be a git repository.{" "}
+                  <a
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setTyping(true);
+                    }}
+                    href="#"
+                  >
+                    Type a path instead
+                  </a>
+                </>
+              ) : (
+                <>
+                  The path as the <em>server</em> sees it. In Docker only the mounted folder is
+                  visible: put the checkout under <code>SLIPWRIGHT_REPOS</code> (default{" "}
+                  <code>./repos</code>) and enter <code>/repos/&lt;name&gt;</code>.
+                  {folders.length > 0 && (
+                    <>
+                      {" "}
+                      <a
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setTyping(false);
+                        }}
+                        href="#"
+                      >
+                        Pick from the list
+                      </a>
+                    </>
+                  )}
+                </>
+              )}
             </div>
           </div>
         ) : (

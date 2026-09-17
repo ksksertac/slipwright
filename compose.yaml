@@ -22,6 +22,8 @@ services:
       # set a stable key so stored tokens survive a rebuilt volume; generated in /data otherwise
       SLIPWRIGHT_SECRET_KEY: ${SLIPWRIGHT_SECRET_KEY:-}
       SLIPWRIGHT_PROVIDER: ${SLIPWRIGHT_PROVIDER:-live}
+      # the mounted checkouts, offered as a list on the New project page
+      SLIPWRIGHT_LOCAL_REPOS: /repos
     volumes:
       - slipwright-state:/data
       # local checkouts you want to register as projects: the folder in SLIPWRIGHT_REPOS

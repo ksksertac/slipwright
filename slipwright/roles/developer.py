@@ -58,7 +58,7 @@ def run(
     timeout_s: float | None = None,
     ci_failure: str | None = None,
     jira: dict[str, Any] | None = None,
-    as_role: RoleName = RoleName.DEVELOPER,
+    as_role: RoleName = RoleName.BACKEND,
     standards: dict[str, Any] | None = None,
     review: dict[str, Any] | None = None,
 ) -> RoleResult:

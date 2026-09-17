@@ -367,3 +367,55 @@ def test_models_settings_page_and_role_provider_column_exist() -> None:
     assert "useProviderModels" in form and "provider: e.target.value" in form and "datalist" in form
     hooks = (web / "api" / "hooks.ts").read_text(encoding="utf-8")
     assert "/api/settings/providers" in hooks
+
+
+def test_default_roles_follow_the_default_provider_and_its_default_model(
+    store: JobStore,
+    worktrees_root: Path,
+    seed: Profile,
+    repo: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Making DeepSeek the default under Settings -> Models must route every role that
+    names no provider there, on DeepSeek's configured default model -- not on the Claude
+    model name written in the profile."""
+    for spec in PROVIDERS.values():
+        monkeypatch.delenv(spec.env_var, raising=False)
+    vendor = FakeVendor("sk-d", ["deep-model"])
+    from tests.pipeline import default_backlog
+
+    vendor.reply = {"summary": "s", "breakdown": default_backlog(1)}
+    engine = full_engine(
+        store, worktrees_root, seed, None, http_transport=httpx.MockTransport(vendor.handler)
+    )
+    engine.update_provider_settings(
+        "deepseek", api_key="sk-d", make_default=True, default_model="deep-model"
+    )
+    assert engine.provider_settings()[2]["default_model"] == "deep-model"
+    assert engine.effective_routing(seed.roles[RoleName.PO]) == ("deepseek", "deep-model")
+    pinned = seed.roles[RoleName.PO].model_copy(update={"provider": "openai"})
+    assert engine.effective_routing(pinned) == ("openai", pinned.model)  # pinned: as written
+
+    job = engine.start(engine.create_job("x", repo).id)
+    assert job.state is JobState.AWAITING_BACKLOG_APPROVAL, job.history[-1].detail
+    assert [r["model"] for r in vendor.requests] == ["deep-model"]
+    assert seed.roles[RoleName.PO].model != "deep-model"  # the profile still says Claude
+
+    # without a default model the profile's model is used as written
+    engine.update_provider_settings("deepseek", default_model="")
+    assert engine.effective_routing(seed.roles[RoleName.PO]) == (
+        "deepseek",
+        seed.roles[RoleName.PO].model,
+    )
+
+    with TestClient(create_app(engine, resume_on_startup=False, require_auth=False)) as client:
+        agents = {a["role"]: a for a in client.get("/api/agents").json()}
+        assert agents["po"]["effective_provider"] == "deepseek"
+        assert agents["po"]["effective_model"] == seed.roles[RoleName.PO].model
+        resp = client.put("/api/settings/providers/deepseek", json={"default_model": "deep-model"})
+        assert resp.status_code == 200
+        assert [p for p in resp.json() if p["name"] == "deepseek"][0][
+            "default_model"
+        ] == "deep-model"
+        agents = {a["role"]: a for a in client.get("/api/agents").json()}
+        assert agents["po"]["effective_model"] == "deep-model" and agents["po"]["provider"] is None

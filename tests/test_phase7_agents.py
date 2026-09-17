@@ -66,7 +66,7 @@ def test_example_profile_grants_jira_to_the_right_roles(seed: Profile) -> None:
     assert granted == {
         RoleName.PO,
         RoleName.ARCHITECT,
-        RoleName.DEVELOPER,
+        RoleName.BACKEND,
         RoleName.BACKEND,
         RoleName.WEB_UI,
         RoleName.MOBILE_UI,
@@ -78,7 +78,7 @@ def test_example_profile_grants_jira_to_the_right_roles(seed: Profile) -> None:
 def _agentic_provider(seed: Profile) -> Any:
     """Each role returns Jira actions the way its instructions describe."""
     provider = full_provider(seed, phases=2, breakdown=None)
-    base_dev = provider.replies[RoleName.DEVELOPER]
+    base_dev = provider.replies[RoleName.BACKEND]
     base_po = provider.replies[RoleName.PO]
     base_architect = provider.replies[RoleName.ARCHITECT]
 
@@ -157,7 +157,7 @@ def _agentic_provider(seed: Profile) -> Any:
 
     provider.replies[RoleName.PO] = po
     provider.replies[RoleName.ARCHITECT] = architect
-    provider.replies[RoleName.DEVELOPER] = developer
+    provider.replies[RoleName.BACKEND] = developer
     provider.replies[RoleName.QA] = qa
     provider.replies[RoleName.DEVOPS] = devops
     return provider
@@ -192,10 +192,10 @@ def test_agents_act_in_jira_through_the_engine(
     assert jira.comments[t1] == ["wrote OK for phase 1"]
     assert jira.comments[t2] == ["wrote OK for phase 2"]
     assert jira.worklogs[t1] == [{"seconds": 900, "note": "implementation"}]
-    dev_notes = [t.note for t in job.history if (t.note or "").startswith("jira (developer)")]
-    assert dev_notes == ["jira (developer): 3 done"] * 2
+    dev_notes = [t.note for t in job.history if (t.note or "").startswith("jira (backend)")]
+    assert dev_notes == ["jira (backend): 3 done"] * 2
     # the developer saw its own task key and the transitions it may use
-    dev_ctx = _context(_requests(engine, RoleName.DEVELOPER)[0])["jira"]
+    dev_ctx = _context(_requests(engine, RoleName.BACKEND)[0])["jira"]
     assert dev_ctx["current_task_key"] == t1 and dev_ctx["project_key"] == "DEM"
     assert dev_ctx["transitions"] == {"todo": "To Do", "in_progress": "In Progress", "done": "Done"}
     assert [i["kind"] for i in dev_ctx["issues"]] == ["epic", "story", "task", "task"]
@@ -241,15 +241,15 @@ def test_actions_are_idempotent_and_queued_during_outages(
     key = job.data.jira_keys[_tasks(job)[0].id]
     actions = [JiraAction(action="comment", issue=key, body="same thing")]
 
-    first = runner.run(job, RoleName.DEVELOPER, seed, actions)
-    second = runner.run(job, RoleName.DEVELOPER, seed, actions)  # a restart replays the result
+    first = runner.run(job, RoleName.BACKEND, seed, actions)
+    second = runner.run(job, RoleName.BACKEND, seed, actions)  # a restart replays the result
     assert [o.status for o in first] == ["done"]
     assert [o.status for o in second] == ["skipped"]
     assert jira.comments[key] == ["same thing"]
 
     jira.down = True
     outage = runner.run(
-        job, RoleName.DEVELOPER, seed, [JiraAction(action="comment", issue=key, body="later")]
+        job, RoleName.BACKEND, seed, [JiraAction(action="comment", issue=key, body="later")]
     )
     assert [o.status for o in outage] == ["queued"]
     assert len(job.data.jira_queue) == 1
@@ -291,8 +291,8 @@ def test_jira_context_is_only_built_for_permitted_roles(
     job = engine.start(engine.create_job("x", project_id=project.id).id)
     assert jira_context(job, RoleName.SUPERVISOR, seed, project) is None
     unlinked = Project(name="plain", repo_path=repo)
-    assert jira_context(job, RoleName.DEVELOPER, seed, unlinked) is None
-    ctx = jira_context(job, RoleName.DEVELOPER, seed, project)
+    assert jira_context(job, RoleName.BACKEND, seed, unlinked) is None
+    ctx = jira_context(job, RoleName.BACKEND, seed, project)
     assert ctx is not None and ctx["issues"] == [] and ctx["current_task_key"] is None
 
 

@@ -61,7 +61,7 @@ class MixedTransport:
 
 def _agentic(seed: Profile) -> Any:
     provider = full_provider(seed, phases=4, breakdown=BREAKDOWN)
-    base_dev = provider.replies[RoleName.DEVELOPER]
+    base_dev = provider.replies[RoleName.BACKEND]
 
     def developer(req: ModelRequest) -> dict[str, Any]:
         import json
@@ -75,7 +75,7 @@ def _agentic(seed: Profile) -> Any:
             ]
         return reply
 
-    provider.replies[RoleName.DEVELOPER] = developer
+    provider.replies[RoleName.BACKEND] = developer
     return provider
 
 
@@ -213,9 +213,9 @@ def test_a_new_user_ships_a_change_from_the_browser_alone(
         assert "implemented by the developer agent" in comments
         assert any("Pull request" in c for c in comments)
     dev_notes = [
-        t["note"] for t in job["history"] if (t["note"] or "").startswith("jira (developer)")
+        t["note"] for t in job["history"] if (t["note"] or "").startswith("jira (backend)")
     ]
-    assert dev_notes == ["jira (developer): 1 done"] * 4
+    assert dev_notes == ["jira (backend): 1 done"] * 4
 
     # logout ends the session
     browser.client.post("/api/auth/logout")

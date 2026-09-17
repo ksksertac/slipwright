@@ -45,10 +45,10 @@ def test_activity_feed_lists_the_whole_pipeline_in_order(
         (ActivityKind.APPROVAL, None),  # rejected
         (ActivityKind.ROLE, RoleName.ARCHITECT),
         (ActivityKind.APPROVAL, None),
-        (ActivityKind.ROLE, RoleName.DEVELOPER),
+        (ActivityKind.ROLE, RoleName.BACKEND),
         (ActivityKind.GATE, None),
         (ActivityKind.ROLE, RoleName.QA),  # standards review of phase 1 (advisory)
-        (ActivityKind.ROLE, RoleName.DEVELOPER),
+        (ActivityKind.ROLE, RoleName.BACKEND),
         (ActivityKind.GATE, None),
         (ActivityKind.ROLE, RoleName.QA),  # review of phase 2
         (ActivityKind.ROLE, RoleName.QA),

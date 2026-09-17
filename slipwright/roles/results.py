@@ -246,7 +246,6 @@ class SupervisorResult(RoleOutput):
 RESULT_SCHEMAS: dict[RoleName, type[RoleOutput]] = {
     RoleName.PO: POResult,
     RoleName.ARCHITECT: ArchitectResult,
-    RoleName.DEVELOPER: DeveloperResult,
     RoleName.BACKEND: DeveloperResult,
     RoleName.WEB_UI: DeveloperResult,
     RoleName.MOBILE_UI: DeveloperResult,

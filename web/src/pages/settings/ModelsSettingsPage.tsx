@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { describeError, type ProviderSettings } from "../../api/client";
-import { useProviders, useSaveProvider, useTestProvider } from "../../api/hooks";
+import { useProviderModels, useProviders, useSaveProvider, useTestProvider } from "../../api/hooks";
 import { useAuth } from "../../auth/AuthProvider";
 import { ErrorBox, Loading, PageHead } from "../../components/ui";
 import { Crumbs } from "../../components/Crumbs";
@@ -19,9 +19,10 @@ export function ModelsSettingsPage() {
       <PageHead title="Models" subtitle="API keys for Anthropic, OpenAI and DeepSeek." />
       <p className="muted">
         Enter an API key for each provider you want to use. Keys are stored encrypted and never
-        shown again; a key from the server's environment is used when none is stored. Pick which
-        provider and model each role runs on under <strong>Agents</strong> — roles without a
-        provider use the default marked below.
+        shown again; a key from the server's environment is used when none is stored. Every agent
+        runs on the provider marked <strong>default</strong> below, on that provider's{" "}
+        <strong>default model</strong> — unless a role is pinned to a provider and model of its own
+        under <strong>Agents</strong>.
       </p>
       <div className="stack">
         {providers.data!.map((p) => (
@@ -38,14 +39,22 @@ function ProviderCard({ provider: p }: { provider: ProviderSettings }) {
   const test = useTestProvider();
   const [key, setKey] = useState("");
   const [baseUrl, setBaseUrl] = useState<string | null>(null);
+  const [model, setModel] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const admin = !!user?.is_admin;
+  const models = useProviderModels(p.key_set ? p.name : null);
+  const modelValue = model ?? p.default_model ?? "";
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
     setSaved(false);
     save.mutate(
-      { name: p.name, api_key: key.trim() || null, base_url: baseUrl ?? p.base_url ?? "" },
+      {
+        name: p.name,
+        api_key: key.trim() || null,
+        base_url: baseUrl ?? p.base_url ?? "",
+        default_model: modelValue,
+      },
       {
         onSuccess: () => {
           setKey("");
@@ -104,6 +113,42 @@ function ProviderCard({ provider: p }: { provider: ProviderSettings }) {
             placeholder={p.default_base_url}
           />
           <div className="muted small">Leave empty for {p.default_base_url}; set for proxies.</div>
+        </div>
+        <div className="field">
+          <label htmlFor={`${p.name}-model`}>Default model</label>
+          {models.data && models.data.models.length > 0 ? (
+            <select
+              id={`${p.name}-model`}
+              value={modelValue}
+              disabled={!admin}
+              onChange={(e) => setModel(e.target.value)}
+            >
+              <option value="">— not set: roles use the model in their profile —</option>
+              {!models.data.models.includes(modelValue) && modelValue && (
+                <option value={modelValue}>{modelValue}</option>
+              )}
+              {models.data.models.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              id={`${p.name}-model`}
+              type="text"
+              className="mono"
+              value={modelValue}
+              disabled={!admin}
+              onChange={(e) => setModel(e.target.value)}
+              placeholder={p.key_set ? "model id" : "add a key to list the models"}
+            />
+          )}
+          <div className="muted small">
+            {p.is_default
+              ? "What every agent without a pinned provider runs on right now."
+              : "Used by every agent without a pinned provider once this provider is the default."}
+          </div>
         </div>
       </div>
       {save.error && <div className="callout error">{describeError(save.error)}</div>}

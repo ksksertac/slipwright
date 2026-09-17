@@ -78,7 +78,6 @@
       "enum": [
         "po",
         "architect",
-        "developer",
         "backend",
         "web_ui",
         "mobile_ui",

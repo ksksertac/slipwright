@@ -46,7 +46,7 @@ def test_invocation_budget_fails_the_job_with_the_reason(
     assert job.data.invocations == 3
     assert len(job.data.invocation_log) == 3
     entry = job.data.invocation_log[-1]
-    assert entry["role"] == "developer" and entry["phase"] == 1 and entry["prompt_chars"] > 100
+    assert entry["role"] == "backend" and entry["phase"] == 1 and entry["prompt_chars"] > 100
     assert entry["attempts"] == 1 and entry["ok"] is True
 
 
@@ -179,23 +179,21 @@ def test_loop_stops_at_the_decision_gate_and_the_human_decides(
     job = engine.approve(engine.approve(job.id).id)
 
     assert job.state is JobState.AWAITING_DECISION
-    assert (
-        job.history[-1].note == "loop detected: developer produced the same output twice in a row"
-    )
+    assert job.history[-1].note == "loop detected: backend produced the same output twice in a row"
     assert job.data.resume_state == "developing"
     assert lane_for(job).pending_approval == "decision"
-    dev = [r for r in provider.requests if r.role is RoleName.DEVELOPER]
+    dev = [r for r in provider.requests if r.role is RoleName.BACKEND]
     assert len(dev) == 2
 
     # reject with feedback: the specialist runs again and reads the feedback from the inbox;
     # the same answer twice more brings the job back to the gate (attempts 3 and 4)
     job = engine.reject(job.id, "the test expects yes, write yes")
-    dev = [r for r in provider.requests if r.role is RoleName.DEVELOPER]
+    dev = [r for r in provider.requests if r.role is RoleName.BACKEND]
     assert len(dev) == 4
     assert "the test expects yes, write yes" in dev[2].prompt
     assert "the test expects yes, write yes" not in dev[3].prompt  # delivered exactly once
     inbox = [t.note or "" for t in job.history if (t.note or "").startswith("inbox:")]
-    assert inbox and "consumed by developer" in inbox[-1]
+    assert inbox and "consumed by backend" in inbox[-1]
     assert "rejected: the test expects yes, write yes" in [t.note for t in job.history]
     # the same answer again: back at the gate, not a silent third round
     assert job.state is JobState.AWAITING_DECISION
@@ -216,7 +214,7 @@ def test_different_outputs_never_trip_the_loop_check(
             "changes": [{"path": "OK", "content": f"try {len(n)}\n"}],
         }
 
-    for role in (RoleName.DEVELOPER, RoleName.BACKEND):
+    for role in (RoleName.BACKEND, RoleName.BACKEND):
         provider.replies[role] = dev
     engine = full_engine(store, worktrees_root, broken, provider)
     job = engine.start(engine.create_job("x", repo).id)
@@ -268,7 +266,7 @@ def _choice_engine(
             "changes": [{"path": "OK", "content": f"try {len(n)}\n"}],
         }
 
-    for role in (RoleName.DEVELOPER, RoleName.BACKEND):
+    for role in (RoleName.BACKEND, RoleName.BACKEND):
         provider.replies[role] = dev
     sup_calls: list[dict[str, Any]] = []
 
@@ -343,11 +341,11 @@ def test_supervisor_asks_the_human(
     assert job.state is JobState.AWAITING_DECISION
     assert "supervisor: asks you (because ask_human)" in (job.history[-1].note or "")
     assert job.data.resume_state == "developing"
-    dev = [r for r in provider.requests if r.role is RoleName.DEVELOPER]
+    dev = [r for r in provider.requests if r.role is RoleName.BACKEND]
     assert len(dev) == 1
     job = engine.approve(job.id)  # continue: the specialist fixes (attempt 2), then 3, then fails
     assert job.state is JobState.FAILED
-    assert len([r for r in provider.requests if r.role is RoleName.DEVELOPER]) == 3
+    assert len([r for r in provider.requests if r.role is RoleName.BACKEND]) == 3
 
 
 def test_manual_projects_keep_the_old_behaviour(
@@ -374,7 +372,7 @@ def test_roles_get_an_outline_not_the_whole_plan(
     job = engine.start(engine.create_job("x", repo).id)
     job = engine.approve(engine.approve(job.id).id)
     assert job.state is JobState.AWAITING_TEST_APPROVAL
-    dev = _context(next(r for r in provider.requests if r.role is RoleName.DEVELOPER))
+    dev = _context(next(r for r in provider.requests if r.role is RoleName.BACKEND))
     assert "breakdown" not in dev["plan"] and [p["goal"] for p in dev["plan"]["phases"]]
     assert "files" not in dev["plan"]["phases"][0]  # other phases' file lists are noise
     assert dev["current_phase"]["files"] == ["OK"]  # its own phase in full

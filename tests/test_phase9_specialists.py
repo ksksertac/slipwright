@@ -23,10 +23,10 @@ def test_domains_map_to_specialists() -> None:
     assert specialist_for("web") is RoleName.WEB_UI
     assert specialist_for("mobile") is RoleName.MOBILE_UI
     assert specialist_for("infra") is RoleName.DEVOPS
-    assert specialist_for("docs") is RoleName.DEVELOPER
-    assert specialist_for(None) is RoleName.DEVELOPER
-    assert specialist_for("bogus") is RoleName.DEVELOPER
-    assert RoleName.DEVELOPER in DEVELOPER_ROLES and RoleName.QA not in DEVELOPER_ROLES
+    assert specialist_for("docs") is RoleName.BACKEND
+    assert specialist_for(None) is RoleName.BACKEND
+    assert specialist_for("bogus") is RoleName.BACKEND
+    assert RoleName.BACKEND in DEVELOPER_ROLES and RoleName.QA not in DEVELOPER_ROLES
     assert [d.value for d in Domain] == ["backend", "web", "mobile", "infra", "docs", "general"]
 
 
@@ -87,7 +87,6 @@ def test_each_phase_runs_on_its_specialist_with_the_profile_model(
         assert len(reqs) == 1, role
         assert reqs[0].model == model
     assert _requests(provider, RoleName.WEB_UI)[0].provider == "openai"
-    assert _requests(provider, RoleName.DEVELOPER) == []  # no general phase: never invoked
     assert "WEB UI specialist" in _requests(provider, RoleName.WEB_UI)[0].prompt
     assert "BACKEND specialist" in _requests(provider, RoleName.BACKEND)[0].prompt
 
@@ -142,9 +141,6 @@ def test_agents_endpoint_and_activity_filter(
         by_role = {a["role"]: a for a in agents}
         assert by_role["backend"]["label"] == "Backend"
         assert by_role["backend"]["invocations"] == 1 and by_role["backend"]["last_used"]
-        assert (
-            by_role["developer"]["invocations"] == 0 and by_role["developer"]["last_used"] is None
-        )
         assert by_role["qa"]["label"] == "QA" and by_role["qa"]["standards_domain"] == "testing"
         assert by_role["architect"]["standards_domain"] == "architecture"
         assert by_role["web_ui"]["model"] == seed.roles[RoleName.WEB_UI].model
@@ -165,9 +161,15 @@ def test_agents_ui_has_cards_and_detail_tabs() -> None:
         "AgentCard",
         "/agents/${a.role}",
         "invocations",
-        "JiraAgentAccount",
+        "effective_model",  # where the role runs right now, the default resolved
     ):
         assert expected in cards, expected
+    jira_page = (web / "pages" / "settings" / "JiraSettingsPage.tsx").read_text(encoding="utf-8")
+    assert "JiraAgentAccount" in jira_page and "ProjectJiraSetup" in jira_page
+    models_page = (web / "pages" / "settings" / "ModelsSettingsPage.tsx").read_text(
+        encoding="utf-8"
+    )
+    assert "default_model" in models_page and "useProviderModels" in models_page
     detail = (web / "pages" / "AgentDetailPage.tsx").read_text(encoding="utf-8")
     for expected in (
         '["setup", "standards", "activity"]',

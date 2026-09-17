@@ -61,6 +61,9 @@ class ProviderSettings(BaseModel):
     key_hint: str | None = None
     key_from_env: bool
     is_default: bool
+    default_model: str | None = Field(
+        default=None, description="What roles without a provider of their own run on here."
+    )
 
 
 class ProviderSettingsIn(BaseModel):
@@ -68,6 +71,7 @@ class ProviderSettingsIn(BaseModel):
     base_url: str | None = Field(default=None, description="Override the vendor URL.")
     clear_key: bool = False
     make_default: bool = False
+    default_model: str | None = Field(default=None, description="Empty string clears it.")
 
 
 class ProviderModels(BaseModel):

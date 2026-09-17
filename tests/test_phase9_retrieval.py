@@ -242,7 +242,7 @@ def test_query_leads_with_the_phase_and_names_the_task() -> None:
     job.data.phase_index = 0
     assert build_query(job, RoleName.BACKEND) == "first a.py Story one Task A the request"
     job.data.phase_index = 1
-    assert build_query(job, RoleName.DEVELOPER) == "second the request"
+    assert build_query(job, RoleName.BACKEND) == "second the request"
     assert build_query(job, RoleName.PO) == "the request"
     assert build_query(job, RoleName.ARCHITECT).startswith("E Story one Task A")
     job.data.test_cases = [{"name": "logs in", "description": "d"}]

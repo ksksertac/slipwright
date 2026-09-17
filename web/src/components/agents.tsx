@@ -54,7 +54,6 @@ function IconMobile() {
 export const ROLE_LABEL: Record<string, string> = {
   po: "Product Owner",
   architect: "Architect",
-  developer: "Developer",
   backend: "Backend",
   web_ui: "Web UI",
   mobile_ui: "Mobile UI",

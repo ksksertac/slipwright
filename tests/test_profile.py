@@ -68,6 +68,13 @@ def test_unknown_role_rejected() -> None:
     assert "roles.intern" in str(excinfo.value)
 
 
+def test_retired_roles_are_ignored_on_load() -> None:
+    data = _valid_data()
+    data["roles"]["developer"] = data["roles"]["qa"]  # written by an older version
+    profile = parse_profile(data)
+    assert "developer" not in {r.value for r in profile.roles}
+
+
 def test_run_cmd_requires_port_placeholder() -> None:
     data = _valid_data()
     data["run_cmd"] = "uv run uvicorn app.main:app"

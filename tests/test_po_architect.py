@@ -206,7 +206,7 @@ def test_architect_designs_from_the_approved_backlog(
 def test_architect_roles_always_come_from_seed(seed: Profile) -> None:
     data = seed.model_dump(mode="json")
     data["language"] = "typescript"
-    data["roles"]["developer"]["model"] = "model-the-architect-picked"
+    data["roles"]["backend"]["model"] = "model-the-architect-picked"
     result = ArchitectResult(
         summary="ts",
         profile=Profile.model_validate(data),

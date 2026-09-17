@@ -69,6 +69,17 @@ class NewProject(BaseModel):
     review: ReviewMode = "advisory"
 
 
+class LocalRepo(BaseModel):
+    name: str
+    path: str
+    is_git: bool
+
+
+class LocalRepos(BaseModel):
+    root: str | None
+    repos: list[LocalRepo]
+
+
 class Rejection(BaseModel):
     feedback: str = Field(min_length=1)
 
@@ -227,9 +238,19 @@ def create_app(
     def get_agents(request: Request) -> list[AgentSummary]:
         """The agent cards: scope, default model routing and how much each has worked."""
         eng = _engine(request)
-        return agent_summaries(eng.store.list(), eng.seed_profile)
+        return agent_summaries(eng.store.list(), eng.seed_profile, route=eng.effective_routing)
 
     # -- projects ------------------------------------------------------------------------
+
+    @api.get("/local-repos", response_model=LocalRepos)
+    def local_repos(request: Request) -> LocalRepos:
+        """Folders the server can register as local checkouts (the mounted repos root)."""
+        eng = _engine(request)
+        root = eng.local_repos_root
+        return LocalRepos(
+            root=root.as_posix() if root else None,
+            repos=[LocalRepo(**r) for r in eng.local_repos()],
+        )
 
     @api.post("/projects", response_model=Project, status_code=201)
     def create_project(body: NewProject, request: Request) -> Project:

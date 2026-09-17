@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 import subprocess
 from collections.abc import Iterator
 from pathlib import Path
@@ -204,3 +205,44 @@ def test_cli_project_commands(
 
     assert cli.main(["project", "list"]) == 0
     assert project_id in capsys.readouterr().out
+
+
+def test_local_repos_lists_the_mounted_checkouts(
+    store: JobStore, worktrees_root: Path, seed: Profile, repo: Path, tmp_path: Path
+) -> None:
+    from slipwright.config import Settings
+    from slipwright.config import build_engine as _build
+
+    root = tmp_path / "mount"
+    root.mkdir()
+    (root / "plain").mkdir()  # not a repository
+    (root / ".hidden").mkdir()
+    shutil.copytree(repo, root / "service")  # a git checkout
+    engine = Engine(
+        store,
+        Workspace(worktrees_root, PortAllocator(start=8300, end=8399)),
+        seed_profile=seed,
+        provider=canned(seed),
+        supervisor_mode="manual",
+    )
+    assert engine.local_repos() == []  # nothing configured: the form asks for a path
+    engine.local_repos_root = root
+    listed = engine.local_repos()
+    assert [(r["name"], r["is_git"]) for r in listed] == [("service", True), ("plain", False)]
+    with TestClient(create_app(engine, resume_on_startup=False, require_auth=False)) as client:
+        body = client.get("/api/local-repos").json()
+        assert body["root"] == root.as_posix() and body["repos"][0]["path"].endswith("/service")
+        created = client.post(
+            "/api/projects", json={"name": "svc", "repo_path": body["repos"][0]["path"]}
+        )
+        assert created.status_code == 201
+    settings = Settings.from_env(
+        {
+            "SLIPWRIGHT_STATE_DIR": str(tmp_path / "st"),
+            "SLIPWRIGHT_PROVIDER": "scripted",
+            "SLIPWRIGHT_LOCAL_REPOS": str(root),
+        }
+    )
+    built = _build(settings)
+    assert built.local_repos_root == root
+    built.store.close()

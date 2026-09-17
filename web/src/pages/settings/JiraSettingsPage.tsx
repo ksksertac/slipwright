@@ -4,6 +4,7 @@ import { useJiraSettings, useSaveJiraSettings, useTestJira } from "../../api/hoo
 import { useAuth } from "../../auth/AuthProvider";
 import { ErrorBox, Loading, PageHead } from "../../components/ui";
 import { Crumbs } from "../../components/Crumbs";
+import { JiraAgentAccount, ProjectJiraSetup } from "../../components/JiraAgentSetup";
 
 const TYPE_KEYS = ["epic", "story", "task", "bug"] as const;
 
@@ -43,7 +44,7 @@ export function JiraSettingsPage() {
         With Jira connected, every approved plan is mirrored as epics, stories and sub-tasks in the
         project's Jira project, issues move as tasks complete, and PR links and failures are
         commented. This is the connection used by the engine; the account the agents themselves act
-        as is set under <strong>Agents</strong>.
+        as, and which Jira project each Slipwright project mirrors into, are set below.
       </p>
       <form className="form card" onSubmit={submit}>
         <div className="field">
@@ -148,6 +149,12 @@ export function JiraSettingsPage() {
         )}
         {test.error && <div className="callout error">{describeError(test.error)}</div>}
       </form>
+
+      <h2 style={{ marginTop: 28, marginBottom: 12 }}>Agents in Jira</h2>
+      <div className="grid-2" style={{ alignItems: "start" }}>
+        <JiraAgentAccount />
+        <ProjectJiraSetup />
+      </div>
     </div>
   );
 }

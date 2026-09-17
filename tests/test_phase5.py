@@ -149,10 +149,10 @@ def test_message_queued_mid_plan_reaches_next_developer_once(
 
     job = store.get(job.id)
     (msg,) = job.data.inbox
-    assert msg.consumed_by == "developer" and msg.consumed_at is not None
+    assert msg.consumed_by == "backend" and msg.consumed_at is not None
     consumed = [t for t in job.history if (t.note or "").startswith("inbox:")]
     assert len(consumed) == 1
-    assert consumed[0].note == "inbox: 1 message(s) consumed by developer"
+    assert consumed[0].note == "inbox: 1 message(s) consumed by backend"
     assert "use snake_case everywhere" in (consumed[0].detail or "")
     assert consumed[0].from_state is JobState.DEVELOPING
     assert consumed[0].to_state is JobState.DEVELOPING
@@ -175,7 +175,7 @@ def test_every_role_drains_the_inbox(
                 seen[m.text] = m.consumed_by
     assert job.state is JobState.DONE
     assert set(seen.values()) == {r.value for r in PIPELINE_ROLES if r not in DEVELOPER_ROLES} | {
-        "developer"
+        "backend"
     }
     assert all(not m.pending for m in store.get(job.id).data.inbox)
 
@@ -204,7 +204,7 @@ def test_each_role_uses_exactly_the_model_named_in_the_profile(
     assert job.state is JobState.DONE
     _assert_routing(provider, seed)
     # the example profile routes DevOps to a different, smaller model than Developer
-    assert seed.roles[RoleName.DEVOPS].model != seed.roles[RoleName.DEVELOPER].model
+    assert seed.roles[RoleName.DEVOPS].model != seed.roles[RoleName.BACKEND].model
 
 
 def test_switching_models_in_the_profile_changes_routing_without_code_changes(

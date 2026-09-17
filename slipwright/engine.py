@@ -59,7 +59,7 @@ from slipwright.roles.results import (
 )
 from slipwright.roles.specialists import specialist_for
 from slipwright.schemas.job import APPROVAL_STATES, Job, JobState, utcnow
-from slipwright.schemas.profile import Permission, Profile, RoleName
+from slipwright.schemas.profile import Permission, Profile, RoleConfig, RoleName
 from slipwright.schemas.project import BudgetSettings, Project, SupervisorSettings
 from slipwright.schemas.testrun import TestRun, TestRunSource, TestRunStatus
 from slipwright.standards import GLOBAL_DIR, PROJECT_SUBDIR, load_corpus
@@ -171,6 +171,8 @@ class Engine:
         self.test_runs_root = workspace.worktrees_root.parent / "test-runs"
         self.standards_db = workspace.worktrees_root.parent / "standards.sqlite3"
         self.standards_dir = GLOBAL_DIR
+        # where the UI looks for local checkouts to register (None: type a path)
+        self.local_repos_root: Path | None = None
         self._standards_index: StandardsIndex | None = None
         self._standards_editor: StandardsEditor | None = None
         self.orchestrator = Orchestrator(store)
@@ -220,6 +222,7 @@ class Engine:
             self._provider = RoutingProvider(
                 self.provider_credentials,
                 default=self.default_provider_name,
+                default_model=self.default_model_for,
                 transport=self.http_transport,
             )
         return self._provider
@@ -229,6 +232,20 @@ class Engine:
     def default_provider_name(self) -> str:
         name = self.store.get_setting("providers.default")
         return str(name) if name in PROVIDERS else DEFAULT_PROVIDER
+
+    def default_model_for(self, name: str) -> str | None:
+        """The model roles without a provider of their own run on, for ``name``; unset
+        means the role's profile model is used as written."""
+        data: dict[str, Any] = self.store.get_setting(f"providers.{name}", {}) or {}
+        model = data.get("default_model")
+        return str(model) if model else None
+
+    def effective_routing(self, cfg: RoleConfig) -> tuple[str, str]:
+        """(provider, model) a role actually runs on right now."""
+        if cfg.provider:
+            return cfg.provider, cfg.model
+        name = self.default_provider_name()
+        return name, self.default_model_for(name) or cfg.model
 
     def provider_credentials(self, name: str) -> Credentials | None:
         """Stored key first, else the vendor's environment variable; None when neither."""
@@ -263,6 +280,7 @@ class Engine:
                     "key_hint": f"…{str(key)[-4:]}" if key else None,
                     "key_from_env": bool(env) and not stored,
                     "is_default": spec.name == default,
+                    "default_model": data.get("default_model"),
                 }
             )
         return out
@@ -275,12 +293,15 @@ class Engine:
         base_url: str | None = None,
         clear_key: bool = False,
         make_default: bool = False,
+        default_model: str | None = None,
     ) -> None:
         if name not in PROVIDERS:
             raise KeyError(name)
         data: dict[str, Any] = self.store.get_setting(f"providers.{name}", {}) or {}
         if base_url is not None:
             data["base_url"] = base_url.strip().rstrip("/") or None
+        if default_model is not None:
+            data["default_model"] = default_model.strip() or None
         self.store.set_setting(f"providers.{name}", data)
         if clear_key:
             self.store.delete_setting(f"providers.{name}.api_key")
@@ -707,6 +728,26 @@ class Engine:
                 "https://github.com/", f"https://x-access-token:{token}@github.com/", 1
             )
         return url
+
+    def local_repos(self) -> list[dict[str, Any]]:
+        """The folders under ``local_repos_root`` a project can be registered from, git
+        repositories first; empty when no root is configured."""
+        root = self.local_repos_root
+        if root is None or not root.is_dir():
+            return []
+        out: list[dict[str, Any]] = []
+        for path in sorted(root.iterdir(), key=lambda p: p.name.lower()):
+            if not path.is_dir() or path.name.startswith("."):
+                continue
+            out.append(
+                {
+                    "name": path.name,
+                    "path": path.as_posix(),
+                    "is_git": (path / ".git").exists(),
+                }
+            )
+        out.sort(key=lambda r: (not r["is_git"], r["name"].lower()))
+        return out
 
     def create_job(
         self, request: str, repo_path: Path | None = None, *, project_id: str | None = None
@@ -1499,7 +1540,7 @@ class Engine:
         """The specialist that wrote the last phase: it also handles CI fixes."""
         phases = self._phases(job)
         if not phases:
-            return RoleName.DEVELOPER
+            return RoleName.BACKEND
         index = min(max(job.data.phase_index - 1, 0), len(phases) - 1)
         return specialist_for(phases[index].get("domain"))
 

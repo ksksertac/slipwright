@@ -28,20 +28,19 @@ SPECIALIST_FOR: dict[Domain, RoleName] = {
     Domain.WEB: RoleName.WEB_UI,
     Domain.MOBILE: RoleName.MOBILE_UI,
     Domain.INFRA: RoleName.DEVOPS,
-    Domain.DOCS: RoleName.DEVELOPER,
-    Domain.GENERAL: RoleName.DEVELOPER,
+    Domain.DOCS: RoleName.BACKEND,  # no specialist of its own: the backend agent writes it
+    Domain.GENERAL: RoleName.BACKEND,
 }
 
 # roles that implement phases (share DeveloperResult and the developer prompt shape)
 DEVELOPER_ROLES: frozenset[RoleName] = frozenset(
-    {RoleName.DEVELOPER, RoleName.BACKEND, RoleName.WEB_UI, RoleName.MOBILE_UI}
+    {RoleName.BACKEND, RoleName.WEB_UI, RoleName.MOBILE_UI}
 )
 
 # the standards domain each role reads (T9.4); "*" means a little of everything
 STANDARDS_DOMAIN: dict[RoleName, str] = {
     RoleName.PO: "product",
     RoleName.ARCHITECT: "architecture",
-    RoleName.DEVELOPER: "backend",
     RoleName.BACKEND: "backend",
     RoleName.WEB_UI: "web",
     RoleName.MOBILE_UI: "mobile",
@@ -54,7 +53,6 @@ STANDARDS_DOMAIN: dict[RoleName, str] = {
 LABEL: dict[RoleName, str] = {
     RoleName.PO: "Product Owner",
     RoleName.ARCHITECT: "Architect",
-    RoleName.DEVELOPER: "Developer",
     RoleName.BACKEND: "Backend",
     RoleName.WEB_UI: "Web UI",
     RoleName.MOBILE_UI: "Mobile UI",
@@ -66,7 +64,6 @@ LABEL: dict[RoleName, str] = {
 SCOPE: dict[RoleName, str] = {
     RoleName.PO: "Turns a request into epics, stories and tasks — the backlog that goes to Jira.",
     RoleName.ARCHITECT: "From backlog and repository: build/test/run profile, decisions, phases.",
-    RoleName.DEVELOPER: "Generic implementer for phases without a specialist domain.",
     RoleName.BACKEND: "Services, APIs, data models, migrations, background jobs.",
     RoleName.WEB_UI: "Web front-end: pages, components, state, styling, accessibility.",
     RoleName.MOBILE_UI: "Mobile apps: screens, navigation, platform APIs, offline state.",
@@ -113,7 +110,7 @@ def specialist_for(domain: str | None) -> RoleName:
     try:
         return SPECIALIST_FOR[Domain(domain or Domain.GENERAL)]
     except ValueError:
-        return RoleName.DEVELOPER
+        return RoleName.BACKEND
 
 
 __all__ = [

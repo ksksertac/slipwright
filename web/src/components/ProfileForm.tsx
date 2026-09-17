@@ -4,7 +4,6 @@ import { useProviderModels, useProviders } from "../api/hooks";
 const ROLES = [
   "po",
   "architect",
-  "developer",
   "backend",
   "web_ui",
   "mobile_ui",
