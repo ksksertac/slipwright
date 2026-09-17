@@ -26,6 +26,7 @@ class ActivityKind(StrEnum):
     APPROVAL = "approval"  # human approved / rejected
     INBOX = "inbox"  # steering messages consumed
     JIRA = "jira"  # Jira actions executed or refused
+    STANDARDS = "standards"  # sections retrieved into a role's prompt
     CRASH = "crash"  # a phase crashed
     FAILED = "failed"  # the job gave up
     DONE = "done"
@@ -220,6 +221,7 @@ def overview(projects: int, jobs: list[Job], *, recent: int = 20) -> Overview:
 
 _INBOX = re.compile(r"^inbox: \d+ message\(s\) consumed by (\w+)")
 _JIRA = re.compile(r"^jira(?: \((\w+)\))?:")
+_STANDARDS = re.compile(r"^standards \((\w+)(?: phase \d+)?\):")
 _ROLE_PREFIX: dict[str, RoleName] = {"PR ": RoleName.DEVOPS}
 for _role in RoleName:
     _ROLE_PREFIX[f"{_role.value}:"] = _role
@@ -235,6 +237,11 @@ def classify(t: Transition) -> tuple[ActivityKind, RoleName | None]:
         role = m.group(1)
         return ActivityKind.JIRA, (
             RoleName(role) if role and role in RoleName.__members__.values() else None
+        )
+    if (m := _STANDARDS.match(note)) is not None:
+        role = m.group(1)
+        return ActivityKind.STANDARDS, (
+            RoleName(role) if role in RoleName.__members__.values() else None
         )
     if note == "job started":
         return ActivityKind.STARTED, None

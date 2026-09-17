@@ -27,7 +27,9 @@ technology, files or architecture — the Architect does that from your backlog.
 backlog as small as the request allows: three to eight tasks is typical.
 If `feedback` is present, a human rejected your previous backlog (`previous_backlog`);
 address every point in it. If a `jira` section is present you may add Jira actions for
-issues that already exist; the backlog itself is mirrored to Jira by the engine."""
+issues that already exist; the backlog itself is mirrored to Jira by the engine.
+If a `standards` section is present its sections are binding unless they contradict
+the core rules; say in `summary` when one could not be followed and why."""
 
 
 def run(

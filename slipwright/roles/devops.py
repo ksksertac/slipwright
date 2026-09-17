@@ -21,7 +21,9 @@ the approved plan and the job history; `branch_diff` is what changed. Produce a 
 `pr_title` (imperative, under 70 characters) and a `pr_body` in Markdown that explains
 what changed and why, lists the phases, and mentions how it was tested. Do not invent
 anything that is not in the draft or the diff. If a `jira` section is present, comment
-the outcome on the stories listed there (the PR link is added by the engine)."""
+the outcome on the stories listed there (the PR link is added by the engine).
+If a `standards` section is present its sections are binding unless they contradict
+the core rules; say in `summary` when one could not be followed and why."""
 
 
 def run(

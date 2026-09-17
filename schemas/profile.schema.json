@@ -43,6 +43,20 @@
           },
           "title": "Permissions",
           "type": "array"
+        },
+        "standards_budget": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Token budget for the standards sections retrieved into this role's prompt; unset means the value under Settings \u2192 Standards.",
+          "title": "Standards Budget"
         }
       },
       "required": [

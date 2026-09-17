@@ -36,7 +36,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 
 ## Progress
 
-> **Resume here:** Phases 0–8 and T9.0–T9.3 are complete. Next: **T9.4** (retrieval into every role's prompt), then T9.9, T9.5, T9.6, T9.8, T9.7.
+> **Resume here:** Phases 0–8 and T9.0–T9.4 are complete. Next: **T9.9** (pipeline view and bulk approvals), then T9.5, T9.6, T9.8, T9.7.
 > Design note for T1.3: `run_cmd` is executed as a subprocess in the worktree (Docker is used
 > only if the profile's `run_cmd` itself invokes it).
 > Design note for T2.2: `invoke_role` talks to a `ModelProvider` (`slipwright/providers/`);
@@ -129,7 +129,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 | 9 | T9.1 Specialist agents: backend, web UI, mobile UI | [x] |
 | 9 | T9.2 Standards corpus | [x] |
 | 9 | T9.3 Standards index (RAG) | [x] |
-| 9 | T9.4 Retrieval into every role's prompt | [ ] |
+| 9 | T9.4 Retrieval into every role's prompt | [x] |
 | 9 | T9.5 Standards review gate | [ ] |
 | 9 | T9.6 Standards in the UI | [ ] |
 | 9 | T9.7 Orchestrator hardening: budgets, retries, supervisor decisions | [ ] |
@@ -792,20 +792,34 @@ make QA own end-to-end tests.
 
 ### T9.4 — Retrieval into every role's prompt
 **Done when**
-- [ ] `base_context` gains a `standards` section: `core` (full `core.md`) plus `retrieved`
+- [x] `base_context` gains a `standards` section: `core` (full `core.md`) plus `retrieved`
   chunks for the role's domain, chosen by a query built from the request, the current
   phase goal, its files and the breakdown task title; capped by a token budget per role
   (default 2 000 tokens, profile-configurable)
-- [ ] Role → domain mapping: analyst→analysis, planner→all domains (k=2 each), specialists
-  →their domain, qa→testing, devops→devops; the Planner also receives the list of domains
-  so it can tag phases
-- [ ] Every invocation records the chunk ids and headings it was given as a history entry
+- [x] Role → domain mapping: po→product, architect→architecture plus every other domain
+  (k=2 each), specialists→their domain, qa→testing, devops→devops; the Architect also
+  receives the list of domains so it can tag phases
+- [x] Every invocation records the chunk ids and headings it was given as a history entry
   (`standards: 3 section(s) for backend`) and in `RoleResult.usage`-style metadata; the
   job page lists them per phase
-- [ ] Prompts tell the role that retrieved standards are binding unless they contradict
+- [x] Prompts tell the role that retrieved standards are binding unless they contradict
   `core`, and to say so in `summary` when a standard could not be followed
-- [ ] Tests: the developer prompt for a Kafka phase contains the retry section and not the
+- [x] Tests: the developer prompt for a Kafka phase contains the retry section and not the
   accessibility section; the token budget truncates deterministically
+
+> Design note for T9.4: `slipwright/standards/retrieval.py`. `Engine._invoke` calls
+> `standards_for(job, role, profile)` unless the caller passed `standards=`; the result's
+> `as_context()` (`note`, `domain`, `core`, `retrieved[]`) goes into `base_context`. The
+> query leads with the phase goal, files and backlog task title (FTS keeps only the first
+> 32 tokens), the request last. Budget: `RoleConfig.standards_budget`, else the
+> `token_budget` standards setting (2 000); sections are taken in rank order, one that does
+> not fit is dropped and smaller ones after it may still be taken; `estimate_tokens` is
+> len/4 so the cut is provider-independent. When nothing in the role's own domain matches,
+> `StandardsIndex.browse` supplies the domain's opening sections (a PO always reads how
+> backlogs are written). Each call records `standards (<role>[ phase N]): K section(s)` in
+> the history *before* the role runs (so `history[-1]` after a phase is still the role's
+> transition); `ActivityKind.STANDARDS`, and the job page lists them under the phase card.
+> `RoleResult.standards` carries the chunk ids.
 
 ### T9.5 — Standards review gate
 **Done when**

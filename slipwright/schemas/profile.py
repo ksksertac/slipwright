@@ -58,6 +58,12 @@ class RoleConfig(BaseModel):
     )
     thinking_depth: ThinkingDepth
     permissions: list[Permission] = Field(default_factory=list)
+    standards_budget: int | None = Field(
+        default=None,
+        ge=0,
+        description="Token budget for the standards sections retrieved into this role's "
+        "prompt; unset means the value under Settings → Standards.",
+    )
 
     @field_validator("permissions")
     @classmethod

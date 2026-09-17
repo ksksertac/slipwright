@@ -31,12 +31,16 @@ If `build_failure` is present, the build or tests failed after your previous att
 this phase: read the output, fix the cause, and return the corrected files.
 If a `jira` section is present you are expected to keep the tracker current: transition
 `current_task_key` to in progress, and add a short comment on it (and `log_work` with a
-realistic estimate) describing what you changed."""
+realistic estimate) describing what you changed.
+If a `standards` section is present its sections are binding unless they contradict
+the core rules; say in `summary` when one could not be followed and why."""
 
 FIX_INSTRUCTIONS = """\
 The change set on this branch is complete but `ci_failure` shows the continuous
 integration run failed. Read the log, fix the cause, and return the corrected files
-(complete contents; paths relative to the project root). Set `phase_complete` to true."""
+(complete contents; paths relative to the project root). Set `phase_complete` to true.
+If a `standards` section is present its sections are binding unless they contradict
+the core rules; say in `summary` when one could not be followed and why."""
 
 
 def run(

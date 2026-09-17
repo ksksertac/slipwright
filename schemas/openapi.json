@@ -84,6 +84,7 @@
           "approval",
           "inbox",
           "jira",
+          "standards",
           "crash",
           "failed",
           "done",
@@ -2037,6 +2038,19 @@
             ],
             "description": "Which provider serves this role (anthropic, openai, deepseek); unset means the configured default.",
             "title": "Provider"
+          },
+          "standards_budget": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Token budget for the standards sections retrieved into this role's prompt; unset means the value under Settings \u2192 Standards.",
+            "title": "Standards Budget"
           },
           "thinking_depth": {
             "$ref": "#/components/schemas/ThinkingDepth"

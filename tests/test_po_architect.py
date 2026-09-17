@@ -49,6 +49,11 @@ def _engine(
     return engine
 
 
+def _moves(job: Job) -> list[JobState]:
+    """State changes only: retrieval / inbox records sit on the same state."""
+    return [t.to_state for t in job.history if t.from_state is not t.to_state]
+
+
 # --- product owner --------------------------------------------------------------------
 
 
@@ -76,7 +81,7 @@ def test_po_sees_worktree_and_job_stops_at_backlog_approval(
     assert "pyproject.toml" in request.prompt
     assert "[project]" in request.prompt
     assert "add a /health endpoint" in request.prompt
-    assert [t.to_state for t in job.history] == [
+    assert _moves(job) == [
         JobState.BACKLOG,
         JobState.AWAITING_BACKLOG_APPROVAL,
     ]
@@ -101,13 +106,13 @@ def test_approve_leaves_gate_and_reject_reruns_po_with_feedback(
     assert "split the story, one task per endpoint" in provider.requests[1].prompt
     assert "previous_backlog" in provider.requests[1].prompt
     assert '"id": "t1"' in provider.requests[1].prompt  # the rejected backlog, verbatim
-    assert [t.to_state for t in job.history] == [
+    assert _moves(job) == [
         JobState.BACKLOG,
         JobState.AWAITING_BACKLOG_APPROVAL,
         JobState.BACKLOG,
         JobState.AWAITING_BACKLOG_APPROVAL,
     ]
-    assert "rejected: split the story" in (job.history[2].note or "")
+    assert any("rejected: split the story" in (t.note or "") for t in job.history)
 
     job = engine.approve(job.id)
     assert job.state is JobState.ARCHITECTURE
@@ -250,7 +255,7 @@ def test_reject_architecture_reruns_architect_with_previous_plan(
     prompt = provider.requests[-1].prompt
     assert "use poetry, not pip" in prompt
     assert "previous_plan" in prompt and "previous_profile" in prompt
-    assert [t.to_state for t in job.history][-3:] == [
+    assert _moves(job)[-3:] == [
         JobState.AWAITING_ARCHITECTURE_APPROVAL,
         JobState.ARCHITECTURE,
         JobState.AWAITING_ARCHITECTURE_APPROVAL,

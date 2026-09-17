@@ -70,6 +70,7 @@ class RoleResult(BaseModel):
     error: InvokeError | None = None
     raw_text: str | None = None
     usage: Usage | None = None
+    standards: list[str] | None = None  # chunk ids retrieved into the prompt (T9.4)
 
     @property
     def ok(self) -> bool:

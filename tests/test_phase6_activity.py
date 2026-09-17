@@ -31,6 +31,10 @@ def test_activity_feed_lists_the_whole_pipeline_in_order(
     assert job.state is JobState.DONE
 
     items = job_activity(job)  # chronological
+    retrievals = [i for i in items if i.kind is ActivityKind.STANDARDS]
+    assert [i.role for i in retrievals][:3] == [RoleName.PO, RoleName.ARCHITECT, RoleName.ARCHITECT]
+    assert retrievals[0].title.startswith("standards (po):") and retrievals[0].has_detail
+    items = [i for i in items if i.kind is not ActivityKind.STANDARDS]
     kinds = [(i.kind, i.role) for i in items]
     assert kinds == [
         (ActivityKind.STARTED, None),
@@ -54,11 +58,12 @@ def test_activity_feed_lists_the_whole_pipeline_in_order(
     assert items[5].title.startswith("rejected: split more")
     assert items[-1].title.startswith("PR https://example.test/pr/1")
     assert items[1].has_detail  # the proposed profile JSON
-    assert [i.index for i in items] == list(range(len(job.history)))
+    assert [i.index for i in job_activity(job)] == list(range(len(job.history)))
 
     feed = project_activity([job])
     assert [i.index for i in feed] == list(reversed(range(len(job.history))))
-    assert [i.index for i in project_activity([job], limit=3)] == [16, 15, 14]
+    last = len(job.history) - 1
+    assert [i.index for i in project_activity([job], limit=3)] == [last, last - 1, last - 2]
 
 
 def test_progress_counts_tasks_and_approvals(
@@ -101,7 +106,7 @@ def test_progress_activity_and_detail_endpoints(
         assert progress["jobs"][0]["pending_approval"] == "backlog"
 
         feed = client.get(f"/api/projects/{project['id']}/activity").json()
-        assert [i["kind"] for i in feed] == ["role", "started"]
+        assert [i["kind"] for i in feed] == ["role", "standards", "started"]
         assert feed[0]["has_detail"] is True
         assert client.get(f"/api/projects/{project['id']}/activity?limit=1").json()[0] == feed[0]
 

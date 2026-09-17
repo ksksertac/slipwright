@@ -151,7 +151,9 @@ def test_agents_endpoint_and_activity_filter(
         assert "jira" in by_role["backend"]["permissions"]
 
         mine = client.get("/api/activity?role=web_ui").json()
-        assert len(mine) == 1 and mine[0]["title"].startswith("web_ui phase 2/3")
+        assert [i["kind"] for i in mine] == ["role", "standards"]  # newest first
+        assert mine[0]["title"].startswith("web_ui phase 2/3")
+        assert mine[1]["title"].startswith("standards (web_ui phase 2):")
         assert client.get("/api/activity?role=nope").status_code == 422
 
 

@@ -71,10 +71,8 @@ def test_post_jobs_starts_job_and_runs_the_po_in_background(
     job = client.get(f"/api/jobs/{created['id']}").json()
     assert job["state"] == "awaiting_backlog_approval"
     assert job["data"]["backlog"]["epics"][0]["stories"][0]["tasks"][0]["id"] == "t1"
-    assert [t["to_state"] for t in job["history"]] == [
-        "backlog",
-        "awaiting_backlog_approval",
-    ]
+    moves = [t["to_state"] for t in job["history"] if t["from_state"] != t["to_state"]]
+    assert moves == ["backlog", "awaiting_backlog_approval"]
     assert len(provider.requests) == 1
 
 

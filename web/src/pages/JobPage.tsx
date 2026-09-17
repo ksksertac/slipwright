@@ -571,23 +571,62 @@ function Phases({ job }: { job: Job }) {
           {g.entries.map((t, i) => {
             const note = t.note ?? "";
             const isGate = note.startsWith("build gate");
+            const isStandards = note.startsWith("standards");
+            const badge = isStandards ? "standards" : isGate ? "gate" : "diff";
+            const cls = isStandards
+              ? "idle"
+              : isGate
+                ? note.includes("passed")
+                  ? "ok"
+                  : "bad"
+                : "work";
             return (
-              <details key={i} open={!isGate && i === g.entries.length - 1}>
+              <details key={i} open={!isGate && !isStandards && i === g.entries.length - 1}>
                 <summary>
-                  <span
-                    className={`badge ${isGate ? (note.includes("passed") ? "ok" : "bad") : "work"}`}
-                  >
-                    {isGate ? "gate" : "diff"}
-                  </span>{" "}
-                  {note} <span className="muted small">· {formatTime(t.at)}</span>
+                  <span className={`badge ${cls}`}>{badge}</span> {note}{" "}
+                  <span className="muted small">· {formatTime(t.at)}</span>
                 </summary>
-                {isGate ? <pre>{t.detail}</pre> : <Diff text={t.detail ?? ""} />}
+                {isStandards ? (
+                  <StandardsList text={t.detail ?? ""} />
+                ) : isGate ? (
+                  <pre>{t.detail}</pre>
+                ) : (
+                  <Diff text={t.detail ?? ""} />
+                )}
               </details>
             );
           })}
         </div>
       ))}
     </section>
+  );
+}
+
+/** The retrieval record: query and budget on top, then one line per section given. */
+function StandardsList({ text }: { text: string }) {
+  const lines = text.split("\n").filter(Boolean);
+  const meta = lines.filter((l) => /^(domain|query|budget):/.test(l));
+  const sections = lines.filter((l) => !/^(domain|query|budget):/.test(l) && !l.startsWith("("));
+  const tail = lines.find((l) => l.startsWith("("));
+  return (
+    <div className="small">
+      {meta.map((l) => (
+        <div key={l} className="muted">
+          {l}
+        </div>
+      ))}
+      <ul style={{ margin: "6px 0 0 18px" }}>
+        {sections.map((l) => {
+          const [id, rest] = l.split("  ", 2);
+          return (
+            <li key={id}>
+              <span className="mono muted">{id}</span> {rest}
+            </li>
+          );
+        })}
+      </ul>
+      {tail && <div className="muted">{tail}</div>}
+    </div>
   );
 }
 
@@ -729,6 +768,7 @@ function classify(t: Transition): string {
   if (note === "job started") return "started";
   if (note.startsWith("inbox:")) return "inbox";
   if (note.startsWith("jira")) return "jira";
+  if (note.startsWith("standards")) return "standards";
   if (note.startsWith("approved") || note.startsWith("rejected")) return "approval";
   if (note.startsWith("build gate")) return "gate";
   if (t.to_state === "done") return "done";

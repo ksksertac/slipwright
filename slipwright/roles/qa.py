@@ -28,7 +28,9 @@ would prove it works: name each case and describe precisely what it checks. Cove
 levels the change needs — unit cases for logic, integration cases for each real boundary
 (database, HTTP, queue) and end-to-end cases that walk the user journey through the real
 UI or API the way a user would. Do not write test code yet; return only `test_cases`.
-If `feedback` is present, a human rejected your previous list; address every point in it."""
+If `feedback` is present, a human rejected your previous list; address every point in it.
+If a `standards` section is present its sections are binding unless they contradict
+the core rules; say in `summary` when one could not be followed and why."""
 
 STAGE_TWO = """\
 You are QA. Stage 2 of 2. Write automated tests for exactly the cases in
@@ -39,7 +41,9 @@ API in-process and say so in `summary`. Return the complete contents of each tes
 `changes`; paths are relative to the project root. If `build_failure` is present, your
 previous tests did not pass the build gate: read the output and fix them.
 If a `jira` section is present, open a Bug issue (parent: the story's key) for each defect
-you find in the change, and close it with a comment once the fix passes."""
+you find in the change, and close it with a comment once the fix passes.
+If a `standards` section is present its sections are binding unless they contradict
+the core rules; say in `summary` when one could not be followed and why."""
 
 
 def run(

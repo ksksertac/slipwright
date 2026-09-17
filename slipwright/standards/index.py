@@ -380,7 +380,38 @@ class StandardsIndex:
         hits.sort(key=lambda h: (-h.score, h.chunk.page, h.chunk.heading))
         return hits[:k]
 
+    def browse(
+        self, domain: str | None = None, *, k: int = 4, project_id: str | None = None
+    ) -> list[Hit]:
+        """The first ``k`` sections of a domain in page order, project pages first: what
+        a role reads when nothing in its domain matches the query."""
+        scope_sql = "(scope = 'global' OR project_id = ?)"
+        args: list[Any] = [project_id or ""]
+        if domain and domain != "*":
+            scope_sql += " AND domain = ?"
+            args.append(domain)
+        with self._lock:
+            rows = self._conn.execute(
+                f"SELECT * FROM chunks WHERE {scope_sql} "
+                "ORDER BY CASE scope WHEN 'project' THEN 0 ELSE 1 END, page, rowid LIMIT ?",
+                [*args, k],
+            ).fetchall()
+        return [Hit(chunk=self._chunk(r), score=0.0, keyword=0.0, semantic=0.0) for r in rows]
+
     # -- helpers -------------------------------------------------------------------------
+
+    @staticmethod
+    def _chunk(r: sqlite3.Row) -> Chunk:
+        return Chunk(
+            id=r["id"],
+            scope=r["scope"],
+            domain=r["domain"],
+            page=r["page"],
+            title=r["title"],
+            heading=r["heading"],
+            text=r["text"],
+            tags=tuple(r["tags"].split()) if r["tags"] else (),
+        )
 
     @staticmethod
     def _scope_clause(project_id: str | None) -> tuple[str, tuple[Any, ...]]:

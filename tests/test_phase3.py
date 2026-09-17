@@ -149,7 +149,7 @@ def test_developer_runs_one_phase_per_invocation_and_records_diffs(
     assert all(r.model == seed.roles[RoleName.DEVELOPER].model for r in dev_reqs)
     assert job.data.phase_index == 2
 
-    states = [(t.from_state, t.to_state) for t in job.history]
+    states = [(t.from_state, t.to_state) for t in job.history if t.from_state is not t.to_state]
     assert states[-4:] == [
         (JobState.DEVELOPING, JobState.BUILD_GATE),
         (JobState.BUILD_GATE, JobState.DEVELOPING),

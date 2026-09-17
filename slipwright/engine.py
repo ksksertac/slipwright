@@ -70,6 +70,7 @@ from slipwright.standards.index import (
     StandardsIndexError,
     corpus_fingerprint,
 )
+from slipwright.standards.retrieval import Retrieval, core_text, retrieve
 from slipwright.store import JobInProgress, JobStore, ProjectNotFound
 from slipwright.workspace import Workspace
 from slipwright.workspace import git as g
@@ -555,6 +556,41 @@ class Engine:
             query, domain, k=k or self.standards_settings()["top_k"], project_id=project_id
         )
 
+    def standards_for(self, job: Job, role: RoleName, profile: Profile) -> Retrieval | None:
+        """The standards a role reads for this call: ``core`` plus its domain's best
+        sections under the role's budget. ``None`` when the index is unavailable — the
+        role then runs without standards rather than not at all."""
+        project = self._project_of(job)
+        settings = self.standards_settings()
+        config = profile.roles.get(role)
+        budget = settings["token_budget"]
+        if config is not None and config.standards_budget is not None:
+            budget = config.standards_budget
+        try:
+            self.ensure_standards_indexed(project.id if project else None)
+            index = self.standards_index
+        except StandardsIndexError as exc:
+            log.warning("standards unavailable for %s: %s", role.value, exc)
+            return None
+        project_id = project.id if project else None
+
+        def search(query: str, domain: str | None, k: int) -> list[Hit]:
+            return index.search(query, domain, k=k, project_id=project_id)
+
+        def browse(domain: str | None, k: int) -> list[Hit]:
+            return index.browse(domain, k=k, project_id=project_id)
+
+        core = core_text(self.standards_dir, project.repo_path if project else None)
+        return retrieve(
+            search,
+            job,
+            role,
+            core=core,
+            budget=budget,
+            top_k=int(settings["top_k"]),
+            browse=browse,
+        )
+
     def _jira_sync_for(self, job: Job) -> JiraSync | None:
         if job.project_id is None:
             return None
@@ -894,7 +930,19 @@ class Engine:
         profile = kw.get("profile") or kw.get("seed") or job.profile or self.seed_for(job)
         if project is not None and "jira" not in kw:
             kw["jira"] = jira_context(job, role, profile, project)
+        retrieved: Retrieval | None = None
+        if "standards" not in kw:
+            retrieved = self.standards_for(job, role, profile)
+            if retrieved is not None:
+                kw["standards"] = retrieved.as_context()
+                phase = job.data.phase_index + 1 if job.state is JobState.DEVELOPING else None
+                self.store.update_state(
+                    job.id, job.state, note=retrieved.note(phase), detail=retrieved.detail()
+                )
+                job.history = self.store.get(job.id).history
         result = run(job, provider=self.provider, timeout_s=self.timeout_s, **kw)
+        if retrieved is not None:
+            result.standards = retrieved.chunk_ids
         if result.ok and result.output is not None and project is not None:
             self._apply_jira_actions(job, role, profile, project, result.output.jira_actions)
         if pending:
