@@ -42,6 +42,15 @@ but the standards review found the listed `violations` (each names the section, 
 and a fix); the phase already committed, so return only the files that change to resolve
 every violation, and set `phase_complete` to true."""
 
+IN_PARTS = """
+Work in parts. If `output_was_truncated` is present, your previous answer was cut off at
+the output limit and was thrown away: return only the most important files now (a few
+files, complete contents) and set `phase_complete` to false — you will be called again
+for the rest. If `continuation` is present, the files listed in `files_so_far` are
+already written from your earlier parts (do not repeat them unless they must change);
+continue with the next files and set `phase_complete` to true only when the phase's goal
+is fully met."""
+
 FIX_INSTRUCTIONS = """\
 The change set on this branch is complete but `ci_failure` shows the continuous
 integration run failed. Read the log, fix the cause, and return the corrected files
@@ -61,6 +70,8 @@ def run(
     as_role: RoleName = RoleName.BACKEND,
     standards: dict[str, Any] | None = None,
     review: dict[str, Any] | None = None,
+    truncated: str | None = None,
+    continuation: dict[str, Any] | None = None,
 ) -> RoleResult:
     """Run the generic developer or, with ``role``, one of the specialists."""
     from slipwright.roles.specialists import INSTRUCTIONS as SPECIALIST_INSTRUCTIONS
@@ -71,6 +82,8 @@ def run(
     instructions = SPECIALIST_INSTRUCTIONS.get(as_role, INSTRUCTIONS)
     if review:
         instructions += REVIEW_FIX
+    if truncated or continuation:
+        instructions += IN_PARTS
 
     if ci_failure is not None:
         context = base_context(job, instructions=FIX_INSTRUCTIONS, jira=jira, standards=standards)
@@ -89,6 +102,10 @@ def run(
 
     context["project"] = project_facts(profile)
     context["plan"] = plan_outline(plan)
+    if truncated:
+        context["output_was_truncated"] = truncated
+    if continuation:
+        context["continuation"] = continuation
     context["tree"] = list_tree(worktree)
     context["files"] = read_files(worktree, wanted)
 

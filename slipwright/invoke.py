@@ -26,6 +26,7 @@ from slipwright.providers import (
     ProviderError,
     ProviderRefusalError,
     ProviderTimeoutError,
+    ProviderTruncatedError,
     ProviderUnavailableError,
 )
 from slipwright.roles.results import RESULT_SCHEMAS, RoleOutput, result_schema_for
@@ -43,6 +44,7 @@ class InvokeErrorKind(StrEnum):
     MALFORMED_OUTPUT = "malformed_output"
     BUDGET = "budget"  # the job's budget is exhausted (T9.7)
     LOOP = "loop"  # the role produced the same output twice in a row (T9.7)
+    TRUNCATED = "truncated"  # the answer hit the output limit; ask for a smaller part
 
 
 # provider errors worth another attempt; refusals and missing providers are not
@@ -164,6 +166,8 @@ def invoke_role(
         return fail(InvokeErrorKind.TIMEOUT, f"{role.value} timed out after {timeout_s:g}s{why}")
     except ProviderRefusalError as exc:
         return fail(InvokeErrorKind.REFUSED, str(exc))
+    except ProviderTruncatedError as exc:
+        return fail(InvokeErrorKind.TRUNCATED, str(exc))
     except ProviderUnavailableError as exc:
         return fail(InvokeErrorKind.PROVIDER_UNAVAILABLE, str(exc))
     except ProviderError as exc:

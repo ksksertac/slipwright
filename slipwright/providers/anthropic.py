@@ -21,12 +21,13 @@ from slipwright.providers import (
     ProviderError,
     ProviderRefusalError,
     ProviderTimeoutError,
+    ProviderTruncatedError,
     ProviderUnavailableError,
 )
 from slipwright.schemas.profile import ThinkingDepth
 
 # Non-streaming ceiling that keeps responses well under the SDK's HTTP timeout.
-DEFAULT_MAX_TOKENS = 16_000
+DEFAULT_MAX_TOKENS = 32_000
 
 
 class AnthropicProvider:
@@ -96,7 +97,7 @@ class AnthropicProvider:
             category = getattr(details, "category", None) if details is not None else None
             raise ProviderRefusalError(f"model refused (category={category})")
         if message.stop_reason == "max_tokens":
-            raise ProviderError(f"response truncated at max_tokens={self._max_tokens}")
+            raise ProviderTruncatedError(f"response truncated at max_tokens={self._max_tokens}")
 
         text = "".join(block.text for block in message.content if block.type == "text")
         usage = message.usage

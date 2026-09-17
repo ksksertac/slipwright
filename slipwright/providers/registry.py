@@ -38,6 +38,7 @@ class ProviderSpec:
     supports_effort: bool
     max_tokens_param: str
     docs_url: str
+    max_tokens: int = 32_000  # the largest answer the vendor accepts in one call
 
 
 PROVIDERS: dict[str, ProviderSpec] = {
@@ -67,6 +68,7 @@ PROVIDERS: dict[str, ProviderSpec] = {
         supports_effort=False,
         max_tokens_param="max_tokens",
         docs_url="https://platform.deepseek.com/api_keys",
+        max_tokens=8_192,  # the chat model rejects anything larger
     ),
 }
 
@@ -93,7 +95,7 @@ def build_client(
         from slipwright.providers.anthropic import AnthropicProvider
 
         return AnthropicProvider.from_credentials(
-            creds.api_key, base_url=creds.base_url, transport=transport
+            creds.api_key, base_url=creds.base_url, transport=transport, max_tokens=spec.max_tokens
         )
     from slipwright.providers.openai_compat import OpenAICompatProvider
 
@@ -102,6 +104,7 @@ def build_client(
         creds.base_url,
         supports_effort=spec.supports_effort,
         max_tokens_param=spec.max_tokens_param,
+        max_tokens=spec.max_tokens,
         transport=transport,
     )
 

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { describeError, type Job } from "../api/client";
-import { useApprove, useReject } from "../api/hooks";
+import { useApprove, useReject, useRetryJob } from "../api/hooks";
 
 export function pendingApproval(job: Job): string | null {
   switch (job.state) {
@@ -17,6 +17,58 @@ export function pendingApproval(job: Job): string | null {
     default:
       return null;
   }
+}
+
+/** The real failure of a failed job: the transition that entered `failed`, not the
+ * bookkeeping (Jira sync, retrieval) recorded on it afterwards. */
+export function failureOf(job: Job) {
+  return [...job.history]
+    .reverse()
+    .find((t) => t.to_state === "failed" && t.from_state !== "failed");
+}
+
+/** Continue a failed job from the step it died in, optionally with a note to the agent. */
+export function RetryActions({ job, compact = false }: { job: Job; compact?: boolean }) {
+  const retry = useRetryJob(job.id);
+  const [open, setOpen] = useState(false);
+  const [feedback, setFeedback] = useState("");
+  if (job.state !== "failed") return null;
+  return (
+    <div className="row">
+      <button
+        className="btn primary small"
+        disabled={retry.isPending}
+        onClick={() => retry.mutate(null)}
+        title="continue from the step that failed; what was built stays"
+      >
+        {retry.isPending ? "Retrying…" : "Retry"}
+      </button>
+      {!open ? (
+        <button className="btn small" onClick={() => setOpen(true)}>
+          Retry with a note…
+        </button>
+      ) : (
+        <>
+          <input
+            type="text"
+            style={{ width: compact ? 220 : 360 }}
+            placeholder="what the agent should know this time"
+            value={feedback}
+            autoFocus
+            onChange={(e) => setFeedback(e.target.value)}
+          />
+          <button
+            className="btn primary small"
+            disabled={!feedback.trim() || retry.isPending}
+            onClick={() => retry.mutate(feedback.trim(), { onSuccess: () => setOpen(false) })}
+          >
+            Send & retry
+          </button>
+        </>
+      )}
+      {retry.error && <span className="error small">{describeError(retry.error)}</span>}
+    </div>
+  );
 }
 
 /** The supervisor's view of the gate the job waits at (assisted / auto modes). */

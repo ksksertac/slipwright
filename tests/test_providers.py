@@ -101,7 +101,7 @@ def test_openai_compat_request_and_response() -> None:
         {"role": "user", "content": "do it"},
     ]
     assert body["response_format"] == {"type": "json_object"}
-    assert body["reasoning_effort"] == "high" and body["max_tokens"] == 16_000
+    assert body["reasoning_effort"] == "high" and body["max_tokens"] == 32_000
     assert provider.list_models() == ["a-model", "b-model"]
 
     # depth mapping and vendor knobs

@@ -24,7 +24,13 @@ import { Crumbs } from "../components/Crumbs";
 import { Detail } from "../components/Detail";
 import { Diff } from "../components/Diff";
 import { ReviewDetail, ViolationsTable, type ReviewRecord } from "../components/Review";
-import { GateActions, Recommendation, pendingApproval } from "../components/GateActions";
+import {
+  GateActions,
+  Recommendation,
+  RetryActions,
+  failureOf,
+  pendingApproval,
+} from "../components/GateActions";
 import { IconCheck, IconExternal, IconTrash, IconX } from "../components/icons";
 import { JiraLink } from "../components/JiraLink";
 import { ConfirmModal } from "../components/Modal";
@@ -180,16 +186,25 @@ function GatePanel({ job }: { job: Job }) {
   const pending = pendingApproval(job);
   if (!pending) {
     if (job.state === "failed") {
-      const last = [...job.history].reverse().find((t) => t.to_state === "failed");
+      const last = failureOf(job);
       return (
         <div className="callout error" style={{ display: "block" }}>
-          <strong>Failed:</strong> {last?.note}
+          <div className="row spread">
+            <span>
+              <strong>Failed:</strong> {last?.note}
+            </span>
+            <RetryActions job={job} compact />
+          </div>
           {last?.detail && (
             <details style={{ marginTop: 6 }}>
               <summary>detail</summary>
               <Detail text={last.detail} />
             </details>
           )}
+          <div className="small muted" style={{ marginTop: 6 }}>
+            Retry continues from the step that failed (<code>{last?.from_state ?? "backlog"}</code>
+            ); everything built so far stays.
+          </div>
         </div>
       );
     }

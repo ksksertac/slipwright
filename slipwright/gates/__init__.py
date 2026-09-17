@@ -6,6 +6,7 @@ combined output is what the Developer gets back for a fix attempt.
 
 from __future__ import annotations
 
+import os
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -26,6 +27,33 @@ class GateResult:
         return self.output[-MAX_OUTPUT_CHARS:]
 
 
+# Slipwright's own Python environment must never leak into a project's commands: with
+# these set, a project's ``uv sync`` or ``pip install`` would write into (and wipe) the
+# environment the server runs from.
+_OWN_ENVIRONMENT = (
+    "VIRTUAL_ENV",
+    "UV_PROJECT_ENVIRONMENT",
+    "UV_PYTHON",
+    "PYTHONPATH",
+    "PYTHONHOME",
+    "CONDA_PREFIX",
+)
+
+
+def project_env(extra: dict[str, str] | None = None) -> dict[str, str]:
+    """The environment a project's build/test/run command gets: the server's, minus
+    the variables that point at the server's own Python environment."""
+    env = {k: v for k, v in os.environ.items() if k not in _OWN_ENVIRONMENT}
+    venv_bin = os.environ.get("VIRTUAL_ENV")
+    if venv_bin and "PATH" in env:
+        # the venv's bin dir was put first on PATH by the activation; take it out again
+        parts = [p for p in env["PATH"].split(os.pathsep) if not p.startswith(venv_bin)]
+        env["PATH"] = os.pathsep.join(parts)
+    if extra:
+        env.update(extra)
+    return env
+
+
 def run_command(cmd: str, cwd: Path, timeout_s: float = DEFAULT_TIMEOUT_S) -> tuple[int, str]:
     try:
         proc = subprocess.run(  # noqa: S602 - the command comes from the approved profile
@@ -37,6 +65,7 @@ def run_command(cmd: str, cwd: Path, timeout_s: float = DEFAULT_TIMEOUT_S) -> tu
             encoding="utf-8",
             errors="replace",
             timeout=timeout_s,
+            env=project_env(),
         )
     except subprocess.TimeoutExpired as exc:
         out = (exc.stdout or b"") if isinstance(exc.stdout, bytes) else (exc.stdout or "")

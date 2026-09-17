@@ -123,11 +123,36 @@ class FakeJira:
                     "isLast": True,
                 },
             )
+        if path == f"/rest/api/3/issue/createmeta/{self.project_key}/issuetypes":
+            return httpx.Response(
+                200,
+                json={
+                    "issueTypes": [
+                        {"id": "1", "name": "Epic", "subtask": False, "hierarchyLevel": 1},
+                        {"id": "2", "name": "Story", "subtask": False, "hierarchyLevel": 0},
+                        {"id": "3", "name": "Task", "subtask": False, "hierarchyLevel": 0},
+                        {"id": "4", "name": "Subtask", "subtask": True, "hierarchyLevel": -1},
+                        {"id": "5", "name": "Bug", "subtask": False, "hierarchyLevel": 0},
+                    ]
+                },
+            )
         if path == "/rest/api/3/issue" and request.method == "POST":
             fields = body["fields"]
             project = fields["project"]["key"]
             if project != self.project_key:
                 return httpx.Response(400, json={"errors": {"project": "project does not exist"}})
+            parent = (fields.get("parent") or {}).get("key")
+            level = {"Epic": 1, "Story": 0, "Task": 0, "Bug": 0, "Subtask": -1}.get(
+                fields["issuetype"]["name"], 0
+            )
+            if parent is not None and fields["issuetype"]["name"] != "Bug":
+                parent_level = {"Epic": 1, "Story": 0, "Task": 0, "Bug": 0, "Subtask": -1}.get(
+                    self.issues.get(parent, {}).get("type", ""), 0
+                )
+                if parent_level != level + 1:  # Jira Cloud: a parent is exactly one level up
+                    return httpx.Response(
+                        400, json={"errors": {"parent": "Please select valid parent issue."}}
+                    )
             self._seq += 1
             key = f"{project}-{self._seq}"
             self.issues[key] = {

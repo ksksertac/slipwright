@@ -17,6 +17,7 @@ import {
 } from "../api/hooks";
 import { AgentIcon, DomainBadge, ROLE_LABEL } from "../components/agents";
 import { BulkBar } from "../components/BulkBar";
+import { RetryActions } from "../components/GateActions";
 import { Detail } from "../components/Detail";
 import { ReviewDetail } from "../components/Review";
 import {
@@ -165,6 +166,7 @@ function LaneRow({
         </Link>
         <StateBadge state={lane.state} />
         <span className="faint tiny">started {timeAgo(lane.created_at)}</span>
+        {lane.state === "failed" && <LaneRetry jobId={lane.job_id} />}
       </div>
       <div className="lane-steps">
         {lane.steps.map((step) => (
@@ -178,6 +180,11 @@ function LaneRow({
       </div>
     </div>
   );
+}
+
+function LaneRetry({ jobId }: { jobId: string }) {
+  const job = useJob(jobId);
+  return job.data ? <RetryActions job={job.data} compact /> : null;
 }
 
 function elapsed(s: number | null | undefined): string {

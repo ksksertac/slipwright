@@ -58,6 +58,11 @@ class ProviderRefusalError(ProviderError):
     """The model declined to answer (``stop_reason == "refusal"``)."""
 
 
+class ProviderTruncatedError(ProviderError):
+    """The answer hit the output limit: the same prompt would be cut off again, so the
+    caller has to ask for less (a smaller part of the work), not simply retry."""
+
+
 class ProviderUnavailableError(ProviderError):
     """The provider could not be constructed (missing SDK, missing credentials, ...)."""
 

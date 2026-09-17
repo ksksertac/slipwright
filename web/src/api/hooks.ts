@@ -249,6 +249,18 @@ export function useSendMessage(jobId: string) {
   });
 }
 
+export function useRetryJob(jobId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (feedback: string | null) =>
+      api.post<Job>(`/api/jobs/${jobId}/retry`, feedback ? { feedback } : {}),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.job(jobId) });
+      void qc.invalidateQueries({ queryKey: keys.projects });
+    },
+  });
+}
+
 export function useDeleteJob() {
   const qc = useQueryClient();
   return useMutation({

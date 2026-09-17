@@ -20,10 +20,11 @@ from slipwright.providers import (
     ProviderError,
     ProviderRefusalError,
     ProviderTimeoutError,
+    ProviderTruncatedError,
 )
 from slipwright.schemas.profile import ThinkingDepth
 
-DEFAULT_MAX_TOKENS = 16_000
+DEFAULT_MAX_TOKENS = 32_000
 # reasoning_effort vocabulary: our five depths onto the vendor's three-ish
 _EFFORT = {
     ThinkingDepth.LOW: "low",
@@ -96,7 +97,9 @@ class OpenAICompatProvider:
         if finish == "content_filter":
             raise ProviderRefusalError("model refused (content_filter)")
         if finish == "length":
-            raise ProviderError(f"response truncated at {self.max_tokens_param}={self._max_tokens}")
+            raise ProviderTruncatedError(
+                f"response truncated at {self.max_tokens_param}={self._max_tokens}"
+            )
         message = choice.get("message") or {}
         text = message.get("content") or ""
         if isinstance(text, list):  # some vendors return content parts

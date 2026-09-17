@@ -17,6 +17,7 @@ import sys
 import time
 from pathlib import Path
 
+from slipwright.gates import project_env
 from slipwright.schemas.job import Job
 from slipwright.schemas.profile import PORT_PLACEHOLDER
 
@@ -76,7 +77,7 @@ def up(job: Job, logs_root: Path, health_timeout: float = 30.0) -> int:
             stdout=log_file,
             stderr=subprocess.STDOUT,
             stdin=subprocess.DEVNULL,
-            env={**os.environ, "PORT": str(job.port)},
+            env=project_env({"PORT": str(job.port)}),
             # each flag is a no-op on the other platform; together they give us a
             # process group we can kill as a unit
             creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if _IS_WINDOWS else 0,

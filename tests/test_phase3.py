@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from collections.abc import Callable, Iterator
@@ -290,3 +291,24 @@ def test_gate_exhausts_retries_and_fails_with_output(
     assert len([r for r in provider.requests if r.role is RoleName.BACKEND]) == 4
     assert job.data.build_attempts == 2
     assert "approved: continue with developing" in [t.note for t in job.history]
+
+
+def test_project_commands_never_see_the_servers_python_environment(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A project's `uv sync` must build its own .venv, never write into the one Slipwright
+    runs from (that wiped the container's packages once)."""
+    from slipwright.gates import project_env, run_command
+
+    monkeypatch.setenv("UV_PROJECT_ENVIRONMENT", "/opt/venv")
+    monkeypatch.setenv("VIRTUAL_ENV", "/opt/venv")
+    monkeypatch.setenv("PATH", "/opt/venv/bin" + os.pathsep + "/usr/bin")
+    monkeypatch.setenv("PYTHONPATH", "/app")
+    monkeypatch.setenv("KEEP_ME", "1")
+    env = project_env({"PORT": "8123"})
+    assert "UV_PROJECT_ENVIRONMENT" not in env and "VIRTUAL_ENV" not in env
+    assert "PYTHONPATH" not in env and env["KEEP_ME"] == "1" and env["PORT"] == "8123"
+    assert env["PATH"] == "/usr/bin"
+    probe = "import os; print(os.environ.get('UV_PROJECT_ENVIRONMENT', 'unset'))"
+    code, out = run_command(f'"{sys.executable}" -c "{probe}"', tmp_path)
+    assert code == 0 and out.strip() == "unset"

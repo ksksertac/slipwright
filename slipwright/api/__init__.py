@@ -84,6 +84,10 @@ class Rejection(BaseModel):
     feedback: str = Field(min_length=1)
 
 
+class Retry(BaseModel):
+    feedback: str | None = None
+
+
 class Message(BaseModel):
     text: str = Field(min_length=1)
 
@@ -530,6 +534,20 @@ def create_app(
             return eng.set_test_cases(job_id, [c.model_dump() for c in body.test_cases])
         except NotAwaitingApproval as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    @api.post("/jobs/{job_id}/retry", response_model=Job)
+    def retry(
+        job_id: str, request: Request, background: BackgroundTasks, body: Retry | None = None
+    ) -> Job:
+        """Continue a failed job from the step it failed in."""
+        eng = _engine(request)
+        _get(eng, job_id)
+        try:
+            job = eng.retry(job_id, run=False, feedback=(body.feedback if body else None))
+        except NotAwaitingApproval as exc:
+            raise HTTPException(status_code=409, detail="only a failed job can be retried") from exc
+        background.add_task(_resume, eng, job.id)
+        return job
 
     @api.post("/jobs/{job_id}/undo", response_model=Job)
     def undo(job_id: str, body: Rejection, request: Request) -> Job:

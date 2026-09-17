@@ -2722,6 +2722,23 @@
         "title": "Rejection",
         "type": "object"
       },
+      "Retry": {
+        "properties": {
+          "feedback": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feedback"
+          }
+        },
+        "title": "Retry",
+        "type": "object"
+      },
       "RoleConfig": {
         "additionalProperties": false,
         "properties": {
@@ -4544,6 +4561,63 @@
           }
         },
         "summary": "Reject"
+      }
+    },
+    "/api/jobs/{job_id}/retry": {
+      "post": {
+        "description": "Continue a failed job from the step it failed in.",
+        "operationId": "retry_api_jobs__job_id__retry_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/Retry"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Retry"
       }
     },
     "/api/jobs/{job_id}/tests": {

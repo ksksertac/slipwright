@@ -7,12 +7,18 @@ import json
 from pathlib import Path
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 
 from slipwright.api import create_app
-from slipwright.engine import Engine
+from slipwright.engine import Engine, NotAwaitingApproval
 from slipwright.pipeline import lane_for
-from slipwright.providers import ModelRequest, ProviderError, ProviderTimeoutError
+from slipwright.providers import (
+    ModelRequest,
+    ProviderError,
+    ProviderRefusalError,
+    ProviderTimeoutError,
+)
 from slipwright.schemas.job import JobState
 from slipwright.schemas.profile import Profile, RoleName
 from slipwright.schemas.project import BudgetSettings, Project, SupervisorSettings
@@ -393,3 +399,121 @@ def test_hardening_ui_sources() -> None:
     assert (
         "budget" in text["ProjectDialogs.tsx"] and "max_invocations" in text["ProjectDialogs.tsx"]
     )
+
+
+# --- follow-ups: retry, work in parts, Jira issue types --------------------------------------
+
+
+def test_failed_job_can_be_retried_from_the_step_it_died_in(
+    store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
+) -> None:
+    provider = full_provider(seed, phases=1)
+    calls: list[int] = []
+    base = provider.replies[RoleName.BACKEND]
+
+    def flaky(req: ModelRequest) -> Any:
+        calls.append(1)
+        if len(calls) <= 3:
+            raise ProviderError("502")
+        return base
+
+    provider.replies[RoleName.BACKEND] = flaky
+    engine = full_engine(store, worktrees_root, seed, provider)
+    job = engine.start(engine.create_job("x", repo).id)
+    job = engine.approve(engine.approve(job.id).id)
+    assert job.state is JobState.FAILED
+    assert job.history[-1].note == "backend failed: provider_error after 3 attempts"
+
+    job = engine.retry(job.id, feedback="the provider is back, go on")
+    assert job.state is JobState.AWAITING_TEST_APPROVAL  # continued from developing
+    notes = [t.note or "" for t in job.history]
+    assert "retried: continuing with developing (the provider is back, go on)" in notes
+    assert "the provider is back, go on" in provider.requests[-2].prompt or any(
+        "the provider is back" in r.prompt for r in provider.requests[-3:]
+    )
+    assert job.data.build_attempts == 0
+    with pytest.raises(NotAwaitingApproval):
+        engine.retry(job.id)  # not failed any more
+
+
+def test_retry_endpoint(store: JobStore, repo: Path, worktrees_root: Path, seed: Profile) -> None:
+    provider = full_provider(seed, phases=1)
+
+    def boom(req: ModelRequest) -> Any:
+        raise ProviderRefusalError("no")
+
+    provider.replies[RoleName.PO] = boom
+    engine = full_engine(store, worktrees_root, seed, provider)
+    with TestClient(create_app(engine, resume_on_startup=False, require_auth=False)) as client:
+        job = client.post("/api/jobs", json={"request": "x", "repo_path": str(repo)}).json()
+        job = client.get(f"/api/jobs/{job['id']}").json()
+        assert job["state"] == "failed"
+        provider.replies[RoleName.PO] = full_provider(seed, phases=1).replies[RoleName.PO]
+        resp = client.post(f"/api/jobs/{job['id']}/retry")
+        assert resp.status_code == 200 and resp.json()["state"] == "backlog"
+        job = client.get(f"/api/jobs/{job['id']}").json()
+        assert job["state"] == "awaiting_backlog_approval"
+        assert client.post(f"/api/jobs/{job['id']}/retry").status_code == 409
+
+
+def test_truncated_answer_is_asked_for_in_parts(
+    store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
+) -> None:
+    from slipwright.providers import ProviderTruncatedError
+
+    provider = full_provider(seed, phases=1)
+    seen: list[dict[str, Any]] = []
+
+    def big(req: ModelRequest) -> Any:
+        ctx = _context(req)
+        seen.append(ctx)
+        if "output_was_truncated" not in ctx and "continuation" not in ctx:
+            raise ProviderTruncatedError("response truncated at max_tokens=32000")
+        part = ctx.get("continuation", {}).get("part", 1)
+        return {
+            "summary": f"part {part}",
+            "phase_complete": part >= 2,
+            "changes": [{"path": f"part{part}.txt", "content": f"{part}\n"}],
+        }
+
+    provider.replies[RoleName.BACKEND] = big
+    engine = full_engine(store, worktrees_root, seed, provider)
+    job = engine.start(engine.create_job("x", repo).id)
+    job = engine.approve(engine.approve(job.id).id)
+    assert job.state is JobState.AWAITING_TEST_APPROVAL
+    # call 1 truncated -> call 2 asked for a smaller part -> call 3 the continuation
+    assert len(seen) == 3
+    backend = [r for r in provider.requests if r.role is RoleName.BACKEND]
+    assert "output_was_truncated" in seen[1] and "Work in parts" in backend[1].prompt
+    assert seen[2]["continuation"]["files_so_far"] == ["part1.txt"]
+    notes = [t.note or "" for t in job.history]
+    assert any("asking for a smaller part" in n for n in notes)
+    assert any(n.startswith("backend phase 1/1 part 1:") for n in notes)
+    assert any("(2 files in 2 parts)" in n for n in notes)
+    assert (job.worktree_path / "part2.txt").is_file()  # type: ignore[operator]
+    assert job.data.invocation_log[-1]["attempts"] == 1  # the continuation is its own call
+
+
+def test_jira_task_type_is_corrected_to_a_subtask(
+    store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
+) -> None:
+    from tests.fakes import FakeJira
+
+    jira = FakeJira(email="bot@example.com")
+    jira.accounts["ada@example.com"] = "Ada"
+    engine = full_engine(store, worktrees_root, seed, full_provider(seed, phases=1))
+    engine.http_transport = jira.transport
+    engine.update_jira_settings(
+        site_url="https://acme.atlassian.net/",
+        email="ada@example.com",
+        token="jira_secret",
+        issue_types={"task": "Task"},  # a level-0 type: it cannot nest under a story
+    )
+    project = engine.create_project(Project(name="demo", repo_path=repo, jira_project_key="DEM"))
+    job = engine.start(engine.create_job("x", project_id=project.id).id)
+    job = engine.approve(job.id)
+    assert job.data.jira_last_error is None
+    assert [i["type"] for i in jira.issues.values()] == ["Epic", "Story", "Subtask"]
+    notes = "\n".join(t.detail or "" for t in job.history if (t.note or "").startswith("jira:"))
+    assert "issue type for task: 'Task' cannot be used at that level in DEM" in notes
+    assert "using 'Subtask'" in notes

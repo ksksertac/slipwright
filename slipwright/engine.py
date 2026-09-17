@@ -13,6 +13,7 @@ approval state, and no handler is registered for those states.
 from __future__ import annotations
 
 import hashlib
+import inspect
 import json
 import logging
 import os
@@ -154,6 +155,7 @@ class Engine:
         max_build_attempts: int = 3,
         max_ci_attempts: int = 3,
         max_review_rounds: int = 2,
+        max_phase_parts: int = 4,
         review: str | None = None,
         supervisor_mode: str | None = None,
         retry_backoff_s: float = 2.0,
@@ -183,6 +185,7 @@ class Engine:
         self.max_build_attempts = max_build_attempts
         self.max_ci_attempts = max_ci_attempts
         self.max_review_rounds = max_review_rounds
+        self.max_phase_parts = max_phase_parts  # answers one phase may take (T9.7 follow-up)
         # a forced standards-review mode (off/advisory/blocking); None follows the project
         self.review_override = review
         # a forced gate mode (manual/assisted/auto); None follows the project
@@ -1073,6 +1076,44 @@ class Engine:
         self._notify_webhook(job, gate, record)
         return job
 
+    def retry(self, job_id: str, *, run: bool = True, feedback: str | None = None) -> Job:
+        """Continue a failed job from the step it failed in. Counters that made it give up
+        (build attempts, retries, review rounds, CI fixes) start over; everything built so
+        far stays. Optional feedback reaches the next role through the inbox."""
+        job = self.store.get(job_id)
+        if job.state is not JobState.FAILED:
+            raise NotAwaitingApproval(job)
+        failure = next(
+            (
+                t
+                for t in reversed(job.history)
+                if t.to_state is JobState.FAILED and t.from_state is not JobState.FAILED
+            ),
+            None,
+        )
+        back = failure.from_state if failure is not None else JobState.BACKLOG
+        if back in APPROVAL_STATES or back in (JobState.CREATED, JobState.FAILED, JobState.DONE):
+            back = JobState.BACKLOG
+        if back is JobState.BUILD_GATE:
+            back = JobState.DEVELOPING  # the gate needs something new to test
+        job.data.build_attempts = 0
+        job.data.review_rounds = 0
+        job.data.reject_rounds = 0
+        job.data.ci_attempts = 0
+        job.data.output_hashes = {}
+        job.data.last_build_output = None
+        if feedback:
+            from slipwright.schemas.job import InboxMessage
+
+            job.data.inbox.append(InboxMessage(text=feedback))
+        self.store.save(job)
+        job = self.orchestrator.transition(
+            job,
+            back,
+            note=f"retried: continuing with {back.value}" + (f" ({feedback})" if feedback else ""),
+        )
+        return self._run(job) if run else job
+
     def undo_auto_approval(self, job_id: str, feedback: str) -> Job:
         """The human overrules the supervisor after the fact: the feedback reaches the
         next role through the inbox and the record shows the approval was undone."""
@@ -1385,12 +1426,30 @@ class Engine:
         self, role: RoleName, run: Callable[..., RoleResult], job: Job, retries: int, **kw: Any
     ) -> RoleResult:
         """Run the role; on a retryable provider error wait (doubling) and try again up to
-        the role's ``retries``. Every failed attempt is recorded in the history."""
+        the role's ``retries``. Every failed attempt is recorded in the history. A
+        truncated answer is retried once with the role told to return a smaller part."""
         attempt = 0
         while True:
             attempt += 1
             result = run(job, provider=self.provider, timeout_s=self.timeout_s, **kw)
             result.attempts = attempt
+            if (
+                result.error is not None
+                and result.error.kind is InvokeErrorKind.TRUNCATED
+                and "truncated" in inspect.signature(run).parameters
+                and not kw.get("truncated")
+            ):
+                kw["truncated"] = result.error.message
+                self.store.update_state(
+                    job.id,
+                    job.state,
+                    note=(
+                        f"{role.value} attempt {attempt}: {result.error.message}; "
+                        "asking for a smaller part"
+                    ),
+                )
+                job.history = self.store.get(job.id).history
+                continue
             if result.ok or result.error is None or result.error.kind not in RETRYABLE:
                 return result
             if attempt > retries:
@@ -1539,25 +1598,57 @@ class Engine:
                 "violations": job.data.review_violations,
                 "feedback": job.data.feedback,
             }
-        result = self._invoke(
-            role, developer.run, job, profile=profile, as_role=role, review=review_ctx
-        )
-        if not result.ok:
-            return self._invocation_failed(job, result)
-        assert isinstance(result.output, DeveloperResult)
-
-        touched = apply_changes(job, profile, role, result.output.changes)
+        # a big phase may take several answers: each part is applied and the specialist
+        # is called again with what is already written, until it says the phase is done
+        touched_all: list[str] = []
+        summaries: list[str] = []
+        continuation: dict[str, Any] | None = None
+        for part in range(1, self.max_phase_parts + 1):
+            result = self._invoke(
+                role,
+                developer.run,
+                job,
+                profile=profile,
+                as_role=role,
+                review=review_ctx,
+                continuation=continuation,
+            )
+            if not result.ok:
+                return self._invocation_failed(job, result)
+            assert isinstance(result.output, DeveloperResult)
+            touched = apply_changes(job, profile, role, result.output.changes)
+            touched_all.extend(t for t in touched if t not in touched_all)
+            summaries.append(result.output.summary)
+            if result.output.phase_complete or part == self.max_phase_parts:
+                break
+            g.stage_all(worktree)
+            self.store.update_state(
+                job.id,
+                job.state,
+                note=(
+                    f"{role.value} phase {index + 1}/{len(phases)} part {part}: "
+                    f"{result.output.summary} ({len(touched)} files, more to come)"
+                ),
+                detail=g.staged_diff(worktree) or "(no changes)",
+            )
+            job.history = self.store.get(job.id).history
+            continuation = {
+                "part": part + 1,
+                "files_so_far": list(touched_all),
+                "summary_so_far": " ".join(summaries),
+            }
         g.stage_all(worktree)
         diff = g.staged_diff(worktree)
         attempt = f", fix attempt {job.data.build_attempts}" if job.data.build_attempts else ""
         if job.data.review_rounds and not attempt:
             attempt = f", review fix {job.data.review_rounds}"
+        parts = f" in {len(summaries)} parts" if len(summaries) > 1 else ""
         return self.orchestrator.transition(
             job,
             JobState.BUILD_GATE,
             note=(
                 f"{role.value} phase {index + 1}/{len(phases)}{attempt}: "
-                f"{result.output.summary} ({len(touched)} files)"
+                f"{summaries[-1]} ({len(touched_all)} files{parts})"
             ),
             detail=diff or "(no changes)",
         )

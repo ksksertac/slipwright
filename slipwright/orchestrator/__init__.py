@@ -40,6 +40,8 @@ _WORKING = (
 for _state in _WORKING:
     LEGAL_TRANSITIONS[_state] = (*LEGAL_TRANSITIONS[_state], JobState.AWAITING_DECISION)
 LEGAL_TRANSITIONS[JobState.AWAITING_DECISION] = _WORKING
+# a failed job can be retried: it re-enters the working state it failed in
+LEGAL_TRANSITIONS[JobState.FAILED] = _WORKING
 # a failed build gate may send the phase back to the architect (the supervisor's "replan")
 LEGAL_TRANSITIONS[JobState.BUILD_GATE] = (
     *LEGAL_TRANSITIONS[JobState.BUILD_GATE],

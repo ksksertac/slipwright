@@ -40,7 +40,8 @@ class JiraSync:
     def __init__(self, client: JiraClient, project: Project, issue_types: dict[str, str]) -> None:
         self.client = client
         self.project = project
-        self.types = issue_types
+        self.types = dict(issue_types)
+        self._resolved = False
 
     @property
     def key(self) -> str:
@@ -68,8 +69,42 @@ class JiraSync:
 
     # -- issues ------------------------------------------------------------------------------
 
+    def _resolve_types(self, report: SyncReport) -> None:
+        """Check the configured names against the project's real issue types once per
+        sync: a task must be a sub-task type to nest under a story (Jira calls it
+        ``Subtask`` or ``Sub-task`` depending on the site); a wrong name in the settings
+        is corrected here rather than failing every create."""
+        if self._resolved:
+            return
+        self._resolved = True
+        try:
+            available = self.client.issue_types(self.key)
+        except JiraError:
+            return  # the create call will report the real problem
+        by_name = {t["name"].lower(): t for t in available}
+        subtasks = [t["name"] for t in available if t["subtask"]]
+        for kind, wanted_level in (("epic", 1), ("story", 0), ("task", -1)):
+            name = self.types.get(kind, "")
+            current = by_name.get(name.lower())
+            if current is not None and current["level"] == wanted_level:
+                continue
+            candidates = [t["name"] for t in available if t["level"] == wanted_level]
+            if kind == "task":
+                candidates = subtasks or candidates
+            if not candidates:
+                continue
+            replacement = candidates[0]
+            if name.lower() != replacement.lower():
+                report.note(
+                    f"issue type for {kind}: {name!r} cannot be used at that level in "
+                    f"{self.key}; using {replacement!r}"
+                )
+            self.types[kind] = replacement
+
     def _ensure_issues(self, job: Job, epics: list[EpicView], report: SyncReport) -> None:
         keys = job.data.jira_keys
+        if any(item.id not in keys for item in _flatten(epics)):
+            self._resolve_types(report)
         for epic in epics:
             if epic.id not in keys:
                 keys[epic.id] = self.client.create_issue(

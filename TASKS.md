@@ -1038,6 +1038,45 @@ in bulk.
   by `GET /api/local-repos`; the New project form offers the folders (non-git ones
   disabled) instead of asking for a path blind.
 
+- [x] **Fail → Retry.** `POST /api/jobs/{id}/retry` (`Engine.retry`) continues a failed job
+  from the working state it failed in (build/CI/review counters reset, optional note to the
+  next role via the inbox); Retry buttons on the job page and the pipeline lane; the failed
+  callout shows the transition that failed, not the bookkeeping after it.
+- [x] **Output too long → work in parts.** `ProviderTruncatedError` /
+  `InvokeErrorKind.TRUNCATED`: the specialist is asked once more for a smaller part
+  (`output_was_truncated`), and `phase_complete=false` makes `_develop` call it again with
+  `continuation` (files so far) up to `max_phase_parts` (4) before the build gate. Output
+  limits per vendor in `ProviderSpec.max_tokens` (32k; DeepSeek 8k).
+- [x] **Server env never leaks into project commands.** `gates.project_env()` strips
+  `VIRTUAL_ENV` / `UV_PROJECT_ENVIRONMENT` / `PYTHONPATH` (a project's `uv sync` wiped the
+  container's venv once); the Dockerfile sets `UV_PROJECT_ENVIRONMENT` only while building.
+- [x] **Jira issue types resolved against the project.** `JiraSync._resolve_types` reads
+  createmeta once per sync and swaps a name that cannot nest (a level-0 `Task` under a
+  story) for the project's sub-task type, noting it in the history.
+- [x] Pipeline lanes wrap into a grid instead of scrolling sideways.
+
+## Phase 10 — Proposed (not started)
+
+### T10.1 — Parallel phases per domain
+Today the phases of one development run one after another in a single worktree (a phase
+commits, the next builds on it). Backend, web and mobile phases are often independent once
+the architecture is approved.
+
+**Done when**
+- [ ] The Architect marks each phase with `depends_on` (phase numbers); phases with no
+  unmet dependency are *ready* together
+- [ ] Ready phases of different domains run concurrently, each in its own worktree and
+  branch off the same base (`jobs never share checkouts` holds per worker); each passes
+  its own build gate and standards review
+- [ ] Finished branches are merged back in dependency order; a merge conflict is handed to
+  the specialist that owns the later phase with the conflict shown, then to the human
+  (decision gate) if it stays; QA runs on the merged branch as today
+- [ ] The pipeline lane shows concurrent phases side by side with their own status; Jira
+  statuses follow each task
+- [ ] Concurrency cap per project (default 3) and per-role model budgets still apply
+- [ ] Tests: two independent phases run at once (scripted provider with a barrier), a
+  dependent phase waits, a conflicting merge reaches the specialist and then the gate
+
 ### Definition of done for Phase 9
 
 - [x] A request touching backend and web is planned into domain-tagged phases, each phase

@@ -142,6 +142,20 @@ class JiraClient:
         key: str = data["key"]
         return key
 
+    def issue_types(self, project_key: str) -> list[dict[str, Any]]:
+        """The issue types the project accepts: name, whether it is a sub-task and its
+        hierarchy level (-1 sub-task, 0 story/task, 1 epic)."""
+        data = self._request("GET", f"/rest/api/3/issue/createmeta/{project_key}/issuetypes").json()
+        rows = data.get("issueTypes") or data.get("values") or []
+        return [
+            {
+                "name": str(r.get("name")),
+                "subtask": bool(r.get("subtask")),
+                "level": int(r.get("hierarchyLevel", -1 if r.get("subtask") else 0)),
+            }
+            for r in rows
+        ]
+
     def get_status(self, key: str) -> str:
         data = self._request("GET", f"/rest/api/3/issue/{key}", params={"fields": "status"})
         status: str = data.json()["fields"]["status"]["name"]

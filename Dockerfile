@@ -18,9 +18,10 @@ RUN mkdir -p /src/slipwright/api && npm run build
 # Stage 2: runtime --------------------------------------------------------------------------
 FROM python:3.12-slim-bookworm AS runtime
 
+# UV_PROJECT_ENVIRONMENT is set only where Slipwright's own venv is built: a project's
+# `uv sync` in a job worktree must create its own .venv, never write into /opt/venv
 ENV PYTHONUNBUFFERED=1 \
     UV_LINK_MODE=copy \
-    UV_PROJECT_ENVIRONMENT=/opt/venv \
     PATH="/opt/venv/bin:/root/.local/bin:${PATH}" \
     SLIPWRIGHT_STATE_DIR=/data \
     SLIPWRIGHT_HOST=0.0.0.0 \
@@ -45,13 +46,14 @@ WORKDIR /app
 COPY pyproject.toml uv.lock README.md LICENSE ./
 # dependencies first so source edits do not invalidate this layer
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --no-install-project
+    UV_PROJECT_ENVIRONMENT=/opt/venv uv sync --frozen --no-dev --no-install-project
 COPY slipwright/ ./slipwright/
 COPY examples/ ./examples/
 COPY standards/ ./standards/
 COPY schemas/ ./schemas/
 COPY scripts/ ./scripts/
-RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen --no-dev
+RUN --mount=type=cache,target=/root/.cache/uv \
+    UV_PROJECT_ENVIRONMENT=/opt/venv uv sync --frozen --no-dev
 COPY --from=web /src/slipwright/api/static ./slipwright/api/static
 
 # jobs commit on their branches; give git an identity so commits never fail
