@@ -13,7 +13,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
@@ -69,7 +69,11 @@ class NewTestRun(BaseModel):
     job_id: str | None = Field(default=None, description="Run in this job's worktree.")
 
 
-def create_app(engine: Engine, *, resume_on_startup: bool = True) -> FastAPI:
+def create_app(
+    engine: Engine, *, resume_on_startup: bool = True, require_auth: bool = True
+) -> FastAPI:
+    """Build the app. ``require_auth=False`` (tests, trusted local use) skips login."""
+
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.engine = engine
@@ -80,10 +84,21 @@ def create_app(engine: Engine, *, resume_on_startup: bool = True) -> FastAPI:
             app.state.resume_thread = thread
         yield
 
-    app = FastAPI(title="Slipwright", lifespan=lifespan)
+    from slipwright.api.auth import auth_dependency
+    from slipwright.api.auth import router as auth_router
     from slipwright.api.ui import router as ui_router
 
+    app = FastAPI(
+        title="Slipwright",
+        lifespan=lifespan,
+        dependencies=[Depends(auth_dependency(enabled=require_auth))],
+    )
+    app.include_router(auth_router)
     app.include_router(ui_router)
+
+    @app.get("/healthz", include_in_schema=False)
+    def healthz() -> dict[str, str]:
+        return {"status": "ok"}
 
     def _engine(request: Request) -> Engine:
         eng: Engine = request.app.state.engine

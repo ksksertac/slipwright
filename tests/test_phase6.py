@@ -50,7 +50,7 @@ def engine(
 
 @pytest.fixture
 def client(engine: Engine) -> Iterator[TestClient]:
-    with TestClient(create_app(engine, resume_on_startup=False)) as c:
+    with TestClient(create_app(engine, resume_on_startup=False, require_auth=False)) as c:
         yield c
 
 

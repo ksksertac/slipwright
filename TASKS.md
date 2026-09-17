@@ -36,7 +36,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 
 ## Progress
 
-> **Resume here:** Phases 0–6 are complete. Next task is **T7.1 — Users and login**.
+> **Resume here:** Phases 0–6 and T7.1 are complete. Next task is **T7.2 — Settings store and GitHub connection**.
 > Design note for T1.3: `run_cmd` is executed as a subprocess in the worktree (Docker is used
 > only if the profile's `run_cmd` itself invokes it).
 > Design note for T2.2: `invoke_role` talks to a `ModelProvider` (`slipwright/providers/`);
@@ -72,6 +72,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 > Design note for T6.2: the breakdown lives inside `PlannerResult` (`breakdown.epics[].stories[].tasks[]`, task.phase is 1-based); a plan the model returns without one gets `default_breakdown` (one epic/story, one task per phase) before it is persisted. `slipwright/board.py` derives task/story/epic statuses from job state and `phase_index`; a job is on the board only once its plan is approved (`plan_is_active`).
 > Design note for T6.3: `slipwright/activity.py` projects progress (`/projects/{id}/progress`) and the feed (`/projects/{id}/activity`) from job history; entries are classified by note prefix (`ActivityKind`, role) and carry the history index for `GET /jobs/{id}/history/{index}`. Shared pipeline test helpers live in `tests/pipeline.py`; `store`/`seed` fixtures in `conftest.py`.
 > Design note for T6.4: `TestRun` rows live in `test_runs`; output goes to `<state>/test-runs/<id>.log`. `Engine.start_test_run` records a pending run and `execute_test_run` (background task in the API) runs `profile.test_cmd` under a per-checkout lock shared with the build gate; every gate execution is also recorded (`source=gate`). The main checkout's profile is the project's, else the newest approved job profile, else the seed (`Engine.project_profile`).
+> Design note for T7.1: passwords are hashed with stdlib scrypt (memory-hard, no native dependency) instead of argon2/bcrypt; sessions and bearer tokens are random secrets stored as SHA-256 hashes (`slipwright/auth.py`, `store/users.py`). `create_app(require_auth=...)` attaches an app-wide dependency (`api/auth.py`) that exempts `/auth/login`, `/healthz` and the docs; tests pass `require_auth=False`. `slipwright user add` / `slipwright token new` work directly on the state dir.
 
 | Phase | Task | Status |
 |-------|------|--------|
@@ -97,7 +98,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 | 6 | T6.2 Work breakdown: epics, stories, tasks | [x] |
 | 6 | T6.3 Progress and activity feed | [x] |
 | 6 | T6.4 Test runs on demand | [x] |
-| 7 | T7.1 Users and login | [ ] |
+| 7 | T7.1 Users and login | [x] |
 | 7 | T7.2 Settings store and GitHub connection | [ ] |
 | 7 | T7.3 API namespace and live events | [ ] |
 | 7 | T7.4 Jira connection and issue sync | [ ] |
@@ -359,16 +360,16 @@ Let the human run the project's tests and read the result without waiting for a 
 Single-tenant, local users. No external identity provider.
 
 **Done when**
-- [ ] `users` table: id, username, password hash (argon2 or bcrypt, never plaintext),
+- [x] `users` table: id, username, password hash (scrypt, salted, never plaintext),
   `is_admin`, created_at
-- [ ] `slipwright user add <name>` creates a user, prompting for the password; the first user
+- [x] `slipwright user add <name>` creates a user, prompting for the password; the first user
   created is admin
-- [ ] `POST /auth/login` sets an HttpOnly session cookie; `POST /auth/logout` clears it;
+- [x] `POST /auth/login` sets an HttpOnly session cookie; `POST /auth/logout` clears it;
   `GET /auth/me` returns the current user
-- [ ] Every `/api/*` route except login requires a session or a bearer token
+- [x] Every `/api/*` route except login requires a session or a bearer token
   (`slipwright token new` issues one for the CLI; tokens are stored hashed)
-- [ ] When no user exists the API answers 503 with a hint to run `slipwright user add`
-- [ ] Tests: login/logout, wrong password, protected route without session, bearer token
+- [x] When no user exists the API answers 503 with a hint to run `slipwright user add`
+- [x] Tests: login/logout, wrong password, protected route without session, bearer token
 
 ### T7.2 — Settings store and GitHub connection
 **Done when**

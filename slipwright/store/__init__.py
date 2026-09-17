@@ -5,5 +5,14 @@ from slipwright.store.sqlite import (
     ProjectNotFound,
     TestRunNotFound,
 )
+from slipwright.store.users import UsernameTaken, UserNotFound
 
-__all__ = ["JobNotFound", "JobStore", "ProjectInUse", "ProjectNotFound", "TestRunNotFound"]
+__all__ = [
+    "JobNotFound",
+    "JobStore",
+    "ProjectInUse",
+    "ProjectNotFound",
+    "TestRunNotFound",
+    "UserNotFound",
+    "UsernameTaken",
+]

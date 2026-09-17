@@ -22,6 +22,7 @@ from slipwright.schemas.job import Job, JobData, JobState, Transition, utcnow
 from slipwright.schemas.profile import Profile
 from slipwright.schemas.project import Project
 from slipwright.schemas.testrun import TestRun
+from slipwright.store.users import USERS_SCHEMA, UserStoreMixin
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS projects (
@@ -112,7 +113,7 @@ class ProjectInUse(ValueError):
         self.active = active
 
 
-class JobStore:
+class JobStore(UserStoreMixin):
     """One store per SQLite file. Safe to share across threads within a process."""
 
     def __init__(self, path: Path | str) -> None:
@@ -124,6 +125,7 @@ class JobStore:
         self._conn.execute("PRAGMA foreign_keys=ON")
         self._conn.execute("PRAGMA synchronous=FULL")
         self._conn.executescript(_SCHEMA)
+        self._conn.executescript(USERS_SCHEMA)
         self._migrate()
 
     def _migrate(self) -> None:

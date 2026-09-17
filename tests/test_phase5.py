@@ -217,7 +217,7 @@ def test_dashboard_lists_jobs_and_approves_from_the_page(
     engine = _engine(store, worktrees_root, seed, provider)
     job = engine.start(engine.create_job("dashboard job", repo).id)
 
-    with TestClient(create_app(engine, resume_on_startup=False)) as client:
+    with TestClient(create_app(engine, resume_on_startup=False, require_auth=False)) as client:
         page = client.get("/").text
         assert job.id in page and "dashboard job" in page
         assert "awaiting_profile_approval" in page

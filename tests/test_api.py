@@ -50,7 +50,7 @@ def engine(
 
 @pytest.fixture
 def client(engine: Engine) -> Iterator[TestClient]:
-    with TestClient(create_app(engine, resume_on_startup=False)) as c:
+    with TestClient(create_app(engine, resume_on_startup=False, require_auth=False)) as c:
         yield c
 
 
@@ -131,7 +131,7 @@ def test_startup_resumes_jobs_left_mid_phase(
     engine.start(job.id, run=False)  # persisted as analyzing, never executed
     assert engine.store.get(job.id).state is JobState.ANALYZING
 
-    with TestClient(create_app(engine)) as client:
+    with TestClient(create_app(engine, require_auth=False)) as client:
         client.app.state.resume_thread.join(timeout=60)
         assert client.get(f"/jobs/{job.id}").json()["state"] == "awaiting_profile_approval"
     assert len(provider.requests) == 1

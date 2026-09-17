@@ -233,7 +233,7 @@ def test_put_tests_endpoint(
 ) -> None:
     engine = _engine(store, worktrees_root, seed, _provider(seed))
     job = _to_test_gate(engine, repo)
-    with TestClient(create_app(engine, resume_on_startup=False)) as client:
+    with TestClient(create_app(engine, resume_on_startup=False, require_auth=False)) as client:
         resp = client.put(
             f"/jobs/{job.id}/tests",
             json={"test_cases": [{"name": "only", "description": "one case"}]},

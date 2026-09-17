@@ -9,11 +9,17 @@ slipwright status [job-id]            list jobs, or show one with its history
 slipwright approve <job-id>           leave the current approval gate
 slipwright reject <job-id> "<why>"    re-run the current phase with feedback
 slipwright message <job-id> "<text>"  steer a running job
+slipwright user add <name>            create a login (the first one is admin)
+slipwright user list                  list logins
+slipwright token new <name>           issue a bearer token for the CLI (SLIPWRIGHT_TOKEN)
+
+Client commands authenticate with --token or the SLIPWRIGHT_TOKEN environment variable.
 """
 
 from __future__ import annotations
 
 import argparse
+import getpass
 import json
 import sys
 import urllib.error
@@ -32,13 +38,16 @@ class ApiError(RuntimeError):
         self.detail = detail
 
 
+_token: str | None = None
+
+
 def call(base_url: str, method: str, path: str, body: dict[str, Any] | None = None) -> Any:
     data = None if body is None else json.dumps(body).encode()
+    headers = {"Content-Type": "application/json"}
+    if _token:
+        headers["Authorization"] = f"Bearer {_token}"
     req = urllib.request.Request(
-        base_url.rstrip("/") + path,
-        data=data,
-        method=method,
-        headers={"Content-Type": "application/json"},
+        base_url.rstrip("/") + path, data=data, method=method, headers=headers
     )
     try:
         with urllib.request.urlopen(req, timeout=60) as resp:  # noqa: S310 - local API
@@ -87,6 +96,8 @@ def format_job(job: dict[str, Any], *, history: bool = False) -> str:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="slipwright", description=__doc__.split("\n\n")[0])
     parser.add_argument("--url", default=None, help="API base URL (default: from settings)")
+    parser.add_argument("--token", default=None, help="bearer token (default: SLIPWRIGHT_TOKEN)")
+    parser.add_argument("--state-dir", type=Path, default=None, dest="global_state_dir")
     sub = parser.add_subparsers(dest="command", required=True)
 
     serve = sub.add_parser("serve", help="run the API server")
@@ -95,6 +106,23 @@ def build_parser() -> argparse.ArgumentParser:
     serve.add_argument("--provider", choices=["anthropic", "scripted"], default=None)
     serve.add_argument("--profile", type=Path, default=None, help="seed profile JSON")
     serve.add_argument("--state-dir", type=Path, default=None)
+    serve.add_argument(
+        "--no-auth", action="store_true", help="serve without login (trusted local use only)"
+    )
+
+    user = sub.add_parser("user", help="manage logins (works directly on the state dir)")
+    usub = user.add_subparsers(dest="user_command", required=True)
+    uadd = usub.add_parser("add", help="create a login; the first one becomes admin")
+    uadd.add_argument("name")
+    uadd.add_argument("--password", default=None, help="otherwise prompted for")
+    uadd.add_argument("--admin", action="store_true", help="make this user an admin")
+    usub.add_parser("list", help="list logins")
+
+    token = sub.add_parser("token", help="bearer tokens (works directly on the state dir)")
+    tsub = token.add_subparsers(dest="token_command", required=True)
+    tnew = tsub.add_parser("new", help="issue a token for a user and print it once")
+    tnew.add_argument("name", help="username")
+    tnew.add_argument("--label", default="cli")
 
     project = sub.add_parser("project", help="manage projects")
     psub = project.add_subparsers(dest="project_command", required=True)
@@ -131,12 +159,20 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    global _token
     args = build_parser().parse_args(argv)
     settings = Settings.from_env()
     base_url = args.url or settings.url
+    _token = args.token or settings.token
+    if args.global_state_dir:
+        settings.state_dir = args.global_state_dir
 
     if args.command == "serve":
         return _serve(settings, args)
+    if args.command == "user":
+        return _user(settings, args)
+    if args.command == "token":
+        return _token_cmd(settings, args)
 
     try:
         if args.command == "project":
@@ -208,6 +244,50 @@ def _project(base_url: str, args: argparse.Namespace) -> int:
     return 0
 
 
+def _open_store(settings: Settings) -> Any:
+    from slipwright.store import JobStore
+
+    settings.state_dir.mkdir(parents=True, exist_ok=True)
+    return JobStore(settings.db_path)
+
+
+def _user(settings: Settings, args: argparse.Namespace) -> int:
+    from slipwright.store import UsernameTaken
+
+    with _open_store(settings) as store:
+        if args.user_command == "add":
+            password = args.password
+            if password is None:
+                password = getpass.getpass(f"password for {args.name}: ")
+                if password != getpass.getpass("again: "):
+                    print("error: passwords do not match", file=sys.stderr)
+                    return 1
+            try:
+                user = store.create_user(args.name, password, is_admin=True if args.admin else None)
+            except (UsernameTaken, ValueError) as exc:
+                print(f"error: {exc}", file=sys.stderr)
+                return 1
+            print(f"{user.id}  {user.username}  admin={'yes' if user.is_admin else 'no'}")
+        elif args.user_command == "list":
+            users = store.list_users()
+            if not users:
+                print("no users")
+            for u in users:
+                print(f"{u.id}  {u.username:<24} admin={'yes' if u.is_admin else 'no'}")
+    return 0
+
+
+def _token_cmd(settings: Settings, args: argparse.Namespace) -> int:
+    with _open_store(settings) as store:
+        user = store.find_user(args.name)
+        if user is None:
+            print(f"error: user not found: {args.name}", file=sys.stderr)
+            return 1
+        _, secret = store.create_token(user.id, args.label)
+        print(secret)
+    return 0
+
+
 def _serve(settings: Settings, args: argparse.Namespace) -> int:
     import uvicorn
 
@@ -224,8 +304,10 @@ def _serve(settings: Settings, args: argparse.Namespace) -> int:
         settings.profile_path = args.profile
     if args.state_dir:
         settings.state_dir = args.state_dir
+    if args.no_auth:
+        settings.require_auth = False
 
-    app = create_app(build_engine(settings))
+    app = create_app(build_engine(settings), require_auth=settings.require_auth)
     uvicorn.run(app, host=settings.host, port=settings.port, log_level="info")
     return 0
 

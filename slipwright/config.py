@@ -19,6 +19,7 @@ from slipwright.workspace import PortAllocator, Workspace
 
 PACKAGE_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_PROFILE = PACKAGE_ROOT / "examples" / "python-fastapi.profile.json"
+_OFF = ("0", "off", "no", "false")
 
 
 @dataclass
@@ -29,6 +30,8 @@ class Settings:
     host: str = "127.0.0.1"
     port: int = 8500
     port_range: tuple[int, int] = (8100, 8999)
+    require_auth: bool = True
+    token: str | None = None
 
     @property
     def db_path(self) -> Path:
@@ -57,6 +60,9 @@ class Settings:
         if "SLIPWRIGHT_PORT_RANGE" in env:
             lo, hi = env["SLIPWRIGHT_PORT_RANGE"].split("-")
             settings.port_range = (int(lo), int(hi))
+        if "SLIPWRIGHT_AUTH" in env:
+            settings.require_auth = env["SLIPWRIGHT_AUTH"].strip().lower() not in _OFF
+        settings.token = env.get("SLIPWRIGHT_TOKEN") or None
         return settings
 
 

@@ -108,7 +108,7 @@ def test_test_run_endpoints(
 ) -> None:
     failing = seed.model_copy(update={"test_cmd": MISSING})
     engine = full_engine(store, worktrees_root, failing, full_provider(failing))
-    with TestClient(create_app(engine, resume_on_startup=False)) as client:
+    with TestClient(create_app(engine, resume_on_startup=False, require_auth=False)) as client:
         project = client.post("/projects", json={"name": "demo", "repo_path": str(repo)}).json()
         resp = client.post(f"/projects/{project['id']}/test-runs", json={})
         assert resp.status_code == 202, resp.text

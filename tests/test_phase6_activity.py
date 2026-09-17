@@ -93,7 +93,7 @@ def test_progress_activity_and_detail_endpoints(
     store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
 ) -> None:
     engine = full_engine(store, worktrees_root, seed, full_provider(seed, phases=1))
-    with TestClient(create_app(engine, resume_on_startup=False)) as client:
+    with TestClient(create_app(engine, resume_on_startup=False, require_auth=False)) as client:
         project = client.post("/projects", json={"name": "demo", "repo_path": str(repo)}).json()
         job = client.post(f"/projects/{project['id']}/jobs", json={"request": "x"}).json()
         progress = client.get(f"/projects/{project['id']}/progress").json()
