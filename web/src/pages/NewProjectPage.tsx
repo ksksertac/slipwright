@@ -104,9 +104,9 @@ export function NewProjectPage() {
               <select id="repo_path" value={repoPath} onChange={(e) => setRepoPath(e.target.value)}>
                 <option value="">Pick a folder under {local.data?.root}…</option>
                 {folders.map((r) => (
-                  <option key={r.path} value={r.path} disabled={!r.is_git}>
+                  <option key={r.path} value={r.path}>
                     {r.name}
-                    {r.is_git ? "" : " — not a git repository"}
+                    {r.is_git ? "" : " — not a git repository yet (git init on create)"}
                   </option>
                 ))}
               </select>
@@ -126,7 +126,8 @@ export function NewProjectPage() {
               {folders.length > 0 && !typing ? (
                 <>
                   These are the folders under <code>{local.data?.root}</code> (your{" "}
-                  <code>SLIPWRIGHT_REPOS</code> folder); a project must be a git repository.{" "}
+                  <code>SLIPWRIGHT_REPOS</code> folder). A folder that is not a git repository yet
+                  becomes one on create, with everything in it committed.{" "}
                   <a
                     onClick={(e) => {
                       e.preventDefault();

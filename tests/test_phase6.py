@@ -236,6 +236,20 @@ def test_local_repos_lists_the_mounted_checkouts(
             "/api/projects", json={"name": "svc", "repo_path": body["repos"][0]["path"]}
         )
         assert created.status_code == 201
+        # a plain folder is turned into a repository on create, its files committed
+        (root / "plain" / "app.py").write_text("print(1)\n", encoding="utf-8")
+        plain = client.post(
+            "/api/projects", json={"name": "plain", "repo_path": body["repos"][1]["path"]}
+        )
+        assert plain.status_code == 201, plain.text
+        assert (root / "plain" / ".git").is_dir()
+        log = subprocess.run(
+            ["git", "-C", str(root / "plain"), "log", "--oneline"], capture_output=True, text=True
+        ).stdout
+        assert "slipwright: initial import" in log
+        assert client.get("/api/local-repos").json()["repos"][1]["is_git"] is True
+        job = client.post(f"/api/projects/{plain.json()['id']}/jobs", json={"request": "x"})
+        assert job.status_code == 201  # a worktree can be made from it
     settings = Settings.from_env(
         {
             "SLIPWRIGHT_STATE_DIR": str(tmp_path / "st"),

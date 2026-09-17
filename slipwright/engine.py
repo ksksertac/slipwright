@@ -718,7 +718,33 @@ class Engine:
             project = project.model_copy(update={"repo_path": target})
         elif not project.repo_path.is_dir():
             raise ValueError(f"repo_path is not a directory: {project.repo_path}")
+        else:
+            self._ensure_git_repository(project.repo_path)
         return self.store.create_project(project)
+
+    @staticmethod
+    def _ensure_git_repository(path: Path) -> None:
+        """A plain folder becomes a repository with everything in it committed, so jobs
+        can branch from it; an existing repository is left exactly as it is."""
+        if (path / ".git").exists():
+            return
+        try:
+            g.run(path, "init", "-q", "-b", "main")
+            g.run(path, "add", "-A")
+            g.run(
+                path,
+                "-c",
+                "user.name=slipwright",
+                "-c",
+                "user.email=slipwright@localhost",
+                "commit",
+                "-q",
+                "--allow-empty",
+                "-m",
+                "slipwright: initial import",
+            )
+        except g.GitError as exc:
+            raise ValueError(f"could not turn {path} into a git repository: {exc.stderr}") from exc
 
     def _authenticated(self, url: str) -> str:
         """Embed the stored token into a GitHub HTTPS URL for cloning; never persisted."""
