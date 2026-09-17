@@ -28,7 +28,7 @@ def test_example_profile_loads() -> None:
     profile = load_profile(EXAMPLE)
     assert profile.language == "python"
     assert set(profile.roles) == set(RoleName)
-    assert profile.roles[RoleName.DEVOPS].thinking_depth is ThinkingDepth.LOW
+    assert profile.roles[RoleName.DEVOPS].thinking_depth is ThinkingDepth.OFF
     assert Permission.GIT_PUSH in profile.roles[RoleName.DEVOPS].permissions
 
 

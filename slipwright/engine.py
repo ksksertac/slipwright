@@ -36,7 +36,7 @@ from slipwright.roles.results import (
     PlannerResult,
     QAResult,
 )
-from slipwright.schemas.job import APPROVAL_STATES, Job, JobState
+from slipwright.schemas.job import APPROVAL_STATES, Job, JobState, utcnow
 from slipwright.schemas.profile import Permission, Profile, RoleName
 from slipwright.store import JobStore
 from slipwright.workspace import Workspace
@@ -261,6 +261,32 @@ class Engine:
             detail=result.error.message,
         )
 
+    def _invoke(
+        self, role: RoleName, run: Callable[..., RoleResult], job: Job, **kw: Any
+    ) -> RoleResult:
+        """Every model call goes through here: run the role, then drain the inbox.
+
+        Messages pending at call time were injected into the role's context by
+        ``base_context``; afterwards they are marked consumed and the fact is recorded in
+        the job's history, so a message is delivered exactly once.
+        """
+        pending = job.pending_messages
+        result = run(job, provider=self.provider, timeout_s=self.timeout_s, **kw)
+        if pending:
+            now = utcnow()
+            for message in pending:
+                message.consumed_at = now
+                message.consumed_by = role.value
+            self.store.save(job)
+            self.store.update_state(
+                job.id,
+                job.state,
+                note=f"inbox: {len(pending)} message(s) consumed by {role.value}",
+                detail="\n\n".join(f"[{m.id}] {m.text}" for m in pending),
+            )
+            job.history = self.store.get(job.id).history
+        return result
+
     @staticmethod
     def _profile(job: Job) -> Profile:
         if job.profile is None:
@@ -281,9 +307,7 @@ class Engine:
 
     def _analyze(self, job: Job) -> Job:
         job = self._ensure_workspace(job)
-        result = analyst.run(
-            job, seed=self.seed_profile, provider=self.provider, timeout_s=self.timeout_s
-        )
+        result = self._invoke(RoleName.ANALYST, analyst.run, job, seed=self.seed_profile)
         if not result.ok:
             return self._invocation_failed(job, result)
         assert isinstance(result.output, AnalystResult)
@@ -303,9 +327,7 @@ class Engine:
                 f"plan rejected {job.data.reject_rounds} times; giving up",
                 detail=job.data.feedback,
             )
-        result = planner.run(
-            job, self._profile(job), provider=self.provider, timeout_s=self.timeout_s
-        )
+        result = self._invoke(RoleName.PLANNER, planner.run, job, profile=self._profile(job))
         if not result.ok:
             return self._invocation_failed(job, result)
         assert isinstance(result.output, PlannerResult)
@@ -327,7 +349,7 @@ class Engine:
         index = job.data.phase_index
         if index >= len(phases):
             return self._fail(job, f"no plan phase {index + 1} to develop")
-        result = developer.run(job, profile, provider=self.provider, timeout_s=self.timeout_s)
+        result = self._invoke(RoleName.DEVELOPER, developer.run, job, profile=profile)
         if not result.ok:
             return self._invocation_failed(job, result)
         assert isinstance(result.output, DeveloperResult)
@@ -392,12 +414,8 @@ class Engine:
 
     def _qa_propose(self, job: Job) -> Job:
         profile = self._profile(job)
-        result = qa.run(
-            job,
-            profile,
-            branch_diff=self._branch_diff(job),
-            provider=self.provider,
-            timeout_s=self.timeout_s,
+        result = self._invoke(
+            RoleName.QA, qa.run, job, profile=profile, branch_diff=self._branch_diff(job)
         )
         if not result.ok:
             return self._invocation_failed(job, result)
@@ -418,9 +436,7 @@ class Engine:
         worktree = require_worktree(job)
         diff = self._branch_diff(job)
         while True:
-            result = qa.run(
-                job, profile, branch_diff=diff, provider=self.provider, timeout_s=self.timeout_s
-            )
+            result = self._invoke(RoleName.QA, qa.run, job, profile=profile, branch_diff=diff)
             if not result.ok:
                 return self._invocation_failed(job, result)
             assert isinstance(result.output, QAResult)
@@ -460,12 +476,12 @@ class Engine:
             return self._fail(job, "devops role lacks the git_push permission")
 
         if job.data.pr_url is None:
-            result = devops.run(
+            result = self._invoke(
+                RoleName.DEVOPS,
+                devops.run,
                 job,
-                profile,
+                profile=profile,
                 branch_diff=self._branch_diff(job),
-                provider=self.provider,
-                timeout_s=self.timeout_s,
             )
             if not result.ok:
                 return self._invocation_failed(job, result)
@@ -500,11 +516,11 @@ class Engine:
                     f"CI red after {self.max_ci_attempts} fix attempts",
                     detail=status.log or status.summary,
                 )
-            fix = developer.run(
+            fix = self._invoke(
+                RoleName.DEVELOPER,
+                developer.run,
                 job,
-                profile,
-                provider=self.provider,
-                timeout_s=self.timeout_s,
+                profile=profile,
                 ci_failure=status.log or status.summary,
             )
             if not fix.ok:

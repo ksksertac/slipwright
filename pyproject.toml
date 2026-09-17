@@ -10,6 +10,7 @@ dependencies = [
     "uvicorn[standard]>=0.30",
     "pydantic>=2.7",
     "anthropic>=1.6.0",
+    "python-multipart>=0.0.32",
 ]
 
 [project.scripts]

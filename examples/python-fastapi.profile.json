@@ -27,8 +27,8 @@
       "permissions": ["read_files", "write_files", "run_commands"]
     },
     "devops": {
-      "model": "claude-haiku-4-5-20251001",
-      "thinking_depth": "low",
+      "model": "claude-haiku-4-5",
+      "thinking_depth": "off",
       "permissions": ["read_files", "run_commands", "network", "git_push"]
     }
   }

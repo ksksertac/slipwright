@@ -57,6 +57,9 @@ def create_app(engine: Engine, *, resume_on_startup: bool = True) -> FastAPI:
         yield
 
     app = FastAPI(title="Slipwright", lifespan=lifespan)
+    from slipwright.api.ui import router as ui_router
+
+    app.include_router(ui_router)
 
     def _engine(request: Request) -> Engine:
         eng: Engine = request.app.state.engine

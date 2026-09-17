@@ -35,7 +35,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 
 ## Progress
 
-> **Resume here:** Phases 0-4 are complete. Next task is **T5.1 — Inbox steering**.
+> **Resume here:** All phases are complete and the definition of done is verified by tests.
 > Design note for T1.3: `run_cmd` is executed as a subprocess in the worktree (Docker is used
 > only if the profile's `run_cmd` itself invokes it).
 > Design note for T2.2: `invoke_role` talks to a `ModelProvider` (`slipwright/providers/`);
@@ -61,6 +61,12 @@ These hold at every point in the build. If a task seems to require breaking one,
 > DevOps talks to a `GitHost` (`slipwright/githost.py`, `gh`-backed); red CI goes to the
 > Developer as a fix, max 3 attempts. The PR URL is persisted before polling so a restart
 > never opens a second PR.
+> Design note for Phase 5: every model call goes through `Engine._invoke`, which injects pending
+> inbox messages (via `roles.common.base_context`) and afterwards marks them consumed and appends
+> a same-state history entry (`inbox: N message(s) consumed by <role>`). The dashboard is
+> server-rendered HTML under `/` and `/ui/...` with form posts; it shares the engine with the
+> JSON API. The example profile gives DevOps `thinking_depth: off` because Haiku 4.5 rejects
+> the `effort` parameter that other depths map to.
 
 | Phase | Task | Status |
 |-------|------|--------|
@@ -79,9 +85,9 @@ These hold at every point in the build. If a task seems to require breaking one,
 | 3 | T3.3 Build gate | [x] |
 | 4 | T4.1 QA role, two stages | [x] |
 | 4 | T4.2 DevOps role | [x] |
-| 5 | T5.1 Inbox steering | [ ] |
-| 5 | T5.2 Per-role model routing, verified | [ ] |
-| 5 | T5.3 Job dashboard | [ ] |
+| 5 | T5.1 Inbox steering | [x] |
+| 5 | T5.2 Per-role model routing, verified | [x] |
+| 5 | T5.3 Job dashboard | [x] |
 
 ---
 
@@ -241,28 +247,32 @@ Enough surface to drive a job by hand.
 Let the human redirect a job that is already running.
 
 **Done when**
-- [ ] `POST /jobs/{id}/message` appends to a per-job inbox
-- [ ] Every role invocation drains the inbox and injects pending messages into its context
-- [ ] Consumed messages are marked and recorded in history, never replayed
-- [ ] Test: queue a message mid-plan, assert the next Developer invocation sees it
+- [x] `POST /jobs/{id}/message` appends to a per-job inbox
+- [x] Every role invocation drains the inbox and injects pending messages into its context
+- [x] Consumed messages are marked and recorded in history, never replayed
+- [x] Test: queue a message mid-plan, assert the next Developer invocation sees it
 
 ### T5.2 — Per-role model routing, verified
 **Done when**
-- [ ] A test asserts each role was invoked with exactly the model named in the profile
-- [ ] Switching a role's model in the profile changes behaviour with no engine code change
-- [ ] README documents how to tune model and thinking depth per role
+- [x] A test asserts each role was invoked with exactly the model named in the profile
+- [x] Switching a role's model in the profile changes behaviour with no engine code change
+- [x] README documents how to tune model and thinking depth per role
 
 ### T5.3 — Job dashboard
 **Done when**
-- [ ] A single page lists jobs with state, current phase, and pending approvals
-- [ ] Approve and reject are actionable from the page
-- [ ] Phase history and diffs are viewable per job
+- [x] A single page lists jobs with state, current phase, and pending approvals
+- [x] Approve and reject are actionable from the page
+- [x] Phase history and diffs are viewable per job
 
 ---
 
 ## Definition of done for the whole build
 
-- [ ] Two jobs run concurrently against the same repo, end to end, without interference
-- [ ] Killing the server at any phase and restarting resumes every in-flight job
-- [ ] No engine module references a model name
-- [ ] A job cannot advance past any approval state without an explicit approve call
+- [x] Two jobs run concurrently against the same repo, end to end, without interference
+  (`tests/test_phase5.py::test_two_jobs_run_concurrently_end_to_end_without_interference`)
+- [x] Killing the server at any phase and restarting resumes every in-flight job
+  (`test_restart_at_every_phase_resumes_the_job`, parametrised over every working state)
+- [x] No engine module references a model name
+  (`tests/test_agent_invocation.py::test_engine_has_no_hardcoded_model_names`)
+- [x] A job cannot advance past any approval state without an explicit approve call
+  (`test_approval_states_never_advance_without_approve`)

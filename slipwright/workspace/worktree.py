@@ -9,6 +9,8 @@ left alone.
 from __future__ import annotations
 
 import shutil
+import threading
+from collections import defaultdict
 from pathlib import Path
 
 from slipwright.schemas.job import Job
@@ -17,6 +19,16 @@ from slipwright.workspace import git
 
 class WorktreeError(RuntimeError):
     pass
+
+
+# git's own worktree bookkeeping is not safe against concurrent ``worktree add`` on the
+# same repository (it reads sibling entries while they are half-written), so those calls
+# are serialised per repository. Jobs still run in parallel; only the checkout is queued.
+_repo_locks: defaultdict[str, threading.Lock] = defaultdict(threading.Lock)
+
+
+def _repo_lock(repo: Path) -> threading.Lock:
+    return _repo_locks[str(repo.resolve())]
 
 
 def worktree_path(worktrees_root: Path, job: Job) -> Path:
@@ -38,11 +50,14 @@ def create(job: Job, worktrees_root: Path) -> Path:
         raise WorktreeError(f"branch already exists: {branch}")
 
     worktrees_root.mkdir(parents=True, exist_ok=True)
-    try:
-        git.run(repo, "worktree", "add", "-b", branch, str(path))
-    except git.GitError as exc:
-        _cleanup_partial(repo, path, branch)
-        raise WorktreeError(f"could not create worktree for job {job.id}: {exc.stderr}") from exc
+    with _repo_lock(repo):
+        try:
+            git.run(repo, "worktree", "add", "-b", branch, str(path))
+        except git.GitError as exc:
+            _cleanup_partial(repo, path, branch)
+            raise WorktreeError(
+                f"could not create worktree for job {job.id}: {exc.stderr}"
+            ) from exc
     return path
 
 
@@ -50,7 +65,8 @@ def destroy(job: Job, worktrees_root: Path) -> None:
     """Remove the job's worktree and delete its branch. Safe to call twice."""
     repo = job.repo_path
     path = job.worktree_path or worktree_path(worktrees_root, job)
-    _cleanup_partial(repo, path, job.branch)
+    with _repo_lock(repo):
+        _cleanup_partial(repo, path, job.branch)
 
 
 def _cleanup_partial(repo: Path, path: Path, branch: str) -> None:
