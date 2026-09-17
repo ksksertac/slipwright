@@ -19,16 +19,20 @@ import traceback
 from collections import defaultdict
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
+from slipwright.gates import GateResult, build_gate
 from slipwright.invoke import DEFAULT_TIMEOUT_S, RoleResult, get_default_provider
 from slipwright.orchestrator import IllegalTransitionError, Orchestrator
 from slipwright.providers import ModelProvider
-from slipwright.roles import analyst
-from slipwright.roles.results import AnalystResult
+from slipwright.roles import analyst, developer, planner
+from slipwright.roles.common import apply_changes, require_worktree
+from slipwright.roles.results import AnalystResult, DeveloperResult, PlannerResult
 from slipwright.schemas.job import APPROVAL_STATES, Job, JobState
-from slipwright.schemas.profile import Profile
+from slipwright.schemas.profile import Profile, RoleName
 from slipwright.store import JobStore
 from slipwright.workspace import Workspace
+from slipwright.workspace import git as g
 
 log = logging.getLogger(__name__)
 
@@ -68,6 +72,9 @@ class Engine:
         seed_profile: Profile,
         provider: ModelProvider | None = None,
         timeout_s: float = DEFAULT_TIMEOUT_S,
+        max_reject_rounds: int = 3,
+        max_build_attempts: int = 3,
+        gate_timeout_s: float | None = None,
     ) -> None:
         self.store = store
         self.workspace = workspace
@@ -75,8 +82,14 @@ class Engine:
         self.seed_profile = seed_profile
         self._provider = provider
         self.timeout_s = timeout_s
+        self.max_reject_rounds = max_reject_rounds
+        self.max_build_attempts = max_build_attempts
+        self.gate_timeout_s = gate_timeout_s
         self.handlers: dict[JobState, Handler] = {
             JobState.ANALYZING: self._analyze,
+            JobState.PLANNING: self._plan,
+            JobState.DEVELOPING: self._develop,
+            JobState.BUILD_GATE: self._build_gate,
         }
         self._locks: defaultdict[str, threading.Lock] = defaultdict(threading.Lock)
         # ports held by jobs that outlived a previous process must stay taken
@@ -187,6 +200,22 @@ class Engine:
             detail=result.error.message,
         )
 
+    @staticmethod
+    def _profile(job: Job) -> Profile:
+        if job.profile is None:
+            raise RuntimeError(f"job {job.id} has no approved profile")
+        return job.profile
+
+    def _run_gate(self, job: Job) -> GateResult:
+        kwargs = {} if self.gate_timeout_s is None else {"timeout_s": self.gate_timeout_s}
+        return build_gate(self._profile(job), require_worktree(job), **kwargs)
+
+    @staticmethod
+    def _phases(job: Job) -> list[dict[str, Any]]:
+        plan = job.data.plan or {}
+        phases: list[dict[str, Any]] = plan.get("phases", [])
+        return phases
+
     # -- phase handlers ------------------------------------------------------------------
 
     def _analyze(self, job: Job) -> Job:
@@ -204,6 +233,97 @@ class Engine:
             JobState.AWAITING_PROFILE_APPROVAL,
             note=f"analyst: {result.output.summary}",
             detail=json.dumps(job.profile.model_dump(mode="json"), indent=2),
+        )
+
+    def _plan(self, job: Job) -> Job:
+        if job.data.reject_rounds > self.max_reject_rounds:
+            return self._fail(
+                job,
+                f"plan rejected {job.data.reject_rounds} times; giving up",
+                detail=job.data.feedback,
+            )
+        result = planner.run(
+            job, self._profile(job), provider=self.provider, timeout_s=self.timeout_s
+        )
+        if not result.ok:
+            return self._invocation_failed(job, result)
+        assert isinstance(result.output, PlannerResult)
+        job.data.plan = result.output.model_dump(mode="json")
+        job.data.phase_index = 0
+        job.data.build_attempts = 0
+        job.data.last_build_output = None
+        self.store.save(job)
+        return self.orchestrator.transition(
+            job,
+            JobState.AWAITING_PLAN_APPROVAL,
+            note=f"planner: {result.output.summary} ({len(result.output.phases)} phases)",
+            detail=json.dumps(job.data.plan, indent=2),
+        )
+
+    def _develop(self, job: Job) -> Job:
+        profile = self._profile(job)
+        phases = self._phases(job)
+        index = job.data.phase_index
+        if index >= len(phases):
+            return self._fail(job, f"no plan phase {index + 1} to develop")
+        result = developer.run(job, profile, provider=self.provider, timeout_s=self.timeout_s)
+        if not result.ok:
+            return self._invocation_failed(job, result)
+        assert isinstance(result.output, DeveloperResult)
+
+        worktree = require_worktree(job)
+        touched = apply_changes(job, profile, RoleName.DEVELOPER, result.output.changes)
+        g.stage_all(worktree)
+        diff = g.staged_diff(worktree)
+        attempt = f", fix attempt {job.data.build_attempts}" if job.data.build_attempts else ""
+        return self.orchestrator.transition(
+            job,
+            JobState.BUILD_GATE,
+            note=(
+                f"developer phase {index + 1}/{len(phases)}{attempt}: "
+                f"{result.output.summary} ({len(touched)} files)"
+            ),
+            detail=diff or "(no changes)",
+        )
+
+    def _build_gate(self, job: Job) -> Job:
+        phases = self._phases(job)
+        index = job.data.phase_index
+        gate = self._run_gate(job)
+        if gate.ok:
+            worktree = require_worktree(job)
+            g.stage_all(worktree)
+            goal = phases[index].get("goal", "") if index < len(phases) else ""
+            g.commit(worktree, f"slipwright: phase {index + 1}: {goal}")
+            job.data.phase_index = index + 1
+            job.data.build_attempts = 0
+            job.data.last_build_output = None
+            self.store.save(job)
+            done = job.data.phase_index >= len(phases)
+            return self.orchestrator.transition(
+                job,
+                JobState.QA if done else JobState.DEVELOPING,
+                note=f"build gate passed for phase {index + 1}/{len(phases)}",
+                detail=gate.tail,
+            )
+
+        job.data.build_attempts += 1
+        job.data.last_build_output = gate.tail
+        self.store.save(job)
+        if job.data.build_attempts >= self.max_build_attempts:
+            return self._fail(
+                job,
+                f"build gate failed {job.data.build_attempts} times on phase {index + 1}",
+                detail=gate.tail,
+            )
+        return self.orchestrator.transition(
+            job,
+            JobState.DEVELOPING,
+            note=(
+                f"build gate failed on phase {index + 1} "
+                f"(attempt {job.data.build_attempts}/{self.max_build_attempts})"
+            ),
+            detail=gate.tail,
         )
 
 

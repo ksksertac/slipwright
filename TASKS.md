@@ -35,7 +35,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 
 ## Progress
 
-> **Resume here:** Phases 0, 1 and 2 are complete. Next task is **T3.1 — Planner role**.
+> **Resume here:** Phases 0-3 are complete. Next task is **T4.1 — QA role, two stages**.
 > Design note for T1.3: `run_cmd` is executed as a subprocess in the worktree (Docker is used
 > only if the profile's `run_cmd` itself invokes it).
 > Design note for T2.2: `invoke_role` talks to a `ModelProvider` (`slipwright/providers/`);
@@ -50,6 +50,10 @@ These hold at every point in the build. If a task seems to require breaking one,
 > attempt counters, inbox); `Transition.detail` holds long-form records (profile JSON, diffs,
 > build logs). The API runs phases in background tasks and resumes in-flight jobs on startup.
 > `slipwright serve --provider scripted` runs the whole pipeline offline.
+> Design note for Phase 3: the Developer returns full file contents (`FileChange`) and the
+> engine writes them (enforcing `write_files`), stages, records the diff on the
+> DEVELOPING→BUILD_GATE transition and commits each phase that passes the gate. Rejecting a
+> plan more than 3 times fails the job.
 
 | Phase | Task | Status |
 |-------|------|--------|
@@ -63,9 +67,9 @@ These hold at every point in the build. If a task seems to require breaking one,
 | 2 | T2.2 Agent invocation layer | [x] |
 | 2 | T2.3 Analyst role | [x] |
 | 2 | T2.4 Minimal API and CLI | [x] |
-| 3 | T3.1 Planner role | [ ] |
-| 3 | T3.2 Developer role, phase by phase | [ ] |
-| 3 | T3.3 Build gate | [ ] |
+| 3 | T3.1 Planner role | [x] |
+| 3 | T3.2 Developer role, phase by phase | [x] |
+| 3 | T3.3 Build gate | [x] |
 | 4 | T4.1 QA role, two stages | [ ] |
 | 4 | T4.2 DevOps role | [ ] |
 | 5 | T5.1 Inbox steering | [ ] |
@@ -186,22 +190,22 @@ Enough surface to drive a job by hand.
 
 ### T3.1 — Planner role
 **Done when**
-- [ ] Planner produces a structured plan: ordered phases, each with a goal and changed files
-- [ ] Job moves to `awaiting_plan_approval` and stops
-- [ ] Reject with feedback re-runs Planner with the feedback in context, bounded to 3 rounds
+- [x] Planner produces a structured plan: ordered phases, each with a goal and changed files
+- [x] Job moves to `awaiting_plan_approval` and stops
+- [x] Reject with feedback re-runs Planner with the feedback in context, bounded to 3 rounds
 
 ### T3.2 — Developer role, phase by phase
 **Done when**
-- [ ] Developer executes one plan phase per invocation, not the whole plan at once
-- [ ] Phase progress is persisted after each phase, so a restart resumes mid-plan
-- [ ] Each phase's diff is recorded in job history
+- [x] Developer executes one plan phase per invocation, not the whole plan at once
+- [x] Phase progress is persisted after each phase, so a restart resumes mid-plan
+- [x] Each phase's diff is recorded in job history
 
 ### T3.3 — Build gate
 **Done when**
-- [ ] After each Developer phase, the profile's `build_cmd` and `test_cmd` run in the worktree
-- [ ] Non-zero exit returns the captured output to Developer for a fix attempt
-- [ ] Maximum 3 attempts, then the job moves to `failed` with the last output attached
-- [ ] Tests cover: pass first try, pass on retry, exhaust retries
+- [x] After each Developer phase, the profile's `build_cmd` and `test_cmd` run in the worktree
+- [x] Non-zero exit returns the captured output to Developer for a fix attempt
+- [x] Maximum 3 attempts, then the job moves to `failed` with the last output attached
+- [x] Tests cover: pass first try, pass on retry, exhaust retries
 
 ---
 
