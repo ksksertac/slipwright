@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Crumbs } from "../components/Crumbs";
 import { PageHead } from "../components/ui";
-import { describeError, type NewProject } from "../api/client";
+import { api, describeError, type Job, type NewProject } from "../api/client";
 import {
   useCreateProject,
   useGitHubRepos,
@@ -33,6 +33,7 @@ export function NewProjectPage() {
   const folders = local.data?.repos ?? [];
   const [githubRepo, setGithubRepo] = useState("");
   const [jiraKey, setJiraKey] = useState("");
+  const [firstRequest, setFirstRequest] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const submit = async (e: FormEvent) => {
@@ -47,6 +48,10 @@ export function NewProjectPage() {
     else body.github_repo = githubRepo.trim();
     try {
       const project = await create.mutateAsync(body);
+      if (firstRequest.trim()) {
+        // the first development starts right away; the pipeline shows it working
+        await api.post<Job>(`/api/projects/${project.id}/jobs`, { request: firstRequest.trim() });
+      }
       navigate(`/projects/${project.id}`);
     } catch (err) {
       setError(describeError(err));
@@ -224,6 +229,22 @@ export function NewProjectPage() {
               <Link to="/settings/jira">Connect Jira</Link> to mirror epics, stories and tasks.
             </div>
           )}
+        </div>
+
+        <div className="field">
+          <label htmlFor="first_request">What should the agents build first? (optional)</label>
+          <textarea
+            id="first_request"
+            value={firstRequest}
+            onChange={(e) => setFirstRequest(e.target.value)}
+            placeholder="e.g. Add a /health endpoint that reports the database status, with tests"
+            style={{ minHeight: 90 }}
+          />
+          <div className="help">
+            Every request becomes a <em>development</em>: the Product Owner turns it into epics,
+            stories and tasks for you to approve, the Architect plans it, the specialists build it.
+            You can add more later from the project's <strong>Developments</strong> tab.
+          </div>
         </div>
 
         {error && <div className="callout error">{error}</div>}
