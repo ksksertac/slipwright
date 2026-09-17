@@ -36,8 +36,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 
 ## Progress
 
-> **Resume here:** Phases 0–8 are complete. Next task is **T9.1 — Specialist agents** (Phase 9
-> is planned, not started).
+> **Resume here:** Phases 0–8 and T9.1 are complete. Next task is **T9.2 — Standards corpus**.
 > Design note for T1.3: `run_cmd` is executed as a subprocess in the worktree (Docker is used
 > only if the profile's `run_cmd` itself invokes it).
 > Design note for T2.2: `invoke_role` talks to a `ModelProvider` (`slipwright/providers/`);
@@ -83,6 +82,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 > Design note for T8.4: `PUT /api/jobs/{id}/profile` lets the human edit the Analyst's proposal before approving (engine `set_profile`, only in `awaiting_profile_approval`). Per-phase diffs and gate attempts are grouped from history notes (`developer phase N`, `build gate ... phase N`). Forms follow the server value until edited (state adjusted during render, no effects). `web/PARITY.md` is the legacy-dashboard parity list.
 > Design note for T8.6: `GET /api/settings/profile` returns the engine's default seed so the Agents page can materialise a project's own profile (saved with `PATCH /api/projects/{id}`, validated server-side by pydantic). The generated client uses `defaultNonNullable: false` so defaulted input fields stay optional in TypeScript.
 > Design note for T8.7: `slipwright/api/ui.py` and its T5.3 test are gone; the React app at `/` is the dashboard (`web/PARITY.md`). `tests/test_phase8_e2e.py` is the Phase 6–8 definition of done driven through the API exactly as the browser does it, with fake GitHub/Jira and the scripted provider.
+> Design note for T9.1: `roles/specialists.py` maps `PlanPhase.domain` → role (`specialist_for`), holds the specialist instructions and the role→standards-domain map; `developer.run(as_role=...)` serves all four implementer roles; history notes are `<role> phase N/M`. `supervisor` is already in `RoleName` for T9.8. `/agents` cards come from `GET /api/agents` (`activity.agent_summaries`).
 
 | Phase | Task | Status |
 |-------|------|--------|
@@ -123,7 +123,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 | 8 | T8.7 Retire the server-rendered dashboard | [x] |
 | 8 | T8.8 Docker image and compose | [x] |
 | 8 | T8.9 UI redesign: dashboard, cards, edit/delete flows, theme | [x] |
-| 9 | T9.1 Specialist agents: backend, web UI, mobile UI | [ ] |
+| 9 | T9.1 Specialist agents: backend, web UI, mobile UI | [x] |
 | 9 | T9.2 Standards corpus | [ ] |
 | 9 | T9.3 Standards index (RAG) | [ ] |
 | 9 | T9.4 Retrieval into every role's prompt | [ ] |
@@ -684,26 +684,26 @@ Design decisions, made up front so tasks do not re-litigate them:
 
 ### T9.1 — Specialist agents: backend, web UI, mobile UI
 **Done when**
-- [ ] `RoleName` gains `backend`, `web_ui`, `mobile_ui`; `Profile.roles` requires them;
+- [x] `RoleName` gains `backend`, `web_ui`, `mobile_ui`; `Profile.roles` requires them;
   the example profile and `schemas/profile.schema.json` are updated; `developer` stays as
   the generic fallback
-- [ ] `PlanPhase.domain` (`backend|web|mobile|infra|docs|general`) is required from the
+- [x] `PlanPhase.domain` (`backend|web|mobile|infra|docs|general`) is required from the
   Planner; breakdown tasks show it; the board and job page show a domain badge per task
-- [ ] The engine's develop step dispatches by domain: `backend`→`backend`, `web`→`web_ui`,
+- [x] The engine's develop step dispatches by domain: `backend`→`backend`, `web`→`web_ui`,
   `mobile`→`mobile_ui`, `infra`→`devops`, everything else →`developer`; CI-fix rounds use
   the same specialist that wrote the phase
-- [ ] Each specialist has its own instructions file (`slipwright/roles/specialists/*.py`)
+- [x] Each specialist has its own instructions file (`slipwright/roles/specialists/*.py`)
   stating scope and hand-off rules (a web change that needs a new endpoint goes back to the
   Planner as a new phase, never done by the web agent)
-- [ ] `/agents` shows the six agents as **cards** (Analysis, Backend, Web UI, Mobile UI,
+- [x] `/agents` shows the six agents as **cards** (Analysis, Backend, Web UI, Mobile UI,
   Tester, DevOps): icon, one-line scope, provider + model, thinking depth, permissions as
   chips, Jira on/off, number of standards sections, last used; the sidebar gets an
   "Agents" entry and Settings → Agents becomes this page
-- [ ] Clicking a card opens the agent's detail page `/agents/<role>` with tabs
+- [x] Clicking a card opens the agent's detail page `/agents/<role>` with tabs
   **Setup** (per project: provider, model, thinking depth, permissions — the roles table
   reduced to one row), **Standards** (T9.6: the domain's pages, editable) and
   **Activity** (recent invocations across projects with prompt size and standards used)
-- [ ] Tests: a scripted plan with phases in three domains asserts the requests went to the
+- [x] Tests: a scripted plan with phases in three domains asserts the requests went to the
   three specialists with exactly the profile's model for each (extends T5.2's routing test)
 
 ### T9.2 — Standards corpus
