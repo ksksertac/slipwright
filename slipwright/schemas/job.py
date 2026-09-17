@@ -95,6 +95,9 @@ class JobData(BaseModel):
     pr_url: str | None = None
     ci_attempts: int = Field(default=0, ge=0)
     inbox: list[InboxMessage] = Field(default_factory=list)
+    jira_keys: dict[str, str] = Field(
+        default_factory=dict, description="Breakdown item id -> Jira issue key, once synced."
+    )
 
 
 class Job(BaseModel):

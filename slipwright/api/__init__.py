@@ -16,6 +16,7 @@ from pathlib import Path
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from slipwright.board import Board, project_board
 from slipwright.engine import Engine, NotAwaitingApproval, ProjectCloneError
 from slipwright.schemas.job import Job
 from slipwright.schemas.profile import Profile
@@ -160,6 +161,13 @@ def create_app(engine: Engine, *, resume_on_startup: bool = True) -> FastAPI:
         eng = _engine(request)
         _get_project(eng, project_id)
         return eng.store.list(project_id)
+
+    @app.get("/projects/{project_id}/board", response_model=Board)
+    def get_board(project_id: str, request: Request) -> Board:
+        """Epics, stories and tasks of every job whose plan was approved, with statuses."""
+        eng = _engine(request)
+        _get_project(eng, project_id)
+        return project_board(project_id, eng.store.list(project_id))
 
     # -- jobs ----------------------------------------------------------------------------
 

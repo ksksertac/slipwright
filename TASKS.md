@@ -36,7 +36,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 
 ## Progress
 
-> **Resume here:** Phases 0–5 and T6.1 are complete. Next task is **T6.2 — Work breakdown**.
+> **Resume here:** Phases 0–5, T6.1 and T6.2 are complete. Next task is **T6.3 — Progress and activity feed**.
 > Design note for T1.3: `run_cmd` is executed as a subprocess in the worktree (Docker is used
 > only if the profile's `run_cmd` itself invokes it).
 > Design note for T2.2: `invoke_role` talks to a `ModelProvider` (`slipwright/providers/`);
@@ -69,6 +69,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 > JSON API. The example profile gives DevOps `thinking_depth: off` because Haiku 4.5 rejects
 > the `effort` parameter that other depths map to.
 > Design note for T6.1: `Job.project_id` is optional on the model so workspace-level code and its tests can build bare jobs, but every job the engine or API creates belongs to a project (`create_job` finds or creates one for a bare `repo_path`). Projects without a checkout are cloned into `<state>/repos/<id>`; `clone_url` overrides the GitHub URL (tests clone local bare repos). A project's `profile` is the seed for its jobs (`Engine.seed_for`).
+> Design note for T6.2: the breakdown lives inside `PlannerResult` (`breakdown.epics[].stories[].tasks[]`, task.phase is 1-based); a plan the model returns without one gets `default_breakdown` (one epic/story, one task per phase) before it is persisted. `slipwright/board.py` derives task/story/epic statuses from job state and `phase_index`; a job is on the board only once its plan is approved (`plan_is_active`).
 
 | Phase | Task | Status |
 |-------|------|--------|
@@ -91,7 +92,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 | 5 | T5.2 Per-role model routing, verified | [x] |
 | 5 | T5.3 Job dashboard | [x] |
 | 6 | T6.1 Project entity | [x] |
-| 6 | T6.2 Work breakdown: epics, stories, tasks | [ ] |
+| 6 | T6.2 Work breakdown: epics, stories, tasks | [x] |
 | 6 | T6.3 Progress and activity feed | [ ] |
 | 6 | T6.4 Test runs on demand | [ ] |
 | 7 | T7.1 Users and login | [ ] |
@@ -308,17 +309,17 @@ and its invariants are unchanged.
 
 ### T6.2 — Work breakdown: epics, stories, tasks
 **Done when**
-- [ ] `PlannerResult` gains a `breakdown`: `epics[] → stories[] → tasks[]`, each with id,
+- [x] `PlannerResult` gains a `breakdown`: `epics[] → stories[] → tasks[]`, each with id,
   title, description; every task references exactly one plan phase index and every plan
   phase is referenced by exactly one task
-- [ ] Planner prompt asks for the breakdown; the result schema rejects orphan phases or tasks
-- [ ] Breakdown is persisted on `Job.data` and returned by `GET /projects/{id}/jobs/{jid}`
-- [ ] Each task carries a status derived from engine state: `todo`, `in_progress`, `done`,
+- [x] Planner prompt asks for the breakdown; the result schema rejects orphan phases or tasks
+- [x] Breakdown is persisted on `Job.data` and returned by `GET /projects/{id}/jobs/{jid}`
+- [x] Each task carries a status derived from engine state: `todo`, `in_progress`, `done`,
   `failed` — computed from `phase_index`, build gate result and job state, never stored
   separately
-- [ ] `GET /projects/{id}/board` merges the breakdowns of all the project's jobs into one
+- [x] `GET /projects/{id}/board` merges the breakdowns of all the project's jobs into one
   epic/story/task tree with statuses
-- [ ] Test: a scripted plan with 2 epics / 3 stories / 4 tasks; drive the job and assert the
+- [x] Test: a scripted plan with 2 epics / 3 stories / 4 tasks; drive the job and assert the
   board statuses change task by task
 
 ### T6.3 — Progress and activity feed

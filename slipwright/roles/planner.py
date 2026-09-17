@@ -12,8 +12,13 @@ INSTRUCTIONS = """\
 Plan how to implement the request in this project. Split the work into small, ordered
 phases; each phase must have one clear goal and list the files it will create or change.
 A later phase may depend on an earlier one, never the reverse. Keep the plan as short as
-the request allows. If `feedback` is present, a human rejected your previous plan
-(`previous_plan`); address every point in it."""
+the request allows.
+Also return a `breakdown`: the same work organised as epics, each with user stories, each
+with tasks. Every task names exactly one phase by its 1-based number in `phase`, and
+every phase must be covered by exactly one task. Use one epic per independent outcome
+of the request, one story per user-visible capability, and one task per phase.
+If `feedback` is present, a human rejected your previous plan (`previous_plan`); address
+every point in it."""
 
 
 def run(

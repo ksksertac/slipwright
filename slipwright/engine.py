@@ -35,6 +35,7 @@ from slipwright.roles.results import (
     DevOpsResult,
     PlannerResult,
     QAResult,
+    default_breakdown,
 )
 from slipwright.schemas.job import APPROVAL_STATES, Job, JobState, utcnow
 from slipwright.schemas.profile import Permission, Profile, RoleName
@@ -391,7 +392,11 @@ class Engine:
         if not result.ok:
             return self._invocation_failed(job, result)
         assert isinstance(result.output, PlannerResult)
-        job.data.plan = result.output.model_dump(mode="json")
+        plan = result.output
+        if plan.breakdown is None:
+            breakdown = default_breakdown(job.request, plan.phases)
+            plan = plan.model_copy(update={"breakdown": breakdown})
+        job.data.plan = plan.model_dump(mode="json")
         job.data.phase_index = 0
         job.data.build_attempts = 0
         job.data.last_build_output = None

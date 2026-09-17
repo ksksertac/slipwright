@@ -8,8 +8,9 @@ registry and the "one schema per role" rule are the contract.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from slipwright.schemas.job import new_job_id
 from slipwright.schemas.profile import Profile, RoleName
 
 
@@ -32,8 +33,95 @@ class PlanPhase(BaseModel):
     files: list[str] = Field(default_factory=list, description="Files expected to change.")
 
 
+class BreakdownTask(BaseModel):
+    """One unit of work; maps onto exactly one plan phase."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(default_factory=new_job_id, min_length=1)
+    title: str = Field(min_length=1)
+    description: str = ""
+    phase: int = Field(ge=1, description="1-based index into PlannerResult.phases.")
+
+
+class BreakdownStory(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(default_factory=new_job_id, min_length=1)
+    title: str = Field(min_length=1)
+    description: str = ""
+    tasks: list[BreakdownTask] = Field(min_length=1)
+
+
+class BreakdownEpic(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(default_factory=new_job_id, min_length=1)
+    title: str = Field(min_length=1)
+    description: str = ""
+    stories: list[BreakdownStory] = Field(min_length=1)
+
+
+class Breakdown(BaseModel):
+    """Epics -> stories -> tasks. Every plan phase is exactly one task."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    epics: list[BreakdownEpic] = Field(min_length=1)
+
+    def tasks(self) -> list[BreakdownTask]:
+        return [t for e in self.epics for s in e.stories for t in s.tasks]
+
+
 class PlannerResult(RoleOutput):
     phases: list[PlanPhase] = Field(min_length=1)
+    breakdown: Breakdown | None = Field(
+        default=None,
+        description="Epics/stories/tasks over the phases; generated when omitted.",
+    )
+
+    @model_validator(mode="after")
+    def _breakdown_covers_phases(self) -> PlannerResult:
+        if self.breakdown is None:
+            return self
+        seen: dict[int, str] = {}
+        for task in self.breakdown.tasks():
+            if task.phase > len(self.phases):
+                raise ValueError(
+                    f"task {task.title!r} references phase {task.phase} "
+                    f"but the plan has {len(self.phases)}"
+                )
+            if task.phase in seen:
+                raise ValueError(
+                    f"phase {task.phase} is referenced by both {seen[task.phase]!r} "
+                    f"and {task.title!r}"
+                )
+            seen[task.phase] = task.title
+        missing = [i + 1 for i in range(len(self.phases)) if i + 1 not in seen]
+        if missing:
+            raise ValueError(f"no task references phase(s) {missing}")
+        return self
+
+
+def default_breakdown(request: str, phases: list[PlanPhase]) -> Breakdown:
+    """One epic, one story, one task per phase: what a plan without a breakdown means."""
+    title = request.strip().splitlines()[0][:120] if request.strip() else "Request"
+    return Breakdown(
+        epics=[
+            BreakdownEpic(
+                title=title,
+                stories=[
+                    BreakdownStory(
+                        title=title,
+                        tasks=[
+                            BreakdownTask(title=phase.goal, phase=i + 1)
+                            for i, phase in enumerate(phases)
+                        ],
+                    )
+                ],
+            )
+        ]
+    )
 
 
 class FileChange(BaseModel):
@@ -87,6 +175,11 @@ def result_schema_for(role: RoleName) -> type[RoleOutput]:
 __all__ = [
     "RESULT_SCHEMAS",
     "AnalystResult",
+    "Breakdown",
+    "BreakdownEpic",
+    "BreakdownStory",
+    "BreakdownTask",
+    "default_breakdown",
     "DevOpsResult",
     "DeveloperResult",
     "FileChange",
