@@ -1,0 +1,15 @@
+.git
+.venv
+.slipwright
+.mypy_cache
+.pytest_cache
+.ruff_cache
+.coverage
+.vscode
+.env
+repos
+tests
+web/node_modules
+web/*.tsbuildinfo
+slipwright/api/static
+**/__pycache__

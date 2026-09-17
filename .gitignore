@@ -22,3 +22,8 @@ web/node_modules/
 web/dist/
 
 web/*.tsbuildinfo
+
+# Local checkouts mounted into the Docker container
+/repos/*
+!/repos/.gitkeep
+.env

@@ -1,0 +1,34 @@
+# Local deployment: one service. Slipwright keeps everything in SQLite under /data, so
+# there is no database or queue to run alongside it.
+#
+#   cp .env.example .env            # API keys (optional: they can be entered in the UI)
+#   docker compose up --build -d
+#   docker compose exec slipwright slipwright user add ada
+#   open http://localhost:8500
+services:
+  slipwright:
+    build: .
+    image: slipwright:local
+    ports:
+      - "8500:8500"          # API + web UI
+      - "8100-8130:8100-8130" # live environments of jobs (SLIPWRIGHT_PORT_RANGE)
+    environment:
+      SLIPWRIGHT_STATE_DIR: /data
+      SLIPWRIGHT_PORT_RANGE: "8100-8130"
+      # provider keys are optional here; Settings -> Models can store them encrypted
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      # set a stable key so stored tokens survive a rebuilt volume; generated in /data otherwise
+      SLIPWRIGHT_SECRET_KEY: ${SLIPWRIGHT_SECRET_KEY:-}
+      SLIPWRIGHT_PROVIDER: ${SLIPWRIGHT_PROVIDER:-live}
+    volumes:
+      - slipwright-state:/data
+      # local checkouts you want to register as projects (use /repos/<name> as repo_path)
+      - ./repos:/repos
+      # uncomment to let run_cmd/build_cmd use docker (e.g. docker compose based projects)
+      # - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+
+volumes:
+  slipwright-state:

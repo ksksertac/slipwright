@@ -120,6 +120,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 | 8 | T8.5 Test results page | [x] |
 | 8 | T8.6 Settings page: GitHub, Jira, agent access and users | [x] |
 | 8 | T8.7 Retire the server-rendered dashboard | [x] |
+| 8 | T8.8 Docker image and compose | [x] |
 
 ---
 
@@ -590,6 +591,21 @@ talks only to `/api/*` and the SSE stream; it holds no business logic.
 - [x] `ui.py` and its tests are deleted; `/` serves the React app
 - [x] README documents: build the UI, create the first user, connect GitHub, create a
   project, start a development, approve gates, run tests
+
+### T8.8 — Docker image and compose
+Added after Phase 8: run the whole thing locally with one command.
+
+**Done when**
+- [x] Multi-stage `Dockerfile`: Node builds the web UI, the runtime image has `git`, `gh`,
+  `uv`/Python 3.12 and Node 22 so the DevOps role and the example (Python) profile work
+  inside the container; state under `/data`, health check on `/healthz`
+- [x] `compose.yaml` with a single service (SQLite needs no database, the event bus no
+  queue), a state volume, `./repos` mounted for local checkouts, job ports mapped, provider
+  keys and `SLIPWRIGHT_SECRET_KEY` from `.env` (`.env.example`)
+- [x] Verified: `docker compose up`, `user add` via `exec`, login, providers page, a
+  scripted job reaching the plan gate with its worktree and port inside the container
+- [x] README documents the Docker path; `tests/test_docker.py` checks the files stay
+  consistent (ports, state dir, volume, ignored paths)
 
 ---
 

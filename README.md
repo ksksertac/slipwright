@@ -33,6 +33,30 @@ any point and restart it: in-flight jobs resume, jobs waiting on you keep waitin
 
 ## Getting started
 
+### With Docker (recommended for a local install)
+
+Everything Slipwright needs — the API, the web UI, `git`, `gh`, `uv`/Python and Node for
+the projects it works on — is in one image; state (SQLite, secret key, clones, worktrees,
+test logs) lives in the `slipwright-state` volume. There is no database or queue to run
+alongside it.
+
+```sh
+cp .env.example .env                    # optional: API keys, a stable SLIPWRIGHT_SECRET_KEY
+docker compose up --build -d            # http://localhost:8500
+docker compose exec slipwright slipwright user add ada   # first login (admin)
+```
+
+- Local checkouts you want to work on go under `./repos/` (mounted at `/repos`; register
+  them with `repo_path = /repos/<name>`). GitHub repositories are cloned into the volume.
+- Jobs' live environments use ports `8100–8130` (mapped through; change
+  `SLIPWRIGHT_PORT_RANGE` and the port mapping in `compose.yaml` together).
+- Projects whose `run_cmd`/`build_cmd` call Docker need the socket mount that is commented
+  out in `compose.yaml`.
+- `SLIPWRIGHT_PROVIDER=scripted docker compose up` runs the whole pipeline with canned
+  model replies, no keys needed.
+
+### From source
+
 ```sh
 uv sync                                  # Python side
 cd web && npm install && npm run build   # web UI -> slipwright/api/static/
