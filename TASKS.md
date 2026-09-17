@@ -125,6 +125,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 | 8 | T8.7 Retire the server-rendered dashboard | [x] |
 | 8 | T8.8 Docker image and compose | [x] |
 | 8 | T8.9 UI redesign: dashboard, cards, edit/delete flows, theme | [x] |
+| 9 | T9.0 Role model: PO, Architect, QA (two new gates) | [ ] |
 | 9 | T9.1 Specialist agents: backend, web UI, mobile UI | [x] |
 | 9 | T9.2 Standards corpus | [x] |
 | 9 | T9.3 Standards index (RAG) | [x] |
@@ -660,8 +661,16 @@ Design decisions, made up front so tasks do not re-litigate them:
   matching specialist for that phase. Model, thinking depth, provider and permissions per
   specialist come from the profile (invariant 1 untouched). `developer` remains the
   generic fallback for `general`/unknown domains so existing profiles keep working.
-- **Analysis = Analyst, Tester = QA, DevOps = DevOps.** No new roles for these; the UI
-  shows the friendlier names.
+- **The people at the table are a product team.** `po` (Product Owner) turns the request
+  into epics, stories and tasks — the backlog — and that is what goes into Jira.
+  `architect` reads the backlog and the repository and answers "how": the project
+  profile (build / test / run), architecture decisions, and domain-tagged phases, each
+  implementing exactly one task. Specialists build, `qa` proposes test cases and writes
+  unit, integration and end-to-end tests, `devops` ships. The old `analyst` and
+  `planner` roles are folded into `architect` and `po` (T9.0).
+- **Two review points before code.** `backlog` → *backlog approval* (the PO's tree, which
+  is also mirrored to Jira on approval) → `architecture` → *architecture approval*
+  (profile + decisions + phases). Rejecting re-runs the same agent with feedback.
 - **Standards live in Markdown under version control** (`standards/<domain>/*.md` in this
   repo, plus optional per-project overrides in `<repo>/.slipwright/standards/`). Editing
   in the UI writes those files; the index is derived, never the source of truth.
@@ -683,6 +692,34 @@ Design decisions, made up front so tasks do not re-litigate them:
 - **Mobile toolchains are a profile concern.** The mobile specialist writes code like any
   other; whether `build_cmd` can run Flutter/React Native depends on the project's profile
   and the machine/image running Slipwright (the default image ships Python and Node only).
+
+### T9.0 — Role model: PO, Architect, QA (two new gates)
+Requested after T9.3: replace analysis with a Product Owner, add a Software Architect,
+make QA own end-to-end tests.
+
+**Done when**
+- [ ] `RoleName`: `po`, `architect`, `developer`, `backend`, `web_ui`, `mobile_ui`, `qa`,
+  `devops`, `supervisor`; `analyst` and `planner` are gone from code, profiles, prompts,
+  standards and the UI
+- [ ] States: `created → backlog → awaiting_backlog_approval → architecture →
+  awaiting_architecture_approval → developing → build_gate → qa → awaiting_test_approval
+  → devops → done | failed`; illegal transitions still raise; resume works from every
+  state; rejection at either new gate re-runs that agent with the feedback (bounded)
+- [ ] `POResult`: summary + breakdown (epics → stories → tasks, no phases yet);
+  `ArchitectResult`: summary + profile + `decisions[]` + phases, each with a `domain` and a
+  `task_id`; the engine checks every task has exactly one phase and writes the phase
+  numbers back into the breakdown so the board, Jira sync and agent Jira context keep
+  working unchanged
+- [ ] Jira mirroring starts at backlog approval (tasks `todo`), statuses move as phases
+  complete; the human may edit the proposed profile at the architecture gate
+  (`PUT /api/jobs/{id}/profile`)
+- [ ] QA instructions cover end-to-end tests (Playwright / the project's e2e runner) in
+  addition to unit and integration tests; standards gain `product` and `architecture`
+  domains (the `analysis` pages move under `product`)
+- [ ] Web: stepper, gate panels (backlog tree; profile + decisions + phases), agent cards
+  and labels reflect the new roles and states
+- [ ] Tests updated: Phase 2–5 role tests now target PO and Architect; every later suite
+  passes against the new states
 
 ### T9.1 — Specialist agents: backend, web UI, mobile UI
 **Done when**
