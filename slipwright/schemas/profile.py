@@ -47,6 +47,11 @@ class RoleConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     model: str = Field(min_length=1, description="Model identifier passed to the provider.")
+    provider: str | None = Field(
+        default=None,
+        description="Which provider serves this role (anthropic, openai, deepseek); "
+        "unset means the configured default.",
+    )
     thinking_depth: ThinkingDepth
     permissions: list[Permission] = Field(default_factory=list)
 

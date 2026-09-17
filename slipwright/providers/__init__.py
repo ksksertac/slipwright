@@ -23,6 +23,9 @@ class ModelRequest(BaseModel):
 
     role: RoleName
     model: str = Field(min_length=1)
+    provider: str | None = Field(
+        default=None, description="Provider name from the profile; None means the default."
+    )
     thinking_depth: ThinkingDepth
     permissions: tuple[Permission, ...] = ()
     system: str

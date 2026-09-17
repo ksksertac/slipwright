@@ -13,6 +13,8 @@ from slipwright.api.auth import require_admin
 from slipwright.engine import Engine
 from slipwright.github import GitHubError, GitHubIdentity, GitHubRepo, GitHubSettings
 from slipwright.jira import JiraAccount, JiraError, JiraProject, JiraSettings
+from slipwright.providers import ProviderError
+from slipwright.providers.registry import PROVIDERS
 from slipwright.schemas.profile import Profile
 
 router = APIRouter(tags=["settings"])
@@ -40,6 +42,31 @@ class JiraTestResult(BaseModel):
     account: JiraAccount
     agent_account: JiraAccount | None = None
     projects: list[JiraProject]
+
+
+class ProviderSettings(BaseModel):
+    name: str
+    label: str
+    env_var: str
+    docs_url: str
+    default_base_url: str
+    base_url: str | None = None
+    key_set: bool
+    key_hint: str | None = None
+    key_from_env: bool
+    is_default: bool
+
+
+class ProviderSettingsIn(BaseModel):
+    api_key: str | None = Field(default=None, description="Omit to keep the stored key.")
+    base_url: str | None = Field(default=None, description="Override the vendor URL.")
+    clear_key: bool = False
+    make_default: bool = False
+
+
+class ProviderModels(BaseModel):
+    name: str
+    models: list[str]
 
 
 def _engine(request: Request) -> Engine:
@@ -94,6 +121,46 @@ def default_profile(request: Request) -> Profile:
     return _engine(request).seed_profile
 
 
+# -- model providers ---------------------------------------------------------------------------
+
+
+@router.get("/settings/providers", response_model=list[ProviderSettings])
+def get_providers(request: Request) -> list[ProviderSettings]:
+    """Every known model provider with whether a key is set (never the key itself)."""
+    return [ProviderSettings(**p) for p in _engine(request).provider_settings()]
+
+
+def _provider_name(name: str) -> str:
+    if name not in PROVIDERS:
+        raise HTTPException(status_code=404, detail=f"unknown provider: {name}")
+    return name
+
+
+@router.put("/settings/providers/{name}", response_model=list[ProviderSettings])
+def put_provider(name: str, body: ProviderSettingsIn, request: Request) -> list[ProviderSettings]:
+    require_admin(request)
+    eng = _engine(request)
+    eng.update_provider_settings(_provider_name(name), **body.model_dump())
+    return [ProviderSettings(**p) for p in eng.provider_settings()]
+
+
+@router.post("/settings/providers/{name}/test", response_model=ProviderModels)
+def test_provider(name: str, request: Request) -> ProviderModels:
+    """Call the vendor with the stored key and return the models it can use."""
+    require_admin(request)
+    return provider_models(name, request)
+
+
+@router.get("/settings/providers/{name}/models", response_model=ProviderModels)
+def provider_models(name: str, request: Request) -> ProviderModels:
+    eng = _engine(request)
+    try:
+        return ProviderModels(name=name, models=eng.provider_models(_provider_name(name)))
+    except ProviderError as exc:
+        status = 400 if "no API key" in str(exc) else 502
+        raise HTTPException(status_code=status, detail=str(exc)) from exc
+
+
 # -- Jira ------------------------------------------------------------------------------------
 
 
@@ -138,4 +205,12 @@ def jira_projects(request: Request) -> list[JiraProject]:
         raise HTTPException(status_code=status, detail=str(exc)) from exc
 
 
-__all__ = ["GitHubSettingsIn", "JiraSettingsIn", "JiraTestResult", "router"]
+__all__ = [
+    "GitHubSettingsIn",
+    "JiraSettingsIn",
+    "JiraTestResult",
+    "ProviderModels",
+    "ProviderSettings",
+    "ProviderSettingsIn",
+    "router",
+]

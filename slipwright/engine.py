@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import threading
 import time
 import traceback
@@ -29,12 +30,19 @@ from slipwright.gates import DEFAULT_TIMEOUT_S as GATE_TIMEOUT_S
 from slipwright.gates import GateResult, build_gate, run_command
 from slipwright.githost import CiState, CiStatus, GitHost, GitHostError
 from slipwright.github import GitHubClient, GitHubError, GitHubSettings
-from slipwright.invoke import DEFAULT_TIMEOUT_S, RoleResult, get_default_provider
+from slipwright.invoke import DEFAULT_TIMEOUT_S, RoleResult
 from slipwright.jira import DEFAULT_ISSUE_TYPES, JiraClient, JiraError, JiraSettings
 from slipwright.jiraactions import ActionOutcome, ActionRunner, jira_context
 from slipwright.jirasync import JiraSync
 from slipwright.orchestrator import IllegalTransitionError, Orchestrator
-from slipwright.providers import ModelProvider
+from slipwright.providers import ModelProvider, ProviderUnavailableError
+from slipwright.providers.registry import (
+    DEFAULT_PROVIDER,
+    PROVIDERS,
+    Credentials,
+    RoutingProvider,
+    list_models,
+)
 from slipwright.roles import analyst, developer, devops, planner, qa
 from slipwright.roles.common import apply_changes, require_worktree
 from slipwright.roles.results import (
@@ -156,9 +164,90 @@ class Engine:
 
     @property
     def provider(self) -> ModelProvider:
+        """The injected provider (tests, ``--provider scripted``), else a router that picks
+        a vendor per role from the profile and credentials from settings or environment."""
         if self._provider is None:
-            self._provider = get_default_provider()
+            self._provider = RoutingProvider(
+                self.provider_credentials,
+                default=self.default_provider_name,
+                transport=self.http_transport,
+            )
         return self._provider
+
+    # -- model providers -------------------------------------------------------------------
+
+    def default_provider_name(self) -> str:
+        name = self.store.get_setting("providers.default")
+        return str(name) if name in PROVIDERS else DEFAULT_PROVIDER
+
+    def provider_credentials(self, name: str) -> Credentials | None:
+        """Stored key first, else the vendor's environment variable; None when neither."""
+        spec = PROVIDERS.get(name)
+        if spec is None:
+            return None
+        data: dict[str, Any] = self.store.get_setting(f"providers.{name}", {}) or {}
+        key = self.store.get_setting(f"providers.{name}.api_key") or os.environ.get(spec.env_var)
+        if not key:
+            return None
+        return Credentials(
+            name=name, api_key=str(key), base_url=data.get("base_url") or spec.default_base_url
+        )
+
+    def provider_settings(self) -> list[dict[str, Any]]:
+        default = self.default_provider_name()
+        out: list[dict[str, Any]] = []
+        for spec in PROVIDERS.values():
+            data: dict[str, Any] = self.store.get_setting(f"providers.{spec.name}", {}) or {}
+            stored = self.store.get_setting(f"providers.{spec.name}.api_key")
+            env = os.environ.get(spec.env_var)
+            key = stored or env
+            out.append(
+                {
+                    "name": spec.name,
+                    "label": spec.label,
+                    "env_var": spec.env_var,
+                    "docs_url": spec.docs_url,
+                    "default_base_url": spec.default_base_url,
+                    "base_url": data.get("base_url"),
+                    "key_set": bool(key),
+                    "key_hint": f"…{str(key)[-4:]}" if key else None,
+                    "key_from_env": bool(env) and not stored,
+                    "is_default": spec.name == default,
+                }
+            )
+        return out
+
+    def update_provider_settings(
+        self,
+        name: str,
+        *,
+        api_key: str | None = None,
+        base_url: str | None = None,
+        clear_key: bool = False,
+        make_default: bool = False,
+    ) -> None:
+        if name not in PROVIDERS:
+            raise KeyError(name)
+        data: dict[str, Any] = self.store.get_setting(f"providers.{name}", {}) or {}
+        if base_url is not None:
+            data["base_url"] = base_url.strip().rstrip("/") or None
+        self.store.set_setting(f"providers.{name}", data)
+        if clear_key:
+            self.store.delete_setting(f"providers.{name}.api_key")
+        elif api_key is not None and api_key.strip():
+            self.store.set_setting(f"providers.{name}.api_key", api_key.strip(), secret=True)
+        if make_default:
+            self.store.set_setting("providers.default", name)
+        # a changed key or URL must not keep serving from a stale cached client
+        if isinstance(self._provider, RoutingProvider):
+            self._provider = None
+
+    def provider_models(self, name: str) -> list[str]:
+        creds = self.provider_credentials(name)
+        if creds is None:
+            spec = PROVIDERS[name]
+            raise ProviderUnavailableError(f"no API key for {spec.label}; set it or {spec.env_var}")
+        return list_models(creds, transport=self.http_transport)
 
     @property
     def git_host(self) -> GitHost:

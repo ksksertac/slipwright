@@ -20,6 +20,9 @@ import {
   type Project,
   type ProjectPatch,
   type ProjectProgress,
+  type ProviderModels,
+  type ProviderSettings,
+  type ProviderSettingsIn,
   type TestCaseIn,
   type TestRun,
   type Transition,
@@ -44,6 +47,8 @@ export const keys = {
   jira: ["settings", "jira"] as const,
   jiraProjects: ["settings", "jira", "projects"] as const,
   users: ["users"] as const,
+  providers: ["settings", "providers"] as const,
+  providerModels: (name: string) => ["settings", "providers", name, "models"] as const,
   tokens: (userId: string) => ["users", userId, "tokens"] as const,
 };
 
@@ -332,5 +337,43 @@ export function useRevokeToken(userId: string) {
   return useMutation({
     mutationFn: (tokenId: string) => api.delete<ApiToken>(`/api/tokens/${tokenId}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.tokens(userId) }),
+  });
+}
+
+// -- model providers ---------------------------------------------------------------------
+
+export function useProviders() {
+  return useQuery({
+    queryKey: keys.providers,
+    queryFn: () => api.get<ProviderSettings[]>("/api/settings/providers"),
+  });
+}
+
+export function useSaveProvider() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ name, ...body }: ProviderSettingsIn & { name: string }) =>
+      api.put<ProviderSettings[]>(`/api/settings/providers/${name}`, body),
+    onSuccess: (data) => {
+      qc.setQueryData(keys.providers, data);
+      void qc.invalidateQueries({ queryKey: ["settings", "providers"] });
+    },
+  });
+}
+
+export function useTestProvider() {
+  return useMutation({
+    mutationFn: (name: string) => api.post<ProviderModels>(`/api/settings/providers/${name}/test`),
+  });
+}
+
+/** Models a configured provider offers, for the model pickers; silent when no key is set. */
+export function useProviderModels(name: string | null) {
+  return useQuery({
+    queryKey: keys.providerModels(name ?? ""),
+    queryFn: () => api.get<ProviderModels>(`/api/settings/providers/${name}/models`),
+    enabled: name !== null,
+    retry: false,
+    staleTime: 5 * 60_000,
   });
 }

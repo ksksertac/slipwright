@@ -15,8 +15,9 @@ export function Layout() {
         </div>
         <nav>
           <NavLink to="/projects">Projects</NavLink>
-          <NavLink to="/settings/github">Settings</NavLink>
+          <NavLink to="/settings/models">Settings</NavLink>
           <div className="nav-sub">
+            <NavLink to="/settings/models">Models</NavLink>
             <NavLink to="/settings/github">GitHub</NavLink>
             <NavLink to="/settings/jira">Jira</NavLink>
             <NavLink to="/settings/agents">Agents</NavLink>

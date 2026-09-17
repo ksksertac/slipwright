@@ -43,6 +43,39 @@ class AnthropicProvider:
         self._client = client
         self._max_tokens = max_tokens
 
+    @classmethod
+    def from_credentials(
+        cls,
+        api_key: str,
+        *,
+        base_url: str | None = None,
+        transport: Any | None = None,
+        max_tokens: int = DEFAULT_MAX_TOKENS,
+    ) -> AnthropicProvider:
+        """Build from an explicit key (the settings page) instead of the environment."""
+        try:
+            import anthropic
+        except ImportError as exc:  # pragma: no cover - dependency is declared
+            raise ProviderUnavailableError("the `anthropic` package is not installed") from exc
+        kwargs: dict[str, Any] = {"api_key": api_key}
+        if base_url:
+            kwargs["base_url"] = base_url
+        if transport is not None:
+            kwargs["http_client"] = _sdk_http_client(transport)
+        return cls(anthropic.Anthropic(**kwargs), max_tokens=max_tokens)
+
+    def list_models(self) -> list[str]:
+        """Model ids the key can use; doubles as the connection test."""
+        import anthropic
+
+        try:
+            page = self._client.models.list(limit=100)
+        except anthropic.APIStatusError as exc:
+            raise ProviderError(f"API error {exc.status_code}: {exc.message}") from exc
+        except anthropic.AnthropicError as exc:
+            raise ProviderError(str(exc)) from exc
+        return sorted(str(m.id) for m in page.data)
+
     def complete(self, request: ModelRequest) -> ModelResponse:
         import anthropic
 
@@ -74,6 +107,30 @@ class AnthropicProvider:
             output_tokens=usage.output_tokens,
             stop_reason=message.stop_reason,
         )
+
+
+def _sdk_http_client(transport: Any) -> Any:
+    """The SDK ships its own ``httpx2``; adapt a plain ``httpx`` mock transport (what the
+    rest of Slipwright and its tests use) so one fake vendor can answer every provider."""
+    import httpx
+    import httpx2
+
+    if not isinstance(transport, httpx.MockTransport):
+        return httpx2.Client(transport=transport)
+    handler = transport.handler
+
+    def bridge(request: Any) -> Any:
+        upstream = httpx.Request(
+            request.method,
+            str(request.url),
+            headers=dict(request.headers),
+            content=request.content,
+        )
+        resp = handler(upstream)
+        assert isinstance(resp, httpx.Response)  # sync handlers only
+        return httpx2.Response(resp.status_code, content=resp.content, headers=dict(resp.headers))
+
+    return httpx2.Client(transport=httpx2.MockTransport(bridge))
 
 
 def build_request_kwargs(request: ModelRequest, *, max_tokens: int) -> dict[str, Any]:

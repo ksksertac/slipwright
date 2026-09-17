@@ -33,6 +33,9 @@ export type Profile = Schemas["Profile"];
 export type RoleConfig = Schemas["RoleConfig"];
 export type Permission = Schemas["Permission"];
 export type TestCaseIn = Schemas["TestCaseIn"];
+export type ProviderSettings = Schemas["ProviderSettings"];
+export type ProviderSettingsIn = Schemas["ProviderSettingsIn"];
+export type ProviderModels = Schemas["ProviderModels"];
 
 export type ApiPaths = keyof paths;
 

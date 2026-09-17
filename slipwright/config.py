@@ -27,7 +27,7 @@ _OFF = ("0", "off", "no", "false")
 class Settings:
     state_dir: Path = field(default_factory=lambda: Path(".slipwright"))
     profile_path: Path = DEFAULT_PROFILE
-    provider: str = "anthropic"
+    provider: str = "live"
     host: str = "127.0.0.1"
     port: int = 8500
     port_range: tuple[int, int] = (8100, 8999)
@@ -70,14 +70,15 @@ class Settings:
 
 
 def build_provider(name: str, seed: Profile) -> ModelProvider | None:
-    """``None`` means "use the invoke layer's default" (the Anthropic provider)."""
-    if name == "anthropic":
+    """``None`` means "route per role" (Anthropic, OpenAI or DeepSeek from the profile,
+    keys from Settings → Models or the environment). ``anthropic`` is kept as an alias."""
+    if name in ("live", "anthropic"):
         return None
     if name == "scripted":
         from slipwright.providers.scripted import canned
 
         return canned(seed)
-    raise ValueError(f"unknown provider: {name!r} (expected 'anthropic' or 'scripted')")
+    raise ValueError(f"unknown provider: {name!r} (expected 'live' or 'scripted')")
 
 
 def build_engine(settings: Settings) -> Engine:

@@ -1682,6 +1682,139 @@
         "title": "ProjectProgress",
         "type": "object"
       },
+      "ProviderModels": {
+        "properties": {
+          "models": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Models",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "models",
+          "name"
+        ],
+        "title": "ProviderModels",
+        "type": "object"
+      },
+      "ProviderSettings": {
+        "properties": {
+          "base_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Url"
+          },
+          "default_base_url": {
+            "title": "Default Base Url",
+            "type": "string"
+          },
+          "docs_url": {
+            "title": "Docs Url",
+            "type": "string"
+          },
+          "env_var": {
+            "title": "Env Var",
+            "type": "string"
+          },
+          "is_default": {
+            "title": "Is Default",
+            "type": "boolean"
+          },
+          "key_from_env": {
+            "title": "Key From Env",
+            "type": "boolean"
+          },
+          "key_hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key Hint"
+          },
+          "key_set": {
+            "title": "Key Set",
+            "type": "boolean"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "base_url",
+          "default_base_url",
+          "docs_url",
+          "env_var",
+          "is_default",
+          "key_from_env",
+          "key_hint",
+          "key_set",
+          "label",
+          "name"
+        ],
+        "title": "ProviderSettings",
+        "type": "object"
+      },
+      "ProviderSettingsIn": {
+        "properties": {
+          "api_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Omit to keep the stored key.",
+            "title": "Api Key"
+          },
+          "base_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Override the vendor URL.",
+            "title": "Base Url"
+          },
+          "clear_key": {
+            "default": false,
+            "title": "Clear Key",
+            "type": "boolean"
+          },
+          "make_default": {
+            "default": false,
+            "title": "Make Default",
+            "type": "boolean"
+          }
+        },
+        "title": "ProviderSettingsIn",
+        "type": "object"
+      },
       "Rejection": {
         "properties": {
           "feedback": {
@@ -1711,6 +1844,18 @@
             },
             "title": "Permissions",
             "type": "array"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Which provider serves this role (anthropic, openai, deepseek); unset means the configured default.",
+            "title": "Provider"
           },
           "thinking_depth": {
             "$ref": "#/components/schemas/ThinkingDepth"
@@ -3434,6 +3579,173 @@
           }
         },
         "summary": "Default Profile",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/settings/providers": {
+      "get": {
+        "description": "Every known model provider with whether a key is set (never the key itself).",
+        "operationId": "get_providers_api_settings_providers_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ProviderSettings"
+                  },
+                  "title": "Response Get Providers Api Settings Providers Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Providers",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/settings/providers/{name}": {
+      "put": {
+        "operationId": "put_provider_api_settings_providers__name__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderSettingsIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ProviderSettings"
+                  },
+                  "title": "Response Put Provider Api Settings Providers  Name  Put",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Provider",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/settings/providers/{name}/models": {
+      "get": {
+        "operationId": "provider_models_api_settings_providers__name__models_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderModels"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Provider Models",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/settings/providers/{name}/test": {
+      "post": {
+        "description": "Call the vendor with the stored key and return the models it can use.",
+        "operationId": "test_provider_api_settings_providers__name__test_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderModels"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Test Provider",
         "tags": [
           "settings"
         ]

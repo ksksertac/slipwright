@@ -21,6 +21,19 @@
           "title": "Model",
           "type": "string"
         },
+        "provider": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Which provider serves this role (anthropic, openai, deepseek); unset means the configured default.",
+          "title": "Provider"
+        },
         "thinking_depth": {
           "$ref": "#/$defs/ThinkingDepth"
         },

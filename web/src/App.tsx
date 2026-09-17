@@ -7,6 +7,7 @@ import { NewProjectPage } from "./pages/NewProjectPage";
 import { ProjectPage } from "./pages/ProjectPage";
 import { JobPage } from "./pages/JobPage";
 import { GitHubSettingsPage } from "./pages/settings/GitHubSettingsPage";
+import { ModelsSettingsPage } from "./pages/settings/ModelsSettingsPage";
 import { JiraSettingsPage } from "./pages/settings/JiraSettingsPage";
 import { AgentsSettingsPage } from "./pages/settings/AgentsSettingsPage";
 import { UsersSettingsPage } from "./pages/settings/UsersSettingsPage";
@@ -28,7 +29,8 @@ export function App() {
         <Route path="/projects/:projectId" element={<ProjectPage />} />
         <Route path="/projects/:projectId/:tab" element={<ProjectPage />} />
         <Route path="/projects/:projectId/jobs/:jobId" element={<JobPage />} />
-        <Route path="/settings" element={<Navigate to="/settings/github" replace />} />
+        <Route path="/settings" element={<Navigate to="/settings/models" replace />} />
+        <Route path="/settings/models" element={<ModelsSettingsPage />} />
         <Route path="/settings/github" element={<GitHubSettingsPage />} />
         <Route path="/settings/jira" element={<JiraSettingsPage />} />
         <Route path="/settings/agents" element={<AgentsSettingsPage />} />

@@ -112,6 +112,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 | 7 | T7.3 API namespace and live events | [x] |
 | 7 | T7.4 Jira connection and issue sync | [x] |
 | 7 | T7.5 Agents act in Jira | [x] |
+| 7 | T7.6 Model providers: OpenAI and DeepSeek, keys in settings | [x] |
 | 8 | T8.1 React app skeleton | [x] |
 | 8 | T8.2 Login and projects list | [x] |
 | 8 | T8.3 Project page: board, progress, developments | [x] |
@@ -478,6 +479,25 @@ wants, the engine *executes* them after checking permissions (like `FileChange` 
   job itself never blocks on Jira
 - [x] Test: engine-level test with a fake Jira server asserts the full sequence of calls for
   a scripted job, including one refused action from a role without the permission
+
+### T7.6 — Model providers: OpenAI and DeepSeek, keys in settings
+Added after Phase 8: let a role run on Anthropic, OpenAI (ChatGPT) or DeepSeek, with API
+keys entered in the UI instead of the environment. Invariant 1 still holds: no module
+names a model; the settings page lists models by asking each vendor.
+
+**Done when**
+- [x] `slipwright/providers/openai_compat.py` speaks the OpenAI chat-completions dialect
+  over httpx (JSON mode, `reasoning_effort` where supported, typed errors); DeepSeek is the
+  same client with its own base URL and no effort knob (`providers/registry.py`)
+- [x] `roles.<role>.provider` in the profile picks the vendor; unset uses the default set
+  under Settings → Models; `ModelRequest.provider` carries it; a `RoutingProvider` builds
+  vendor clients lazily from settings-or-env credentials (`Engine.provider_credentials`)
+- [x] `GET/PUT /api/settings/providers[/{name}]`, `POST …/{name}/test` (lists usable models),
+  `GET …/{name}/models`; keys encrypted, never returned, last four shown; admin-only writes
+- [x] Web: Settings → Models (key, base URL, test, default, remove) and a provider column
+  with model suggestions in every roles table (job profile gate, project Agents page)
+- [x] `slipwright serve --provider live` is the default (`anthropic` kept as an alias);
+  tests use a fake OpenAI-compatible vendor (`tests/test_providers.py`)
 
 ---
 

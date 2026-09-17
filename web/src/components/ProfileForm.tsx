@@ -1,4 +1,5 @@
 import type { Permission, Profile, RoleConfig } from "../api/client";
+import { useProviderModels, useProviders } from "../api/hooks";
 
 const ROLES = ["analyst", "planner", "developer", "qa", "devops"] as const;
 const DEPTHS = ["off", "low", "medium", "high", "max"] as const;
@@ -27,6 +28,8 @@ export function ProfileForm({
   const set = (patch: Partial<Profile>) => onChange({ ...value, ...patch });
   const roleOf = (role: (typeof ROLES)[number]): RoleConfig =>
     value.roles[role] ?? { model: "", thinking_depth: "medium", permissions: [] };
+  const providers = useProviders();
+  const defaultProvider = providers.data?.find((p) => p.is_default)?.name ?? "anthropic";
   const setRole = (role: (typeof ROLES)[number], patch: Partial<RoleConfig>) =>
     onChange({ ...value, roles: { ...value.roles, [role]: { ...roleOf(role), ...patch } } });
 
@@ -93,6 +96,7 @@ export function ProfileForm({
         <thead>
           <tr>
             <th>Role</th>
+            <th>Provider</th>
             <th>Model</th>
             <th>Thinking</th>
             <th>Permissions</th>
@@ -107,12 +111,26 @@ export function ProfileForm({
                   <strong>{role}</strong>
                 </td>
                 <td>
-                  <input
-                    type="text"
-                    className="mono"
+                  <select
+                    value={cfg.provider ?? ""}
+                    disabled={disabled}
+                    onChange={(e) => setRole(role, { provider: e.target.value || null })}
+                  >
+                    <option value="">default ({defaultProvider})</option>
+                    {(providers.data ?? []).map((p) => (
+                      <option key={p.name} value={p.name}>
+                        {p.label}
+                        {p.key_set ? "" : " — no key"}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+                <td>
+                  <ModelInput
+                    provider={cfg.provider ?? defaultProvider}
                     value={cfg.model}
                     disabled={disabled}
-                    onChange={(e) => setRole(role, { model: e.target.value })}
+                    onChange={(model) => setRole(role, { model })}
                   />
                 </td>
                 <td>
@@ -163,6 +181,40 @@ export function ProfileForm({
         </tbody>
       </table>
     </div>
+  );
+}
+
+/** Free-text model id with the provider's model list as suggestions (when a key is set). */
+function ModelInput({
+  provider,
+  value,
+  disabled,
+  onChange,
+}: {
+  provider: string;
+  value: string;
+  disabled: boolean;
+  onChange: (model: string) => void;
+}) {
+  const models = useProviderModels(provider);
+  const listId = `models-${provider}`;
+  return (
+    <>
+      <input
+        type="text"
+        className="mono"
+        list={listId}
+        value={value}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="model id"
+      />
+      <datalist id={listId}>
+        {(models.data?.models ?? []).map((m) => (
+          <option key={m} value={m} />
+        ))}
+      </datalist>
+    </>
   );
 }
 

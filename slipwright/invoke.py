@@ -121,6 +121,7 @@ def invoke_role(
     request = ModelRequest(
         role=role,
         model=role_cfg.model,
+        provider=role_cfg.provider,
         thinking_depth=role_cfg.thinking_depth,
         permissions=tuple(role_cfg.permissions),
         system=_system_prompt(role, context),

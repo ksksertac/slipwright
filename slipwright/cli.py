@@ -103,7 +103,12 @@ def build_parser() -> argparse.ArgumentParser:
     serve = sub.add_parser("serve", help="run the API server")
     serve.add_argument("--host", default=None)
     serve.add_argument("--port", type=int, default=None)
-    serve.add_argument("--provider", choices=["anthropic", "scripted"], default=None)
+    serve.add_argument(
+        "--provider",
+        choices=["live", "anthropic", "scripted"],
+        default=None,
+        help="live: route per role to Anthropic/OpenAI/DeepSeek; scripted: canned replies",
+    )
     serve.add_argument("--profile", type=Path, default=None, help="seed profile JSON")
     serve.add_argument("--state-dir", type=Path, default=None)
     serve.add_argument(
