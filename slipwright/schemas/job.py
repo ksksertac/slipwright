@@ -83,6 +83,7 @@ class JobData(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    base_commit: str | None = Field(default=None, description="Commit the job branched from.")
     feedback: str | None = Field(default=None, description="Rejection feedback for a re-run.")
     reject_rounds: int = Field(default=0, ge=0)
     plan: dict[str, Any] | None = Field(default=None, description="Approved PlannerResult.")

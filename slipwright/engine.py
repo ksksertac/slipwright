@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import logging
 import threading
+import time
 import traceback
 from collections import defaultdict
 from collections.abc import Callable
@@ -22,14 +23,21 @@ from pathlib import Path
 from typing import Any
 
 from slipwright.gates import GateResult, build_gate
+from slipwright.githost import CiState, CiStatus, GitHost, GitHostError
 from slipwright.invoke import DEFAULT_TIMEOUT_S, RoleResult, get_default_provider
 from slipwright.orchestrator import IllegalTransitionError, Orchestrator
 from slipwright.providers import ModelProvider
-from slipwright.roles import analyst, developer, planner
+from slipwright.roles import analyst, developer, devops, planner, qa
 from slipwright.roles.common import apply_changes, require_worktree
-from slipwright.roles.results import AnalystResult, DeveloperResult, PlannerResult
+from slipwright.roles.results import (
+    AnalystResult,
+    DeveloperResult,
+    DevOpsResult,
+    PlannerResult,
+    QAResult,
+)
 from slipwright.schemas.job import APPROVAL_STATES, Job, JobState
-from slipwright.schemas.profile import Profile, RoleName
+from slipwright.schemas.profile import Permission, Profile, RoleName
 from slipwright.store import JobStore
 from slipwright.workspace import Workspace
 from slipwright.workspace import git as g
@@ -51,8 +59,21 @@ WORKING_STATES: frozenset[JobState] = frozenset(
 APPROVAL_EDGES: dict[JobState, tuple[JobState, JobState]] = {
     JobState.AWAITING_PROFILE_APPROVAL: (JobState.PLANNING, JobState.ANALYZING),
     JobState.AWAITING_PLAN_APPROVAL: (JobState.DEVELOPING, JobState.PLANNING),
+    # stage 1 (test list) approved -> QA writes the tests; stage 2 approved -> DevOps
     JobState.AWAITING_TEST_APPROVAL: (JobState.DEVOPS, JobState.QA),
 }
+
+
+def approval_edges(job: Job) -> tuple[JobState, JobState] | None:
+    edges = APPROVAL_EDGES.get(job.state)
+    if (
+        edges is not None
+        and job.state is JobState.AWAITING_TEST_APPROVAL
+        and job.data.qa_stage == 1
+    ):
+        return (JobState.QA, JobState.QA)
+    return edges
+
 
 Handler = Callable[[Job], Job]
 
@@ -74,7 +95,11 @@ class Engine:
         timeout_s: float = DEFAULT_TIMEOUT_S,
         max_reject_rounds: int = 3,
         max_build_attempts: int = 3,
+        max_ci_attempts: int = 3,
         gate_timeout_s: float | None = None,
+        git_host: GitHost | None = None,
+        ci_poll_s: float = 15.0,
+        ci_timeout_s: float = 3600.0,
     ) -> None:
         self.store = store
         self.workspace = workspace
@@ -84,12 +109,18 @@ class Engine:
         self.timeout_s = timeout_s
         self.max_reject_rounds = max_reject_rounds
         self.max_build_attempts = max_build_attempts
+        self.max_ci_attempts = max_ci_attempts
         self.gate_timeout_s = gate_timeout_s
+        self._git_host = git_host
+        self.ci_poll_s = ci_poll_s
+        self.ci_timeout_s = ci_timeout_s
         self.handlers: dict[JobState, Handler] = {
             JobState.ANALYZING: self._analyze,
             JobState.PLANNING: self._plan,
             JobState.DEVELOPING: self._develop,
             JobState.BUILD_GATE: self._build_gate,
+            JobState.QA: self._qa,
+            JobState.DEVOPS: self._devops,
         }
         self._locks: defaultdict[str, threading.Lock] = defaultdict(threading.Lock)
         # ports held by jobs that outlived a previous process must stay taken
@@ -100,6 +131,14 @@ class Engine:
         if self._provider is None:
             self._provider = get_default_provider()
         return self._provider
+
+    @property
+    def git_host(self) -> GitHost:
+        if self._git_host is None:
+            from slipwright.githost import GhHost
+
+            self._git_host = GhHost()
+        return self._git_host
 
     # -- public API ----------------------------------------------------------------------
 
@@ -114,18 +153,24 @@ class Engine:
 
     def approve(self, job_id: str, *, run: bool = True) -> Job:
         job = self.store.get(job_id)
-        edges = APPROVAL_EDGES.get(job.state)
+        edges = approval_edges(job)
         if edges is None:
             raise NotAwaitingApproval(job)
+        note = "approved"
+        if job.state is JobState.AWAITING_TEST_APPROVAL and job.data.qa_stage == 1:
+            job.data.qa_stage = 2
+            job.data.build_attempts = 0
+            job.data.last_build_output = None
+            note = f"approved {len(job.data.test_cases)} test cases"
         job.data.feedback = None
         job.data.reject_rounds = 0
         self.store.save(job)
-        job = self.orchestrator.transition(job, edges[0], note="approved")
+        job = self.orchestrator.transition(job, edges[0], note=note)
         return self._run(job) if run else job
 
     def reject(self, job_id: str, feedback: str, *, run: bool = True) -> Job:
         job = self.store.get(job_id)
-        edges = APPROVAL_EDGES.get(job.state)
+        edges = approval_edges(job)
         if edges is None:
             raise NotAwaitingApproval(job)
         job.data.feedback = feedback
@@ -133,6 +178,14 @@ class Engine:
         self.store.save(job)
         job = self.orchestrator.transition(job, edges[1], note=f"rejected: {feedback}")
         return self._run(job) if run else job
+
+    def set_test_cases(self, job_id: str, cases: list[dict[str, Any]]) -> Job:
+        """Replace the proposed test list while the job waits for its approval."""
+        job = self.store.get(job_id)
+        if job.state is not JobState.AWAITING_TEST_APPROVAL or job.data.qa_stage != 1:
+            raise NotAwaitingApproval(job)
+        job.data.test_cases = qa.normalise_cases(cases)
+        return self.store.save(job)
 
     def resume(self, job_id: str) -> Job:
         """Continue a job from its persisted state; a no-op unless it was mid-phase."""
@@ -190,7 +243,15 @@ class Engine:
         if job.worktree_path is not None:  # recorded but gone from disk: start clean
             self.workspace.destroy(job)
         self.workspace.create(job)
+        job.data.base_commit = g.head_commit(require_worktree(job))
         return self.store.save(job)
+
+    def _branch_diff(self, job: Job) -> str:
+        worktree = require_worktree(job)
+        base = job.data.base_commit
+        if base is None:
+            return "(base commit unknown)"
+        return g.run(worktree, "diff", "--no-color", base, "HEAD").stdout or "(no changes)"
 
     def _invocation_failed(self, job: Job, result: RoleResult) -> Job:
         assert result.error is not None
@@ -325,6 +386,147 @@ class Engine:
             ),
             detail=gate.tail,
         )
+
+    def _qa(self, job: Job) -> Job:
+        return self._qa_propose(job) if job.data.qa_stage == 1 else self._qa_write(job)
+
+    def _qa_propose(self, job: Job) -> Job:
+        profile = self._profile(job)
+        result = qa.run(
+            job,
+            profile,
+            branch_diff=self._branch_diff(job),
+            provider=self.provider,
+            timeout_s=self.timeout_s,
+        )
+        if not result.ok:
+            return self._invocation_failed(job, result)
+        assert isinstance(result.output, QAResult)
+        job.data.test_cases = [c.model_dump() for c in result.output.test_cases]
+        job.data.feedback = None
+        self.store.save(job)
+        return self.orchestrator.transition(
+            job,
+            JobState.AWAITING_TEST_APPROVAL,
+            note=f"qa: {len(job.data.test_cases)} test cases proposed — {result.output.summary}",
+            detail=json.dumps(job.data.test_cases, indent=2),
+        )
+
+    def _qa_write(self, job: Job) -> Job:
+        """Stage two: write tests for the approved list, then pass the same build gate."""
+        profile = self._profile(job)
+        worktree = require_worktree(job)
+        diff = self._branch_diff(job)
+        while True:
+            result = qa.run(
+                job, profile, branch_diff=diff, provider=self.provider, timeout_s=self.timeout_s
+            )
+            if not result.ok:
+                return self._invocation_failed(job, result)
+            assert isinstance(result.output, QAResult)
+            touched = apply_changes(job, profile, RoleName.QA, result.output.changes)
+            g.stage_all(worktree)
+            test_diff = g.staged_diff(worktree)
+            gate = self._run_gate(job)
+            if gate.ok:
+                g.commit(worktree, "slipwright: tests")
+                job.data.feedback = None
+                job.data.build_attempts = 0
+                job.data.last_build_output = None
+                self.store.save(job)
+                return self.orchestrator.transition(
+                    job,
+                    JobState.AWAITING_TEST_APPROVAL,
+                    note=(
+                        f"qa: tests written and green ({len(touched)} files) — "
+                        f"{result.output.summary}"
+                    ),
+                    detail=(test_diff or "(no changes)") + "\n\n" + gate.tail,
+                )
+            job.data.build_attempts += 1
+            job.data.last_build_output = gate.tail
+            self.store.save(job)
+            if job.data.build_attempts >= self.max_build_attempts:
+                return self._fail(
+                    job,
+                    f"qa tests failed the build gate {job.data.build_attempts} times",
+                    detail=gate.tail,
+                )
+
+    def _devops(self, job: Job) -> Job:
+        profile = self._profile(job)
+        worktree = require_worktree(job)
+        if Permission.GIT_PUSH not in profile.roles[RoleName.DEVOPS].permissions:
+            return self._fail(job, "devops role lacks the git_push permission")
+
+        if job.data.pr_url is None:
+            result = devops.run(
+                job,
+                profile,
+                branch_diff=self._branch_diff(job),
+                provider=self.provider,
+                timeout_s=self.timeout_s,
+            )
+            if not result.ok:
+                return self._invocation_failed(job, result)
+            assert isinstance(result.output, DevOpsResult)
+            try:
+                self.git_host.push(worktree, job.branch)
+                job.data.pr_url = self.git_host.open_pr(
+                    worktree, job.branch, result.output.pr_title, result.output.pr_body
+                )
+            except GitHostError as exc:
+                return self._fail(job, f"devops: {exc}")
+            self.store.save(job)
+
+        while True:
+            status = self._poll_ci(job)
+            if status.state is CiState.PENDING:
+                return self._fail(
+                    job, f"CI still pending after {self.ci_timeout_s:.0f}s", detail=status.summary
+                )
+            if status.state in (CiState.SUCCESS, CiState.NONE):
+                return self.orchestrator.transition(
+                    job,
+                    JobState.DONE,
+                    note=f"PR {job.data.pr_url} ({status.state.value})",
+                    detail=status.summary,
+                )
+            job.data.ci_attempts += 1
+            self.store.save(job)
+            if job.data.ci_attempts > self.max_ci_attempts:
+                return self._fail(
+                    job,
+                    f"CI red after {self.max_ci_attempts} fix attempts",
+                    detail=status.log or status.summary,
+                )
+            fix = developer.run(
+                job,
+                profile,
+                provider=self.provider,
+                timeout_s=self.timeout_s,
+                ci_failure=status.log or status.summary,
+            )
+            if not fix.ok:
+                return self._invocation_failed(job, fix)
+            assert isinstance(fix.output, DeveloperResult)
+            apply_changes(job, profile, RoleName.DEVELOPER, fix.output.changes)
+            g.stage_all(worktree)
+            g.commit(worktree, f"slipwright: CI fix {job.data.ci_attempts}: {fix.output.summary}")
+            try:
+                self.git_host.push(worktree, job.branch)
+            except GitHostError as exc:
+                return self._fail(job, f"devops: {exc}")
+
+    def _poll_ci(self, job: Job) -> CiStatus:
+        worktree = require_worktree(job)
+        assert job.data.pr_url is not None
+        deadline = time.monotonic() + self.ci_timeout_s
+        while True:
+            status = self.git_host.ci_status(worktree, job.branch, job.data.pr_url)
+            if status.terminal or time.monotonic() >= deadline:
+                return status
+            time.sleep(self.ci_poll_s)
 
 
 def is_approval_state(state: JobState) -> bool:

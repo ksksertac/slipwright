@@ -36,6 +36,15 @@ class Message(BaseModel):
     text: str = Field(min_length=1)
 
 
+class TestCaseIn(BaseModel):
+    name: str = Field(min_length=1)
+    description: str = Field(min_length=1)
+
+
+class TestCases(BaseModel):
+    test_cases: list[TestCaseIn]
+
+
 def create_app(engine: Engine, *, resume_on_startup: bool = True) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -101,6 +110,16 @@ def create_app(engine: Engine, *, resume_on_startup: bool = True) -> FastAPI:
         background.add_task(_resume, eng, job.id)
         return job
 
+    @app.put("/jobs/{job_id}/tests", response_model=Job)
+    def set_tests(job_id: str, body: TestCases, request: Request) -> Job:
+        """Edit the proposed test list while the job awaits its approval."""
+        eng = _engine(request)
+        _get(eng, job_id)
+        try:
+            return eng.set_test_cases(job_id, [c.model_dump() for c in body.test_cases])
+        except NotAwaitingApproval as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+
     @app.post("/jobs/{job_id}/message", response_model=Job)
     def message(job_id: str, body: Message, request: Request) -> Job:
         eng = _engine(request)
@@ -129,4 +148,4 @@ def _resume_all(engine: Engine) -> None:
         thread.join()
 
 
-__all__ = ["Message", "NewJob", "Rejection", "create_app"]
+__all__ = ["Message", "NewJob", "Rejection", "TestCaseIn", "TestCases", "create_app"]

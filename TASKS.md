@@ -35,7 +35,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 
 ## Progress
 
-> **Resume here:** Phases 0-3 are complete. Next task is **T4.1 — QA role, two stages**.
+> **Resume here:** Phases 0-4 are complete. Next task is **T5.1 — Inbox steering**.
 > Design note for T1.3: `run_cmd` is executed as a subprocess in the worktree (Docker is used
 > only if the profile's `run_cmd` itself invokes it).
 > Design note for T2.2: `invoke_role` talks to a `ModelProvider` (`slipwright/providers/`);
@@ -54,6 +54,13 @@ These hold at every point in the build. If a task seems to require breaking one,
 > engine writes them (enforcing `write_files`), stages, records the diff on the
 > DEVELOPING→BUILD_GATE transition and commits each phase that passes the gate. Rejecting a
 > plan more than 3 times fails the job.
+> Design note for Phase 4: the state machine has no `qa -> devops` edge, so QA passes the
+> `awaiting_test_approval` gate twice: `qa_stage=1` (case list proposed; the human may edit it
+> via `PUT /jobs/{id}/tests`) and `qa_stage=2` (tests written and green through the same build
+> gate). Approving stage 1 sends the job back to `qa`; approving stage 2 sends it to `devops`.
+> DevOps talks to a `GitHost` (`slipwright/githost.py`, `gh`-backed); red CI goes to the
+> Developer as a fix, max 3 attempts. The PR URL is persisted before polling so a restart
+> never opens a second PR.
 
 | Phase | Task | Status |
 |-------|------|--------|
@@ -70,8 +77,8 @@ These hold at every point in the build. If a task seems to require breaking one,
 | 3 | T3.1 Planner role | [x] |
 | 3 | T3.2 Developer role, phase by phase | [x] |
 | 3 | T3.3 Build gate | [x] |
-| 4 | T4.1 QA role, two stages | [ ] |
-| 4 | T4.2 DevOps role | [ ] |
+| 4 | T4.1 QA role, two stages | [x] |
+| 4 | T4.2 DevOps role | [x] |
 | 5 | T5.1 Inbox steering | [ ] |
 | 5 | T5.2 Per-role model routing, verified | [ ] |
 | 5 | T5.3 Job dashboard | [ ] |
@@ -213,17 +220,17 @@ Enough surface to drive a job by hand.
 
 ### T4.1 — QA role, two stages
 **Done when**
-- [ ] Stage one: QA emits a test case list; job moves to `awaiting_test_approval` and stops
-- [ ] The human can add and remove cases; edits are persisted on the job
-- [ ] Stage two: QA writes tests for the approved list only
-- [ ] New tests run through the same build gate before the job advances
+- [x] Stage one: QA emits a test case list; job moves to `awaiting_test_approval` and stops
+- [x] The human can add and remove cases; edits are persisted on the job
+- [x] Stage two: QA writes tests for the approved list only
+- [x] New tests run through the same build gate before the job advances
 
 ### T4.2 — DevOps role
 **Done when**
-- [ ] Opens a PR from the job's branch with a description built from the plan and phase history
-- [ ] Polls CI status until terminal
-- [ ] On red CI, feeds the failure log back for a fix, bounded to 3 attempts
-- [ ] DevOps is configured with a smaller model in the example profile — verify the engine
+- [x] Opens a PR from the job's branch with a description built from the plan and phase history
+- [x] Polls CI status until terminal
+- [x] On red CI, feeds the failure log back for a fix, bounded to 3 attempts
+- [x] DevOps is configured with a smaller model in the example profile — verify the engine
   honours it and does not fall back to the default
 
 ---
