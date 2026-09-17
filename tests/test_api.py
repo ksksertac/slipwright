@@ -44,7 +44,7 @@ def engine(
 ) -> Engine:
     ws = Workspace(worktrees_root, PortAllocator(start=8400, end=8499))
     eng = Engine(store, ws, seed_profile=seed, provider=provider)
-    eng.handlers.pop(JobState.PLANNING, None)  # phase 2: stop after profile approval
+    eng.handlers.pop(JobState.ARCHITECTURE, None)  # stop after backlog approval
     return eng
 
 
@@ -61,19 +61,19 @@ def _new(client: TestClient, repo: Path, request: str = "add /health") -> dict[s
     return body
 
 
-def test_post_jobs_starts_job_and_runs_analyst_in_background(
+def test_post_jobs_starts_job_and_runs_the_po_in_background(
     client: TestClient, repo: Path, provider: ScriptedProvider
 ) -> None:
     created = _new(client, repo)
-    assert created["state"] == "analyzing"  # the response never waits for the model
+    assert created["state"] == "backlog"  # the response never waits for the model
 
     # TestClient runs background tasks before returning, so the job has moved on
     job = client.get(f"/api/jobs/{created['id']}").json()
-    assert job["state"] == "awaiting_profile_approval"
-    assert job["profile"]["language"] == "python"
+    assert job["state"] == "awaiting_backlog_approval"
+    assert job["data"]["backlog"]["epics"][0]["stories"][0]["tasks"][0]["id"] == "t1"
     assert [t["to_state"] for t in job["history"]] == [
-        "analyzing",
-        "awaiting_profile_approval",
+        "backlog",
+        "awaiting_backlog_approval",
     ]
     assert len(provider.requests) == 1
 
@@ -100,14 +100,14 @@ def test_approve_and_reject_endpoints(
 
     resp = client.post(f"/api/jobs/{job_id}/reject", json={"feedback": "use poetry"})
     assert resp.status_code == 200
-    assert resp.json()["state"] == "analyzing"
+    assert resp.json()["state"] == "backlog"
     job = client.get(f"/api/jobs/{job_id}").json()
-    assert job["state"] == "awaiting_profile_approval"
+    assert job["state"] == "awaiting_backlog_approval"
     assert "use poetry" in provider.requests[-1].prompt
 
     resp = client.post(f"/api/jobs/{job_id}/approve")
     assert resp.status_code == 200
-    assert resp.json()["state"] == "planning"
+    assert resp.json()["state"] == "architecture"
 
     # not at a gate any more
     assert client.post(f"/api/jobs/{job_id}/approve").status_code == 409
@@ -129,11 +129,11 @@ def test_startup_resumes_jobs_left_mid_phase(
 ) -> None:
     job = engine.create_job("resume me", repo)
     engine.start(job.id, run=False)  # persisted as analyzing, never executed
-    assert engine.store.get(job.id).state is JobState.ANALYZING
+    assert engine.store.get(job.id).state is JobState.BACKLOG
 
     with TestClient(create_app(engine, require_auth=False)) as client:
         client.app.state.resume_thread.join(timeout=60)
-        assert client.get(f"/api/jobs/{job.id}").json()["state"] == "awaiting_profile_approval"
+        assert client.get(f"/api/jobs/{job.id}").json()["state"] == "awaiting_backlog_approval"
     assert len(provider.requests) == 1
 
 
@@ -193,15 +193,15 @@ def test_cli_new_status_approve(
     assert cli.main(["new", str(repo), "add /health"]) == 0
     out = capsys.readouterr().out
     job_id = out.split()[0]
-    assert "analyzing" in out
+    assert "backlog" in out
 
     assert cli.main(["status"]) == 0
     assert job_id in capsys.readouterr().out
 
     assert cli.main(["status", job_id]) == 0
     out = capsys.readouterr().out
-    assert "awaiting_profile_approval" in out
-    assert "analyzing -> awaiting_profile_approval" in out
+    assert "awaiting_backlog_approval" in out
+    assert "backlog -> awaiting_backlog_approval" in out
 
     assert cli.main(["status", job_id, "--json"]) == 0
     assert json.loads(capsys.readouterr().out)["id"] == job_id
@@ -209,7 +209,7 @@ def test_cli_new_status_approve(
     assert cli.main(["reject", job_id, "wrong runner"]) == 0
     capsys.readouterr()
     assert cli.main(["approve", job_id]) == 0
-    assert "planning" in capsys.readouterr().out
+    assert "architecture" in capsys.readouterr().out
 
     assert cli.main(["approve", job_id]) == 1
     assert "HTTP 409" in capsys.readouterr().err

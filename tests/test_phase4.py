@@ -19,6 +19,7 @@ from slipwright.schemas.job import Job, JobState
 from slipwright.schemas.profile import Profile, RoleName, load_profile
 from slipwright.store import JobStore
 from slipwright.workspace import PortAllocator, Workspace
+from tests.pipeline import set_plan
 
 ROOT = Path(__file__).resolve().parent.parent
 EXAMPLE = ROOT / "examples" / "python-fastapi.profile.json"
@@ -76,10 +77,7 @@ def _write_tests(_: ModelRequest) -> list[dict[str, Any]]:
 
 def _provider(seed: Profile, qa: Any = None) -> ScriptedProvider:
     p = canned(seed)
-    p.replies[RoleName.PLANNER] = {
-        "summary": "one phase",
-        "phases": [{"goal": "write OK", "files": ["OK"]}],
-    }
+    set_plan(p, seed, [{"goal": "write OK", "files": ["OK"]}])
     p.replies[RoleName.DEVELOPER] = lambda req: {
         "summary": "fixed" if '"ci_failure":' in req.prompt else "wrote OK",
         "phase_complete": True,

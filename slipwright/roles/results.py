@@ -90,15 +90,14 @@ class RoleOutput(BaseModel):
     )
 
 
-class AnalystResult(RoleOutput):
-    profile: Profile = Field(description="Project profile inferred from the worktree.")
-
-
 class PlanPhase(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     goal: str = Field(min_length=1)
     files: list[str] = Field(default_factory=list, description="Files expected to change.")
+    task_id: str | None = Field(
+        default=None, description="The backlog task this phase implements (one phase per task)."
+    )
     domain: Literal["backend", "web", "mobile", "infra", "docs", "general"] = Field(
         default="general",
         description="Which specialist implements the phase: backend, web, mobile, infra "
@@ -114,7 +113,9 @@ class BreakdownTask(BaseModel):
     id: str = Field(default_factory=new_job_id, min_length=1)
     title: str = Field(min_length=1)
     description: str = ""
-    phase: int = Field(ge=1, description="1-based index into PlannerResult.phases.")
+    phase: int | None = Field(
+        default=None, ge=1, description="1-based plan phase; set by the Architect's plan."
+    )
 
 
 class BreakdownStory(BaseModel):
@@ -146,55 +147,37 @@ class Breakdown(BaseModel):
         return [t for e in self.epics for s in e.stories for t in s.tasks]
 
 
-class PlannerResult(RoleOutput):
-    phases: list[PlanPhase] = Field(min_length=1)
-    breakdown: Breakdown | None = Field(
-        default=None,
-        description="Epics/stories/tasks over the phases; generated when omitted.",
-    )
+class POResult(RoleOutput):
+    """The Product Owner's backlog. Task ids are generated when the model omits them."""
+
+    breakdown: Breakdown
 
     @model_validator(mode="after")
-    def _breakdown_covers_phases(self) -> PlannerResult:
-        if self.breakdown is None:
-            return self
-        seen: dict[int, str] = {}
-        for task in self.breakdown.tasks():
-            if task.phase > len(self.phases):
-                raise ValueError(
-                    f"task {task.title!r} references phase {task.phase} "
-                    f"but the plan has {len(self.phases)}"
-                )
-            if task.phase in seen:
-                raise ValueError(
-                    f"phase {task.phase} is referenced by both {seen[task.phase]!r} "
-                    f"and {task.title!r}"
-                )
-            seen[task.phase] = task.title
-        missing = [i + 1 for i in range(len(self.phases)) if i + 1 not in seen]
-        if missing:
-            raise ValueError(f"no task references phase(s) {missing}")
+    def _unique_ids(self) -> POResult:
+        ids = [t.id for t in self.breakdown.tasks()]
+        if len(set(ids)) != len(ids):
+            raise ValueError("task ids must be unique")
         return self
 
 
-def default_breakdown(request: str, phases: list[PlanPhase]) -> Breakdown:
-    """One epic, one story, one task per phase: what a plan without a breakdown means."""
-    title = request.strip().splitlines()[0][:120] if request.strip() else "Request"
-    return Breakdown(
-        epics=[
-            BreakdownEpic(
-                title=title,
-                stories=[
-                    BreakdownStory(
-                        title=title,
-                        tasks=[
-                            BreakdownTask(title=phase.goal, phase=i + 1)
-                            for i, phase in enumerate(phases)
-                        ],
-                    )
-                ],
-            )
-        ]
-    )
+class ArchitectResult(RoleOutput):
+    """The Architect's answer: how the project is built, what was decided, and the
+    phases (one per backlog task; the engine checks the mapping against the backlog)."""
+
+    profile: Profile = Field(description="Build/test/run facts; roles come from the seed.")
+    decisions: list[str] = Field(default_factory=list)
+    phases: list[PlanPhase] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _phases_name_tasks(self) -> ArchitectResult:
+        seen: set[str] = set()
+        for i, phase in enumerate(self.phases, start=1):
+            if not phase.task_id:
+                raise ValueError(f"phase {i} has no task_id")
+            if phase.task_id in seen:
+                raise ValueError(f"task {phase.task_id!r} has more than one phase")
+            seen.add(phase.task_id)
+        return self
 
 
 class FileChange(BaseModel):
@@ -243,8 +226,8 @@ class SupervisorResult(RoleOutput):
 
 
 RESULT_SCHEMAS: dict[RoleName, type[RoleOutput]] = {
-    RoleName.ANALYST: AnalystResult,
-    RoleName.PLANNER: PlannerResult,
+    RoleName.PO: POResult,
+    RoleName.ARCHITECT: ArchitectResult,
     RoleName.DEVELOPER: DeveloperResult,
     RoleName.BACKEND: DeveloperResult,
     RoleName.WEB_UI: DeveloperResult,
@@ -261,19 +244,18 @@ def result_schema_for(role: RoleName) -> type[RoleOutput]:
 
 __all__ = [
     "RESULT_SCHEMAS",
-    "AnalystResult",
+    "ArchitectResult",
     "Breakdown",
     "BreakdownEpic",
     "BreakdownStory",
     "BreakdownTask",
-    "default_breakdown",
+    "POResult",
     "DevOpsResult",
     "DeveloperResult",
     "FileChange",
     "JiraAction",
     "JiraActionType",
     "PlanPhase",
-    "PlannerResult",
     "QAResult",
     "RoleOutput",
     "SupervisorResult",

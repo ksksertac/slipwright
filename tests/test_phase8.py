@@ -157,9 +157,17 @@ def test_profile_can_be_edited_while_awaiting_approval(engine: Engine, repo: Pat
     from slipwright.schemas.job import JobState
 
     job = engine.start(engine.create_job("x", repo).id)
-    assert job.state is JobState.AWAITING_PROFILE_APPROVAL
+    assert job.state is JobState.AWAITING_BACKLOG_APPROVAL
     app = create_app(engine, resume_on_startup=False, require_auth=False)
     with TestClient(app) as client:
+        seed = job.profile or engine.seed_for(job)
+        assert (
+            client.put(f"/api/jobs/{job.id}/profile", json=seed.model_dump(mode="json")).status_code
+            == 409
+        )
+        client.post(f"/api/jobs/{job.id}/approve")  # backlog -> the architect proposes a profile
+        job = engine.store.get(job.id)
+        assert job.state is JobState.AWAITING_ARCHITECTURE_APPROVAL
         assert job.profile is not None
         edited = job.profile.model_dump(mode="json")
         edited["test_cmd"] = "make test"
@@ -185,7 +193,8 @@ def test_job_page_covers_every_gate_and_the_parity_list() -> None:
         "Stepper",
         "ProfileGate",
         "/api/jobs/${job.id}/profile",
-        "PlanGate",
+        "BacklogGate",
+        "ArchitectureGate",
         "BreakdownTree",
         "TestCasesGate",
         "useSetTestCases",

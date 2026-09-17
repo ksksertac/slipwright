@@ -12,8 +12,13 @@ from typing import Any
 
 from slipwright.invoke import RoleResult, invoke_role
 from slipwright.providers import ModelProvider
-from slipwright.roles.common import base_context, list_tree, read_files, require_worktree
-from slipwright.roles.planner import _project_facts
+from slipwright.roles.common import (
+    base_context,
+    list_tree,
+    project_facts,
+    read_files,
+    require_worktree,
+)
 from slipwright.schemas.job import Job
 from slipwright.schemas.profile import Profile, RoleName
 
@@ -66,7 +71,7 @@ def run(
             context["build_failure"] = job.data.last_build_output
         wanted = list(phase.get("files", []))
 
-    context["project"] = _project_facts(profile)
+    context["project"] = project_facts(profile)
     context["plan"] = plan
     context["tree"] = list_tree(worktree)
     context["files"] = read_files(worktree, wanted)

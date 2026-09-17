@@ -86,12 +86,12 @@ def test_store_publishes_on_every_persisted_change(engine: Engine, repo: Path) -
     assert types[1] == "job.state" and seen[1].payload["state"] == "created"
     assert "activity" in types and "job.data" in types
     states = [e.payload["state"] for e in seen if e.type == "job.state"]
-    assert states[-1] == "awaiting_plan_approval"
+    assert states[-1] == "awaiting_architecture_approval"
     runs = [e for e in seen if e.type == "test_run.state"]
     assert [r.payload["status"] for r in runs] == ["running", "passed"]
     assert all(e.project_id == job.project_id for e in seen[1:])
     titles = [e.payload["title"] for e in seen if e.type == "activity"]
-    assert titles[0] == "job started" and any(t.startswith("planner:") for t in titles)
+    assert titles[0] == "job started" and any(t.startswith("architect:") for t in titles)
 
 
 def _read_events(client: TestClient, url: str, n: int) -> list[dict[str, Any]]:
@@ -123,7 +123,7 @@ def test_sse_endpoint_streams_store_events(client: TestClient, engine: Engine, r
     assert [e["type"] for e in events] == ["job.state", "job.state", "activity"]
     assert all(e["project_id"] == project["id"] for e in events)
     assert events[0]["payload"]["state"] == "created"
-    assert events[1]["payload"]["state"] == "analyzing"
+    assert events[1]["payload"]["state"] == "backlog"
     assert events[2]["payload"]["title"] == "job started"
 
 

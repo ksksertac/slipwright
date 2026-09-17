@@ -9,6 +9,7 @@ from typing import Any
 from slipwright.engine import Engine
 from slipwright.githost import CiState, CiStatus
 from slipwright.providers.scripted import ScriptedProvider, canned
+from slipwright.roles.specialists import DEVELOPER_ROLES
 from slipwright.schemas.profile import Profile, RoleName, load_profile
 from slipwright.store import JobStore
 from slipwright.workspace import PortAllocator, Workspace
@@ -41,14 +42,14 @@ BREAKDOWN: dict[str, Any] = {
                     "id": "s1",
                     "title": "As an operator I can probe liveness",
                     "tasks": [
-                        {"id": "t1", "title": "Add route", "phase": 1},
-                        {"id": "t2", "title": "Add response model", "phase": 2},
+                        {"id": "t1", "title": "Add route"},
+                        {"id": "t2", "title": "Add response model"},
                     ],
                 },
                 {
                     "id": "s2",
                     "title": "As an operator I see the version",
-                    "tasks": [{"id": "t3", "title": "Expose version", "phase": 3}],
+                    "tasks": [{"id": "t3", "title": "Expose version"}],
                 },
             ],
         },
@@ -59,7 +60,7 @@ BREAKDOWN: dict[str, Any] = {
                 {
                     "id": "s3",
                     "title": "As a developer I read about /health",
-                    "tasks": [{"id": "t4", "title": "Document it", "phase": 4}],
+                    "tasks": [{"id": "t4", "title": "Document it"}],
                 }
             ],
         },
@@ -67,22 +68,76 @@ BREAKDOWN: dict[str, Any] = {
 }
 
 
+def default_backlog(tasks: int) -> dict[str, Any]:
+    """One epic, one story, ``tasks`` tasks with ids t1..tN."""
+    return {
+        "epics": [
+            {
+                "id": "e1",
+                "title": "Request",
+                "stories": [
+                    {
+                        "id": "s1",
+                        "title": "As a user I get the request",
+                        "tasks": [
+                            {"id": f"t{i + 1}", "title": f"step {i + 1}"} for i in range(tasks)
+                        ],
+                    }
+                ],
+            }
+        ]
+    }
+
+
+def task_ids(breakdown: dict[str, Any]) -> list[str]:
+    return [t["id"] for e in breakdown["epics"] for s in e["stories"] for t in s["tasks"]]
+
+
+def set_plan(provider: ScriptedProvider, seed: Profile, phases: list[dict[str, Any]]) -> None:
+    """Script the PO (one task per phase, ids t1..tN) and the Architect (the phases,
+    each mapped to its task) so older tests can describe a plan as a phase list."""
+    backlog = default_backlog(len(phases))
+    provider.replies[RoleName.PO] = {"summary": f"{len(phases)} tasks", "breakdown": backlog}
+    provider.replies[RoleName.ARCHITECT] = {
+        "summary": f"{len(phases)} phases",
+        "profile": seed.model_dump(mode="json"),
+        "decisions": [],
+        "phases": [{**phase, "task_id": f"t{i + 1}"} for i, phase in enumerate(phases)],
+    }
+
+
 def full_provider(
-    seed: Profile, phases: int = 4, breakdown: dict[str, Any] | None = None
+    seed: Profile,
+    phases: int = 4,
+    breakdown: dict[str, Any] | None = None,
+    domains: list[str] | None = None,
 ) -> ScriptedProvider:
+    """PO returns ``breakdown`` (or a default one with ``phases`` tasks); the Architect
+    returns one phase per task, in order, tagged with ``domains`` (default general)."""
     p = canned(seed)
-    plan: dict[str, Any] = {
-        "summary": f"{phases} phases",
-        "phases": [{"goal": f"step {i + 1}", "files": ["OK"]} for i in range(phases)],
+    backlog = breakdown if breakdown is not None else default_backlog(phases)
+    ids = task_ids(backlog)
+    p.replies[RoleName.PO] = {"summary": f"{len(ids)} tasks", "breakdown": backlog}
+    p.replies[RoleName.ARCHITECT] = {
+        "summary": f"{len(ids)} phases",
+        "profile": seed.model_dump(mode="json"),
+        "decisions": ["write OK"],
+        "phases": [
+            {
+                "goal": f"step {i + 1}",
+                "files": ["OK"],
+                "task_id": tid,
+                "domain": (domains[i % len(domains)] if domains else "general"),
+            }
+            for i, tid in enumerate(ids)
+        ],
     }
-    if breakdown is not None:
-        plan["breakdown"] = breakdown
-    p.replies[RoleName.PLANNER] = plan
-    p.replies[RoleName.DEVELOPER] = {
-        "summary": "wrote OK",
-        "phase_complete": True,
-        "changes": [{"path": "OK", "content": "yes\n"}],
-    }
+    for role in DEVELOPER_ROLES:
+        p.replies[role] = {
+            "summary": "wrote OK",
+            "phase_complete": True,
+            "changes": [{"path": "OK", "content": "yes\n"}],
+        }
     p.replies[RoleName.QA] = lambda req: (
         {"summary": "cases", "test_cases": [{"name": "smoke", "description": "OK is yes"}]}
         if '"stage": 1' in req.prompt

@@ -991,6 +991,19 @@
         "additionalProperties": false,
         "description": "Working state that phases read and write. Persisted with the job, never in history.",
         "properties": {
+          "backlog": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The Product Owner's breakdown (epics/stories/tasks).",
+            "title": "Backlog"
+          },
           "base_commit": {
             "anyOf": [
               {
@@ -1115,7 +1128,7 @@
                 "type": "null"
               }
             ],
-            "description": "Approved PlannerResult.",
+            "description": "The Architect's plan: summary, decisions, phases and the breakdown with phase numbers filled in.",
             "title": "Plan"
           },
           "pr_url": {
@@ -1152,6 +1165,7 @@
           }
         },
         "required": [
+          "backlog",
           "base_commit",
           "build_attempts",
           "ci_attempts",
@@ -1257,10 +1271,10 @@
       "JobState": {
         "enum": [
           "created",
-          "analyzing",
-          "awaiting_profile_approval",
-          "planning",
-          "awaiting_plan_approval",
+          "backlog",
+          "awaiting_backlog_approval",
+          "architecture",
+          "awaiting_architecture_approval",
           "developing",
           "build_gate",
           "qa",
@@ -2037,8 +2051,8 @@
       },
       "RoleName": {
         "enum": [
-          "analyst",
-          "planner",
+          "po",
+          "architect",
           "developer",
           "backend",
           "web_ui",
@@ -2304,6 +2318,17 @@
             "title": "Description",
             "type": "string"
           },
+          "domain": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Domain"
+          },
           "files": {
             "items": {
               "type": "string"
@@ -2331,8 +2356,15 @@
             "type": "string"
           },
           "phase": {
-            "title": "Phase",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phase"
           },
           "status": {
             "$ref": "#/components/schemas/TaskStatus"
@@ -2344,6 +2376,7 @@
         },
         "required": [
           "description",
+          "domain",
           "files",
           "id",
           "jira_key",

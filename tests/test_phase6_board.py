@@ -8,71 +8,85 @@ from fastapi.testclient import TestClient
 
 from slipwright.api import create_app
 from slipwright.board import TaskStatus, breakdown_of, job_epics, project_board
-from slipwright.roles.results import PlannerResult
+from slipwright.roles.results import ArchitectResult, POResult
 from slipwright.schemas.job import Job, JobState
 from slipwright.schemas.profile import Profile
 from slipwright.schemas.project import Project
 from slipwright.store import JobStore
-from tests.pipeline import BREAKDOWN, FALSE, full_engine, full_provider
+from tests.pipeline import BREAKDOWN, FALSE, full_engine, full_provider, full_seed
+
+SEED = full_seed()
 
 
 def _statuses(job: Job) -> list[str]:
     return [t.status.value for e in job_epics(job) for s in e.stories for t in s.tasks]
 
 
-def _plan(phases: list[dict[str, Any]], tasks: list[dict[str, Any]]) -> dict[str, Any]:
-    return {
-        "summary": "s",
-        "phases": phases,
-        "breakdown": {"epics": [{"title": "e", "stories": [{"title": "s", "tasks": tasks}]}]},
-    }
+def _plan(phases: list[dict[str, Any]]) -> dict[str, Any]:
+    return {"summary": "s", "profile": SEED.model_dump(mode="json"), "phases": phases}
 
 
 # --- T6.2 work breakdown ------------------------------------------------------------------
 
 
-def test_breakdown_schema_rejects_orphans() -> None:
-    phases = [{"goal": "a"}, {"goal": "b"}]
-    ok = PlannerResult.model_validate(
-        _plan(phases, [{"title": "t1", "phase": 1}, {"title": "t2", "phase": 2}])
+def test_architect_phases_must_name_tasks_once() -> None:
+    ok = ArchitectResult.model_validate(
+        _plan([{"goal": "a", "task_id": "t1"}, {"goal": "b", "task_id": "t2"}])
     )
-    assert ok.breakdown is not None
-    assert [t.phase for t in ok.breakdown.tasks()] == [1, 2]
-    with pytest.raises(ValueError, match="no task references"):
-        PlannerResult.model_validate(_plan(phases, [{"title": "t", "phase": 1}]))
-    with pytest.raises(ValueError, match="referenced by both"):
-        PlannerResult.model_validate(
-            _plan(
-                phases,
-                [
-                    {"title": "t1", "phase": 1},
-                    {"title": "t2", "phase": 1},
-                    {"title": "t3", "phase": 2},
-                ],
-            )
+    assert [p.task_id for p in ok.phases] == ["t1", "t2"]
+    with pytest.raises(ValueError, match="has no task_id"):
+        ArchitectResult.model_validate(_plan([{"goal": "a"}]))
+    with pytest.raises(ValueError, match="more than one phase"):
+        ArchitectResult.model_validate(
+            _plan([{"goal": "a", "task_id": "t1"}, {"goal": "b", "task_id": "t1"}])
         )
-    with pytest.raises(ValueError, match="references phase 3"):
-        PlannerResult.model_validate(
-            _plan(phases, [{"title": "t1", "phase": 1}, {"title": "t2", "phase": 3}])
+    with pytest.raises(ValueError, match="unique"):
+        POResult.model_validate(
+            {
+                "summary": "s",
+                "breakdown": {
+                    "epics": [
+                        {
+                            "title": "e",
+                            "stories": [
+                                {
+                                    "title": "s",
+                                    "tasks": [
+                                        {"id": "t1", "title": "a"},
+                                        {"id": "t1", "title": "b"},
+                                    ],
+                                }
+                            ],
+                        }
+                    ]
+                },
+            }
         )
 
 
-def test_plan_without_breakdown_gets_a_default_one(
+def test_backlog_reaches_the_board_and_the_architect_numbers_the_tasks(
     store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
 ) -> None:
     provider = full_provider(seed, phases=2)
     engine = full_engine(store, worktrees_root, seed, provider)
     job = engine.start(engine.create_job("Add a /health endpoint", repo).id)
-    job = engine.approve(job.id)
-    assert job.state is JobState.AWAITING_PLAN_APPROVAL
+    assert job.state is JobState.AWAITING_BACKLOG_APPROVAL
+    assert job_epics(job) == []  # backlog not approved yet: not on the board
+    backlog = breakdown_of(job)
+    assert backlog is not None and [t.phase for t in backlog.tasks()] == [None, None]
+
+    job = engine.approve(job.id)  # backlog approved -> architect proposes the plan
+    assert job.state is JobState.AWAITING_ARCHITECTURE_APPROVAL
+    assert '"backlog"' in provider.requests[-1].prompt  # the architect saw the backlog
     breakdown = breakdown_of(job)
     assert breakdown is not None
-    assert [e.title for e in breakdown.epics] == ["Add a /health endpoint"]
-    assert [t.phase for t in breakdown.tasks()] == [1, 2]
+    assert [t.phase for t in breakdown.tasks()] == [1, 2]  # numbered by the plan
     stored = (job.data.plan or {})["breakdown"]["epics"][0]["stories"][0]["tasks"]
     assert stored[1]["title"] == "step 2"
-    assert job_epics(job) == []  # not approved yet: not on the board
-    assert "breakdown" in provider.requests[-1].prompt  # the planner was asked for one
+    assert (job.data.plan or {})["decisions"] == ["write OK"]
+    # the tree is on the board (Jira gets it at backlog approval), all still to do
+    statuses = [t.status.value for e in job_epics(job) for s in e.stories for t in s.tasks]
+    assert statuses == ["todo", "todo"]
 
 
 def test_board_statuses_change_task_by_task(
@@ -82,9 +96,11 @@ def test_board_statuses_change_task_by_task(
     engine = full_engine(store, worktrees_root, seed, provider)
     project = engine.create_project(Project(name="demo", repo_path=repo))
     job = engine.start(engine.create_job("health", project_id=project.id).id)
-    job = engine.approve(job.id)  # profile
-    assert job.state is JobState.AWAITING_PLAN_APPROVAL
-    assert project_board(project.id, [job]).epics == []
+    job = engine.approve(job.id)  # backlog
+    assert job.state is JobState.AWAITING_ARCHITECTURE_APPROVAL
+    assert all(
+        t.status is TaskStatus.TODO for e in job_epics(job) for s in e.stories for t in s.tasks
+    )
 
     # step one handler at a time: remove the next handler so ``_run`` stops after each
     develop, gate = engine.handlers[JobState.DEVELOPING], engine.handlers[JobState.BUILD_GATE]
@@ -154,10 +170,10 @@ def test_board_endpoint_merges_jobs(
             for r in ("one", "two")
         ]
         for n, job_id in enumerate(ids):
-            client.post(f"/api/jobs/{job_id}/approve")  # profile
             board = client.get(f"/api/projects/{project['id']}/board").json()
-            assert {e["job_id"] for e in board["epics"]} == set(ids[:n])  # plan not approved
-            client.post(f"/api/jobs/{job_id}/approve")  # plan -> runs to the QA gate
+            assert {e["job_id"] for e in board["epics"]} == set(ids[:n])  # backlog not approved
+            client.post(f"/api/jobs/{job_id}/approve")  # backlog
+            client.post(f"/api/jobs/{job_id}/approve")  # architecture -> runs to the QA gate
         board = client.get(f"/api/projects/{project['id']}/board").json()
         assert [e["job_id"] for e in board["epics"]] == [ids[0], ids[0], ids[1], ids[1]]
         assert (board["tasks_done"], board["tasks_total"]) == (8, 8)

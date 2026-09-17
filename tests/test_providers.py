@@ -21,7 +21,7 @@ from slipwright.providers import (
 )
 from slipwright.providers.openai_compat import OpenAICompatProvider
 from slipwright.providers.registry import PROVIDERS, Credentials, RoutingProvider
-from slipwright.roles.results import PlannerResult
+from slipwright.roles.results import ArchitectResult
 from slipwright.schemas.job import JobState
 from slipwright.schemas.profile import Profile, RoleName, ThinkingDepth
 from slipwright.store import JobStore
@@ -72,13 +72,13 @@ def _request(
     model: str = "m", provider: str | None = None, depth: ThinkingDepth = ThinkingDepth.HIGH
 ) -> ModelRequest:
     return ModelRequest(
-        role=RoleName.PLANNER,
+        role=RoleName.ARCHITECT,
         model=model,
         provider=provider,
         thinking_depth=depth,
         system="sys",
         prompt="do it",
-        output_schema=PlannerResult.model_json_schema(),
+        output_schema=ArchitectResult.model_json_schema(),
         timeout_s=5,
     )
 
@@ -239,17 +239,26 @@ def test_roles_run_on_the_provider_named_in_the_profile(
     for spec in PROVIDERS.values():
         monkeypatch.delenv(spec.env_var, raising=False)
     vendors = {"openai": FakeVendor("sk-o", []), "deepseek": FakeVendor("sk-d", [])}
-    # a planner reply that is a valid PlannerResult; the analyst reply must be an AnalystResult
-    analyst_reply = {"summary": "s", "profile": seed.model_dump(mode="json")}
+    # the PO (on DeepSeek) returns a backlog; the Architect (on OpenAI) a matching plan
+    from tests.pipeline import default_backlog
+
+    po_reply = {"summary": "s", "breakdown": default_backlog(1)}
+    architect_reply = {
+        "summary": "s",
+        "profile": seed.model_dump(mode="json"),
+        "decisions": [],
+        "phases": [{"goal": "g", "task_id": "t1"}],
+    }
 
     def handler(request: httpx.Request) -> httpx.Response:
         vendor = vendors["deepseek" if "deepseek" in request.url.host else "openai"]
-        vendor.reply = analyst_reply if "analyst" in request.content.decode()[:600] else None
+        body = request.content.decode()
+        vendor.reply = po_reply if "You are the po agent" in body else architect_reply
         return vendor.handler(request)
 
     data = seed.model_dump(mode="json")
-    data["roles"]["analyst"]["provider"] = "deepseek"
-    data["roles"]["planner"]["provider"] = "openai"
+    data["roles"]["po"]["provider"] = "deepseek"
+    data["roles"]["architect"]["provider"] = "openai"
     routed = Profile.model_validate(data)
     engine = full_engine(
         store, worktrees_root, routed, None, http_transport=httpx.MockTransport(handler)
@@ -258,14 +267,12 @@ def test_roles_run_on_the_provider_named_in_the_profile(
     engine.update_provider_settings("deepseek", api_key="sk-d")
 
     job = engine.start(engine.create_job("x", repo).id)
-    assert job.state is JobState.AWAITING_PROFILE_APPROVAL, job.history[-1].detail
+    assert job.state is JobState.AWAITING_BACKLOG_APPROVAL, job.history[-1].detail
     job = engine.approve(job.id)
-    assert job.state is JobState.AWAITING_PLAN_APPROVAL, job.history[-1].detail
-    assert [r["model"] for r in vendors["deepseek"].requests] == [
-        routed.roles[RoleName.ANALYST].model
-    ]
+    assert job.state is JobState.AWAITING_ARCHITECTURE_APPROVAL, job.history[-1].detail
+    assert [r["model"] for r in vendors["deepseek"].requests] == [routed.roles[RoleName.PO].model]
     assert [r["model"] for r in vendors["openai"].requests] == [
-        routed.roles[RoleName.PLANNER].model
+        routed.roles[RoleName.ARCHITECT].model
     ]
 
     # a role whose provider has no key fails the job with a readable reason, not a crash

@@ -6,16 +6,16 @@ import {
   IconGit,
   IconLayers,
   IconMonitor,
-  IconSearch,
+  IconTicket,
   IconUsers,
 } from "./icons";
 
 /** Role -> icon, used on cards, badges and the pipeline view. */
 export function AgentIcon({ role }: { role: string }): ReactNode {
   switch (role) {
-    case "analyst":
-      return <IconSearch />;
-    case "planner":
+    case "po":
+      return <IconTicket />;
+    case "architect":
       return <IconLayers />;
     case "backend":
       return <IconCpu />;
@@ -52,13 +52,13 @@ function IconMobile() {
 }
 
 export const ROLE_LABEL: Record<string, string> = {
-  analyst: "Analysis",
-  planner: "Planner",
+  po: "Product Owner",
+  architect: "Architect",
   developer: "Developer",
   backend: "Backend",
   web_ui: "Web UI",
   mobile_ui: "Mobile UI",
-  qa: "Tester",
+  qa: "QA",
   devops: "DevOps",
   supervisor: "Supervisor",
 };

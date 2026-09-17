@@ -14,18 +14,18 @@ from slipwright.providers import (
     ProviderTimeoutError,
 )
 from slipwright.providers.anthropic import AnthropicProvider, build_request_kwargs
-from slipwright.roles.results import PlannerResult
+from slipwright.roles.results import ArchitectResult
 from slipwright.schemas.profile import RoleName, ThinkingDepth
 
 
 def _request(depth: ThinkingDepth = ThinkingDepth.HIGH) -> ModelRequest:
     return ModelRequest(
-        role=RoleName.PLANNER,
+        role=RoleName.ARCHITECT,
         model="model-from-profile",
         thinking_depth=depth,
         system="sys",
         prompt="do it",
-        output_schema=PlannerResult.model_json_schema(),
+        output_schema=ArchitectResult.model_json_schema(),
         timeout_s=12.5,
     )
 

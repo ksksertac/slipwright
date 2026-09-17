@@ -12,7 +12,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from slipwright.roles.results import Breakdown, PlanPhase, default_breakdown
+from slipwright.roles.results import Breakdown
 from slipwright.schemas.job import Job, JobState
 
 
@@ -23,15 +23,9 @@ class TaskStatus(StrEnum):
     FAILED = "failed"
 
 
-# states in which ``job.data.plan`` is the plan being executed, not a proposal
-_PLAN_PENDING: frozenset[JobState] = frozenset(
-    {
-        JobState.CREATED,
-        JobState.ANALYZING,
-        JobState.AWAITING_PROFILE_APPROVAL,
-        JobState.PLANNING,
-        JobState.AWAITING_PLAN_APPROVAL,
-    }
+# states before the backlog is approved: nothing is on the board yet
+_BACKLOG_PENDING: frozenset[JobState] = frozenset(
+    {JobState.CREATED, JobState.BACKLOG, JobState.AWAITING_BACKLOG_APPROVAL}
 )
 
 
@@ -41,7 +35,8 @@ class TaskView(BaseModel):
     id: str
     title: str
     description: str = ""
-    phase: int
+    phase: int | None = None
+    domain: str | None = None
     status: TaskStatus
     job_id: str
     files: list[str] = Field(default_factory=list)
@@ -84,28 +79,23 @@ class Board(BaseModel):
 
 
 def plan_is_active(job: Job) -> bool:
-    """True once a plan has been approved (or the job ended after approving one)."""
-    return job.data.plan is not None and job.state not in _PLAN_PENDING
+    """True once the backlog is approved: the tree is on the board (and in Jira)."""
+    return job.data.backlog is not None and job.state not in _BACKLOG_PENDING
 
 
 def breakdown_of(job: Job) -> Breakdown | None:
-    """The job's breakdown, generating the default one for plans that carry none."""
+    """The Architect's phase-numbered breakdown when there is a plan, else the PO's."""
     plan = job.data.plan
-    if not plan:
-        return None
-    phases = [PlanPhase.model_validate(p) for p in plan.get("phases", [])]
-    if not phases:
-        return None
-    raw = plan.get("breakdown")
-    if raw:
-        return Breakdown.model_validate(raw)
-    return default_breakdown(job.request, phases)
+    raw = (plan or {}).get("breakdown") or job.data.backlog
+    return Breakdown.model_validate(raw) if raw else None
 
 
-def task_status(job: Job, phase: int) -> TaskStatus:
-    """Status of the task that owns 1-based plan ``phase``."""
-    if not plan_is_active(job):
+def task_status(job: Job, phase: int | None) -> TaskStatus:
+    """Status of the task that owns 1-based plan ``phase`` (None: not planned yet)."""
+    if not plan_is_active(job) or phase is None:
         return TaskStatus.TODO
+    if job.state in (JobState.ARCHITECTURE, JobState.AWAITING_ARCHITECTURE_APPROVAL):
+        return TaskStatus.TODO  # the plan is a proposal until approved
     if job.state is JobState.DONE:
         return TaskStatus.DONE
     index = phase - 1
@@ -154,10 +144,15 @@ def job_epics(job: Job) -> list[EpicView]:
                     job_id=job.id,
                     files=(
                         list(phases[t.phase - 1].get("files", []))
-                        if t.phase - 1 < len(phases)
+                        if t.phase is not None and t.phase - 1 < len(phases)
                         else []
                     ),
                     jira_key=keys.get(t.id),
+                    domain=(
+                        phases[t.phase - 1].get("domain")
+                        if t.phase is not None and t.phase - 1 < len(phases)
+                        else None
+                    ),
                 )
                 for t in story.tasks
             ]

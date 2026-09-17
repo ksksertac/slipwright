@@ -17,12 +17,31 @@ from slipwright.providers import (
     ProviderRefusalError,
     ProviderTimeoutError,
 )
-from slipwright.roles.results import RESULT_SCHEMAS, AnalystResult, PlannerResult
+from slipwright.roles.results import RESULT_SCHEMAS, ArchitectResult, POResult
 from slipwright.schemas.profile import Profile, RoleName, ThinkingDepth, load_profile
 
 ROOT = Path(__file__).resolve().parent.parent
+_PROFILE = load_profile(ROOT / "examples" / "python-fastapi.profile.json")
 PLAN_JSON = json.dumps(
-    {"summary": "two phases", "phases": [{"goal": "add endpoint", "files": ["app/main.py"]}]}
+    {
+        "summary": "one phase",
+        "profile": _PROFILE.model_dump(mode="json"),
+        "decisions": [],
+        "phases": [{"goal": "add endpoint", "files": ["app/main.py"], "task_id": "t1"}],
+    }
+)
+BACKLOG_JSON = json.dumps(
+    {
+        "summary": "backlog",
+        "breakdown": {
+            "epics": [
+                {
+                    "title": "E",
+                    "stories": [{"title": "S", "tasks": [{"id": "t1", "title": "add endpoint"}]}],
+                }
+            ]
+        },
+    }
 )
 
 
@@ -82,12 +101,12 @@ def test_request_uses_model_and_depth_from_profile(profile: Profile, role: RoleN
 
 def test_changing_profile_model_changes_request(profile: Profile) -> None:
     data = profile.model_dump(mode="json")
-    data["roles"]["planner"]["model"] = "some-other-model"
-    data["roles"]["planner"]["thinking_depth"] = "off"
+    data["roles"]["architect"]["model"] = "some-other-model"
+    data["roles"]["architect"]["thinking_depth"] = "off"
     changed = Profile.model_validate(data)
 
     provider = FakeProvider()
-    result = invoke_role(RoleName.PLANNER, changed, {}, provider=provider)
+    result = invoke_role(RoleName.ARCHITECT, changed, {}, provider=provider)
 
     assert provider.requests[0].model == "some-other-model"
     assert provider.requests[0].thinking_depth is ThinkingDepth.OFF
@@ -113,7 +132,7 @@ def test_engine_has_no_hardcoded_model_names() -> None:
 def test_context_is_rendered_into_prompt(profile: Profile) -> None:
     provider = FakeProvider()
     invoke_role(
-        RoleName.PLANNER,
+        RoleName.ARCHITECT,
         profile,
         {"system": "custom system", "instructions": "do the thing", "request": "add login"},
         provider=provider,
@@ -136,10 +155,10 @@ def test_default_system_prompt_names_role(profile: Profile) -> None:
 
 
 def test_valid_output_is_parsed_into_role_schema(profile: Profile) -> None:
-    result = invoke_role(RoleName.PLANNER, profile, {}, provider=FakeProvider())
+    result = invoke_role(RoleName.ARCHITECT, profile, {}, provider=FakeProvider())
 
     assert result.ok
-    assert isinstance(result.output, PlannerResult)
+    assert isinstance(result.output, ArchitectResult)
     assert result.output.phases[0].goal == "add endpoint"
     assert result.raw_text == PLAN_JSON
     assert result.usage is not None and result.usage.input_tokens == 10
@@ -147,24 +166,23 @@ def test_valid_output_is_parsed_into_role_schema(profile: Profile) -> None:
 
 def test_fenced_json_is_accepted(profile: Profile) -> None:
     provider = FakeProvider(f"```json\n{PLAN_JSON}\n```")
-    result = invoke_role(RoleName.PLANNER, profile, {}, provider=provider)
+    result = invoke_role(RoleName.ARCHITECT, profile, {}, provider=provider)
     assert result.ok
 
 
-def test_analyst_output_validates_full_profile(profile: Profile) -> None:
-    text = json.dumps({"summary": "python project", "profile": profile.model_dump(mode="json")})
-    result = invoke_role(RoleName.ANALYST, profile, {}, provider=FakeProvider(text))
+def test_po_output_validates_backlog(profile: Profile) -> None:
+    result = invoke_role(RoleName.PO, profile, {}, provider=FakeProvider(BACKLOG_JSON))
 
     assert result.ok
-    assert isinstance(result.output, AnalystResult)
-    assert result.output.profile == profile
+    assert isinstance(result.output, POResult)
+    assert [t.id for t in result.output.breakdown.tasks()] == ["t1"]
 
 
 def test_result_round_trips_through_json(profile: Profile) -> None:
-    result = invoke_role(RoleName.PLANNER, profile, {}, provider=FakeProvider())
+    result = invoke_role(RoleName.ARCHITECT, profile, {}, provider=FakeProvider())
     dumped = result.model_dump(mode="json")
     assert dumped["output"]["phases"][0]["goal"] == "add endpoint"
-    assert RoleResult.model_validate(dumped).role is RoleName.PLANNER
+    assert RoleResult.model_validate(dumped).role is RoleName.ARCHITECT
 
 
 # --- typed failures ----------------------------------------------------------------------
@@ -175,7 +193,7 @@ def test_result_round_trips_through_json(profile: Profile) -> None:
     ["", "not json at all", "[1, 2, 3]", '{"summary": "no phases"}', '{"phases": []}'],
 )
 def test_malformed_output_returns_typed_error(profile: Profile, text: str) -> None:
-    result = invoke_role(RoleName.PLANNER, profile, {}, provider=FakeProvider(text))
+    result = invoke_role(RoleName.ARCHITECT, profile, {}, provider=FakeProvider(text))
 
     assert not result.ok
     assert result.error is not None
@@ -186,16 +204,16 @@ def test_malformed_output_returns_typed_error(profile: Profile, text: str) -> No
 
 def test_schema_violation_message_is_readable(profile: Profile) -> None:
     result = invoke_role(
-        RoleName.PLANNER, profile, {}, provider=FakeProvider('{"summary": "x", "phases": []}')
+        RoleName.ARCHITECT, profile, {}, provider=FakeProvider('{"summary": "x", "phases": []}')
     )
     assert result.error is not None
-    assert "PlannerResult" in result.error.message
+    assert "ArchitectResult" in result.error.message
     assert "phases" in result.error.message
 
 
 def test_slow_provider_times_out(profile: Profile) -> None:
     provider = FakeProvider(delay_s=1.0)
-    result = invoke_role(RoleName.PLANNER, profile, {}, provider=provider, timeout_s=0.05)
+    result = invoke_role(RoleName.ARCHITECT, profile, {}, provider=provider, timeout_s=0.05)
 
     assert result.error is not None
     assert result.error.kind is InvokeErrorKind.TIMEOUT
@@ -213,7 +231,7 @@ def test_slow_provider_times_out(profile: Profile) -> None:
 def test_provider_failures_never_raise(
     profile: Profile, exc: Exception, kind: InvokeErrorKind
 ) -> None:
-    result = invoke_role(RoleName.PLANNER, profile, {}, provider=FakeProvider(raises=exc))
+    result = invoke_role(RoleName.ARCHITECT, profile, {}, provider=FakeProvider(raises=exc))
 
     assert not result.ok
     assert result.error is not None
@@ -229,6 +247,6 @@ def test_unknown_role_is_a_programmer_error(profile: Profile) -> None:
 def test_default_provider_is_used_when_none_given(profile: Profile) -> None:
     provider = FakeProvider()
     invoke.set_default_provider(provider)
-    result = invoke_role(RoleName.PLANNER, profile, {})
+    result = invoke_role(RoleName.ARCHITECT, profile, {})
     assert result.ok
     assert len(provider.requests) == 1

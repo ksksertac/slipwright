@@ -20,7 +20,7 @@ at that point instead of inventing a value or committing a placeholder that look
 
 Implement exactly the phase you were given. Do not refactor unrelated code, rename public
 symbols, change formatting of files you did not need to touch, or "improve" things outside
-the goal. If you find a real problem elsewhere, describe it in `summary` for the Planner.
+the goal. If you find a real problem elsewhere, describe it in `summary` for the Architect.
 
 ## Never destroy history or data
 

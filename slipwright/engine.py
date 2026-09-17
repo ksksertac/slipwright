@@ -43,15 +43,15 @@ from slipwright.providers.registry import (
     RoutingProvider,
     list_models,
 )
-from slipwright.roles import analyst, developer, devops, planner, qa
+from slipwright.roles import architect, developer, devops, po, qa
 from slipwright.roles.common import apply_changes, require_worktree
 from slipwright.roles.results import (
-    AnalystResult,
+    ArchitectResult,
+    Breakdown,
     DeveloperResult,
     DevOpsResult,
-    PlannerResult,
+    POResult,
     QAResult,
-    default_breakdown,
 )
 from slipwright.roles.specialists import specialist_for
 from slipwright.schemas.job import APPROVAL_STATES, Job, JobState, utcnow
@@ -78,8 +78,8 @@ log = logging.getLogger(__name__)
 
 WORKING_STATES: frozenset[JobState] = frozenset(
     {
-        JobState.ANALYZING,
-        JobState.PLANNING,
+        JobState.BACKLOG,
+        JobState.ARCHITECTURE,
         JobState.DEVELOPING,
         JobState.BUILD_GATE,
         JobState.QA,
@@ -89,8 +89,8 @@ WORKING_STATES: frozenset[JobState] = frozenset(
 
 # approval state -> (state on approve, state on reject)
 APPROVAL_EDGES: dict[JobState, tuple[JobState, JobState]] = {
-    JobState.AWAITING_PROFILE_APPROVAL: (JobState.PLANNING, JobState.ANALYZING),
-    JobState.AWAITING_PLAN_APPROVAL: (JobState.DEVELOPING, JobState.PLANNING),
+    JobState.AWAITING_BACKLOG_APPROVAL: (JobState.ARCHITECTURE, JobState.BACKLOG),
+    JobState.AWAITING_ARCHITECTURE_APPROVAL: (JobState.DEVELOPING, JobState.ARCHITECTURE),
     # stage 1 (test list) approved -> QA writes the tests; stage 2 approved -> DevOps
     JobState.AWAITING_TEST_APPROVAL: (JobState.DEVOPS, JobState.QA),
 }
@@ -161,8 +161,8 @@ class Engine:
         self.ci_poll_s = ci_poll_s
         self.ci_timeout_s = ci_timeout_s
         self.handlers: dict[JobState, Handler] = {
-            JobState.ANALYZING: self._analyze,
-            JobState.PLANNING: self._plan,
+            JobState.BACKLOG: self._backlog,
+            JobState.ARCHITECTURE: self._architecture,
             JobState.DEVELOPING: self._develop,
             JobState.BUILD_GATE: self._build_gate,
             JobState.QA: self._qa,
@@ -672,7 +672,7 @@ class Engine:
     def start(self, job_id: str, *, run: bool = True) -> Job:
         """Move a new job into analysis. With ``run=False`` only the transition happens;
         call ``resume`` later (e.g. from a background worker) to execute the phase."""
-        job = self.orchestrator.transition(job_id, JobState.ANALYZING, note="job started")
+        job = self.orchestrator.transition(job_id, JobState.BACKLOG, note="job started")
         return self._run(job) if run else job
 
     def approve(self, job_id: str, *, run: bool = True) -> Job:
@@ -706,7 +706,7 @@ class Engine:
     def set_profile(self, job_id: str, profile: Profile) -> Job:
         """Replace the proposed profile while the job waits for its approval."""
         job = self.store.get(job_id)
-        if job.state is not JobState.AWAITING_PROFILE_APPROVAL:
+        if job.state is not JobState.AWAITING_ARCHITECTURE_APPROVAL:
             raise NotAwaitingApproval(job)
         job.profile = profile
         return self.store.save(job)
@@ -934,47 +934,72 @@ class Engine:
 
     # -- phase handlers ------------------------------------------------------------------
 
-    def _analyze(self, job: Job) -> Job:
-        job = self._ensure_workspace(job)
-        seed = self.seed_for(job)
-        result = self._invoke(RoleName.ANALYST, analyst.run, job, seed=seed)
-        if not result.ok:
-            return self._invocation_failed(job, result)
-        assert isinstance(result.output, AnalystResult)
-        job.profile = analyst.accepted_profile(result.output, seed)
-        self.store.save(job)
-        return self.orchestrator.transition(
-            job,
-            JobState.AWAITING_PROFILE_APPROVAL,
-            note=f"analyst: {result.output.summary}",
-            detail=json.dumps(job.profile.model_dump(mode="json"), indent=2),
-        )
-
-    def _plan(self, job: Job) -> Job:
+    def _backlog(self, job: Job) -> Job:
+        """The Product Owner writes the backlog; the human approves it before design."""
         if job.data.reject_rounds > self.max_reject_rounds:
             return self._fail(
                 job,
-                f"plan rejected {job.data.reject_rounds} times; giving up",
+                f"backlog rejected {job.data.reject_rounds} times; giving up",
                 detail=job.data.feedback,
             )
-        result = self._invoke(RoleName.PLANNER, planner.run, job, profile=self._profile(job))
+        job = self._ensure_workspace(job)
+        seed = self.seed_for(job)
+        result = self._invoke(RoleName.PO, po.run, job, profile=seed)
         if not result.ok:
             return self._invocation_failed(job, result)
-        assert isinstance(result.output, PlannerResult)
-        plan = result.output
-        if plan.breakdown is None:
-            breakdown = default_breakdown(job.request, plan.phases)
-            plan = plan.model_copy(update={"breakdown": breakdown})
-        job.data.plan = plan.model_dump(mode="json")
+        assert isinstance(result.output, POResult)
+        job.data.backlog = result.output.breakdown.model_dump(mode="json")
+        self.store.save(job)
+        tasks = result.output.breakdown.tasks()
+        return self.orchestrator.transition(
+            job,
+            JobState.AWAITING_BACKLOG_APPROVAL,
+            note=f"po: {result.output.summary} ({len(tasks)} tasks)",
+            detail=json.dumps(job.data.backlog, indent=2),
+        )
+
+    def _architecture(self, job: Job) -> Job:
+        """The Architect proposes profile, decisions and one phase per backlog task."""
+        if job.data.reject_rounds > self.max_reject_rounds:
+            return self._fail(
+                job,
+                f"architecture rejected {job.data.reject_rounds} times; giving up",
+                detail=job.data.feedback,
+            )
+        if not job.data.backlog:
+            return self._fail(job, "no approved backlog to design from")
+        seed = self.seed_for(job)
+        result = self._invoke(RoleName.ARCHITECT, architect.run, job, seed=seed)
+        if not result.ok:
+            return self._invocation_failed(job, result)
+        assert isinstance(result.output, ArchitectResult)
+        breakdown = Breakdown.model_validate(job.data.backlog)
+        mapping = architect.phase_task_map(result.output, [t.id for t in breakdown.tasks()])
+        if isinstance(mapping, str):
+            return self._fail(job, f"architect: plan does not match the backlog: {mapping}")
+        for task in breakdown.tasks():
+            task.phase = mapping[task.id]
+        job.profile = architect.accepted_profile(result.output, seed)
+        job.data.plan = {
+            "summary": result.output.summary,
+            "decisions": result.output.decisions,
+            "phases": [p.model_dump(mode="json") for p in result.output.phases],
+            "breakdown": breakdown.model_dump(mode="json"),
+        }
         job.data.phase_index = 0
         job.data.build_attempts = 0
         job.data.last_build_output = None
         self.store.save(job)
         return self.orchestrator.transition(
             job,
-            JobState.AWAITING_PLAN_APPROVAL,
-            note=f"planner: {result.output.summary} ({len(result.output.phases)} phases)",
-            detail=json.dumps(job.data.plan, indent=2),
+            JobState.AWAITING_ARCHITECTURE_APPROVAL,
+            note=(
+                f"architect: {result.output.summary} "
+                f"({len(result.output.phases)} phases, {len(result.output.decisions)} decisions)"
+            ),
+            detail=json.dumps(
+                {"profile": job.profile.model_dump(mode="json"), **job.data.plan}, indent=2
+            ),
         )
 
     def _develop(self, job: Job) -> Job:

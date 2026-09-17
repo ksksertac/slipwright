@@ -120,6 +120,18 @@ def base_context(
     return ctx
 
 
+def project_facts(profile: Profile) -> dict[str, str | int]:
+    """The profile's build/test/run facts, as every implementing role sees them."""
+    return {
+        "language": profile.language,
+        "package_manager": profile.package_manager,
+        "build_cmd": profile.build_cmd,
+        "test_cmd": profile.test_cmd,
+        "run_cmd": profile.run_cmd,
+        "port": profile.port,
+    }
+
+
 def require_worktree(job: Job) -> Path:
     if job.worktree_path is None:
         raise RuntimeError(f"job {job.id} has no worktree")
@@ -158,6 +170,7 @@ __all__ = [
     "apply_changes",
     "base_context",
     "list_tree",
+    "project_facts",
     "read_files",
     "require_worktree",
     "scan_worktree",

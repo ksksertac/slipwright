@@ -36,7 +36,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 
 ## Progress
 
-> **Resume here:** Phases 0–8 and T9.1–T9.3 are complete. Next: role model refactor (T9.0, PO / Architect / QA), then **T9.4**.
+> **Resume here:** Phases 0–8 and T9.0–T9.3 are complete. Next: **T9.4** (retrieval into every role's prompt), then T9.9, T9.5, T9.6, T9.8, T9.7.
 > Design note for T1.3: `run_cmd` is executed as a subprocess in the worktree (Docker is used
 > only if the profile's `run_cmd` itself invokes it).
 > Design note for T2.2: `invoke_role` talks to a `ModelProvider` (`slipwright/providers/`);
@@ -125,7 +125,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 | 8 | T8.7 Retire the server-rendered dashboard | [x] |
 | 8 | T8.8 Docker image and compose | [x] |
 | 8 | T8.9 UI redesign: dashboard, cards, edit/delete flows, theme | [x] |
-| 9 | T9.0 Role model: PO, Architect, QA (two new gates) | [ ] |
+| 9 | T9.0 Role model: PO, Architect, QA (two new gates) | [x] |
 | 9 | T9.1 Specialist agents: backend, web UI, mobile UI | [x] |
 | 9 | T9.2 Standards corpus | [x] |
 | 9 | T9.3 Standards index (RAG) | [x] |
@@ -698,28 +698,41 @@ Requested after T9.3: replace analysis with a Product Owner, add a Software Arch
 make QA own end-to-end tests.
 
 **Done when**
-- [ ] `RoleName`: `po`, `architect`, `developer`, `backend`, `web_ui`, `mobile_ui`, `qa`,
+- [x] `RoleName`: `po`, `architect`, `developer`, `backend`, `web_ui`, `mobile_ui`, `qa`,
   `devops`, `supervisor`; `analyst` and `planner` are gone from code, profiles, prompts,
   standards and the UI
-- [ ] States: `created → backlog → awaiting_backlog_approval → architecture →
+- [x] States: `created → backlog → awaiting_backlog_approval → architecture →
   awaiting_architecture_approval → developing → build_gate → qa → awaiting_test_approval
   → devops → done | failed`; illegal transitions still raise; resume works from every
   state; rejection at either new gate re-runs that agent with the feedback (bounded)
-- [ ] `POResult`: summary + breakdown (epics → stories → tasks, no phases yet);
+- [x] `POResult`: summary + breakdown (epics → stories → tasks, no phases yet);
   `ArchitectResult`: summary + profile + `decisions[]` + phases, each with a `domain` and a
   `task_id`; the engine checks every task has exactly one phase and writes the phase
   numbers back into the breakdown so the board, Jira sync and agent Jira context keep
   working unchanged
-- [ ] Jira mirroring starts at backlog approval (tasks `todo`), statuses move as phases
+- [x] Jira mirroring starts at backlog approval (tasks `todo`), statuses move as phases
   complete; the human may edit the proposed profile at the architecture gate
   (`PUT /api/jobs/{id}/profile`)
-- [ ] QA instructions cover end-to-end tests (Playwright / the project's e2e runner) in
+- [x] QA instructions cover end-to-end tests (Playwright / the project's e2e runner) in
   addition to unit and integration tests; standards gain `product` and `architecture`
   domains (the `analysis` pages move under `product`)
-- [ ] Web: stepper, gate panels (backlog tree; profile + decisions + phases), agent cards
+- [x] Web: stepper, gate panels (backlog tree; profile + decisions + phases), agent cards
   and labels reflect the new roles and states
-- [ ] Tests updated: Phase 2–5 role tests now target PO and Architect; every later suite
+- [x] Tests updated: Phase 2–5 role tests now target PO and Architect; every later suite
   passes against the new states
+
+> Design note for T9.0: `slipwright/roles/po.py` and `roles/architect.py` replace
+> `analyst.py` / `planner.py`. The PO runs first with the seed profile only; `job.profile`
+> stays `None` until the Architect proposes one (`accepted_profile` keeps the seed's `roles`).
+> `job.data.backlog` is the PO's tree; `job.data.plan` is the Architect's
+> `{summary, decisions, phases, breakdown}` where `architect.phase_task_map` has checked the
+> 1:1 task↔phase mapping and written `task.phase`. Jira mirroring moved to backlog approval
+> (`_jira_reconcile` sees `backlog` when `plan` is absent), so the Architect already sees
+> issue keys in its Jira context. `activity.py` derives role prefixes generically
+> (`"<role>:"`, `"<role> phase"`), so new roles need no changes there. Tests describe plans
+> through `tests.pipeline.set_plan(provider, seed, phases)`, which scripts a matching PO
+> backlog (`t1..tN`) and Architect reply. `tests/test_po_architect.py` replaces
+> `test_analyst.py`.
 
 ### T9.1 — Specialist agents: backend, web UI, mobile UI
 **Done when**

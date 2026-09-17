@@ -46,13 +46,33 @@ def canned(profile: Profile) -> ScriptedProvider:
     """A script that takes any job through every phase with harmless outputs."""
     provider = ScriptedProvider(
         {
-            RoleName.ANALYST: {
-                "summary": "scripted analysis",
-                "profile": profile.model_dump(mode="json"),
+            RoleName.PO: {
+                "summary": "scripted backlog",
+                "breakdown": {
+                    "epics": [
+                        {
+                            "id": "e1",
+                            "title": "Record the request",
+                            "stories": [
+                                {
+                                    "id": "s1",
+                                    "title": "As a user I can see my request recorded",
+                                    "tasks": [
+                                        {"id": "t1", "title": "record the request"},
+                                    ],
+                                }
+                            ],
+                        }
+                    ]
+                },
             },
-            RoleName.PLANNER: {
-                "summary": "scripted plan",
-                "phases": [{"goal": "record the request", "files": ["SLIPWRIGHT.md"]}],
+            RoleName.ARCHITECT: {
+                "summary": "scripted architecture",
+                "profile": profile.model_dump(mode="json"),
+                "decisions": ["write the request into SLIPWRIGHT.md"],
+                "phases": [
+                    {"goal": "record the request", "files": ["SLIPWRIGHT.md"], "task_id": "t1"}
+                ],
             },
             RoleName.DEVELOPER: lambda req: {
                 "summary": "scripted development",

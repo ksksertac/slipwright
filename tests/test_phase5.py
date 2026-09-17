@@ -18,6 +18,7 @@ from slipwright.schemas.profile import Profile, RoleName, load_profile
 from slipwright.store import JobStore
 from slipwright.workspace import PortAllocator, Workspace
 from slipwright.workspace import git as g
+from tests.pipeline import set_plan
 
 ROOT = Path(__file__).resolve().parent.parent
 EXAMPLE = ROOT / "examples" / "python-fastapi.profile.json"
@@ -60,13 +61,14 @@ DOMAINS = ["general", "backend", "web", "mobile"]
 def _provider(seed: Profile, phases: int = 2) -> ScriptedProvider:
     """Phases cycle through the domains so every specialist gets a turn."""
     p = canned(seed)
-    p.replies[RoleName.PLANNER] = {
-        "summary": f"{phases} phases",
-        "phases": [
+    set_plan(
+        p,
+        seed,
+        [
             {"goal": f"step {i + 1}", "files": ["OK"], "domain": DOMAINS[i % len(DOMAINS)]}
             for i in range(phases)
         ],
-    }
+    )
     for role in DEVELOPER_ROLES:
         p.replies[role] = {
             "summary": "wrote OK",
@@ -125,7 +127,7 @@ def test_message_queued_mid_plan_reaches_next_developer_once(
     engine = _engine(store, worktrees_root, seed, provider)
     job = engine.start(engine.create_job("x", repo).id)
     job = engine.approve(job.id)
-    assert job.state is JobState.AWAITING_PLAN_APPROVAL
+    assert job.state is JobState.AWAITING_ARCHITECTURE_APPROVAL
 
     job = engine.message(job.id, "use snake_case everywhere")
     assert [m.pending for m in job.data.inbox] == [True]
@@ -300,8 +302,8 @@ def test_approval_states_never_advance_without_approve(
         assert len(provider.requests) == before  # no role was invoked at the gate
         job = engine.approve(job.id)
     assert gates == [
-        JobState.AWAITING_PROFILE_APPROVAL,
-        JobState.AWAITING_PLAN_APPROVAL,
+        JobState.AWAITING_BACKLOG_APPROVAL,
+        JobState.AWAITING_ARCHITECTURE_APPROVAL,
         JobState.AWAITING_TEST_APPROVAL,
         JobState.AWAITING_TEST_APPROVAL,
     ]

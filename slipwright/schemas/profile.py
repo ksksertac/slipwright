@@ -19,8 +19,8 @@ PORT_PLACEHOLDER = "{port}"
 
 
 class RoleName(StrEnum):
-    ANALYST = "analyst"
-    PLANNER = "planner"
+    PO = "po"  # product owner: request -> epics, stories, tasks
+    ARCHITECT = "architect"  # backlog + repository -> profile, decisions, phases
     DEVELOPER = "developer"  # generic implementer; specialists below take tagged phases
     BACKEND = "backend"
     WEB_UI = "web_ui"

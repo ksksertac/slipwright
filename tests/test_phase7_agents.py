@@ -9,7 +9,7 @@ import pytest
 from slipwright.engine import Engine
 from slipwright.jiraactions import ActionRunner, jira_context
 from slipwright.providers import ModelRequest
-from slipwright.roles.results import JiraAction, PlannerResult
+from slipwright.roles.results import ArchitectResult, JiraAction
 from slipwright.schemas.job import JobState
 from slipwright.schemas.profile import Permission, Profile, RoleName
 from slipwright.schemas.project import Project
@@ -56,7 +56,7 @@ def test_jira_action_schema() -> None:
         JiraAction(action="transition")
     with pytest.raises(ValueError, match="needs minutes"):
         JiraAction(action="log_work", issue="DEM-1")
-    schema = PlannerResult.model_json_schema()
+    schema = ArchitectResult.model_json_schema()
     assert "jira_actions" in schema["properties"]
     assert Permission.JIRA.value == "jira"
 
@@ -64,7 +64,8 @@ def test_jira_action_schema() -> None:
 def test_example_profile_grants_jira_to_the_right_roles(seed: Profile) -> None:
     granted = {r for r in RoleName if Permission.JIRA in seed.roles[r].permissions}
     assert granted == {
-        RoleName.PLANNER,
+        RoleName.PO,
+        RoleName.ARCHITECT,
         RoleName.DEVELOPER,
         RoleName.BACKEND,
         RoleName.WEB_UI,
@@ -78,7 +79,8 @@ def _agentic_provider(seed: Profile) -> Any:
     """Each role returns Jira actions the way its instructions describe."""
     provider = full_provider(seed, phases=2, breakdown=None)
     base_dev = provider.replies[RoleName.DEVELOPER]
-    base_analyst = provider.replies[RoleName.ANALYST]
+    base_po = provider.replies[RoleName.PO]
+    base_architect = provider.replies[RoleName.ARCHITECT]
 
     def developer(req: ModelRequest) -> dict[str, Any]:
         ctx = _context(req)
@@ -138,22 +140,21 @@ def _agentic_provider(seed: Profile) -> Any:
             ],
         }
 
-    def planner(req: ModelRequest) -> dict[str, Any]:
-        assert "jira" in _context(req) and _context(req)["jira"]["issues"] == []  # nothing yet
-        return {
-            "summary": "2 phases",
-            "phases": [{"goal": "step 1", "files": ["OK"]}, {"goal": "step 2", "files": ["OK"]}],
-            "jira_actions": [{"action": "comment", "issue": "OTHER-1", "body": "outside"}],
-        }
+    def architect(req: ModelRequest) -> dict[str, Any]:
+        # the backlog is approved (and mirrored) before the architect runs: keys exist
+        assert "jira" in _context(req) and len(_context(req)["jira"]["issues"]) == 4
+        reply = dict(base_architect)  # type: ignore[arg-type]
+        reply["jira_actions"] = [{"action": "comment", "issue": "OTHER-1", "body": "outside"}]
+        return reply
 
-    def analyst(req: ModelRequest) -> dict[str, Any]:
-        assert "jira" not in _context(req)  # no permission: no Jira section
-        reply = dict(base_analyst)  # type: ignore[arg-type]
+    def po(req: ModelRequest) -> dict[str, Any]:
+        assert "jira" not in _context(req)  # no permission in this test: no Jira section
+        reply = dict(base_po)  # type: ignore[arg-type]
         reply["jira_actions"] = [{"action": "comment", "issue": "DEM-1", "body": "sneaky"}]
         return reply
 
-    provider.replies[RoleName.ANALYST] = analyst
-    provider.replies[RoleName.PLANNER] = planner
+    provider.replies[RoleName.PO] = po
+    provider.replies[RoleName.ARCHITECT] = architect
     provider.replies[RoleName.DEVELOPER] = developer
     provider.replies[RoleName.QA] = qa
     provider.replies[RoleName.DEVOPS] = devops
@@ -164,21 +165,25 @@ def test_agents_act_in_jira_through_the_engine(
     store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
 ) -> None:
     jira = _fake()
+    data = seed.model_dump(mode="json")
+    data["roles"]["po"]["permissions"] = ["read_files"]  # the PO may not act in Jira here
+    seed = Profile.model_validate(data)
     engine = full_engine(store, worktrees_root, seed, _agentic_provider(seed))
     _connect(engine, jira)
     project = engine.create_project(Project(name="demo", repo_path=repo, jira_project_key="DEM"))
     job = engine.start(engine.create_job("health", project_id=project.id).id)
-    job = engine.approve(job.id)  # profile: analyst's sneaky action is refused
-    refused = [t for t in job.history if (t.note or "").startswith("jira (analyst)")]
+    # the PO's sneaky action is refused: no permission
+    refused = [t for t in job.history if (t.note or "").startswith("jira (po)")]
     assert len(refused) == 1 and "1 refused" in (refused[0].note or "")
     assert "lacks the jira permission" in (refused[0].detail or "")
     assert jira.calls == []  # nothing executed
 
-    # planner: allowed, but OTHER-1 is outside the project
-    refused = [t for t in job.history if (t.note or "").startswith("jira (planner)")]
+    job = engine.approve(job.id)  # backlog: engine mirrors DEM-1..4; architect runs
+    # architect: allowed, but OTHER-1 is outside the project
+    refused = [t for t in job.history if (t.note or "").startswith("jira (architect)")]
     assert len(refused) == 1 and "outside project DEM" in (refused[0].detail or "")
 
-    job = engine.approve(job.id)  # plan: engine mirrors DEM-1..5, developer runs twice
+    job = engine.approve(job.id)  # architecture: developer runs twice
     assert job.state is JobState.AWAITING_TEST_APPROVAL
     keys = job.data.jira_keys
     t1, t2 = (keys[t.id] for t in _tasks(job))
@@ -256,7 +261,7 @@ def test_actions_are_idempotent_and_queued_during_outages(
 
     # a role without the permission is refused even if Jira is fine
     denied = runner.run(
-        job, RoleName.ANALYST, seed, [JiraAction(action="comment", issue=key, body="no")]
+        job, RoleName.SUPERVISOR, seed, [JiraAction(action="comment", issue=key, body="no")]
     )
     assert denied[0].status == "refused" and "lacks the jira permission" in denied[0].detail
     assert jira.comments[key] == ["same thing", "later"]
@@ -282,7 +287,7 @@ def test_jira_context_is_only_built_for_permitted_roles(
     )
     project = engine.create_project(Project(name="demo", repo_path=repo, jira_project_key="DEM"))
     job = engine.start(engine.create_job("x", project_id=project.id).id)
-    assert jira_context(job, RoleName.ANALYST, seed, project) is None
+    assert jira_context(job, RoleName.SUPERVISOR, seed, project) is None
     unlinked = Project(name="plain", repo_path=repo)
     assert jira_context(job, RoleName.DEVELOPER, seed, unlinked) is None
     ctx = jira_context(job, RoleName.DEVELOPER, seed, project)

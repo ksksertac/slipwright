@@ -18,7 +18,16 @@ from typing import Any
 PACKAGE_ROOT = Path(__file__).resolve().parent.parent.parent
 GLOBAL_DIR = PACKAGE_ROOT / "standards"
 PROJECT_SUBDIR = Path(".slipwright") / "standards"
-DOMAINS = ("core", "analysis", "backend", "web", "mobile", "testing", "devops")
+DOMAINS = (
+    "core",
+    "product",
+    "architecture",
+    "backend",
+    "web",
+    "mobile",
+    "testing",
+    "devops",
+)
 MAX_SECTION_WORDS = 400
 
 _FRONT = re.compile(r"\A---\s*\n(.*?)\n---\s*\n", re.DOTALL)

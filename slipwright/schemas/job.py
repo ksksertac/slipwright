@@ -19,10 +19,10 @@ from slipwright.schemas.profile import Profile
 
 class JobState(StrEnum):
     CREATED = "created"
-    ANALYZING = "analyzing"
-    AWAITING_PROFILE_APPROVAL = "awaiting_profile_approval"
-    PLANNING = "planning"
-    AWAITING_PLAN_APPROVAL = "awaiting_plan_approval"
+    BACKLOG = "backlog"  # the Product Owner writes epics, stories and tasks
+    AWAITING_BACKLOG_APPROVAL = "awaiting_backlog_approval"
+    ARCHITECTURE = "architecture"  # the Architect proposes profile, decisions and phases
+    AWAITING_ARCHITECTURE_APPROVAL = "awaiting_architecture_approval"
     DEVELOPING = "developing"
     BUILD_GATE = "build_gate"
     QA = "qa"
@@ -34,8 +34,8 @@ class JobState(StrEnum):
 
 APPROVAL_STATES: frozenset[JobState] = frozenset(
     {
-        JobState.AWAITING_PROFILE_APPROVAL,
-        JobState.AWAITING_PLAN_APPROVAL,
+        JobState.AWAITING_BACKLOG_APPROVAL,
+        JobState.AWAITING_ARCHITECTURE_APPROVAL,
         JobState.AWAITING_TEST_APPROVAL,
     }
 )
@@ -86,7 +86,14 @@ class JobData(BaseModel):
     base_commit: str | None = Field(default=None, description="Commit the job branched from.")
     feedback: str | None = Field(default=None, description="Rejection feedback for a re-run.")
     reject_rounds: int = Field(default=0, ge=0)
-    plan: dict[str, Any] | None = Field(default=None, description="Approved PlannerResult.")
+    backlog: dict[str, Any] | None = Field(
+        default=None, description="The Product Owner's breakdown (epics/stories/tasks)."
+    )
+    plan: dict[str, Any] | None = Field(
+        default=None,
+        description="The Architect's plan: summary, decisions, phases and the breakdown "
+        "with phase numbers filled in.",
+    )
     phase_index: int = Field(default=0, ge=0, description="Next plan phase to execute.")
     build_attempts: int = Field(default=0, ge=0)
     last_build_output: str | None = None

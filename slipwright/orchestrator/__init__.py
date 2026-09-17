@@ -6,11 +6,11 @@ from slipwright.schemas.job import Job, JobState
 from slipwright.store import JobStore
 
 LEGAL_TRANSITIONS: dict[JobState, tuple[JobState, ...]] = {
-    JobState.CREATED: (JobState.ANALYZING,),
-    JobState.ANALYZING: (JobState.AWAITING_PROFILE_APPROVAL, JobState.FAILED),
-    JobState.AWAITING_PROFILE_APPROVAL: (JobState.ANALYZING, JobState.PLANNING),
-    JobState.PLANNING: (JobState.AWAITING_PLAN_APPROVAL, JobState.FAILED),
-    JobState.AWAITING_PLAN_APPROVAL: (JobState.PLANNING, JobState.DEVELOPING),
+    JobState.CREATED: (JobState.BACKLOG,),
+    JobState.BACKLOG: (JobState.AWAITING_BACKLOG_APPROVAL, JobState.FAILED),
+    JobState.AWAITING_BACKLOG_APPROVAL: (JobState.BACKLOG, JobState.ARCHITECTURE),
+    JobState.ARCHITECTURE: (JobState.AWAITING_ARCHITECTURE_APPROVAL, JobState.FAILED),
+    JobState.AWAITING_ARCHITECTURE_APPROVAL: (JobState.ARCHITECTURE, JobState.DEVELOPING),
     JobState.DEVELOPING: (JobState.BUILD_GATE, JobState.FAILED),
     JobState.BUILD_GATE: (JobState.DEVELOPING, JobState.QA, JobState.FAILED),
     JobState.QA: (JobState.AWAITING_TEST_APPROVAL, JobState.FAILED),

@@ -4,10 +4,10 @@ import { useApprove, useReject } from "../api/hooks";
 
 export function pendingApproval(job: Job): string | null {
   switch (job.state) {
-    case "awaiting_profile_approval":
-      return "profile";
-    case "awaiting_plan_approval":
-      return "plan";
+    case "awaiting_backlog_approval":
+      return "backlog";
+    case "awaiting_architecture_approval":
+      return "architecture";
     case "awaiting_test_approval":
       return job.data.qa_stage === 1 ? "test cases" : "written tests";
     default:

@@ -138,16 +138,18 @@ def test_a_new_user_ships_a_change_from_the_browser_alone(
     assert Path(project["repo_path"]).is_dir()
     assert browser.call("GET", "/api/projects")[0]["id"] == project["id"]
 
-    # start a development and approve the profile (after a look at the form)
+    # start a development: the PO's backlog waits for approval, the board is still empty
     job = browser.call("POST", f"/api/projects/{project['id']}/jobs", {"request": "health"})
     job = browser.call("GET", f"/api/jobs/{job['id']}")
-    assert job["state"] == "awaiting_profile_approval"
-    profile = job["profile"]
-    browser.call("PUT", f"/api/jobs/{job['id']}/profile", profile)
-    browser.call("POST", f"/api/jobs/{job['id']}/approve")
-    job = browser.call("GET", f"/api/jobs/{job['id']}")
-    assert job["state"] == "awaiting_plan_approval"
+    assert job["state"] == "awaiting_backlog_approval"
     assert browser.call("GET", f"/api/projects/{project['id']}/board")["epics"] == []
+    browser.call("POST", f"/api/jobs/{job['id']}/approve")  # backlog -> architecture
+    job = browser.call("GET", f"/api/jobs/{job['id']}")
+    assert job["state"] == "awaiting_architecture_approval"
+    board = browser.call("GET", f"/api/projects/{project['id']}/board")
+    assert board["tasks_total"] == 4 and board["tasks_done"] == 0  # mirrored, nothing built
+    profile = job["profile"]  # the architect's proposal; edit it (a no-op here) and approve
+    browser.call("PUT", f"/api/jobs/{job['id']}/profile", profile)
 
     # approve the plan: the board fills in task by task (observed through the event stream)
     seen: list[str] = []

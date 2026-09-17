@@ -44,7 +44,7 @@ def engine(
 ) -> Engine:
     ws = Workspace(worktrees_root, PortAllocator(start=8300, end=8399))
     eng = Engine(store, ws, seed_profile=seed, provider=provider)
-    eng.handlers.pop(JobState.PLANNING, None)  # stop after profile approval
+    eng.handlers.pop(JobState.ARCHITECTURE, None)  # stop after profile approval
     return eng
 
 
@@ -81,7 +81,7 @@ def test_delete_project_refused_while_jobs_run(engine: Engine, repo: Path) -> No
     job = engine.create_job("x", project_id=project.id)
     assert job.project_id == project.id
     assert job.repo_path == repo
-    engine.start(job.id)  # awaiting_profile_approval: not terminal
+    engine.start(job.id)  # awaiting_backlog_approval: not terminal
     with pytest.raises(ProjectInUse):
         engine.store.delete_project(project.id)
     engine.store.update_state(job.id, JobState.FAILED, note="abandoned by test")
@@ -105,7 +105,9 @@ def test_project_seed_profile_overrides_the_engine_default(
     custom = seed.model_copy(update={"language": "elixir"})
     project = engine.create_project(Project(name="ex", repo_path=repo, profile=custom))
     job = engine.start(engine.create_job("x", project_id=project.id).id)
-    assert job.state is JobState.AWAITING_PROFILE_APPROVAL
+    assert job.state is JobState.AWAITING_BACKLOG_APPROVAL
+    engine.handlers[JobState.ARCHITECTURE] = engine._architecture
+    job = engine.approve(job.id)  # the architect is handed the project's seed profile
     assert '"language": "elixir"' in provider.requests[-1].prompt
     assert engine.seed_for(job) == custom
 
@@ -117,7 +119,7 @@ def test_project_without_checkout_is_cloned(engine: Engine, repo: Path) -> None:
     assert project.repo_path == engine.repos_root / project.id
     assert (project.repo_path / "README.md").exists()
     job = engine.start(engine.create_job("x", project_id=project.id).id)
-    assert job.state is JobState.AWAITING_PROFILE_APPROVAL
+    assert job.state is JobState.AWAITING_BACKLOG_APPROVAL
 
     with pytest.raises(ProjectCloneError):
         engine.create_project(Project(name="bad", clone_url=str(repo.parent / "missing.git")))
@@ -159,7 +161,7 @@ def test_project_endpoints(client: TestClient, repo: Path, tmp_path: Path) -> No
     job = resp.json()
     assert job["project_id"] == project["id"]
     assert client.get(f"/api/projects/{project['id']}/jobs").json()[0]["id"] == job["id"]
-    assert client.get(f"/api/jobs/{job['id']}").json()["state"] == "awaiting_profile_approval"
+    assert client.get(f"/api/jobs/{job['id']}").json()["state"] == "awaiting_backlog_approval"
     assert client.post("/api/projects/nope/jobs", json={"request": "x"}).status_code == 404
 
     assert client.delete(f"/api/projects/{project['id']}").status_code == 409
@@ -194,11 +196,11 @@ def test_cli_project_commands(
     assert "jira=DEM" in out
 
     assert cli.main(["new", project_id, "add /health"]) == 0
-    assert "analyzing" in capsys.readouterr().out
+    assert "backlog" in capsys.readouterr().out
 
     assert cli.main(["project", "show", project_id]) == 0
     out = capsys.readouterr().out
-    assert "jobs:" in out and "awaiting_profile_approval" in out
+    assert "jobs:" in out and "awaiting_backlog_approval" in out
 
     assert cli.main(["project", "list"]) == 0
     assert project_id in capsys.readouterr().out

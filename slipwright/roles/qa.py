@@ -11,25 +11,35 @@ from typing import Any
 
 from slipwright.invoke import RoleResult, invoke_role
 from slipwright.providers import ModelProvider
-from slipwright.roles.common import base_context, list_tree, read_files, require_worktree
-from slipwright.roles.planner import _project_facts
+from slipwright.roles.common import (
+    base_context,
+    list_tree,
+    project_facts,
+    read_files,
+    require_worktree,
+)
 from slipwright.schemas.job import Job
 from slipwright.schemas.profile import Profile, RoleName
 
 STAGE_ONE = """\
-Stage 1 of 2. Review `branch_diff` (what the Developer changed for `request`) and propose
-the test cases that would prove it works: name each case and describe precisely what it
-checks. Do not write test code yet; return only `test_cases`. If `feedback` is present, a
-human rejected your previous list; address every point in it."""
+You are QA. Stage 1 of 2. Review `branch_diff` (what the specialists changed for
+`request`, see `plan` for the backlog it implements) and propose the test cases that
+would prove it works: name each case and describe precisely what it checks. Cover the
+levels the change needs — unit cases for logic, integration cases for each real boundary
+(database, HTTP, queue) and end-to-end cases that walk the user journey through the real
+UI or API the way a user would. Do not write test code yet; return only `test_cases`.
+If `feedback` is present, a human rejected your previous list; address every point in it."""
 
 STAGE_TWO = """\
-Stage 2 of 2. Write automated tests for exactly the cases in `approved_test_cases` — no
-more, no fewer — using the project's existing test layout and framework (see `tree`,
-`existing_tests`, `project`). Return the complete contents of each test file in
+You are QA. Stage 2 of 2. Write automated tests for exactly the cases in
+`approved_test_cases` — no more, no fewer — using the project's existing test layout and
+frameworks (see `tree`, `existing_tests`, `project`). End-to-end cases use the project's
+e2e runner (Playwright, Cypress, Detox, …) when one exists; otherwise drive the public
+API in-process and say so in `summary`. Return the complete contents of each test file in
 `changes`; paths are relative to the project root. If `build_failure` is present, your
 previous tests did not pass the build gate: read the output and fix them.
-If a `jira` section is present, open a Bug issue (parent: the story's key) for each
-defect you find in the change, and close it with a comment once the fix passes."""
+If a `jira` section is present, open a Bug issue (parent: the story's key) for each defect
+you find in the change, and close it with a comment once the fix passes."""
 
 
 def run(
@@ -49,7 +59,7 @@ def run(
         job, instructions=instructions, feedback=job.data.feedback, jira=jira, standards=standards
     )
     context["stage"] = stage
-    context["project"] = _project_facts(profile)
+    context["project"] = project_facts(profile)
     context["plan"] = job.data.plan
     context["branch_diff"] = branch_diff
     if stage == 1:

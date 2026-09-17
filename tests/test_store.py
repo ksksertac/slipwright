@@ -55,19 +55,19 @@ def test_read_back_after_reopening_connection(db_path: Path) -> None:
     profile = load_profile(EXAMPLE)
     with JobStore(db_path) as s:
         job = s.create(_job(profile=profile, port=8123, worktree_path=Path("/wt/abc")))
-        s.update_state(job.id, JobState.ANALYZING)
-        s.update_state(job.id, JobState.AWAITING_PROFILE_APPROVAL, note="analyst done")
+        s.update_state(job.id, JobState.BACKLOG)
+        s.update_state(job.id, JobState.AWAITING_BACKLOG_APPROVAL, note="analyst done")
 
     with JobStore(db_path) as s:
         fetched = s.get(job.id)
 
-    assert fetched.state is JobState.AWAITING_PROFILE_APPROVAL
+    assert fetched.state is JobState.AWAITING_BACKLOG_APPROVAL
     assert fetched.profile == profile
     assert fetched.port == 8123
     assert fetched.worktree_path == Path("/wt/abc")
     assert [(t.from_state, t.to_state) for t in fetched.history] == [
-        (JobState.CREATED, JobState.ANALYZING),
-        (JobState.ANALYZING, JobState.AWAITING_PROFILE_APPROVAL),
+        (JobState.CREATED, JobState.BACKLOG),
+        (JobState.BACKLOG, JobState.AWAITING_BACKLOG_APPROVAL),
     ]
     assert fetched.history[1].note == "analyst done"
 
@@ -75,17 +75,17 @@ def test_read_back_after_reopening_connection(db_path: Path) -> None:
 def test_transitions_append_never_overwrite(store: JobStore) -> None:
     job = store.create(_job())
     before = utcnow()
-    store.update_state(job.id, JobState.ANALYZING)
-    store.update_state(job.id, JobState.AWAITING_PROFILE_APPROVAL)
-    store.update_state(job.id, JobState.ANALYZING, note="rejected: wrong package manager")
-    fetched = store.update_state(job.id, JobState.AWAITING_PROFILE_APPROVAL)
+    store.update_state(job.id, JobState.BACKLOG)
+    store.update_state(job.id, JobState.AWAITING_BACKLOG_APPROVAL)
+    store.update_state(job.id, JobState.BACKLOG, note="rejected: wrong package manager")
+    fetched = store.update_state(job.id, JobState.AWAITING_BACKLOG_APPROVAL)
 
     assert len(fetched.history) == 4
     assert [t.to_state for t in fetched.history] == [
-        JobState.ANALYZING,
-        JobState.AWAITING_PROFILE_APPROVAL,
-        JobState.ANALYZING,
-        JobState.AWAITING_PROFILE_APPROVAL,
+        JobState.BACKLOG,
+        JobState.AWAITING_BACKLOG_APPROVAL,
+        JobState.BACKLOG,
+        JobState.AWAITING_BACKLOG_APPROVAL,
     ]
     # each entry carries its own timestamp and they are monotonic
     stamps = [t.at for t in fetched.history]
@@ -98,12 +98,12 @@ def test_transitions_append_never_overwrite(store: JobStore) -> None:
 
 def test_update_state_unknown_job(store: JobStore) -> None:
     with pytest.raises(JobNotFound):
-        store.update_state("missing", JobState.ANALYZING)
+        store.update_state("missing", JobState.BACKLOG)
 
 
 def test_history_row_count_grows_monotonically(store: JobStore, db_path: Path) -> None:
     job = store.create(_job())
-    for state in (JobState.ANALYZING, JobState.AWAITING_PROFILE_APPROVAL, JobState.PLANNING):
+    for state in (JobState.BACKLOG, JobState.AWAITING_BACKLOG_APPROVAL, JobState.ARCHITECTURE):
         store.update_state(job.id, state)
     raw = sqlite3.connect(db_path)
     (count,) = raw.execute(
@@ -114,8 +114,8 @@ def test_history_row_count_grows_monotonically(store: JobStore, db_path: Path) -
 
 
 def test_create_persists_preexisting_history(store: JobStore) -> None:
-    t = Transition(from_state=JobState.CREATED, to_state=JobState.ANALYZING, at=utcnow())
-    job = store.create(_job(state=JobState.ANALYZING, history=[t]))
+    t = Transition(from_state=JobState.CREATED, to_state=JobState.BACKLOG, at=utcnow())
+    job = store.create(_job(state=JobState.BACKLOG, history=[t]))
     assert job.history == [t]
 
 
@@ -141,10 +141,10 @@ def test_list_orders_by_creation(store: JobStore) -> None:
     a = store.create(_job(request="first"))
     b = store.create(_job(request="second"))
     c = store.create(_job(request="third"))
-    store.update_state(b.id, JobState.ANALYZING)
+    store.update_state(b.id, JobState.BACKLOG)
     listed = store.list()
     assert [j.id for j in listed] == [a.id, b.id, c.id]
-    assert listed[1].state is JobState.ANALYZING
+    assert listed[1].state is JobState.BACKLOG
 
 
 def test_failed_transaction_leaves_no_partial_history(store: JobStore, db_path: Path) -> None:
@@ -155,11 +155,11 @@ def test_failed_transaction_leaves_no_partial_history(store: JobStore, db_path: 
         store._insert_transition(
             conn,
             job.id,
-            Transition(from_state=JobState.CREATED, to_state=JobState.ANALYZING, at=utcnow()),
+            Transition(from_state=JobState.CREATED, to_state=JobState.BACKLOG, at=utcnow()),
         )
         store._insert_transition(
             conn,
             "ghost",
-            Transition(from_state=JobState.CREATED, to_state=JobState.ANALYZING, at=utcnow()),
+            Transition(from_state=JobState.CREATED, to_state=JobState.BACKLOG, at=utcnow()),
         )
     assert store.get(job.id).history == []

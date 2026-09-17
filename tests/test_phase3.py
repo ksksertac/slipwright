@@ -17,6 +17,7 @@ from slipwright.schemas.job import Job, JobState
 from slipwright.schemas.profile import Profile, RoleName, load_profile
 from slipwright.store import JobStore
 from slipwright.workspace import PortAllocator, Workspace
+from tests.pipeline import set_plan
 
 ROOT = Path(__file__).resolve().parent.parent
 EXAMPLE = ROOT / "examples" / "python-fastapi.profile.json"
@@ -67,16 +68,16 @@ def _dev(answers: Callable[[ModelRequest], str]) -> Callable[[ModelRequest], dic
 
 def _provider(seed: Profile, plan: dict[str, Any], dev: Any) -> ScriptedProvider:
     p = canned(seed)
-    p.replies[RoleName.PLANNER] = plan
+    set_plan(p, seed, plan["phases"])
     p.replies[RoleName.DEVELOPER] = dev
     return p
 
 
 def _to_plan_gate(engine: Engine, repo: Path) -> Job:
     job = engine.start(engine.create_job("make OK say yes", repo).id)
-    assert job.state is JobState.AWAITING_PROFILE_APPROVAL
+    assert job.state is JobState.AWAITING_BACKLOG_APPROVAL
     job = engine.approve(job.id)
-    assert job.state is JobState.AWAITING_PLAN_APPROVAL
+    assert job.state is JobState.AWAITING_ARCHITECTURE_APPROVAL
     return job
 
 
@@ -99,10 +100,10 @@ def test_planner_produces_plan_and_stops_at_gate(
     assert job.data.plan is not None
     assert [p["goal"] for p in job.data.plan["phases"]] == ["first", "second"]
     assert job.data.phase_index == 0
-    assert job.history[-1].note == "planner: 2 phases (2 phases)"
+    assert job.history[-1].note == "architect: 2 phases (2 phases, 0 decisions)"
     assert json.loads(job.history[-1].detail or "{}")["phases"][1]["goal"] == "second"
-    planner_req = [r for r in provider.requests if r.role is RoleName.PLANNER][0]
-    assert planner_req.model == seed.roles[RoleName.PLANNER].model
+    planner_req = [r for r in provider.requests if r.role is RoleName.ARCHITECT][0]
+    assert planner_req.model == seed.roles[RoleName.ARCHITECT].model
     assert "make OK say yes" in planner_req.prompt
 
 
@@ -115,19 +116,19 @@ def test_plan_reject_reruns_with_feedback_bounded_to_three_rounds(
 
     for round_no in (1, 2, 3):
         job = engine.reject(job.id, f"too vague ({round_no})")
-        assert job.state is JobState.AWAITING_PLAN_APPROVAL
+        assert job.state is JobState.AWAITING_ARCHITECTURE_APPROVAL
         req = provider.requests[-1]
-        assert req.role is RoleName.PLANNER
+        assert req.role is RoleName.ARCHITECT
         assert f"too vague ({round_no})" in req.prompt
         assert '"previous_plan"' in req.prompt and '"only"' in req.prompt
 
-    planner_calls = len([r for r in provider.requests if r.role is RoleName.PLANNER])
+    planner_calls = len([r for r in provider.requests if r.role is RoleName.ARCHITECT])
     assert planner_calls == 4  # initial + 3 re-runs
 
     job = engine.reject(job.id, "still no")
     assert job.state is JobState.FAILED
     assert "rejected 4 times" in (job.history[-1].note or "")
-    assert len([r for r in provider.requests if r.role is RoleName.PLANNER]) == planner_calls
+    assert len([r for r in provider.requests if r.role is RoleName.ARCHITECT]) == planner_calls
 
 
 # --- T3.2 developer -----------------------------------------------------------------------

@@ -32,10 +32,10 @@ import { useToast } from "../components/Toast";
 import { ErrorBox, Loading, StateBadge, formatTime } from "../components/ui";
 
 const STEPS: { state: JobState; label: string; gate?: boolean }[] = [
-  { state: "analyzing", label: "analyze" },
-  { state: "awaiting_profile_approval", label: "profile approval", gate: true },
-  { state: "planning", label: "plan" },
-  { state: "awaiting_plan_approval", label: "plan approval", gate: true },
+  { state: "backlog", label: "backlog" },
+  { state: "awaiting_backlog_approval", label: "backlog approval", gate: true },
+  { state: "architecture", label: "architecture" },
+  { state: "awaiting_architecture_approval", label: "architecture approval", gate: true },
   { state: "developing", label: "develop" },
   { state: "build_gate", label: "build gate" },
   { state: "qa", label: "qa" },
@@ -197,10 +197,8 @@ function GatePanel({ job }: { job: Job }) {
         <strong>Waiting for your approval of the {pending}</strong>
         <GateActions job={job} compact />
       </div>
-      {job.state === "awaiting_profile_approval" && job.profile && (
-        <ProfileGate job={job} profile={job.profile} />
-      )}
-      {job.state === "awaiting_plan_approval" && <PlanGate job={job} />}
+      {job.state === "awaiting_backlog_approval" && <BacklogGate job={job} />}
+      {job.state === "awaiting_architecture_approval" && <ArchitectureGate job={job} />}
       {job.state === "awaiting_test_approval" && job.data.qa_stage === 1 && (
         <TestCasesGate job={job} />
       )}
@@ -241,7 +239,7 @@ function ProfileGate({ job, profile }: { job: Job; profile: Profile }) {
   return (
     <div style={{ marginTop: 12 }}>
       <p className="muted small">
-        The Analyst proposes how the project is built, tested and run. Edit anything before
+        The Architect proposes how the project is built, tested and run. Edit anything before
         approving; the roles come from the project's seed profile and stay a human decision.
       </p>
       <ProfileForm
@@ -262,33 +260,69 @@ function ProfileGate({ job, profile }: { job: Job; profile: Profile }) {
   );
 }
 
-function PlanGate({ job }: { job: Job }) {
+/** The Product Owner's backlog: the epic / story / task tree, before any design. */
+function BacklogGate({ job }: { job: Job }) {
+  const backlog = job.data.backlog as BreakdownShape | null;
+  if (!backlog) return null;
+  return (
+    <div style={{ marginTop: 12 }}>
+      <p className="muted small">
+        The Product Owner turned the request into epics, stories and tasks. Once approved they are
+        mirrored to Jira and the Architect designs one phase per task.
+      </p>
+      <BreakdownTree plan={{ phases: [], breakdown: backlog }} />
+    </div>
+  );
+}
+
+/** The Architect's proposal: profile, decisions and the phases mapped onto the backlog. */
+function ArchitectureGate({ job }: { job: Job }) {
   const plan = job.data.plan as PlanShape | null;
   if (!plan) return null;
   return (
     <div style={{ marginTop: 12 }}>
       {plan.summary && <p>{plan.summary}</p>}
+      {plan.decisions && plan.decisions.length > 0 && (
+        <>
+          <h3>Decisions</h3>
+          <ul>
+            {plan.decisions.map((d, i) => (
+              <li key={i}>{d}</li>
+            ))}
+          </ul>
+        </>
+      )}
+      <h3>Phases</h3>
       <BreakdownTree plan={plan} />
+      {job.profile && (
+        <>
+          <h3>Profile</h3>
+          <ProfileGate job={job} profile={job.profile} />
+        </>
+      )}
     </div>
   );
 }
 
-interface PlanShape {
-  summary?: string;
-  phases: { goal: string; files?: string[]; domain?: string }[];
-  breakdown?: {
-    epics: {
+interface BreakdownShape {
+  epics: {
+    id: string;
+    title: string;
+    description?: string;
+    stories: {
       id: string;
       title: string;
       description?: string;
-      stories: {
-        id: string;
-        title: string;
-        description?: string;
-        tasks: { id: string; title: string; description?: string; phase: number }[];
-      }[];
+      tasks: { id: string; title: string; description?: string; phase?: number | null }[];
     }[];
-  };
+  }[];
+}
+
+interface PlanShape {
+  summary?: string;
+  decisions?: string[];
+  phases: { goal: string; files?: string[]; domain?: string; task_id?: string | null }[];
+  breakdown?: BreakdownShape;
 }
 
 function BreakdownTree({ plan }: { plan: PlanShape }) {
@@ -329,20 +363,25 @@ function BreakdownTree({ plan }: { plan: PlanShape }) {
                 </div>
                 <ul className="tree">
                   {story.tasks.map((task) => {
-                    const phase = plan.phases[task.phase - 1];
+                    const phase = task.phase ? plan.phases[task.phase - 1] : undefined;
                     return (
                       <li key={task.id} className="depth-2">
                         <div className="node">
                           <span className="kind">task</span>
                           <span className="title">
                             {task.title}
-                            <div className="muted small">
-                              phase {task.phase}: {phase?.goal}{" "}
-                              <DomainBadge domain={phase?.domain} />
-                              {phase?.files && phase.files.length > 0 && (
-                                <span className="mono"> — {phase.files.join(", ")}</span>
-                              )}
-                            </div>
+                            {task.description && (
+                              <div className="muted small">{task.description}</div>
+                            )}
+                            {phase && (
+                              <div className="muted small">
+                                phase {task.phase}: {phase.goal}{" "}
+                                <DomainBadge domain={phase.domain} />
+                                {phase.files && phase.files.length > 0 && (
+                                  <span className="mono"> — {phase.files.join(", ")}</span>
+                                )}
+                              </div>
+                            )}
                           </span>
                         </div>
                       </li>
@@ -501,7 +540,9 @@ function groupByPhase(job: Job): PhaseGroup[] {
 function Phases({ job }: { job: Job }) {
   const groups = useMemo(() => groupByPhase(job), [job]);
   const active =
-    job.state !== "awaiting_plan_approval" && job.state !== "planning" && groups.length > 0;
+    job.state !== "awaiting_architecture_approval" &&
+    job.state !== "architecture" &&
+    groups.length > 0;
   if (!active) return null;
   return (
     <section>
@@ -661,7 +702,7 @@ function History({ job, projectId }: { job: Job; projectId: string }) {
           ))}
         </ul>
       </div>
-      {job.profile && job.state !== "awaiting_profile_approval" && (
+      {job.profile && job.state !== "awaiting_architecture_approval" && (
         <details className="card" style={{ marginTop: 12 }}>
           <summary>Approved profile</summary>
           <pre>{JSON.stringify(job.profile, null, 2)}</pre>

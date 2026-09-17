@@ -165,7 +165,7 @@ def jira_context(
                         "story_key": story.jira_key,
                     }
                 )
-                if task.phase - 1 == job.data.phase_index:
+                if task.phase is not None and task.phase - 1 == job.data.phase_index:
                     current = task.jira_key
     transitions = {**DEFAULT_TRANSITIONS, **project.jira_transitions}
     return {

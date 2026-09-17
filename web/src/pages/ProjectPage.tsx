@@ -280,8 +280,8 @@ function DevelopmentsTab({ projectId }: { projectId: string }) {
       <form className="card" onSubmit={submit}>
         <h3 style={{ marginBottom: 6 }}>New development</h3>
         <p className="muted small">
-          Describe what you want. The Analyst proposes how to build and test the project, the
-          Planner breaks the work into epics, stories and tasks, and you approve each step.
+          Describe what you want. The Product Owner turns it into epics, stories and tasks, the
+          Architect designs how to build and test it, and you approve each step.
         </p>
         <textarea
           value={request}

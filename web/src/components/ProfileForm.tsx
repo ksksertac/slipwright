@@ -1,7 +1,17 @@
 import type { Permission, Profile, RoleConfig } from "../api/client";
 import { useProviderModels, useProviders } from "../api/hooks";
 
-const ROLES = ["analyst", "planner", "developer", "qa", "devops"] as const;
+const ROLES = [
+  "po",
+  "architect",
+  "developer",
+  "backend",
+  "web_ui",
+  "mobile_ui",
+  "qa",
+  "devops",
+  "supervisor",
+] as const;
 const DEPTHS = ["off", "low", "medium", "high", "max"] as const;
 const PERMISSIONS: Permission[] = [
   "read_files",

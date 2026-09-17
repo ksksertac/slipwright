@@ -8,12 +8,12 @@ from fastapi.testclient import TestClient
 
 from slipwright.api import create_app
 from slipwright.providers import ModelRequest
-from slipwright.roles.results import PlannerResult
+from slipwright.roles.results import PlanPhase
 from slipwright.roles.specialists import DEVELOPER_ROLES, Domain, specialist_for
 from slipwright.schemas.job import JobState
 from slipwright.schemas.profile import Profile, RoleName
 from slipwright.store import JobStore
-from tests.pipeline import full_engine, full_provider
+from tests.pipeline import full_engine, full_provider, set_plan
 
 # --- T9.1 specialist agents ---------------------------------------------------------------
 
@@ -31,25 +31,23 @@ def test_domains_map_to_specialists() -> None:
 
 
 def test_plan_phase_domain_is_validated() -> None:
-    PlannerResult.model_validate({"summary": "s", "phases": [{"goal": "g", "domain": "web"}]})
-    assert (
-        PlannerResult.model_validate({"summary": "s", "phases": [{"goal": "g"}]}).phases[0].domain
-        == "general"
-    )
+    assert PlanPhase.model_validate({"goal": "g", "domain": "web"}).domain == "web"
+    assert PlanPhase.model_validate({"goal": "g"}).domain == "general"
     with pytest.raises(ValueError):
-        PlannerResult.model_validate({"summary": "s", "phases": [{"goal": "g", "domain": "ios"}]})
+        PlanPhase.model_validate({"goal": "g", "domain": "ios"})
 
 
 def _three_domain_provider(seed: Profile) -> Any:
     provider = full_provider(seed, phases=3)
-    provider.replies[RoleName.PLANNER] = {
-        "summary": "three domains",
-        "phases": [
+    set_plan(
+        provider,
+        seed,
+        [
             {"goal": "add the endpoint", "files": ["OK"], "domain": "backend"},
             {"goal": "show it on the page", "files": ["OK"], "domain": "web"},
             {"goal": "show it in the app", "files": ["OK"], "domain": "mobile"},
         ],
-    }
+    )
     for role in DEVELOPER_ROLES:
         provider.replies[role] = {
             "summary": f"done by {role.value}",
@@ -147,8 +145,8 @@ def test_agents_endpoint_and_activity_filter(
         assert (
             by_role["developer"]["invocations"] == 0 and by_role["developer"]["last_used"] is None
         )
-        assert by_role["qa"]["label"] == "Tester" and by_role["qa"]["standards_domain"] == "testing"
-        assert by_role["planner"]["standards_domain"] == "*"
+        assert by_role["qa"]["label"] == "QA" and by_role["qa"]["standards_domain"] == "testing"
+        assert by_role["architect"]["standards_domain"] == "architecture"
         assert by_role["web_ui"]["model"] == seed.roles[RoleName.WEB_UI].model
         assert "jira" in by_role["backend"]["permissions"]
 

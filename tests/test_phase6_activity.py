@@ -34,12 +34,12 @@ def test_activity_feed_lists_the_whole_pipeline_in_order(
     kinds = [(i.kind, i.role) for i in items]
     assert kinds == [
         (ActivityKind.STARTED, None),
-        (ActivityKind.ROLE, RoleName.ANALYST),
+        (ActivityKind.ROLE, RoleName.PO),
         (ActivityKind.APPROVAL, None),
-        (ActivityKind.INBOX, RoleName.PLANNER),
-        (ActivityKind.ROLE, RoleName.PLANNER),
+        (ActivityKind.INBOX, RoleName.ARCHITECT),
+        (ActivityKind.ROLE, RoleName.ARCHITECT),
         (ActivityKind.APPROVAL, None),  # rejected
-        (ActivityKind.ROLE, RoleName.PLANNER),
+        (ActivityKind.ROLE, RoleName.ARCHITECT),
         (ActivityKind.APPROVAL, None),
         (ActivityKind.ROLE, RoleName.DEVELOPER),
         (ActivityKind.GATE, None),
@@ -78,7 +78,7 @@ def test_progress_counts_tasks_and_approvals(
     rows = {r.job_id: r for r in progress.jobs}
     assert rows[a.id].pending_approval == "test cases"
     assert rows[a.id].current_phase == "qa stage 1"
-    assert rows[b.id].pending_approval == "profile"
+    assert rows[b.id].pending_approval == "backlog"
     assert (rows[b.id].tasks_done, rows[b.id].tasks_total) == (0, 0)
     assert progress.last_activity == max(a.history[-1].at, b.history[-1].at)
 
@@ -98,7 +98,7 @@ def test_progress_activity_and_detail_endpoints(
         job = client.post(f"/api/projects/{project['id']}/jobs", json={"request": "x"}).json()
         progress = client.get(f"/api/projects/{project['id']}/progress").json()
         assert progress["pending_approvals"] == 1
-        assert progress["jobs"][0]["pending_approval"] == "profile"
+        assert progress["jobs"][0]["pending_approval"] == "backlog"
 
         feed = client.get(f"/api/projects/{project['id']}/activity").json()
         assert [i["kind"] for i in feed] == ["role", "started"]
@@ -106,8 +106,8 @@ def test_progress_activity_and_detail_endpoints(
         assert client.get(f"/api/projects/{project['id']}/activity?limit=1").json()[0] == feed[0]
 
         detail = client.get(f"/api/jobs/{job['id']}/history/{feed[0]['index']}").json()
-        assert detail["to_state"] == "awaiting_profile_approval"
-        assert '"language": "python"' in detail["detail"]
+        assert detail["to_state"] == "awaiting_backlog_approval"
+        assert '"epics"' in detail["detail"]
         assert client.get(f"/api/jobs/{job['id']}/history/99").status_code == 404
         assert client.get("/api/jobs/nope/history/0").status_code == 404
         assert client.get("/api/projects/nope/progress").status_code == 404

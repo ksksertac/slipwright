@@ -54,8 +54,8 @@
     },
     "RoleName": {
       "enum": [
-        "analyst",
-        "planner",
+        "po",
+        "architect",
         "developer",
         "backend",
         "web_ui",

@@ -1,12 +1,12 @@
 ---
-domain: analysis
-tags: [profile, build, test, run, repository, planning, breakdown, estimation]
+domain: product
+tags: [backlog, epics, stories, tasks, acceptance, scope, jira]
 applies_to: [all]
 ---
 
-# Analysis and planning
+# Product backlog
 
-## Reading a repository
+## Reading the product before writing the backlog
 
 Start from the manifest (`pyproject.toml`, `package.json`, `go.mod`, `pom.xml`, …),
 the lockfile, the CI configuration and the README; they say more than the tree. Detect
@@ -14,21 +14,13 @@ the package manager from the lockfile that exists (`uv.lock`, `package-lock.json
 `pnpm-lock.yaml`), not from habit. Note monorepos (several manifests) and name the
 package the request concerns.
 
-## Choosing build, test and run commands
+## What a task must say
 
-Prefer the commands CI already runs; they are known to work. The build command must
-include the linters and type checks the project uses; the test command runs the whole
-suite non-interactively with quiet output. The run command starts the service on the
-literal `{port}` placeholder and must not daemonise. Never invent a command the
-repository does not support — say what is missing instead.
-
-## Writing a plan
-
-Phases are small, ordered and independently verifiable: each one can pass the build
-gate on its own. Backend contracts come before the front-ends that consume them. One
-domain per phase (backend, web, mobile, infra, docs). Name the files each phase will
-touch — it is how the developer's context is chosen. Three to eight phases is typical;
-more means the request should be split into separate developments.
+A task is done when a tester can verify it without asking: name the user-visible
+behaviour, the inputs and the expected outcome, and any rule or limit that applies.
+Tasks that hide a technical choice ("use Redis") are wrong — say the need ("responses
+under 200 ms") and let the Architect choose. One task, one specialist: if a task needs
+both a backend change and a screen, write two tasks and say which comes first.
 
 ## Epics, stories and tasks
 

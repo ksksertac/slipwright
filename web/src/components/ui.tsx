@@ -4,10 +4,10 @@ import { IconFolder } from "./icons";
 
 const STATE_CLASS: Record<JobState, string> = {
   created: "idle",
-  analyzing: "work",
-  awaiting_profile_approval: "wait",
-  planning: "work",
-  awaiting_plan_approval: "wait",
+  backlog: "work",
+  awaiting_backlog_approval: "wait",
+  architecture: "work",
+  awaiting_architecture_approval: "wait",
   developing: "work",
   build_gate: "work",
   qa: "work",
@@ -19,10 +19,10 @@ const STATE_CLASS: Record<JobState, string> = {
 
 export const STATE_LABEL: Record<JobState, string> = {
   created: "created",
-  analyzing: "analyzing",
-  awaiting_profile_approval: "needs profile approval",
-  planning: "planning",
-  awaiting_plan_approval: "needs plan approval",
+  backlog: "writing backlog",
+  awaiting_backlog_approval: "needs backlog approval",
+  architecture: "designing",
+  awaiting_architecture_approval: "needs architecture approval",
   developing: "developing",
   build_gate: "build gate",
   qa: "qa",

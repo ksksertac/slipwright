@@ -75,7 +75,7 @@ def _project(engine: Engine, repo: Path, **kw: object) -> Project:
     return engine.create_project(Project(name="demo", repo_path=repo, jira_project_key="DEM", **kw))
 
 
-def test_plan_approval_mirrors_the_breakdown_and_tracks_status(
+def test_backlog_approval_mirrors_the_breakdown_and_tracks_status(
     store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
 ) -> None:
     jira = _fake()
@@ -85,9 +85,11 @@ def test_plan_approval_mirrors_the_breakdown_and_tracks_status(
     _connect(engine, jira)
     project = _project(engine, repo)
     job = engine.start(engine.create_job("health", project_id=project.id).id)
-    job = engine.approve(job.id)  # profile
-    assert jira.issues == {}  # nothing until the plan is approved
-    job = engine.approve(job.id)  # plan -> development -> qa gate
+    assert jira.issues == {}  # nothing until the backlog is approved
+    job = engine.approve(job.id)  # backlog approved: the tree is mirrored, all To Do
+    assert job.state is JobState.AWAITING_ARCHITECTURE_APPROVAL
+    assert len(jira.issues) == 9 and set(jira.statuses.values()) == {"To Do"}
+    job = engine.approve(job.id)  # architecture -> development -> qa gate
     assert job.state is JobState.AWAITING_TEST_APPROVAL
 
     # hierarchy: 2 epics, 3 stories, 4 tasks with parents set
@@ -102,7 +104,7 @@ def test_plan_approval_mirrors_the_breakdown_and_tracks_status(
     assert jira.issues[keys["t1"]]["parent"] == keys["s1"]
     assert jira.issues[keys["t2"]]["parent"] == keys["s1"]
     assert jira.issues[keys["s3"]]["parent"] == keys["e2"]
-    assert "Files: OK" in _text(jira.issues[keys["t1"]]["description"])
+    assert "Created by Slipwright job" in _text(jira.issues[keys["t1"]]["description"])
 
     # every task, story and epic ended up Done; the board shows the keys
     assert all(jira.statuses[keys[i]] == "Done" for i in ("t1", "t2", "t3", "t4", "s1", "e1"))
@@ -110,9 +112,9 @@ def test_plan_approval_mirrors_the_breakdown_and_tracks_status(
     assert board[0].jira_key == "DEM-1" and board[0].stories[0].tasks[0].jira_key == "DEM-3"
     notes = [t.note for t in job.history if (t.note or "").startswith("jira:")]
     assert notes and all(n.endswith("update(s)") for n in notes)
-    first = next(t for t in job.history if (t.note or "").startswith("jira:"))
-    assert "created DEM-1 (epic) Health endpoint" in (first.detail or "")
-    assert "DEM-3 -> In Progress" in (first.detail or "")
+    details = "\n".join(t.detail or "" for t in job.history if (t.note or "").startswith("jira:"))
+    assert "created DEM-1 (epic) Health endpoint" in details
+    assert "DEM-3 -> In Progress" in details
 
     calls_before = len(jira.calls)
     job = engine.approve(job.id)  # tests written

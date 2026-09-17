@@ -138,10 +138,10 @@ class ProjectProgress(BaseModel):
 
 
 def pending_approval(job: Job) -> str | None:
-    if job.state is JobState.AWAITING_PROFILE_APPROVAL:
-        return "profile"
-    if job.state is JobState.AWAITING_PLAN_APPROVAL:
-        return "plan"
+    if job.state is JobState.AWAITING_BACKLOG_APPROVAL:
+        return "backlog"
+    if job.state is JobState.AWAITING_ARCHITECTURE_APPROVAL:
+        return "architecture"
     if job.state is JobState.AWAITING_TEST_APPROVAL:
         return "test cases" if job.data.qa_stage == 1 else "written tests"
     return None

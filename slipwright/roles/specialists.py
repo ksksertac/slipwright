@@ -1,6 +1,6 @@
 """Specialist developer roles: backend, web UI, mobile UI.
 
-The Planner tags every phase with a ``domain``; the engine hands the phase to the
+The Architect tags every phase with a ``domain``; the engine hands the phase to the
 specialist for that domain. All specialists share the Developer's contract (one phase per
 invocation, full file contents back) and differ only in scope and hand-off rules, which
 live here as instructions. ``developer`` stays the generic fallback.
@@ -37,10 +37,10 @@ DEVELOPER_ROLES: frozenset[RoleName] = frozenset(
     {RoleName.DEVELOPER, RoleName.BACKEND, RoleName.WEB_UI, RoleName.MOBILE_UI}
 )
 
-# the standards domain each role reads (T9.4); planner reads a little of everything
+# the standards domain each role reads (T9.4); "*" means a little of everything
 STANDARDS_DOMAIN: dict[RoleName, str] = {
-    RoleName.ANALYST: "analysis",
-    RoleName.PLANNER: "*",
+    RoleName.PO: "product",
+    RoleName.ARCHITECT: "architecture",
     RoleName.DEVELOPER: "backend",
     RoleName.BACKEND: "backend",
     RoleName.WEB_UI: "web",
@@ -52,25 +52,25 @@ STANDARDS_DOMAIN: dict[RoleName, str] = {
 
 # friendly names for the UI and history notes
 LABEL: dict[RoleName, str] = {
-    RoleName.ANALYST: "Analysis",
-    RoleName.PLANNER: "Planner",
+    RoleName.PO: "Product Owner",
+    RoleName.ARCHITECT: "Architect",
     RoleName.DEVELOPER: "Developer",
     RoleName.BACKEND: "Backend",
     RoleName.WEB_UI: "Web UI",
     RoleName.MOBILE_UI: "Mobile UI",
-    RoleName.QA: "Tester",
+    RoleName.QA: "QA",
     RoleName.DEVOPS: "DevOps",
     RoleName.SUPERVISOR: "Supervisor",
 }
 
 SCOPE: dict[RoleName, str] = {
-    RoleName.ANALYST: "Reads the repository and proposes how it is built, tested and run.",
-    RoleName.PLANNER: "Breaks a request into domain-tagged phases, epics, stories and tasks.",
+    RoleName.PO: "Turns a request into epics, stories and tasks — the backlog that goes to Jira.",
+    RoleName.ARCHITECT: "From backlog and repository: build/test/run profile, decisions, phases.",
     RoleName.DEVELOPER: "Generic implementer for phases without a specialist domain.",
     RoleName.BACKEND: "Services, APIs, data models, migrations, background jobs.",
     RoleName.WEB_UI: "Web front-end: pages, components, state, styling, accessibility.",
     RoleName.MOBILE_UI: "Mobile apps: screens, navigation, platform APIs, offline state.",
-    RoleName.QA: "Proposes test cases, writes tests, reviews changes against standards.",
+    RoleName.QA: "Proposes test cases; writes unit, integration and end-to-end tests.",
     RoleName.DEVOPS: "Infrastructure phases, pull requests, CI, deployment.",
     RoleName.SUPERVISOR: "Reads what waits at a gate and recommends approve or reject.",
 }
@@ -93,13 +93,13 @@ INSTRUCTIONS: dict[RoleName, str] = {
 You are the BACKEND specialist: services, HTTP/RPC APIs, data models and migrations,
 background jobs, integrations. Stay out of front-end code. If the phase needs a UI change
 or a mobile change, do not do it: finish the backend part, describe the missing piece in
-`summary` so the Planner can add a phase for the right specialist.""",
+`summary` so the Architect can add a phase for the right specialist.""",
     RoleName.WEB_UI: _SHARED
     + """
 You are the WEB UI specialist: pages, components, client state, styling, accessibility,
 front-end tests. Do not add or change server endpoints. If the phase needs an endpoint that
 does not exist, build against the contract described in the plan, keep the call isolated
-in one client module, and say in `summary` exactly which endpoint is missing so the Planner
+in one client module, and say in `summary` exactly which endpoint is missing so the Architect
 can add a backend phase.""",
     RoleName.MOBILE_UI: _SHARED
     + """

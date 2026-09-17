@@ -30,37 +30,37 @@ def test_advance_persists_transition_before_side_effect(store: JobStore) -> None
         return updated
 
     advanced = orchestrator.advance(
-        job, JobState.ANALYZING, note="start analysis", side_effect=side_effect
+        job, JobState.BACKLOG, note="start analysis", side_effect=side_effect
     )
 
-    assert advanced.state is JobState.ANALYZING
+    assert advanced.state is JobState.BACKLOG
     assert advanced.history[-1].from_state is JobState.CREATED
-    assert advanced.history[-1].to_state is JobState.ANALYZING
+    assert advanced.history[-1].to_state is JobState.BACKLOG
     assert advanced.history[-1].note == "start analysis"
-    assert seen == ["analyzing"]
-    assert store.get(job.id).state is JobState.ANALYZING
+    assert seen == ["backlog"]
+    assert store.get(job.id).state is JobState.BACKLOG
 
 
 def test_illegal_transition_rejected(store: JobStore) -> None:
     orchestrator = Orchestrator(store)
     job = store.create(_job())
 
-    with pytest.raises(IllegalTransitionError, match="created.*planning"):
-        orchestrator.advance(job, JobState.PLANNING)
+    with pytest.raises(IllegalTransitionError, match="created.*architecture"):
+        orchestrator.advance(job, JobState.ARCHITECTURE)
 
 
 def test_resume_continues_from_persisted_state(store: JobStore) -> None:
     orchestrator = Orchestrator(store)
     job = store.create(_job())
-    orchestrator.advance(job, JobState.ANALYZING)
+    orchestrator.advance(job, JobState.BACKLOG)
 
     calls: list[JobState] = []
 
     def handle_analyzing(current: Job) -> Job:
         calls.append(current.state)
-        return orchestrator.advance(current, JobState.AWAITING_PROFILE_APPROVAL, note="analyst ok")
+        return orchestrator.advance(current, JobState.AWAITING_BACKLOG_APPROVAL, note="analyst ok")
 
-    resumed = orchestrator.resume(job.id, handlers={JobState.ANALYZING: handle_analyzing})
+    resumed = orchestrator.resume(job.id, handlers={JobState.BACKLOG: handle_analyzing})
 
-    assert resumed.state is JobState.AWAITING_PROFILE_APPROVAL
-    assert calls == [JobState.ANALYZING]
+    assert resumed.state is JobState.AWAITING_BACKLOG_APPROVAL
+    assert calls == [JobState.BACKLOG]
