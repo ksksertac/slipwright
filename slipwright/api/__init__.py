@@ -114,6 +114,12 @@ def create_app(
         lifespan=lifespan,
         dependencies=[Depends(auth_dependency(enabled=require_auth))],
     )
+    default_openapi = app.openapi
+
+    def tightened_openapi() -> dict[str, Any]:
+        return _tighten_response_schemas(default_openapi())
+
+    app.openapi = tightened_openapi  # type: ignore[method-assign]
     if dev:
         app.add_middleware(
             CORSMiddleware,
@@ -401,6 +407,48 @@ def openapi_schema() -> dict[str, Any]:
     """The API description, independent of any engine (for ``schemas/openapi.json``)."""
     app = create_app(cast(Engine, None), resume_on_startup=False, require_auth=False)
     return app.openapi()
+
+
+def _tighten_response_schemas(schema: dict[str, Any]) -> dict[str, Any]:
+    """Mark every property of a response-only model as required.
+
+    Pydantic leaves fields with defaults optional even in serialization mode, which
+    would make ``job.id`` nullable in the generated TypeScript client. Models that also
+    appear in a request body keep their optional fields.
+    """
+    components: dict[str, Any] = schema.get("components", {}).get("schemas", {})
+
+    def refs(node: Any, out: set[str]) -> None:
+        if isinstance(node, dict):
+            ref = node.get("$ref")
+            if isinstance(ref, str) and ref.startswith("#/components/schemas/"):
+                out.add(ref.rsplit("/", 1)[1])
+            for value in node.values():
+                refs(value, out)
+        elif isinstance(node, list):
+            for value in node:
+                refs(value, out)
+
+    inputs: set[str] = set()
+    for path_item in schema.get("paths", {}).values():
+        for operation in path_item.values():
+            if isinstance(operation, dict) and "requestBody" in operation:
+                refs(operation["requestBody"], inputs)
+    # anything reachable from an input model is an input model too
+    frontier = list(inputs)
+    while frontier:
+        name = frontier.pop()
+        nested: set[str] = set()
+        refs(components.get(name, {}), nested)
+        for n in nested - inputs:
+            inputs.add(n)
+            frontier.append(n)
+
+    for name, model in components.items():
+        if name in inputs or "properties" not in model:
+            continue
+        model["required"] = sorted(model["properties"])
+    return schema
 
 
 async def _event_stream(

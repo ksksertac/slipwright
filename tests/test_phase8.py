@@ -96,3 +96,28 @@ def test_without_a_build_the_root_explains_how_to_build(engine: Engine, tmp_path
         assert resp.status_code == 503
         assert "npm run build" in resp.text
         assert client.get("/api/projects").status_code == 200
+
+
+# --- T8.2 login and projects list ---------------------------------------------------------
+
+
+def _src(name: str) -> str:
+    return (WEB / "src" / name).read_text(encoding="utf-8")
+
+
+def test_login_and_projects_pages_use_the_api() -> None:
+    login = _src("pages/LoginPage.tsx")
+    assert "slipwright user add" in login  # empty state explains how to create the first user
+    assert "useAuth" in login and "Navigate" in login  # redirect back after login
+    auth = _src("auth/AuthProvider.tsx")
+    assert "/api/auth/login" in auth and "/api/auth/logout" in auth and "/api/auth/me" in auth
+    assert "RequireAuth" in auth and '"/login"' in auth
+    projects = _src("pages/ProjectsPage.tsx")
+    for expected in ("useProjects", "useProgress", "pending_approvals", "jobs_running", "Empty"):
+        assert expected in projects, expected
+    new_project = _src("pages/NewProjectPage.tsx")
+    for expected in ("useGitHubRepos", "repo_path", "github_repo", "jira_project_key"):
+        assert expected in new_project, expected
+    hooks = _src("api/hooks.ts")
+    for path in ("/api/projects", "/api/settings/github/repos", "/api/projects/${id}/progress"):
+        assert path in hooks, path

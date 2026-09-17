@@ -36,7 +36,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 
 ## Progress
 
-> **Resume here:** Phases 0–7 and T8.1 are complete. Next task is **T8.2 — Login and projects list**.
+> **Resume here:** Phases 0–7, T8.1 and T8.2 are complete. Next task is **T8.3 — Project page**.
 > Design note for T1.3: `run_cmd` is executed as a subprocess in the worktree (Docker is used
 > only if the profile's `run_cmd` itself invokes it).
 > Design note for T2.2: `invoke_role` talks to a `ModelProvider` (`slipwright/providers/`);
@@ -78,6 +78,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 > Design note for T7.4: `slipwright/jira.py` is the REST v3 client (basic auth, ADF bodies built from text); `slipwright/jirasync.py` reconciles a job idempotently (issue keys in `job.data.jira_keys`, last pushed statuses in `jira_status`, one-shot comments in `jira_marks`, outage in `jira_last_error`). The engine reconciles on entry to `_run` and after every handler, so approvals, restarts and failures all retry; each pass that did something is one `jira: N update(s)` history entry. Default issue types are Epic/Story/Subtask/Bug and default transitions To Do/In Progress/Done (per-project overrides in `Project.jira_transitions`).
 > Design note for T7.5: `JiraAction` lives in `roles/results.py` (every `RoleOutput` may carry `jira_actions`); `slipwright/jiraactions.py` executes them through the agent account (`Engine.jira_client(agent=True)`, falling back to the human connection) after checking `Permission.JIRA` and project confinement. Idempotency keys are content hashes stored in `job.data.jira_done`; outages queue actions in `job.data.jira_queue`, retried by `_jira_reconcile`. Roles get a `jira` context section (keys, current task, transitions) only when permitted; every outcome is a `jira (<role>): ...` history entry.
 > Design note for T8.1: `web/` is Vite 7 + React 19 + TypeScript (strict), React Router 7 and TanStack Query 5; `npm run build` writes `slipwright/api/static/` (gitignored) which `create_app` serves at `/` with an SPA fallback, or a 503 build hint when absent. `npm run gen:api` generates `src/api/schema.d.ts` from `schemas/openapi.json` with a SHA-256 header that `tests/test_phase8.py` and `npm run check:api` verify. The legacy dashboard moved to `/legacy` (retired in T8.7); only `/api` and `/legacy` require a session.
+> Design note for T8.2: the OpenAPI export marks every property of response-only models as required (`_tighten_response_schemas`, since pydantic leaves defaulted fields optional), so the TypeScript client sees `job.id: string`, not `string | undefined`; input models keep their optional fields.
 
 | Phase | Task | Status |
 |-------|------|--------|
@@ -109,7 +110,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 | 7 | T7.4 Jira connection and issue sync | [x] |
 | 7 | T7.5 Agents act in Jira | [x] |
 | 8 | T8.1 React app skeleton | [x] |
-| 8 | T8.2 Login and projects list | [ ] |
+| 8 | T8.2 Login and projects list | [x] |
 | 8 | T8.3 Project page: board, progress, developments | [ ] |
 | 8 | T8.4 Job page: gates, plan, diffs, steering | [ ] |
 | 8 | T8.5 Test results page | [ ] |
@@ -496,12 +497,12 @@ talks only to `/api/*` and the SSE stream; it holds no business logic.
 
 ### T8.2 — Login and projects list
 **Done when**
-- [ ] `/login` page; unauthenticated visits to any route redirect there and back
-- [ ] `/projects` lists all projects with: name, repo, jobs running, pending approvals,
+- [x] `/login` page; unauthenticated visits to any route redirect there and back
+- [x] `/projects` lists all projects with: name, repo, jobs running, pending approvals,
   tasks done/total, last activity
-- [ ] "New project" form: name, description, and either a local path or a GitHub repo
+- [x] "New project" form: name, description, and either a local path or a GitHub repo
   picked from `GET /settings/github/repos`
-- [ ] Empty state explains how to add the first project
+- [x] Empty state explains how to add the first project
 
 ### T8.3 — Project page: board, progress, developments
 **Done when**

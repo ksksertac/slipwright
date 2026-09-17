@@ -50,15 +50,16 @@
           }
         },
         "required": [
-          "job_id",
-          "job_request",
-          "index",
           "at",
           "from_state",
-          "to_state",
+          "has_detail",
+          "index",
+          "job_id",
+          "job_request",
           "kind",
+          "role",
           "title",
-          "has_detail"
+          "to_state"
         ],
         "title": "ActivityItem",
         "type": "object"
@@ -127,6 +128,11 @@
           }
         },
         "required": [
+          "created_at",
+          "id",
+          "last_used_at",
+          "name",
+          "revoked_at",
           "user_id"
         ],
         "title": "ApiToken",
@@ -156,10 +162,10 @@
           }
         },
         "required": [
-          "project_id",
           "epics",
-          "tasks_total",
-          "tasks_done"
+          "project_id",
+          "tasks_done",
+          "tasks_total"
         ],
         "title": "Board",
         "type": "object"
@@ -234,13 +240,15 @@
           }
         },
         "required": [
+          "description",
           "id",
-          "title",
-          "status",
+          "jira_key",
           "job_id",
           "job_request",
           "job_state",
-          "stories"
+          "status",
+          "stories",
+          "title"
         ],
         "title": "EpicView",
         "type": "object"
@@ -287,7 +295,10 @@
           }
         },
         "required": [
-          "login"
+          "login",
+          "name",
+          "rate_limit_limit",
+          "rate_limit_remaining"
         ],
         "title": "GitHubIdentity",
         "type": "object"
@@ -327,7 +338,11 @@
           }
         },
         "required": [
-          "full_name"
+          "default_branch",
+          "description",
+          "full_name",
+          "html_url",
+          "private"
         ],
         "title": "GitHubRepo",
         "type": "object"
@@ -371,6 +386,12 @@
             "type": "boolean"
           }
         },
+        "required": [
+          "base_branch",
+          "owner",
+          "token_hint",
+          "token_set"
+        ],
         "title": "GitHubSettings",
         "type": "object"
       },
@@ -429,6 +450,9 @@
             "type": "array"
           }
         },
+        "required": [
+          "detail"
+        ],
         "title": "HTTPValidationError",
         "type": "object"
       },
@@ -475,6 +499,10 @@
           }
         },
         "required": [
+          "at",
+          "consumed_at",
+          "consumed_by",
+          "id",
           "text"
         ],
         "title": "InboxMessage",
@@ -491,8 +519,8 @@
           }
         },
         "required": [
-          "token",
-          "secret"
+          "secret",
+          "token"
         ],
         "title": "IssuedToken",
         "type": "object"
@@ -522,7 +550,8 @@
         },
         "required": [
           "account_id",
-          "display_name"
+          "display_name",
+          "email"
         ],
         "title": "JiraAccount",
         "type": "object"
@@ -551,6 +580,7 @@
           }
         },
         "required": [
+          "id",
           "key",
           "name"
         ],
@@ -636,6 +666,16 @@
             "type": "boolean"
           }
         },
+        "required": [
+          "agent_email",
+          "agent_token_hint",
+          "agent_token_set",
+          "email",
+          "issue_types",
+          "site_url",
+          "token_hint",
+          "token_set"
+        ],
         "title": "JiraSettings",
         "type": "object"
       },
@@ -750,6 +790,7 @@
         },
         "required": [
           "account",
+          "agent_account",
           "projects"
         ],
         "title": "JiraTestResult",
@@ -842,8 +883,17 @@
           }
         },
         "required": [
+          "created_at",
+          "data",
+          "history",
+          "id",
+          "port",
+          "profile",
+          "project_id",
+          "repo_path",
           "request",
-          "repo_path"
+          "state",
+          "worktree_path"
         ],
         "title": "Job",
         "type": "object"
@@ -1012,6 +1062,26 @@
             "type": "array"
           }
         },
+        "required": [
+          "base_commit",
+          "build_attempts",
+          "ci_attempts",
+          "feedback",
+          "inbox",
+          "jira_done",
+          "jira_keys",
+          "jira_last_error",
+          "jira_marks",
+          "jira_queue",
+          "jira_status",
+          "last_build_output",
+          "phase_index",
+          "plan",
+          "pr_url",
+          "qa_stage",
+          "reject_rounds",
+          "test_cases"
+        ],
         "title": "JobData",
         "type": "object"
       },
@@ -1070,14 +1140,15 @@
           }
         },
         "required": [
+          "current_phase",
           "job_id",
+          "last_activity",
+          "pending_approval",
+          "pr_url",
           "request",
           "state",
-          "pending_approval",
-          "current_phase",
           "tasks_done",
-          "tasks_total",
-          "last_activity"
+          "tasks_total"
         ],
         "title": "JobProgress",
         "type": "object"
@@ -1455,7 +1526,16 @@
           }
         },
         "required": [
-          "name"
+          "clone_url",
+          "created_at",
+          "description",
+          "github_repo",
+          "id",
+          "jira_project_key",
+          "jira_transitions",
+          "name",
+          "profile",
+          "repo_path"
         ],
         "title": "Project",
         "type": "object"
@@ -1589,15 +1669,15 @@
           }
         },
         "required": [
-          "project_id",
           "jobs",
-          "jobs_running",
           "jobs_done",
           "jobs_failed",
+          "jobs_running",
+          "last_activity",
           "pending_approvals",
+          "project_id",
           "tasks_done",
-          "tasks_total",
-          "last_activity"
+          "tasks_total"
         ],
         "title": "ProjectProgress",
         "type": "object"
@@ -1697,11 +1777,13 @@
           }
         },
         "required": [
+          "description",
           "id",
-          "title",
-          "status",
+          "jira_key",
           "job_id",
-          "tasks"
+          "status",
+          "tasks",
+          "title"
         ],
         "title": "StoryView",
         "type": "object"
@@ -1763,11 +1845,14 @@
           }
         },
         "required": [
+          "description",
+          "files",
           "id",
-          "title",
+          "jira_key",
+          "job_id",
           "phase",
           "status",
-          "job_id"
+          "title"
         ],
         "title": "TaskView",
         "type": "object"
@@ -1902,9 +1987,18 @@
           }
         },
         "required": [
-          "project_id",
           "command",
-          "cwd"
+          "cwd",
+          "exit_code",
+          "finished_at",
+          "id",
+          "job_id",
+          "note",
+          "output_path",
+          "project_id",
+          "source",
+          "started_at",
+          "status"
         ],
         "title": "TestRun",
         "type": "object"
@@ -1976,9 +2070,11 @@
           }
         },
         "required": [
+          "at",
+          "detail",
           "from_state",
-          "to_state",
-          "at"
+          "note",
+          "to_state"
         ],
         "title": "Transition",
         "type": "object"
@@ -2008,6 +2104,9 @@
           }
         },
         "required": [
+          "created_at",
+          "id",
+          "is_admin",
           "username"
         ],
         "title": "User",
@@ -2046,6 +2145,8 @@
           }
         },
         "required": [
+          "ctx",
+          "input",
           "loc",
           "msg",
           "type"
