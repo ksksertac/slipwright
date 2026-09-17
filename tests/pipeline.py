@@ -153,6 +153,7 @@ def full_engine(
     if "git_host" not in kw:
         kw["git_host"] = FakeHost()
     kw.setdefault("supervisor_mode", "manual")  # the supervisor has its own tests (T9.8)
+    kw.setdefault("retry_backoff_s", 0.0)  # retries are tested on their own (T9.7)
     return Engine(store, ws, seed_profile=seed, provider=provider, ci_poll_s=0.0, **kw)
 
 

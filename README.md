@@ -37,6 +37,33 @@ created ─▶ backlog ─▶ awaiting_backlog_approval ─▶ architecture ─�
 Every transition is persisted to SQLite before the next phase runs. Kill the server at
 any point and restart it: in-flight jobs resume, jobs waiting on you keep waiting.
 
+## Standards, review and the supervisor
+
+- **Standards** are Markdown pages under `standards/<domain>/` (product, architecture,
+  backend, web, mobile, testing, devops) plus `core.md`, which every agent always reads.
+  They are indexed in SQLite (keyword search, optional embeddings) and the sections that
+  match a phase are put into that agent's prompt under a token budget. Each agent card's
+  **Standards** tab edits its domain's pages (globally or per project under
+  `<repo>/.slipwright/standards`), tries a search the way retrieval does, and holds the
+  index settings; edits are linted, reindexed at once and committed on a
+  `slipwright/standards` branch.
+- **Standards review**: after a phase passes the build gate, QA checks the diff against
+  the sections its specialist was given. Per project: `off`, `advisory` (findings are
+  recorded and shown) or `blocking` (blocking findings go back to the specialist for two
+  rounds, then a human decides).
+- **Supervisor**: per project `manual` (you decide every gate), `assisted` (default — a
+  recommendation with confidence and risk next to each gate) or `auto` (a confident,
+  low-risk approval is made for you and recorded as such; rejections are never automatic,
+  the written-tests gate needs explicit permission, and you can undo from the dashboard).
+  On a failed build gate the supervisor also chooses between *the same specialist fixes*,
+  *re-plan* and *ask a human*.
+- **Hardening**: per-project budgets (tokens, wall clock, model calls) fail a job with a
+  readable reason; provider errors are retried per role with backoff; an agent that
+  produces the same output twice in a row stops at a decision gate instead of looping.
+- **Pipeline**: the project's default tab shows every development as a lane of step cards;
+  gates waiting for you carry checkboxes for bulk approval, and editable gates (backlog,
+  plan, profile, test cases) are edited in place with *Save & approve*.
+
 ## Getting started
 
 ### With Docker (recommended for a local install)

@@ -41,6 +41,14 @@ class InvokeErrorKind(StrEnum):
     PROVIDER_UNAVAILABLE = "provider_unavailable"
     REFUSED = "refused"
     MALFORMED_OUTPUT = "malformed_output"
+    BUDGET = "budget"  # the job's budget is exhausted (T9.7)
+    LOOP = "loop"  # the role produced the same output twice in a row (T9.7)
+
+
+# provider errors worth another attempt; refusals and missing providers are not
+RETRYABLE: frozenset[InvokeErrorKind] = frozenset(
+    {InvokeErrorKind.TIMEOUT, InvokeErrorKind.PROVIDER_ERROR, InvokeErrorKind.MALFORMED_OUTPUT}
+)
 
 
 class InvokeError(BaseModel):
@@ -71,6 +79,8 @@ class RoleResult(BaseModel):
     raw_text: str | None = None
     usage: Usage | None = None
     standards: list[str] | None = None  # chunk ids retrieved into the prompt (T9.4)
+    attempts: int = 1  # how many calls it took (T9.7)
+    prompt_chars: int | None = None  # size of the prompt sent (T9.7)
 
     @property
     def ok(self) -> bool:
@@ -138,6 +148,7 @@ def invoke_role(
             thinking_depth=role_cfg.thinking_depth,
             error=InvokeError(kind=kind, message=message, detail=raw_text),
             raw_text=raw_text,
+            prompt_chars=len(request.system) + len(request.prompt),
         )
 
     if provider is None:
@@ -172,6 +183,7 @@ def invoke_role(
         output=output,
         raw_text=response.text,
         usage=Usage(input_tokens=response.input_tokens, output_tokens=response.output_tokens),
+        prompt_chars=len(request.system) + len(request.prompt),
     )
 
 

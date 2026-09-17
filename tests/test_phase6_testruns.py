@@ -86,6 +86,8 @@ def test_failed_gate_runs_are_recorded_too(
     job = engine.start(engine.create_job("x", project_id=project.id).id)
     job = engine.approve(job.id)
     job = engine.approve(job.id)
+    while job.state is JobState.AWAITING_DECISION:  # the loop check asks; we insist
+        job = engine.approve(job.id)
     assert job.state is JobState.FAILED
     runs = store.list_test_runs(project.id, job.id)
     assert [r.status for r in runs] == [tr.TestRunStatus.FAILED] * 3  # three gate attempts

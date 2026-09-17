@@ -15,6 +15,7 @@ export function EditProjectModal({ project, onClose }: { project: Project; onClo
   const [githubRepo, setGithubRepo] = useState(project.github_repo ?? "");
   const [review, setReview] = useState<Project["review"]>(project.review);
   const [supervisor, setSupervisor] = useState<Project["supervisor"]>(project.supervisor);
+  const [budget, setBudget] = useState<Project["budget"]>(project.budget);
 
   const save = () => {
     patch.mutate(
@@ -25,6 +26,7 @@ export function EditProjectModal({ project, onClose }: { project: Project; onClo
         github_repo: githubRepo.trim() || null,
         review,
         supervisor,
+        budget,
       },
       {
         onSuccess: () => {
@@ -157,6 +159,64 @@ export function EditProjectModal({ project, onClose }: { project: Project; onClo
         <div className="help faint small">
           Rejections are never automatic; every automatic approval is recorded on the job and can be
           undone from the dashboard while the next step runs.
+        </div>
+      </fieldset>
+      <fieldset className="field" style={{ border: 0, padding: 0 }}>
+        <label>Budget per development (blank = unlimited)</label>
+        <div className="grid-3">
+          <div className="field">
+            <label htmlFor="ep-b-tokens" className="small">
+              Tokens
+            </label>
+            <input
+              id="ep-b-tokens"
+              type="number"
+              min={1000}
+              step={1000}
+              value={budget.max_tokens ?? ""}
+              onChange={(e) =>
+                setBudget({ ...budget, max_tokens: e.target.value ? Number(e.target.value) : null })
+              }
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="ep-b-clock" className="small">
+              Wall clock (seconds)
+            </label>
+            <input
+              id="ep-b-clock"
+              type="number"
+              min={60}
+              step={60}
+              value={budget.max_wall_clock_s ?? ""}
+              onChange={(e) =>
+                setBudget({
+                  ...budget,
+                  max_wall_clock_s: e.target.value ? Number(e.target.value) : null,
+                })
+              }
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="ep-b-calls" className="small">
+              Model calls
+            </label>
+            <input
+              id="ep-b-calls"
+              type="number"
+              min={1}
+              value={budget.max_invocations ?? ""}
+              onChange={(e) =>
+                setBudget({
+                  ...budget,
+                  max_invocations: e.target.value ? Number(e.target.value) : null,
+                })
+              }
+            />
+          </div>
+        </div>
+        <div className="help faint small">
+          Exceeding a limit fails the development with the reason in its history — never silently.
         </div>
       </fieldset>
       <div className="help faint small">

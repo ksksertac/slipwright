@@ -10,6 +10,8 @@ export function pendingApproval(job: Job): string | null {
       return "architecture";
     case "awaiting_review_approval":
       return "review";
+    case "awaiting_decision":
+      return "decision";
     case "awaiting_test_approval":
       return job.data.qa_stage === 1 ? "test cases" : "written tests";
     default:

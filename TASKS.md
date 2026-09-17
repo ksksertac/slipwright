@@ -36,7 +36,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 
 ## Progress
 
-> **Resume here:** Phases 0–8 and T9.0–T9.6, T9.8, T9.9 are complete. Next: **T9.7** (orchestrator hardening), then the Phase 9 definition of done.
+> **Resume here:** Phases 0–9 are complete (T9.0–T9.9). Next: whatever the user asks for; keep the invariants and the task-by-task rhythm.
 > Design note for T1.3: `run_cmd` is executed as a subprocess in the worktree (Docker is used
 > only if the profile's `run_cmd` itself invokes it).
 > Design note for T2.2: `invoke_role` talks to a `ModelProvider` (`slipwright/providers/`);
@@ -132,7 +132,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 | 9 | T9.4 Retrieval into every role's prompt | [x] |
 | 9 | T9.5 Standards review gate | [x] |
 | 9 | T9.6 Standards in the UI | [x] |
-| 9 | T9.7 Orchestrator hardening: budgets, retries, supervisor decisions | [ ] |
+| 9 | T9.7 Orchestrator hardening: budgets, retries, supervisor decisions | [x] |
 | 9 | T9.8 Supervisor at the gates: manual / assisted / auto | [x] |
 | 9 | T9.9 Project pipeline view and bulk approvals | [x] |
 
@@ -891,20 +891,41 @@ editor for that agent's domain, so "what does the Backend agent follow?" is one 
 
 ### T9.7 — Orchestrator hardening: budgets, retries, supervisor decisions
 **Done when**
-- [ ] Per-job budget: max total tokens, max wall-clock, max invocations (profile or
+- [x] Per-job budget: max total tokens, max wall-clock, max invocations (profile or
   project settings); exceeding one fails the job with a readable reason, never silently
-- [ ] Per-role retry policy for provider errors (timeouts, 5xx, malformed JSON):
+- [x] Per-role retry policy for provider errors (timeouts, 5xx, malformed JSON):
   exponential backoff, bounded attempts, all recorded in history
-- [ ] Loop detection: the same (role, phase, output hash) twice in a row stops the loop and
+- [x] Loop detection: the same (role, phase, output hash) twice in a row stops the loop and
   routes to a gate instead of a third identical attempt
-- [ ] One explicit LLM decision point where code cannot decide: on a failed build gate the
-  supervisor (Planner model) chooses between "same specialist fixes", "re-plan this phase"
+- [x] One explicit LLM decision point where code cannot decide: on a failed build gate the
+  supervisor role chooses between "same specialist fixes", "re-plan this phase"
   or "ask the human", returning JSON; the choice and its reason are recorded
-- [ ] Context hygiene: each role receives only what its instructions list (no full plan
+- [x] Context hygiene: each role receives only what its instructions list (no full plan
   dumps into the Tester, no diffs into the Planner); prompt sizes are measured and shown
   on the job page per invocation
-- [ ] Tests cover budget exhaustion, retry-then-success, loop detection and each
+- [x] Tests cover budget exhaustion, retry-then-success, loop detection and each
   supervisor branch with the scripted provider
+
+> Design note for T9.7: everything hangs off `Engine._invoke`. Budget: `Project.budget`
+> (`BudgetSettings`: max_tokens / max_wall_clock_s / max_invocations, None = unlimited) is
+> checked before every call; a breach returns an `InvokeErrorKind.BUDGET` result and
+> `_invocation_failed` fails the job with `budget exhausted: <reason>`. Accounting lives in
+> `job.data.invocations`, `tokens_used` and `invocation_log[]` (role, state, phase,
+> attempts, prompt_chars, tokens, ok/error) — the job page's "Model calls" table.
+> Retries: `RoleConfig.retries` (default 2) for `RETRYABLE` kinds (timeout, provider
+> error, malformed output; refusals and missing providers are not), backoff
+> `retry_backoff_s · 2^(attempt-1)` (engine default 2 s, tests 0), each failed attempt a
+> history entry. Loop check: `_output_key` = role:phase_index:state:review_round for
+> producing roles (judges — the reviewer and the supervisor — are exempt); the same output
+> hash twice in a row returns `InvokeErrorKind.LOOP` and `_ask_human` moves the job to the
+> new `awaiting_decision` gate with `job.data.resume_state`; approve resumes that state,
+> reject resumes it with the feedback queued in the inbox; any human decision resets the
+> hashes. Failed build gate: `_failed_gate_choice` asks the supervisor (unless the project
+> is `manual`) — `fix` (as before), `replan` (feedback + `ARCHITECTURE`, phase index reset;
+> `BUILD_GATE → ARCHITECTURE` is now legal) or `ask_human` (decision gate); the choice is a
+> history entry. Context hygiene: `plan_outline()` gives specialists and QA the summary,
+> decisions and phase goals only; the architect never sees diffs; `RoleResult.prompt_chars`
+> is measured in `invoke_role`.
 
 ### T9.8 — Supervisor at the gates: manual / assisted / auto
 The gates stay in the state machine (invariant 2); what changes is who calls *approve*.
@@ -1004,18 +1025,25 @@ in bulk.
 
 ### Definition of done for Phase 9
 
-- [ ] A request touching backend and web is planned into domain-tagged phases, each phase
+- [x] A request touching backend and web is planned into domain-tagged phases, each phase
   is implemented by its specialist with that specialist's model, and every specialist
   prompt contains the relevant standards sections (verified by an end-to-end scripted test)
-- [ ] Editing a standard in the UI changes what the next invocation retrieves, with no
+- [x] Editing a standard in the UI changes what the next invocation retrieves, with no
   restart
-- [ ] A phase violating a blocking standard is fixed by the specialist or stopped at the
+- [x] A phase violating a blocking standard is fixed by the specialist or stopped at the
   review gate; nothing ships past it without a human
-- [ ] In `auto` mode a low-risk development reaches the PR with the human only reading
+- [x] In `auto` mode a low-risk development reaches the PR with the human only reading
   notifications; in `manual` mode nothing moves without a click
-- [ ] From the project's Pipeline tab a human can see every step of every development,
+- [x] From the project's Pipeline tab a human can see every step of every development,
   edit a plan in place and approve three waiting gates with one action
-- [ ] All Phase 0–8 invariants hold; no module names a model
+- [x] All Phase 0–8 invariants hold; no module names a model
+
+> Verified by: `tests/test_phase9_retrieval.py` (backend + web phases, specialists, Kafka /
+> accessibility sections), `test_phase9_editing.py` (edit → next retrieval, no restart),
+> `test_phase9_review.py` (blocking findings: two fix rounds, then the gate),
+> `test_phase9_supervisor.py` (auto with the final gate allowed reaches DONE; manual never
+> asks), `test_phase9_pipeline.py` (plan edit in place, batch approval of three gates) and
+> `test_agent_invocation.py` (no model names in engine code).
 
 ---
 

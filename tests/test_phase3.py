@@ -272,8 +272,21 @@ def test_gate_exhausts_retries_and_fails_with_output(
     engine = _engine(store, worktrees_root, seed, provider)
     job = engine.approve(_to_plan_gate(engine, repo).id)
 
-    assert job.state is JobState.FAILED
-    assert len([r for r in provider.requests if r.role is RoleName.DEVELOPER]) == 3
-    assert job.history[-1].note == "build gate failed 3 times on phase 1"
-    assert "[test: exit 1]" in (job.history[-1].detail or "")
-    assert job.data.build_attempts == 3
+    # the scripted developer answers the same thing twice: the loop check stops the job
+    # at the decision gate instead of a third identical attempt (T9.7)
+    assert job.state is JobState.AWAITING_DECISION
+    assert len([r for r in provider.requests if r.role is RoleName.DEVELOPER]) == 2
+    assert job.history[-1].note == (
+        "loop detected: developer produced the same output twice in a row"
+    )
+    assert job.data.build_attempts == 1
+    assert job.data.resume_state == "developing"
+    gate_note = next(t for t in job.history if (t.note or "").startswith("build gate failed"))
+    assert "[test: exit 1]" in (gate_note.detail or "")
+    job = engine.approve(job.id)  # the human says: try once more anyway
+
+    # one more (fresh) attempt, the gate fails again, the next identical answer stops it
+    assert job.state is JobState.AWAITING_DECISION
+    assert len([r for r in provider.requests if r.role is RoleName.DEVELOPER]) == 4
+    assert job.data.build_attempts == 2
+    assert "approved: continue with developing" in [t.note for t in job.history]

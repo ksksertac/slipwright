@@ -12,6 +12,7 @@ approval state, and no handler is registered for those states.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -31,7 +32,7 @@ from slipwright.gates import DEFAULT_TIMEOUT_S as GATE_TIMEOUT_S
 from slipwright.gates import GateResult, build_gate, run_command
 from slipwright.githost import CiState, CiStatus, GitHost, GitHostError
 from slipwright.github import GitHubClient, GitHubError, GitHubSettings
-from slipwright.invoke import DEFAULT_TIMEOUT_S, RoleResult
+from slipwright.invoke import DEFAULT_TIMEOUT_S, RETRYABLE, InvokeError, InvokeErrorKind, RoleResult
 from slipwright.jira import DEFAULT_ISSUE_TYPES, JiraClient, JiraError, JiraSettings
 from slipwright.jiraactions import ActionOutcome, ActionRunner, jira_context
 from slipwright.jirasync import JiraSync
@@ -59,7 +60,7 @@ from slipwright.roles.results import (
 from slipwright.roles.specialists import specialist_for
 from slipwright.schemas.job import APPROVAL_STATES, Job, JobState, utcnow
 from slipwright.schemas.profile import Permission, Profile, RoleName
-from slipwright.schemas.project import Project, SupervisorSettings
+from slipwright.schemas.project import BudgetSettings, Project, SupervisorSettings
 from slipwright.schemas.testrun import TestRun, TestRunSource, TestRunStatus
 from slipwright.standards import GLOBAL_DIR, PROJECT_SUBDIR, load_corpus
 from slipwright.standards.editing import StandardsEditor
@@ -117,6 +118,9 @@ def approval_edges(job: Job) -> tuple[JobState, JobState] | None:
         phases = (job.data.plan or {}).get("phases", [])
         if job.data.phase_index >= len(phases):
             return (JobState.QA, JobState.DEVELOPING)
+    if job.state is JobState.AWAITING_DECISION:
+        back = JobState(job.data.resume_state or JobState.DEVELOPING.value)
+        return (back, back)
     return edges
 
 
@@ -152,6 +156,7 @@ class Engine:
         max_review_rounds: int = 2,
         review: str | None = None,
         supervisor_mode: str | None = None,
+        retry_backoff_s: float = 2.0,
         gate_timeout_s: float | None = None,
         git_host: GitHost | None = None,
         ci_poll_s: float = 15.0,
@@ -180,6 +185,8 @@ class Engine:
         self.review_override = review
         # a forced gate mode (manual/assisted/auto); None follows the project
         self.supervisor_override = supervisor_mode
+        # first retry waits this long, then doubles (T9.7); tests set it to 0
+        self.retry_backoff_s = retry_backoff_s
         self.gate_timeout_s = gate_timeout_s
         self._git_host = git_host
         # tests answer GitHub/Jira HTTP locally through a mock transport
@@ -772,8 +779,12 @@ class Engine:
             note = f"approved phase {job.data.phase_index} despite the review"
         if by:
             note = f"{note} by {by}"
+        if job.state is JobState.AWAITING_DECISION:
+            note = f"{note}: continue with {edges[0].value}"
+            job.data.resume_state = None
         job.data.feedback = None
         job.data.reject_rounds = 0
+        job.data.output_hashes = {}  # a human decision is a fresh start for the loop check
         self.store.save(job)
         job = self.orchestrator.transition(job, edges[0], note=note)
         return self._run(job) if run else job
@@ -785,11 +796,20 @@ class Engine:
             raise NotAwaitingApproval(job)
         job.data.feedback = feedback
         job.data.reject_rounds += 1
+        job.data.output_hashes = {}  # the feedback changes the input: not a loop
         if job.state is JobState.AWAITING_REVIEW_APPROVAL:
             # back to the specialist for another round on the same phase
             job.data.phase_index = max(job.data.phase_index - 1, 0)
             job.data.review_rounds = 0
             job.data.reject_rounds = 0
+        if job.state is JobState.AWAITING_DECISION:
+            from slipwright.schemas.job import InboxMessage
+
+            # the feedback reaches the role that continues, through the inbox
+            job.data.inbox.append(InboxMessage(text=feedback))
+            job.data.feedback = None
+            job.data.reject_rounds = 0
+            job.data.resume_state = None
         self.store.save(job)
         job = self.orchestrator.transition(job, edges[1], note=f"rejected: {feedback}")
         return self._run(job) if run else job
@@ -894,6 +914,8 @@ class Engine:
         settings = self.supervisor_settings(job)
         if settings.mode == "manual" or job.state not in APPROVAL_STATES:
             return job
+        if job.state is JobState.AWAITING_DECISION:
+            return job  # a loop or the supervisor itself stopped here: a person decides
         profile = job.profile or self.seed_for(job)
         gate = supervisor.gate_name(job)
         written = None
@@ -1169,11 +1191,54 @@ class Engine:
 
     def _invocation_failed(self, job: Job, result: RoleResult) -> Job:
         assert result.error is not None
+        if result.error.kind is InvokeErrorKind.BUDGET:
+            return self._fail(job, f"budget exhausted: {result.error.message}")
+        if result.error.kind is InvokeErrorKind.LOOP:
+            return self._ask_human(job, f"loop detected: {result.error.message}")
+        attempts = f" after {result.attempts} attempts" if result.attempts > 1 else ""
         return self._fail(
             job,
-            f"{result.role.value} failed: {result.error.kind.value}",
+            f"{result.role.value} failed: {result.error.kind.value}{attempts}",
             detail=result.error.message,
         )
+
+    def _ask_human(self, job: Job, note: str, detail: str | None = None) -> Job:
+        """Stop at the decision gate; approve resumes the interrupted state, reject
+        resumes it with feedback in the inbox."""
+        job.data.resume_state = job.state.value
+        self.store.save(job)
+        return self.orchestrator.transition(
+            job, JobState.AWAITING_DECISION, note=note, detail=detail
+        )
+
+    # -- budgets (T9.7) ----------------------------------------------------------------------
+
+    def budget_for(self, job: Job) -> BudgetSettings:
+        project = self._project_of(job)
+        return BudgetSettings() if project is None else project.budget
+
+    def _budget_problem(self, job: Job) -> str | None:
+        budget = self.budget_for(job)
+        if budget.max_invocations is not None and job.data.invocations >= budget.max_invocations:
+            return f"{job.data.invocations} model calls (limit {budget.max_invocations})"
+        if budget.max_tokens is not None and job.data.tokens_used >= budget.max_tokens:
+            return f"{job.data.tokens_used} tokens used (limit {budget.max_tokens})"
+        if budget.max_wall_clock_s is not None and job.history:
+            elapsed = (utcnow() - job.history[0].at).total_seconds()
+            if elapsed >= budget.max_wall_clock_s:
+                return f"{elapsed:.0f}s elapsed (limit {budget.max_wall_clock_s}s)"
+        return None
+
+    @staticmethod
+    def _output_key(job: Job, role: RoleName) -> str | None:
+        """Where the loop check applies: producers (PO, architect, specialists, QA, DevOps)
+        within one phase. Judges (the reviewer, the supervisor) may well say the same
+        thing twice; the flows around them are bounded on their own."""
+        if role is RoleName.SUPERVISOR or job.state is JobState.REVIEW:
+            return None
+        # a review round changes the specialist's input (the violations), so each round
+        # is its own series; build-gate retries are not (same failure, same fix = stuck)
+        return f"{role.value}:{job.data.phase_index}:{job.state.value}:r{job.data.review_rounds}"
 
     def _invoke(
         self, role: RoleName, run: Callable[..., RoleResult], job: Job, **kw: Any
@@ -1199,9 +1264,39 @@ class Engine:
                     job.id, job.state, note=retrieved.note(phase), detail=retrieved.detail()
                 )
                 job.history = self.store.get(job.id).history
-        result = run(job, provider=self.provider, timeout_s=self.timeout_s, **kw)
+        problem = self._budget_problem(job)
+        if problem is not None:
+            return RoleResult(
+                role=role,
+                model=profile.roles[role].model,
+                thinking_depth=profile.roles[role].thinking_depth,
+                error=InvokeError(kind=InvokeErrorKind.BUDGET, message=problem),
+            )
+        result = self._call_with_retries(role, run, job, profile.roles[role].retries, **kw)
         if retrieved is not None:
             result.standards = retrieved.chunk_ids
+        self._account(job, role, result)
+        key = self._output_key(job, role)
+        if result.ok and result.raw_text is not None and key is not None:
+            digest = hashlib.sha256(result.raw_text.encode()).hexdigest()[:16]
+            if job.data.output_hashes.get(key) == digest:
+                job.data.output_hashes.pop(key, None)
+                self.store.save(job)
+                result = RoleResult(
+                    role=role,
+                    model=result.model,
+                    thinking_depth=result.thinking_depth,
+                    error=InvokeError(
+                        kind=InvokeErrorKind.LOOP,
+                        message=f"{role.value} produced the same output twice in a row",
+                    ),
+                    raw_text=result.raw_text,
+                    attempts=result.attempts,
+                    prompt_chars=result.prompt_chars,
+                )
+            else:
+                job.data.output_hashes[key] = digest
+                self.store.save(job)
         if result.ok and result.output is not None and project is not None:
             self._apply_jira_actions(job, role, profile, project, result.output.jira_actions)
         if pending:
@@ -1218,6 +1313,56 @@ class Engine:
             )
             job.history = self.store.get(job.id).history
         return result
+
+    def _call_with_retries(
+        self, role: RoleName, run: Callable[..., RoleResult], job: Job, retries: int, **kw: Any
+    ) -> RoleResult:
+        """Run the role; on a retryable provider error wait (doubling) and try again up to
+        the role's ``retries``. Every failed attempt is recorded in the history."""
+        attempt = 0
+        while True:
+            attempt += 1
+            result = run(job, provider=self.provider, timeout_s=self.timeout_s, **kw)
+            result.attempts = attempt
+            if result.ok or result.error is None or result.error.kind not in RETRYABLE:
+                return result
+            if attempt > retries:
+                return result
+            wait = self.retry_backoff_s * (2 ** (attempt - 1))
+            self.store.update_state(
+                job.id,
+                job.state,
+                note=(
+                    f"{role.value} attempt {attempt} failed: {result.error.kind.value}; "
+                    f"retrying in {wait:g}s ({attempt}/{retries} retries used)"
+                ),
+                detail=result.error.message,
+            )
+            job.history = self.store.get(job.id).history
+            if wait > 0:
+                time.sleep(wait)
+
+    def _account(self, job: Job, role: RoleName, result: RoleResult) -> None:
+        """Count the call against the job's budget and keep the per-call log."""
+        usage = result.usage
+        tokens = ((usage.input_tokens or 0) + (usage.output_tokens or 0)) if usage else 0
+        job.data.invocations += result.attempts
+        job.data.tokens_used += tokens
+        job.data.invocation_log.append(
+            {
+                "role": role.value,
+                "state": job.state.value,
+                "phase": job.data.phase_index + 1 if job.state is JobState.DEVELOPING else None,
+                "attempts": result.attempts,
+                "prompt_chars": result.prompt_chars,
+                "input_tokens": usage.input_tokens if usage else None,
+                "output_tokens": usage.output_tokens if usage else None,
+                "ok": result.ok,
+                "error": result.error.kind.value if result.error else None,
+                "at": utcnow().isoformat(),
+            }
+        )
+        self.store.save(job)
 
     @staticmethod
     def _profile(job: Job) -> Profile:
@@ -1392,15 +1537,80 @@ class Engine:
                 f"build gate failed {job.data.build_attempts} times on phase {index + 1}",
                 detail=gate.tail,
             )
-        return self.orchestrator.transition(
-            job,
-            JobState.DEVELOPING,
-            note=(
-                f"build gate failed on phase {index + 1} "
-                f"(attempt {job.data.build_attempts}/{self.max_build_attempts})"
-            ),
-            detail=gate.tail,
+        note = (
+            f"build gate failed on phase {index + 1} "
+            f"(attempt {job.data.build_attempts}/{self.max_build_attempts})"
         )
+        choice, reason = self._failed_gate_choice(job, index, gate.tail)
+        if choice == "replan":
+            job.data.feedback = (
+                f"phase {index + 1} failed the build gate {job.data.build_attempts} time(s); "
+                f"the supervisor asked for a re-plan: {reason}\n\n{gate.tail[-2000:]}"
+            )
+            job.data.phase_index = 0
+            job.data.build_attempts = 0
+            self.store.save(job)
+            return self.orchestrator.transition(
+                job,
+                JobState.ARCHITECTURE,
+                note=f"{note}; supervisor: re-plan ({reason})",
+                detail=gate.tail,
+            )
+        if choice == "ask_human":
+            job.data.resume_state = JobState.DEVELOPING.value
+            self.store.save(job)
+            return self.orchestrator.transition(
+                job,
+                JobState.AWAITING_DECISION,
+                note=f"{note}; supervisor: asks you ({reason})",
+                detail=gate.tail,
+            )
+        suffix = f"; supervisor: same specialist fixes ({reason})" if reason else ""
+        return self.orchestrator.transition(
+            job, JobState.DEVELOPING, note=f"{note}{suffix}", detail=gate.tail
+        )
+
+    def _failed_gate_choice(self, job: Job, index: int, output: str) -> tuple[str, str]:
+        """The one decision code cannot make: after a failed build gate, does the same
+        specialist fix it, does the architect re-plan, or does a human look? Without a
+        supervisor (manual projects) the specialist fixes, as before."""
+        if self.supervisor_settings(job).mode == "manual":
+            return "fix", ""
+        profile = self._profile(job)
+        phases = self._phases(job)
+        result = self._invoke(
+            RoleName.SUPERVISOR,
+            supervisor.run,
+            job,
+            profile=profile,
+            gate_material={
+                "failed_build_gate": {
+                    "phase": {"number": index + 1, **phases[index]},
+                    "attempt": job.data.build_attempts,
+                    "max_attempts": self.max_build_attempts,
+                    "output": output[-4000:],
+                },
+                "choices": {
+                    "fix": "the same specialist tries again with the build output",
+                    "replan": "the architect re-plans (the change is larger than one phase)",
+                    "ask_human": "a person should look before more model time is spent",
+                },
+            },
+            jira=None,
+        )
+        if not result.ok or not isinstance(result.output, SupervisorResult):
+            return "fix", "supervisor unavailable"
+        out = result.output
+        choice = out.decision if out.decision in ("fix", "replan", "ask_human") else "fix"
+        reason = "; ".join(out.reasons) or out.summary
+        self.store.update_state(
+            job.id,
+            job.state,
+            note=f"supervisor: {choice} ({reason})",
+            detail=json.dumps(out.model_dump(mode="json"), indent=2),
+        )
+        job.history = self.store.get(job.id).history
+        return choice, reason
 
     # -- standards review (T9.5) -----------------------------------------------------------
 

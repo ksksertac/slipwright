@@ -15,6 +15,7 @@ const STATE_CLASS: Record<JobState, string> = {
   qa: "work",
   awaiting_test_approval: "wait",
   devops: "work",
+  awaiting_decision: "wait",
   done: "ok",
   failed: "bad",
 };
@@ -32,6 +33,7 @@ export const STATE_LABEL: Record<JobState, string> = {
   qa: "qa",
   awaiting_test_approval: "needs test approval",
   devops: "devops",
+  awaiting_decision: "needs your decision",
   done: "done",
   failed: "failed",
 };

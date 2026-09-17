@@ -57,6 +57,14 @@
           "default": null,
           "description": "Token budget for the standards sections retrieved into this role's prompt; unset means the value under Settings \u2192 Standards.",
           "title": "Standards Budget"
+        },
+        "retries": {
+          "default": 2,
+          "description": "Attempts after a timeout, provider error or malformed output (exponential backoff) before the job fails.",
+          "maximum": 5,
+          "minimum": 0,
+          "title": "Retries",
+          "type": "integer"
         }
       },
       "required": [

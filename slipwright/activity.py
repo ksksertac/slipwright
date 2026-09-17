@@ -154,6 +154,8 @@ def pending_approval(job: Job) -> str | None:
         return "architecture"
     if job.state is JobState.AWAITING_REVIEW_APPROVAL:
         return "review"
+    if job.state is JobState.AWAITING_DECISION:
+        return "decision"
     if job.state is JobState.AWAITING_TEST_APPROVAL:
         return "test cases" if job.data.qa_stage == 1 else "written tests"
     return None

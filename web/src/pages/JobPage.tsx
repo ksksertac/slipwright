@@ -89,6 +89,7 @@ export function JobPage() {
       <GatePanel job={j} />
       <Phases job={j} />
       <QaSection job={j} />
+      <Invocations job={j} />
       <Steering job={j} />
       <History job={j} projectId={projectId} />
     </div>
@@ -204,6 +205,7 @@ function GatePanel({ job }: { job: Job }) {
       {job.state === "awaiting_backlog_approval" && <BacklogGate job={job} />}
       {job.state === "awaiting_architecture_approval" && <ArchitectureGate job={job} />}
       {job.state === "awaiting_review_approval" && <ReviewGate job={job} />}
+      {job.state === "awaiting_decision" && <DecisionGate job={job} />}
       {job.state === "awaiting_test_approval" && job.data.qa_stage === 1 && (
         <TestCasesGate job={job} />
       )}
@@ -304,6 +306,30 @@ function ArchitectureGate({ job }: { job: Job }) {
           <h3>Profile</h3>
           <ProfileGate job={job} profile={job.profile} />
         </>
+      )}
+    </div>
+  );
+}
+
+/** The job stopped mid-step (a loop, or the supervisor asked): continue, or send
+ * feedback that reaches the role that continues. */
+function DecisionGate({ job }: { job: Job }) {
+  const stop = [...job.history].reverse().find((t) => t.to_state === "awaiting_decision");
+  const resume = job.data.resume_state ?? "the interrupted step";
+  return (
+    <div style={{ marginTop: 12 }}>
+      <p>
+        <strong>{stop?.note}</strong>
+      </p>
+      <p className="muted small">
+        Approving continues with <code>{resume}</code> as it was; rejecting continues too, with your
+        feedback delivered to the agent that runs next. Nothing more is spent until you decide.
+      </p>
+      {stop?.detail && (
+        <details>
+          <summary className="small">what happened</summary>
+          <Detail text={stop.detail} />
+        </details>
       )}
     </div>
   );
@@ -671,6 +697,74 @@ function StandardsList({ text }: { text: string }) {
       </ul>
       {tail && <div className="muted">{tail}</div>}
     </div>
+  );
+}
+
+interface InvocationEntry {
+  role: string;
+  state: string;
+  phase: number | null;
+  attempts: number;
+  prompt_chars: number | null;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  ok: boolean;
+  error: string | null;
+  at: string;
+}
+
+/** Every model call: who, when, how big the prompt was, what it cost (T9.7). */
+function Invocations({ job }: { job: Job }) {
+  const log = job.data.invocation_log as unknown as InvocationEntry[];
+  if (log.length === 0) return null;
+  const tokens = log.reduce((n, e) => n + (e.input_tokens ?? 0) + (e.output_tokens ?? 0), 0);
+  return (
+    <section>
+      <h2>Model calls</h2>
+      <details className="card">
+        <summary>
+          {log.length} call{log.length === 1 ? "" : "s"} · {job.data.invocations} attempt
+          {job.data.invocations === 1 ? "" : "s"} · {tokens.toLocaleString()} tokens
+        </summary>
+        <table style={{ marginTop: 8 }}>
+          <thead>
+            <tr>
+              <th>When</th>
+              <th>Role</th>
+              <th>Step</th>
+              <th>Prompt</th>
+              <th>Tokens in / out</th>
+              <th>Attempts</th>
+              <th>Result</th>
+            </tr>
+          </thead>
+          <tbody>
+            {log.map((e, i) => (
+              <tr key={i}>
+                <td className="muted small">{formatTime(e.at)}</td>
+                <td>{e.role}</td>
+                <td className="small">
+                  {e.state}
+                  {e.phase ? ` · phase ${e.phase}` : ""}
+                </td>
+                <td className="mono small">
+                  {e.prompt_chars !== null ? `${(e.prompt_chars / 1000).toFixed(1)}k chars` : "—"}
+                </td>
+                <td className="mono small">
+                  {e.input_tokens ?? "—"} / {e.output_tokens ?? "—"}
+                </td>
+                <td>{e.attempts}</td>
+                <td>
+                  <span className={`badge plain ${e.ok ? "ok" : "bad"}`}>
+                    {e.ok ? "ok" : (e.error ?? "failed")}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </details>
+    </section>
   );
 }
 

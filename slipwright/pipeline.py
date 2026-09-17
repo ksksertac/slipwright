@@ -358,6 +358,43 @@ def _review_gate(job: Job, r: _Reader, number: int) -> StepCard | None:
     )
 
 
+def _insert_decision_gate(job: Job, r: _Reader, steps: list[StepCard]) -> None:
+    """While the job waits at the decision gate (a loop, or the supervisor asked), show
+    it right after the step it interrupted."""
+    if job.state is not JobState.AWAITING_DECISION:
+        return
+    visits = r.visits(JobState.AWAITING_DECISION, r.whole)
+    if not visits:
+        return
+    resume = job.data.resume_state or ""
+    phase = f"phase:{min(job.data.phase_index + 1, max(len(job.history), 1))}"
+    anchor = {
+        "backlog": "backlog",
+        "architecture": "architecture",
+        "developing": phase,
+        "build_gate": phase,
+        "review": phase,
+        "qa": "qa:1" if job.data.qa_stage == 1 else "qa:2",
+        "devops": "devops",
+    }.get(resume, "backlog")
+    keys = [c.key for c in steps]
+    at = keys.index(anchor) + 1 if anchor in keys else len(steps) - 1
+    start = r.history[visits[-1]].at
+    steps.insert(
+        at,
+        StepCard(
+            key="decision_gate",
+            label="Your decision",
+            gate=True,
+            pending="decision",
+            status=StepStatus.WAITING,
+            started_at=start,
+            elapsed_s=_elapsed(start, None, r.now),
+            outputs=[visits[-1]],
+        ),
+    )
+
+
 def _annotate_supervision(job: Job, steps: list[StepCard]) -> None:
     """Put the supervisor's view on the gate it concerns: a recommendation chip while the
     gate waits, an "approved by supervisor" mark once it acted."""
@@ -462,6 +499,7 @@ def lane_for(job: Job) -> Lane:
             finished_at=job.history[-1].at if job.state is JobState.DONE else None,
         ),
     ]
+    _insert_decision_gate(job, r, steps)
     _annotate_supervision(job, steps)
     return Lane(
         job_id=job.id,

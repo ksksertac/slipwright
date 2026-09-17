@@ -64,6 +64,13 @@ class RoleConfig(BaseModel):
         description="Token budget for the standards sections retrieved into this role's "
         "prompt; unset means the value under Settings → Standards.",
     )
+    retries: int = Field(
+        default=2,
+        ge=0,
+        le=5,
+        description="Attempts after a timeout, provider error or malformed output "
+        "(exponential backoff) before the job fails.",
+    )
 
     @field_validator("permissions")
     @classmethod

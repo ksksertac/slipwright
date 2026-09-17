@@ -27,7 +27,13 @@ data, auth, money or infrastructure; high: could lose data, expose secrets, brea
 production or is far larger than the request), `reasons` (short, concrete, at most five)
 and, when rejecting, `feedback` the agent can act on. Reject when the proposal drifts
 from `request`, breaks a core rule or a retrieved standard, or leaves the request
-unfinished. Prefer approve with medium risk over inventing objections."""
+unfinished. Prefer approve with medium risk over inventing objections.
+When `material.failed_build_gate` is present there is no gate to approve: a phase failed
+the build and you choose what happens next — `decision` is one of `fix` (the same
+specialist tries again with the build output; the usual answer for a test failure or a
+typo), `replan` (the failure shows the plan was wrong, e.g. a missing dependency or a
+phase far larger than its goal) or `ask_human` (secrets, data loss, or the same failure
+repeating). Give the reason in `reasons`."""
 
 GATE_LABELS = {
     JobState.AWAITING_BACKLOG_APPROVAL: "backlog",

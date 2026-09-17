@@ -205,8 +205,10 @@ def test_stage_two_exhausts_gate_attempts(
     engine = _engine(store, worktrees_root, seed, provider)
     job = engine.approve(_to_test_gate(engine, repo).id)
 
-    assert job.state is JobState.FAILED
-    assert job.history[-1].note == "qa tests failed the build gate 3 times"
+    # QA writes the same failing tests twice: the loop check hands it to a human (T9.7)
+    assert job.state is JobState.AWAITING_DECISION
+    assert job.history[-1].note == "loop detected: qa produced the same output twice in a row"
+    assert job.data.resume_state == "qa" and job.data.build_attempts == 1
 
 
 def test_reject_reruns_the_current_stage_with_feedback(
@@ -323,12 +325,15 @@ def test_red_ci_bounded_to_three_fix_attempts(
 
     job = _to_devops(engine, repo)
 
-    assert job.state is JobState.FAILED
-    assert job.history[-1].note == "CI red after 3 fix attempts"
-    assert job.history[-1].detail == "still red"
+    # the second identical fix is caught by the loop check before a third push (T9.7)
+    assert job.state is JobState.AWAITING_DECISION
+    assert (
+        job.history[-1].note == "loop detected: developer produced the same output twice in a row"
+    )
+    assert job.data.resume_state == "devops" and job.data.ci_attempts == 2
     fixes = [r for r in _requests(provider, RoleName.DEVELOPER) if '"ci_failure":' in r.prompt]
-    assert len(fixes) == 3
-    assert host.pushes == [job.branch] * 4
+    assert len(fixes) == 2
+    assert host.pushes == [job.branch] * 2
 
 
 def test_repo_without_checks_is_done(

@@ -377,6 +377,50 @@
         "title": "Board",
         "type": "object"
       },
+      "BudgetSettings": {
+        "additionalProperties": false,
+        "description": "Per-job limits (T9.7); None means unlimited. Exceeding one fails the job with the\nreason in its history.",
+        "properties": {
+          "max_invocations": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Invocations"
+          },
+          "max_tokens": {
+            "anyOf": [
+              {
+                "minimum": 1000.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Tokens"
+          },
+          "max_wall_clock_s": {
+            "anyOf": [
+              {
+                "minimum": 60.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Wall Clock S"
+          }
+        },
+        "title": "BudgetSettings",
+        "type": "object"
+      },
       "Credentials": {
         "properties": {
           "password": {
@@ -1172,6 +1216,22 @@
             "title": "Inbox",
             "type": "array"
           },
+          "invocation_log": {
+            "description": "One entry per model call: role, phase, attempts, prompt_chars, tokens, at.",
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Invocation Log",
+            "type": "array"
+          },
+          "invocations": {
+            "default": 0,
+            "description": "Model calls made so far.",
+            "minimum": 0.0,
+            "title": "Invocations",
+            "type": "integer"
+          },
           "jira_done": {
             "description": "Idempotency keys of agent Jira actions executed.",
             "items": {
@@ -1236,6 +1296,14 @@
             ],
             "title": "Last Build Output"
           },
+          "output_hashes": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "(role:phase) -> hash of the last output (loop check).",
+            "title": "Output Hashes",
+            "type": "object"
+          },
           "phase_base_commit": {
             "anyOf": [
               {
@@ -1292,6 +1360,18 @@
             "title": "Reject Rounds",
             "type": "integer"
           },
+          "resume_state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where the job continues after the decision gate.",
+            "title": "Resume State"
+          },
           "review_rounds": {
             "default": 0,
             "description": "Fix rounds the current phase went through after review.",
@@ -1337,6 +1417,13 @@
             },
             "title": "Test Cases",
             "type": "array"
+          },
+          "tokens_used": {
+            "default": 0,
+            "description": "Input + output tokens so far.",
+            "minimum": 0.0,
+            "title": "Tokens Used",
+            "type": "integer"
           }
         },
         "required": [
@@ -1347,6 +1434,8 @@
           "ci_attempts",
           "feedback",
           "inbox",
+          "invocation_log",
+          "invocations",
           "jira_done",
           "jira_keys",
           "jira_last_error",
@@ -1354,17 +1443,20 @@
           "jira_queue",
           "jira_status",
           "last_build_output",
+          "output_hashes",
           "phase_base_commit",
           "phase_index",
           "plan",
           "pr_url",
           "qa_stage",
           "reject_rounds",
+          "resume_state",
           "review_rounds",
           "review_violations",
           "reviews",
           "supervision",
-          "test_cases"
+          "test_cases",
+          "tokens_used"
         ],
         "title": "JobData",
         "type": "object"
@@ -1505,6 +1597,7 @@
           "qa",
           "awaiting_test_approval",
           "devops",
+          "awaiting_decision",
           "done",
           "failed"
         ],
@@ -2077,6 +2170,9 @@
       "Project": {
         "additionalProperties": false,
         "properties": {
+          "budget": {
+            "$ref": "#/components/schemas/BudgetSettings"
+          },
           "clone_url": {
             "anyOf": [
               {
@@ -2180,6 +2276,7 @@
           }
         },
         "required": [
+          "budget",
           "clone_url",
           "created_at",
           "description",
@@ -2200,6 +2297,16 @@
         "additionalProperties": false,
         "description": "Fields a client may change after creation. Unset fields are left alone.",
         "properties": {
+          "budget": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BudgetSettings"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "description": {
             "anyOf": [
               {
@@ -2556,6 +2663,14 @@
             ],
             "description": "Which provider serves this role (anthropic, openai, deepseek); unset means the configured default.",
             "title": "Provider"
+          },
+          "retries": {
+            "default": 2,
+            "description": "Attempts after a timeout, provider error or malformed output (exponential backoff) before the job fails.",
+            "maximum": 5.0,
+            "minimum": 0.0,
+            "title": "Retries",
+            "type": "integer"
           },
           "standards_budget": {
             "anyOf": [

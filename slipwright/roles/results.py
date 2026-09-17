@@ -232,9 +232,11 @@ class DevOpsResult(RoleOutput):
 
 
 class SupervisorResult(RoleOutput):
-    """Recommendation at a human gate (T9.8)."""
+    """Recommendation at a human gate (T9.8), or the choice on a failed build gate
+    (T9.7): ``fix`` (the same specialist tries again), ``replan`` (the architect
+    re-plans) or ``ask_human`` (the job waits at the decision gate)."""
 
-    decision: Literal["approve", "reject"]
+    decision: Literal["approve", "reject", "fix", "replan", "ask_human"]
     confidence: float = Field(ge=0.0, le=1.0)
     risk: Literal["low", "medium", "high"]
     reasons: list[str] = Field(default_factory=list)

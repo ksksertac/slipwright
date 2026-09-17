@@ -15,6 +15,7 @@ from slipwright.providers import ModelProvider
 from slipwright.roles.common import (
     base_context,
     list_tree,
+    plan_outline,
     project_facts,
     read_files,
     require_worktree,
@@ -87,7 +88,7 @@ def run(
         wanted = list(phase.get("files", []))
 
     context["project"] = project_facts(profile)
-    context["plan"] = plan
+    context["plan"] = plan_outline(plan)
     context["tree"] = list_tree(worktree)
     context["files"] = read_files(worktree, wanted)
 

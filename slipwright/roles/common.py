@@ -120,6 +120,21 @@ def base_context(
     return ctx
 
 
+def plan_outline(plan: dict[str, Any] | None) -> dict[str, Any] | None:
+    """The plan as a role that implements or tests it needs it: summary, decisions and
+    the phase goals — never the breakdown tree or file lists of other phases."""
+    if not plan:
+        return None
+    return {
+        "summary": plan.get("summary"),
+        "decisions": plan.get("decisions", []),
+        "phases": [
+            {"number": i + 1, "goal": p.get("goal"), "domain": p.get("domain", "general")}
+            for i, p in enumerate(plan.get("phases", []))
+        ],
+    }
+
+
 def project_facts(profile: Profile) -> dict[str, str | int]:
     """The profile's build/test/run facts, as every implementing role sees them."""
     return {

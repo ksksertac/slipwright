@@ -222,12 +222,14 @@ def test_auto_never_rejects_and_respects_threshold_cap_and_final_gate(
 def test_supervisor_error_falls_back_to_manual(
     store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
 ) -> None:
-    engine, _ = _engine(store, worktrees_root, seed, [ProviderTimeoutError("gone"), APPROVE])
+    gone = ProviderTimeoutError("gone")
+    engine, _ = _engine(store, worktrees_root, seed, [gone, gone, gone, APPROVE])  # 2 retries
     project = _project(engine, repo, mode="auto")
     job = engine.start(engine.create_job("health", project_id=project.id).id)
     assert job.state is JobState.AWAITING_BACKLOG_APPROVAL
     assert job.data.supervision is not None and job.data.supervision["acted"] == "error"
     assert (job.history[-1].note or "").startswith("supervisor failed: timeout")
+    assert sum(1 for t in job.history if "supervisor attempt" in (t.note or "")) == 2
     assert job.data.auto_approvals == 0
     job = engine.approve(job.id)  # and the next gate works again
     assert job.state is JobState.AWAITING_TEST_APPROVAL

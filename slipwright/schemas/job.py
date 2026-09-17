@@ -30,6 +30,7 @@ class JobState(StrEnum):
     QA = "qa"
     AWAITING_TEST_APPROVAL = "awaiting_test_approval"
     DEVOPS = "devops"
+    AWAITING_DECISION = "awaiting_decision"  # stuck (loop, or the supervisor asked): T9.7
     DONE = "done"
     FAILED = "failed"
 
@@ -40,6 +41,7 @@ APPROVAL_STATES: frozenset[JobState] = frozenset(
         JobState.AWAITING_ARCHITECTURE_APPROVAL,
         JobState.AWAITING_REVIEW_APPROVAL,
         JobState.AWAITING_TEST_APPROVAL,
+        JobState.AWAITING_DECISION,
     }
 )
 TERMINAL_STATES: frozenset[JobState] = frozenset({JobState.DONE, JobState.FAILED})
@@ -119,6 +121,19 @@ class JobData(BaseModel):
         "confidence, risk, reasons, feedback, acted (none | auto | error), undone.",
     )
     auto_approvals: int = Field(default=0, ge=0, description="Gates the supervisor approved.")
+    # -- hardening (T9.7) --
+    resume_state: str | None = Field(
+        default=None, description="Where the job continues after the decision gate."
+    )
+    invocations: int = Field(default=0, ge=0, description="Model calls made so far.")
+    tokens_used: int = Field(default=0, ge=0, description="Input + output tokens so far.")
+    invocation_log: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="One entry per model call: role, phase, attempts, prompt_chars, tokens, at.",
+    )
+    output_hashes: dict[str, str] = Field(
+        default_factory=dict, description="(role:phase) -> hash of the last output (loop check)."
+    )
     test_cases: list[dict[str, Any]] = Field(default_factory=list)
     qa_stage: int = Field(default=1, ge=1, le=2)
     pr_url: str | None = None

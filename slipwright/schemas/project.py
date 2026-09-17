@@ -43,6 +43,17 @@ class SupervisorSettings(BaseModel):
     )
 
 
+class BudgetSettings(BaseModel):
+    """Per-job limits (T9.7); None means unlimited. Exceeding one fails the job with the
+    reason in its history."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    max_tokens: int | None = Field(default=None, ge=1000)
+    max_wall_clock_s: int | None = Field(default=None, ge=60)
+    max_invocations: int | None = Field(default=None, ge=1)
+
+
 class Project(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -69,6 +80,7 @@ class Project(BaseModel):
         "blocks) or blocking (the specialist fixes, then a human gate).",
     )
     supervisor: SupervisorSettings = Field(default_factory=SupervisorSettings)
+    budget: BudgetSettings = Field(default_factory=BudgetSettings)
     created_at: datetime = Field(default_factory=utcnow)
 
     @field_validator("github_repo")
@@ -109,6 +121,14 @@ class ProjectPatch(BaseModel):
     profile: Profile | None = None
     review: ReviewMode | None = None
     supervisor: SupervisorSettings | None = None
+    budget: BudgetSettings | None = None
 
 
-__all__ = ["GateMode", "Project", "ProjectPatch", "ReviewMode", "SupervisorSettings"]
+__all__ = [
+    "BudgetSettings",
+    "GateMode",
+    "Project",
+    "ProjectPatch",
+    "ReviewMode",
+    "SupervisorSettings",
+]

@@ -27,6 +27,25 @@ LEGAL_TRANSITIONS: dict[JobState, tuple[JobState, ...]] = {
     JobState.FAILED: (),
 }
 
+# the decision gate (T9.7) can interrupt any working state and resumes into any of them
+_WORKING = (
+    JobState.BACKLOG,
+    JobState.ARCHITECTURE,
+    JobState.DEVELOPING,
+    JobState.BUILD_GATE,
+    JobState.REVIEW,
+    JobState.QA,
+    JobState.DEVOPS,
+)
+for _state in _WORKING:
+    LEGAL_TRANSITIONS[_state] = (*LEGAL_TRANSITIONS[_state], JobState.AWAITING_DECISION)
+LEGAL_TRANSITIONS[JobState.AWAITING_DECISION] = _WORKING
+# a failed build gate may send the phase back to the architect (the supervisor's "replan")
+LEGAL_TRANSITIONS[JobState.BUILD_GATE] = (
+    *LEGAL_TRANSITIONS[JobState.BUILD_GATE],
+    JobState.ARCHITECTURE,
+)
+
 
 class IllegalTransitionError(ValueError):
     def __init__(self, from_state: JobState, to_state: JobState) -> None:

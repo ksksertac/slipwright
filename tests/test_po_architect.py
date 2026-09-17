@@ -44,7 +44,14 @@ def _engine(
     """An engine that stops right after the backlog gate (default) or, with
     ``stop_after=JobState.DEVELOPING``, right after the architecture gate."""
     ws = Workspace(worktrees_root, PortAllocator(start=8300, end=8399))
-    engine = Engine(store, ws, seed_profile=seed, provider=provider, supervisor_mode="manual")
+    engine = Engine(
+        store,
+        ws,
+        seed_profile=seed,
+        provider=provider,
+        supervisor_mode="manual",
+        retry_backoff_s=0.0,
+    )
     engine.handlers.pop(stop_after, None)
     return engine
 
@@ -143,8 +150,13 @@ def test_po_failure_moves_job_to_failed(
     job = engine.start(engine.create_job("x", repo).id)
 
     assert job.state is JobState.FAILED
-    assert job.history[-1].note == "po failed: timeout"
+    assert job.history[-1].note == "po failed: timeout after 3 attempts"  # 2 retries (T9.7)
     assert "model went away" in (job.history[-1].detail or "")
+    retries = [t.note or "" for t in job.history if "retrying" in (t.note or "")]
+    assert retries == [
+        "po attempt 1 failed: timeout; retrying in 0s (1/2 retries used)",
+        "po attempt 2 failed: timeout; retrying in 0s (2/2 retries used)",
+    ]
 
 
 def test_malformed_backlog_from_po_fails_job(
@@ -155,7 +167,7 @@ def test_malformed_backlog_from_po_fails_job(
     job = engine.start(engine.create_job("x", repo).id)
 
     assert job.state is JobState.FAILED
-    assert job.history[-1].note == "po failed: malformed_output"
+    assert job.history[-1].note == "po failed: malformed_output after 3 attempts"
 
 
 # --- architect ------------------------------------------------------------------------

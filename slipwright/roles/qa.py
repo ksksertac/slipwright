@@ -14,6 +14,7 @@ from slipwright.providers import ModelProvider
 from slipwright.roles.common import (
     base_context,
     list_tree,
+    plan_outline,
     project_facts,
     read_files,
     require_worktree,
@@ -64,7 +65,7 @@ def run(
     )
     context["stage"] = stage
     context["project"] = project_facts(profile)
-    context["plan"] = job.data.plan
+    context["plan"] = plan_outline(job.data.plan)
     context["branch_diff"] = branch_diff
     if stage == 1:
         context["previous_test_cases"] = job.data.test_cases

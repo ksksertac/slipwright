@@ -143,6 +143,8 @@ def test_failure_comments_on_the_failing_task(
     job = engine.start(engine.create_job("x", project_id=project.id).id)
     job = engine.approve(job.id)
     job = engine.approve(job.id)
+    while job.state is JobState.AWAITING_DECISION:  # the loop check asks; we insist
+        job = engine.approve(job.id)
     assert job.state is JobState.FAILED
     task_key = job.data.jira_keys[_task_ids(job)[0]]
     assert any("failed here" in c for c in jira.comments[task_key])

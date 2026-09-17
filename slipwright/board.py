@@ -113,6 +113,11 @@ def task_status(job: Job, phase: int | None) -> TaskStatus:
             return TaskStatus.FAILED
         if job.state in (JobState.DEVELOPING, JobState.BUILD_GATE):
             return TaskStatus.IN_PROGRESS
+        if job.state is JobState.AWAITING_DECISION and job.data.resume_state in (
+            JobState.DEVELOPING.value,
+            JobState.BUILD_GATE.value,
+        ):
+            return TaskStatus.IN_PROGRESS  # stuck mid-phase, waiting for a person
     return TaskStatus.TODO
 
 
