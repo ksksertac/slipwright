@@ -25,6 +25,11 @@ import {
   type PlanEdit,
   type Project,
   type ProjectPatch,
+  type StandardsHit,
+  type StandardsPage,
+  type StandardsPageText,
+  type StandardsSettingsIn,
+  type StandardsStatus,
   type ProjectProgress,
   type ProviderModels,
   type ProviderSettings,
@@ -60,6 +65,11 @@ export const keys = {
   providers: ["settings", "providers"] as const,
   providerModels: (name: string) => ["settings", "providers", name, "models"] as const,
   tokens: (userId: string) => ["users", userId, "tokens"] as const,
+  standards: ["standards", "status"] as const,
+  standardsPages: (scope: string, domain: string) => ["standards", "pages", scope, domain] as const,
+  standardsPage: (scope: string, path: string) => ["standards", "page", scope, path] as const,
+  standardsSearch: (scope: string, domain: string, q: string) =>
+    ["standards", "search", scope, domain, q] as const,
 };
 
 // -- dashboard -------------------------------------------------------------------------
@@ -474,5 +484,97 @@ export function useProviderModels(name: string | null) {
     enabled: name !== null,
     retry: false,
     staleTime: 5 * 60_000,
+  });
+}
+
+// -- standards (T9.6) ------------------------------------------------------------------
+
+function scopeParam(projectId: string | null): string {
+  return projectId ? `project_id=${encodeURIComponent(projectId)}` : "";
+}
+
+export function useStandardsStatus() {
+  return useQuery({
+    queryKey: keys.standards,
+    queryFn: () => api.get<StandardsStatus>("/api/settings/standards"),
+  });
+}
+
+export function useSaveStandardsSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: StandardsSettingsIn) => api.put("/api/settings/standards", body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.standards }),
+  });
+}
+
+export function useReindexStandards() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (projectId: string | null) =>
+      api.post<StandardsStatus>(`/api/settings/standards/reindex?${scopeParam(projectId)}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["standards"] }),
+  });
+}
+
+export function useStandardsPages(projectId: string | null, domain: string) {
+  return useQuery({
+    queryKey: keys.standardsPages(projectId ?? "global", domain),
+    queryFn: () =>
+      api.get<StandardsPage[]>(
+        `/api/standards/pages?domain=${encodeURIComponent(domain)}&${scopeParam(projectId)}`,
+      ),
+  });
+}
+
+export function useStandardsPage(projectId: string | null, path: string | null) {
+  return useQuery({
+    queryKey: keys.standardsPage(projectId ?? "global", path ?? ""),
+    queryFn: () =>
+      api.get<StandardsPageText>(`/api/standards/pages/${path}?${scopeParam(projectId)}`),
+    enabled: path !== null,
+  });
+}
+
+export function useSaveStandardsPage(projectId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { path: string; text: string }) =>
+      api.put<StandardsPage>(`/api/standards/pages/${args.path}`, {
+        text: args.text,
+        project_id: projectId,
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["standards"] }),
+  });
+}
+
+export function useCreateStandardsPage(projectId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { domain: string; title: string; text: string }) =>
+      api.post<StandardsPage>("/api/standards/pages", { ...args, project_id: projectId }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["standards"] }),
+  });
+}
+
+export function useDeleteStandardsPage(projectId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (path: string) =>
+      api.delete<void>(`/api/standards/pages/${path}?${scopeParam(projectId)}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["standards"] }),
+  });
+}
+
+export function useStandardsSearch(projectId: string | null, domain: string, q: string) {
+  return useQuery({
+    queryKey: keys.standardsSearch(projectId ?? "global", domain, q),
+    queryFn: () =>
+      api.get<StandardsHit[]>(
+        `/api/settings/standards/search?q=${encodeURIComponent(q)}&domain=${encodeURIComponent(
+          domain,
+        )}&k=6&${scopeParam(projectId)}`,
+      ),
+    enabled: q.trim().length > 0,
   });
 }

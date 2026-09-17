@@ -61,6 +61,7 @@ from slipwright.schemas.profile import Permission, Profile, RoleName
 from slipwright.schemas.project import Project
 from slipwright.schemas.testrun import TestRun, TestRunSource, TestRunStatus
 from slipwright.standards import GLOBAL_DIR, PROJECT_SUBDIR, load_corpus
+from slipwright.standards.editing import StandardsEditor
 from slipwright.standards.index import (
     Embedder,
     HashingEmbedder,
@@ -164,6 +165,7 @@ class Engine:
         self.standards_db = workspace.worktrees_root.parent / "standards.sqlite3"
         self.standards_dir = GLOBAL_DIR
         self._standards_index: StandardsIndex | None = None
+        self._standards_editor: StandardsEditor | None = None
         self.orchestrator = Orchestrator(store)
         self.seed_profile = seed_profile
         self._provider = provider
@@ -527,6 +529,23 @@ class Engine:
             self.standards_db.parent.mkdir(parents=True, exist_ok=True)
             self._standards_index = StandardsIndex(self.standards_db, self._build_embedder())
         return self._standards_index
+
+    @property
+    def standards_editor(self) -> StandardsEditor:
+        if self._standards_editor is None:
+            self._standards_editor = StandardsEditor(
+                self.standards_dir, self.workspace.worktrees_root.parent / "standards-branches"
+            )
+        return self._standards_editor
+
+    def standards_repo_for(self, project_id: str | None) -> Path | None:
+        """The project checkout whose overrides are edited, or None for the global corpus."""
+        if project_id is None:
+            return None
+        project = self.store.get_project(project_id)
+        if project.repo_path is None:
+            raise ProjectNotFound(project_id)
+        return project.repo_path
 
     def _standards_paths(self, project: Project | None) -> list[Path]:
         if project is None:

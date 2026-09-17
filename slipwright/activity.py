@@ -133,6 +133,9 @@ class ProjectProgress(BaseModel):
     tasks_done: int
     tasks_total: int
     last_activity: datetime | None
+    review_blocking: int = 0  # blocking findings across the project's reviews (T9.6)
+    review_advisory: int = 0
+    reviews: int = 0
 
 
 # -- progress ---------------------------------------------------------------------------
@@ -201,6 +204,9 @@ def project_progress(project_id: str, jobs: list[Job]) -> ProjectProgress:
         tasks_done=sum(r.tasks_done for r in rows),
         tasks_total=sum(r.tasks_total for r in rows),
         last_activity=max((r.last_activity for r in rows), default=None),
+        review_blocking=sum(int(r.get("blocking", 0)) for j in jobs for r in j.data.reviews),
+        review_advisory=sum(int(r.get("advisory", 0)) for j in jobs for r in j.data.reviews),
+        reviews=sum(len(j.data.reviews) for j in jobs),
     )
 
 

@@ -205,7 +205,7 @@ def corpus_fingerprint(paths: list[Path]) -> str:
     parts = []
     for path in sorted(paths):
         st = path.stat()
-        parts.append(f"{path.as_posix()}:{st.st_size}:{int(st.st_mtime)}")
+        parts.append(f"{path.as_posix()}:{st.st_size}:{st.st_mtime_ns}")
     return hashlib.sha256("\n".join(parts).encode()).hexdigest()
 
 

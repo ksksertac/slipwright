@@ -128,6 +128,19 @@ function OverviewTab({ projectId }: { projectId: string }) {
           {p.jobs_running} running · {p.pending_approvals} waiting for approval · {p.jobs_done} done
           · {p.jobs_failed} failed · last activity {timeAgo(p.last_activity)}
         </div>
+        <div className="muted small" style={{ marginTop: 4 }}>
+          Standards review: {p.reviews} review{p.reviews === 1 ? "" : "s"}
+          {p.reviews > 0 && (
+            <>
+              {" "}
+              ·{" "}
+              <span className={p.review_blocking ? "error" : ""}>
+                {p.review_blocking} blocking
+              </span>{" "}
+              · {p.review_advisory} advisory finding{p.review_advisory === 1 ? "" : "s"}
+            </>
+          )}
+        </div>
       </div>
 
       <div className="card">

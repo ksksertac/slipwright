@@ -45,6 +45,11 @@ export type StepStatus = StepCard["status"];
 export type BatchResult = Schemas["BatchResult"];
 export type BatchOutcome = Schemas["BatchOutcome"];
 export type PlanEdit = Schemas["PlanEdit"];
+export type StandardsPage = Schemas["StandardsPage"];
+export type StandardsPageText = Schemas["StandardsPageText"];
+export type StandardsStatus = Schemas["StandardsStatus"];
+export type StandardsSettingsIn = Schemas["StandardsSettingsIn"];
+export type StandardsHit = Schemas["StandardsHit"];
 
 export type ApiPaths = keyof paths;
 

@@ -36,7 +36,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 
 ## Progress
 
-> **Resume here:** Phases 0–8, T9.0–T9.5 and T9.9 are complete. Next: **T9.6** (standards in the UI), then T9.8, T9.7.
+> **Resume here:** Phases 0–8, T9.0–T9.6 and T9.9 are complete. Next: **T9.8** (supervisor at the gates), then T9.7.
 > Design note for T1.3: `run_cmd` is executed as a subprocess in the worktree (Docker is used
 > only if the profile's `run_cmd` itself invokes it).
 > Design note for T2.2: `invoke_role` talks to a `ModelProvider` (`slipwright/providers/`);
@@ -131,7 +131,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 | 9 | T9.3 Standards index (RAG) | [x] |
 | 9 | T9.4 Retrieval into every role's prompt | [x] |
 | 9 | T9.5 Standards review gate | [x] |
-| 9 | T9.6 Standards in the UI | [ ] |
+| 9 | T9.6 Standards in the UI | [x] |
 | 9 | T9.7 Orchestrator hardening: budgets, retries, supervisor decisions | [ ] |
 | 9 | T9.8 Supervisor at the gates: manual / assisted / auto | [ ] |
 | 9 | T9.9 Project pipeline view and bulk approvals | [x] |
@@ -858,20 +858,36 @@ The standards are reached **through the agent**: each agent card's *Standards* t
 editor for that agent's domain, so "what does the Backend agent follow?" is one click.
 
 **Done when**
-- [ ] Agent detail → Standards tab: the domain's pages as a list with search, page count
+- [x] Agent detail → Standards tab: the domain's pages as a list with search, page count
   and last edit; **New page** (title + Markdown), edit in a Markdown editor with preview,
   delete with confirmation; a *Scope* switch chooses the global corpus or a project's
   override; save writes the file and triggers an incremental reindex
-- [ ] `core.md` is shown on every agent's Standards tab as a read-only "applies to all"
+- [x] `core.md` is shown on every agent's Standards tab as a read-only "applies to all"
   block with a link to edit it (admin only)
-- [ ] "Try a search" box: enter a task sentence, pick a domain, see the ranked chunks with
+- [x] "Try a search" box: enter a task sentence, pick a domain, see the ranked chunks with
   scores — the tool for tuning headings and chunking
-- [ ] Embedder settings (none / openai / local) with a status line (chunks indexed, last
+- [x] Embedder settings (none / openai / local) with a status line (chunks indexed, last
   reindex, model) and a *Reindex now* button
-- [ ] Job page: per phase, the standards sections that were given to the agent and any
+- [x] Job page: per phase, the standards sections that were given to the agent and any
   review violations; project page Overview shows review health (advisory/blocking counts)
-- [ ] Git: files edited in the UI are committed on a `slipwright/standards` branch of this
+- [x] Git: files edited in the UI are committed on a `slipwright/standards` branch of this
   repo (or the project repo for overrides) so changes are reviewable
+
+> Design note for T9.6: `slipwright/standards/editing.py` (`StandardsEditor`) owns page
+> CRUD: paths are checked against `<domain>/<name>.md` | `core.md`, a save is linted in a
+> temp dir together with its siblings (duplicate headings, section length, front-matter)
+> and refused with a 422 before anything is written, then written where the agents read
+> it (`standards/` or `<repo>/.slipwright/standards`) and `ensure_standards_indexed`
+> reindexes (the corpus fingerprint now uses `st_mtime_ns`). The review branch: a
+> worktree of the same repository under `<state>/standards-branches/` checked out on
+> `slipwright/standards`; the edited file is copied there and committed, so the running
+> checkout never changes branch; no git → no branch, logged. API: `/api/standards/pages`
+> (list/create), `/api/standards/pages/{path}` (get/put/delete, admin for writes),
+> `project_id` selects a project's overrides. Web: `pages/AgentStandardsTab.tsx` (scope
+> switch, page table, `PageEditor` modal with Markdown/preview tabs, `NewPageModal`,
+> `CoreBlock`, `TrySearch` over `/api/settings/standards/search`, `IndexSettings` with
+> reindex); a small `Markdown` renderer avoids a dependency. `ProjectProgress` gained
+> `reviews` / `review_blocking` / `review_advisory` for the Overview tab.
 
 ### T9.7 — Orchestrator hardening: budgets, retries, supervisor decisions
 **Done when**

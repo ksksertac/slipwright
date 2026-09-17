@@ -1764,6 +1764,66 @@
         "title": "Overview",
         "type": "object"
       },
+      "PageCreate": {
+        "properties": {
+          "domain": {
+            "title": "Domain",
+            "type": "string"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "text": {
+            "default": "",
+            "title": "Text",
+            "type": "string"
+          },
+          "title": {
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "domain",
+          "title"
+        ],
+        "title": "PageCreate",
+        "type": "object"
+      },
+      "PageWrite": {
+        "properties": {
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "text": {
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "PageWrite",
+        "type": "object"
+      },
       "Permission": {
         "enum": [
           "read_files",
@@ -2177,6 +2237,21 @@
             "title": "Project Id",
             "type": "string"
           },
+          "review_advisory": {
+            "default": 0,
+            "title": "Review Advisory",
+            "type": "integer"
+          },
+          "review_blocking": {
+            "default": 0,
+            "title": "Review Blocking",
+            "type": "integer"
+          },
+          "reviews": {
+            "default": 0,
+            "title": "Reviews",
+            "type": "integer"
+          },
           "tasks_done": {
             "title": "Tasks Done",
             "type": "integer"
@@ -2194,6 +2269,9 @@
           "last_activity",
           "pending_approvals",
           "project_id",
+          "review_advisory",
+          "review_blocking",
+          "reviews",
           "tasks_done",
           "tasks_total"
         ],
@@ -2465,6 +2543,99 @@
           "text"
         ],
         "title": "StandardsHit",
+        "type": "object"
+      },
+      "StandardsPage": {
+        "properties": {
+          "domain": {
+            "title": "Domain",
+            "type": "string"
+          },
+          "modified_at": {
+            "format": "date-time",
+            "title": "Modified At",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "scope": {
+            "title": "Scope",
+            "type": "string"
+          },
+          "sections": {
+            "title": "Sections",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "words": {
+            "title": "Words",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "domain",
+          "modified_at",
+          "path",
+          "scope",
+          "sections",
+          "title",
+          "words"
+        ],
+        "title": "StandardsPage",
+        "type": "object"
+      },
+      "StandardsPageText": {
+        "properties": {
+          "domain": {
+            "title": "Domain",
+            "type": "string"
+          },
+          "modified_at": {
+            "format": "date-time",
+            "title": "Modified At",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "scope": {
+            "title": "Scope",
+            "type": "string"
+          },
+          "sections": {
+            "title": "Sections",
+            "type": "integer"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "words": {
+            "title": "Words",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "domain",
+          "modified_at",
+          "path",
+          "scope",
+          "sections",
+          "text",
+          "title",
+          "words"
+        ],
+        "title": "StandardsPageText",
         "type": "object"
       },
       "StandardsSettings": {
@@ -5226,6 +5397,273 @@
           }
         },
         "summary": "Search Standards",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/standards/pages": {
+      "get": {
+        "description": "The pages of a domain (plus ``core.md``) in the global corpus or a project's overrides.",
+        "operationId": "list_standards_pages_api_standards_pages_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "domain",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Domain"
+            }
+          },
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Project Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/StandardsPage"
+                  },
+                  "title": "Response List Standards Pages Api Standards Pages Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Standards Pages",
+        "tags": [
+          "settings"
+        ]
+      },
+      "post": {
+        "operationId": "create_standards_page_api_standards_pages_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PageCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardsPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Standards Page",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/standards/pages/{path}": {
+      "delete": {
+        "operationId": "delete_standards_page_api_standards_pages__path__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "path",
+            "required": true,
+            "schema": {
+              "title": "Path",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Project Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Standards Page",
+        "tags": [
+          "settings"
+        ]
+      },
+      "get": {
+        "operationId": "get_standards_page_api_standards_pages__path__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "path",
+            "required": true,
+            "schema": {
+              "title": "Path",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Project Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardsPageText"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Standards Page",
+        "tags": [
+          "settings"
+        ]
+      },
+      "put": {
+        "description": "Save a page (linted first), commit it on the review branch, reindex.",
+        "operationId": "put_standards_page_api_standards_pages__path__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "path",
+            "required": true,
+            "schema": {
+              "title": "Path",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PageWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardsPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Standards Page",
         "tags": [
           "settings"
         ]

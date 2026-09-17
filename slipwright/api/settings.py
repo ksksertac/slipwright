@@ -6,6 +6,9 @@ stored token is never returned, only whether one exists and its last four charac
 
 from __future__ import annotations
 
+from datetime import datetime
+from pathlib import Path
+
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
@@ -16,7 +19,9 @@ from slipwright.jira import JiraAccount, JiraError, JiraProject, JiraSettings
 from slipwright.providers import ProviderError
 from slipwright.providers.registry import PROVIDERS
 from slipwright.schemas.profile import Profile
+from slipwright.standards.editing import PageError, PageInfo
 from slipwright.standards.index import StandardsIndexError
+from slipwright.store import ProjectNotFound
 
 router = APIRouter(tags=["settings"])
 
@@ -318,3 +323,120 @@ __all__ = [
     "ProviderSettingsIn",
     "router",
 ]
+
+
+# -- standards pages (T9.6) --------------------------------------------------------------------
+
+
+class StandardsPage(BaseModel):
+    path: str
+    domain: str
+    title: str
+    scope: str
+    sections: int
+    words: int
+    modified_at: datetime
+
+
+class StandardsPageText(StandardsPage):
+    text: str
+
+
+class PageWrite(BaseModel):
+    text: str = Field(min_length=1)
+    project_id: str | None = None
+
+
+class PageCreate(BaseModel):
+    domain: str
+    title: str = Field(min_length=1)
+    text: str = ""
+    project_id: str | None = None
+
+
+def _page(info: PageInfo) -> StandardsPage:
+    return StandardsPage(
+        path=info.path,
+        domain=info.domain,
+        title=info.title,
+        scope=info.scope,
+        sections=info.sections,
+        words=info.words,
+        modified_at=info.modified_at,
+    )
+
+
+def _repo(eng: Engine, project_id: str | None) -> Path | None:
+    try:
+        return eng.standards_repo_for(project_id)
+    except ProjectNotFound as exc:
+        raise HTTPException(status_code=404, detail=f"no project {project_id}") from exc
+
+
+@router.get("/standards/pages", response_model=list[StandardsPage])
+def list_standards_pages(
+    request: Request, domain: str | None = None, project_id: str | None = None
+) -> list[StandardsPage]:
+    """The pages of a domain (plus ``core.md``) in the global corpus or a project's overrides."""
+    eng = _engine(request)
+    pages = eng.standards_editor.list_pages(_repo(eng, project_id), domain)
+    return [_page(p) for p in pages]
+
+
+@router.get("/standards/pages/{path:path}", response_model=StandardsPageText)
+def get_standards_page(
+    path: str, request: Request, project_id: str | None = None
+) -> StandardsPageText:
+    eng = _engine(request)
+    repo = _repo(eng, project_id)
+    try:
+        text = eng.standards_editor.read(path, repo)
+    except PageError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=f"no page {path}") from exc
+    info = next(p for p in eng.standards_editor.list_pages(repo) if p.path == path)
+    return StandardsPageText(text=text, **_page(info).model_dump())
+
+
+@router.put("/standards/pages/{path:path}", response_model=StandardsPage)
+def put_standards_page(path: str, body: PageWrite, request: Request) -> StandardsPage:
+    """Save a page (linted first), commit it on the review branch, reindex."""
+    user = require_admin(request)
+    eng = _engine(request)
+    repo = _repo(eng, body.project_id)
+    try:
+        info = eng.standards_editor.write(path, body.text, repo, author=user.username)
+    except PageError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    eng.ensure_standards_indexed(body.project_id)
+    return _page(info)
+
+
+@router.post("/standards/pages", response_model=StandardsPage, status_code=201)
+def create_standards_page(body: PageCreate, request: Request) -> StandardsPage:
+    user = require_admin(request)
+    eng = _engine(request)
+    repo = _repo(eng, body.project_id)
+    try:
+        info = eng.standards_editor.create(
+            body.domain, body.title, body.text, repo, author=user.username
+        )
+    except PageError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    eng.ensure_standards_indexed(body.project_id)
+    return _page(info)
+
+
+@router.delete("/standards/pages/{path:path}", status_code=204)
+def delete_standards_page(path: str, request: Request, project_id: str | None = None) -> None:
+    user = require_admin(request)
+    eng = _engine(request)
+    repo = _repo(eng, project_id)
+    try:
+        eng.standards_editor.delete(path, repo, author=user.username)
+    except PageError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=f"no page {path}") from exc
+    eng.ensure_standards_indexed(project_id)

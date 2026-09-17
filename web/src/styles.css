@@ -1594,3 +1594,58 @@ table.violations th {
   padding: 6px 10px;
   vertical-align: top;
 }
+
+/* standards editing (T9.6) */
+tr.clickable {
+  cursor: pointer;
+}
+tr.clickable:hover td {
+  background: var(--surface-2);
+}
+textarea.editor {
+  width: 100%;
+  font-size: 13px;
+  line-height: 1.5;
+  tab-size: 2;
+}
+.preview,
+.markdown {
+  font-size: 14px;
+  line-height: 1.55;
+}
+.markdown h2 {
+  font-size: 18px;
+  margin: 14px 0 6px;
+}
+.markdown h3 {
+  font-size: 15px;
+  margin: 14px 0 4px;
+}
+.markdown h4 {
+  font-size: 13.5px;
+  margin: 10px 0 4px;
+}
+.markdown p {
+  margin: 6px 0;
+}
+.markdown ul {
+  margin: 6px 0 6px 20px;
+}
+.preview {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  min-height: 420px;
+  max-height: 60vh;
+  overflow: auto;
+  background: var(--surface-2);
+}
+ol.hits {
+  margin: 10px 0 0 18px;
+}
+ol.hits li {
+  margin-bottom: 6px;
+}
+ol.hits summary {
+  cursor: pointer;
+}
