@@ -68,6 +68,7 @@ class Pipeline(BaseModel):
 
 
 _PHASE_NOTE = re.compile(r"^(\w+) phase (\d+)/(\d+)")
+_REVIEW_NOTE = re.compile(r"^review phase (\d+)/(\d+)")
 _GATE_PASSED = re.compile(r"^build gate passed for phase (\d+)/")
 _GATE_FAILED = re.compile(r"^build gate failed (?:on phase|\d+ times on phase) (\d+)")
 
@@ -267,7 +268,13 @@ def _phase_cards(job: Job, r: _Reader) -> list[StepCard]:
                     start = r.history[i].at
                     break
         in_dev = job.state in (JobState.DEVELOPING, JobState.BUILD_GATE)
-        if passed or past_dev or job.data.phase_index > index:
+        in_review = job.state in (JobState.REVIEW, JobState.AWAITING_REVIEW_APPROVAL)
+        if in_review and job.data.phase_index - 1 == index:
+            status = StepStatus.RUNNING  # built, the standards review is not settled
+            if start is None:
+                visits = r.visits(JobState.DEVELOPING, r.whole)
+                start = r.history[visits[-1]].at if visits else None
+        elif passed or past_dev or job.data.phase_index > index:
             status = StepStatus.DONE
             end = passed[-1].at if passed else None
         elif in_dev and job.data.phase_index == index:
@@ -303,7 +310,48 @@ def _phase_cards(job: Job, r: _Reader) -> list[StepCard]:
                 outputs=sorted(set(outputs + gate_logs)),
             )
         )
+        gate = _review_gate(job, r, number)
+        if gate is not None:
+            cards.append(gate)
     return cards
+
+
+def _review_gate(job: Job, r: _Reader, number: int) -> StepCard | None:
+    """A "Review approval" card after a phase whose blocking violations reached the
+    human: waiting while the job sits at the gate, done once it was decided."""
+    visits = [
+        i
+        for i, t in enumerate(r.history)
+        if t.to_state is JobState.AWAITING_REVIEW_APPROVAL
+        and (m := _REVIEW_NOTE.match(t.note or ""))
+        and int(m.group(1)) == number
+    ]
+    if not visits:
+        return None
+    last = visits[-1]
+    decided = next(
+        (
+            i
+            for i in range(last + 1, len(r.history))
+            if r.history[i].from_state is JobState.AWAITING_REVIEW_APPROVAL
+        ),
+        None,
+    )
+    waiting = job.state is JobState.AWAITING_REVIEW_APPROVAL and decided is None
+    start = r.history[last].at
+    end = r.history[decided].at if decided is not None else None
+    return StepCard(
+        key=f"review_gate:{number}",
+        label=f"Review approval: phase {number}",
+        gate=True,
+        pending="review" if waiting else None,
+        status=StepStatus.WAITING if waiting else StepStatus.DONE,
+        phase=number,
+        started_at=start,
+        finished_at=end,
+        elapsed_s=_elapsed(start, end, r.now),
+        outputs=[last] + ([decided] if decided is not None else []),
+    )
 
 
 def lane_for(job: Job) -> Lane:

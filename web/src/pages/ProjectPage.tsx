@@ -243,6 +243,16 @@ function BoardTab({ projectId }: { projectId: string }) {
                               <span className="muted small mono"> · {task.files.join(", ")}</span>
                             )}
                           </span>
+                          {task.violations > 0 && (
+                            <span
+                              className={`badge plain ${task.blocking ? "bad" : "work"}`}
+                              title="standards review findings"
+                            >
+                              {task.blocking
+                                ? `${task.blocking} blocking`
+                                : `${task.violations} advisory`}
+                            </span>
+                          )}
                           <JiraLink issueKey={task.jira_key} />
                           <StatusBadge status={task.status} />
                         </div>

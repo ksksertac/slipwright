@@ -36,7 +36,7 @@ from slipwright.engine import Engine, InvalidEdit, NotAwaitingApproval, ProjectC
 from slipwright.pipeline import Pipeline, pipeline
 from slipwright.schemas.job import Job, Transition
 from slipwright.schemas.profile import Profile, RoleName
-from slipwright.schemas.project import Project, ProjectPatch
+from slipwright.schemas.project import Project, ProjectPatch, ReviewMode
 from slipwright.schemas.testrun import TestRun
 from slipwright.store import (
     JobInProgress,
@@ -66,6 +66,7 @@ class NewProject(BaseModel):
     clone_url: str | None = None
     jira_project_key: str | None = None
     profile: Profile | None = None
+    review: ReviewMode = "advisory"
 
 
 class Rejection(BaseModel):

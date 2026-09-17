@@ -41,6 +41,8 @@ class TaskView(BaseModel):
     job_id: str
     files: list[str] = Field(default_factory=list)
     jira_key: str | None = None
+    violations: int = Field(default=0, description="Findings of the latest standards review.")
+    blocking: int = Field(default=0, description="Of which blocking.")
 
 
 class StoryView(BaseModel):
@@ -99,6 +101,11 @@ def task_status(job: Job, phase: int | None) -> TaskStatus:
     if job.state is JobState.DONE:
         return TaskStatus.DONE
     index = phase - 1
+    if (
+        job.state in (JobState.REVIEW, JobState.AWAITING_REVIEW_APPROVAL)
+        and index == job.data.phase_index - 1
+    ):
+        return TaskStatus.IN_PROGRESS  # built, but the review is not settled
     if index < job.data.phase_index:
         return TaskStatus.DONE
     if index == job.data.phase_index:
@@ -121,6 +128,14 @@ def rollup(statuses: list[TaskStatus]) -> TaskStatus:
     return TaskStatus.TODO
 
 
+def latest_reviews(job: Job) -> dict[int, dict[str, Any]]:
+    """Phase number -> the last standards review recorded for it (T9.5)."""
+    latest: dict[int, dict[str, Any]] = {}
+    for record in job.data.reviews:
+        latest[int(record.get("phase", 0))] = record
+    return latest
+
+
 def job_epics(job: Job) -> list[EpicView]:
     """The job's breakdown with statuses; empty until its plan is approved."""
     if not plan_is_active(job):
@@ -130,6 +145,7 @@ def job_epics(job: Job) -> list[EpicView]:
         return []
     phases: list[dict[str, Any]] = (job.data.plan or {}).get("phases", [])
     keys: dict[str, str] = job.data.jira_keys
+    reviews = latest_reviews(job)
     epics: list[EpicView] = []
     for epic in breakdown.epics:
         stories: list[StoryView] = []
@@ -153,6 +169,8 @@ def job_epics(job: Job) -> list[EpicView]:
                         if t.phase is not None and t.phase - 1 < len(phases)
                         else None
                     ),
+                    violations=len(reviews.get(t.phase or 0, {}).get("violations", [])),
+                    blocking=int(reviews.get(t.phase or 0, {}).get("blocking", 0)),
                 )
                 for t in story.tasks
             ]

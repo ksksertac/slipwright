@@ -35,6 +35,12 @@ realistic estimate) describing what you changed.
 If a `standards` section is present its sections are binding unless they contradict
 the core rules; say in `summary` when one could not be followed and why."""
 
+REVIEW_FIX = """
+If `standards_review` is present, your previous change for this phase passed the build
+but the standards review found the listed `violations` (each names the section, the file
+and a fix); the phase already committed, so return only the files that change to resolve
+every violation, and set `phase_complete` to true."""
+
 FIX_INSTRUCTIONS = """\
 The change set on this branch is complete but `ci_failure` shows the continuous
 integration run failed. Read the log, fix the cause, and return the corrected files
@@ -53,6 +59,7 @@ def run(
     jira: dict[str, Any] | None = None,
     as_role: RoleName = RoleName.DEVELOPER,
     standards: dict[str, Any] | None = None,
+    review: dict[str, Any] | None = None,
 ) -> RoleResult:
     """Run the generic developer or, with ``role``, one of the specialists."""
     from slipwright.roles.specialists import INSTRUCTIONS as SPECIALIST_INSTRUCTIONS
@@ -61,6 +68,8 @@ def run(
     phases: list[dict[str, Any]] = plan.get("phases", [])
     worktree = require_worktree(job)
     instructions = SPECIALIST_INSTRUCTIONS.get(as_role, INSTRUCTIONS)
+    if review:
+        instructions += REVIEW_FIX
 
     if ci_failure is not None:
         context = base_context(job, instructions=FIX_INSTRUCTIONS, jira=jira, standards=standards)
@@ -73,6 +82,8 @@ def run(
         context["current_phase"] = {"number": index + 1, "of": len(phases), **phase}
         if job.data.last_build_output:
             context["build_failure"] = job.data.last_build_output
+        if review:
+            context["standards_review"] = review
         wanted = list(phase.get("files", []))
 
     context["project"] = project_facts(profile)

@@ -143,6 +143,8 @@ def pending_approval(job: Job) -> str | None:
         return "backlog"
     if job.state is JobState.AWAITING_ARCHITECTURE_APPROVAL:
         return "architecture"
+    if job.state is JobState.AWAITING_REVIEW_APPROVAL:
+        return "review"
     if job.state is JobState.AWAITING_TEST_APPROVAL:
         return "test cases" if job.data.qa_stage == 1 else "written tests"
     return None
@@ -153,6 +155,9 @@ def current_phase(job: Job) -> str:
     if job.state in (JobState.DEVELOPING, JobState.BUILD_GATE) and phases:
         i = min(job.data.phase_index, len(phases) - 1)
         return f"phase {i + 1}/{len(phases)}: {phases[i].get('goal', '')}"
+    if job.state in (JobState.REVIEW, JobState.AWAITING_REVIEW_APPROVAL) and phases:
+        i = min(max(job.data.phase_index - 1, 0), len(phases) - 1)
+        return f"review of phase {i + 1}/{len(phases)}: {phases[i].get('goal', '')}"
     if job.state is JobState.QA or job.state is JobState.AWAITING_TEST_APPROVAL:
         return f"qa stage {job.data.qa_stage}"
     if job.state is JobState.DEVOPS and job.data.pr_url:
@@ -222,7 +227,7 @@ def overview(projects: int, jobs: list[Job], *, recent: int = 20) -> Overview:
 _INBOX = re.compile(r"^inbox: \d+ message\(s\) consumed by (\w+)")
 _JIRA = re.compile(r"^jira(?: \((\w+)\))?:")
 _STANDARDS = re.compile(r"^standards \((\w+)(?: phase \d+)?\):")
-_ROLE_PREFIX: dict[str, RoleName] = {"PR ": RoleName.DEVOPS}
+_ROLE_PREFIX: dict[str, RoleName] = {"PR ": RoleName.DEVOPS, "review phase": RoleName.QA}
 for _role in RoleName:
     _ROLE_PREFIX[f"{_role.value}:"] = _role
     _ROLE_PREFIX[f"{_role.value} phase"] = _role

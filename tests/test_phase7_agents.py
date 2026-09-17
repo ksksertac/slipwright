@@ -99,6 +99,8 @@ def _agentic_provider(seed: Profile) -> Any:
 
     def qa(req: ModelRequest) -> dict[str, Any]:
         ctx = _context(req)
+        if "phase_diff" in ctx:  # the standards review (T9.5): nothing to report
+            return {"summary": "clean"}
         story = ctx["jira"]["issues"][1]["key"]  # the only story
         if ctx["stage"] == 1:
             return {

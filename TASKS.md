@@ -36,7 +36,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 
 ## Progress
 
-> **Resume here:** Phases 0–8, T9.0–T9.4 and T9.9 are complete. Next: **T9.5** (standards review gate), then T9.6, T9.8, T9.7.
+> **Resume here:** Phases 0–8, T9.0–T9.5 and T9.9 are complete. Next: **T9.6** (standards in the UI), then T9.8, T9.7.
 > Design note for T1.3: `run_cmd` is executed as a subprocess in the worktree (Docker is used
 > only if the profile's `run_cmd` itself invokes it).
 > Design note for T2.2: `invoke_role` talks to a `ModelProvider` (`slipwright/providers/`);
@@ -130,7 +130,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 | 9 | T9.2 Standards corpus | [x] |
 | 9 | T9.3 Standards index (RAG) | [x] |
 | 9 | T9.4 Retrieval into every role's prompt | [x] |
-| 9 | T9.5 Standards review gate | [ ] |
+| 9 | T9.5 Standards review gate | [x] |
 | 9 | T9.6 Standards in the UI | [ ] |
 | 9 | T9.7 Orchestrator hardening: budgets, retries, supervisor decisions | [ ] |
 | 9 | T9.8 Supervisor at the gates: manual / assisted / auto | [ ] |
@@ -823,18 +823,35 @@ make QA own end-to-end tests.
 
 ### T9.5 — Standards review gate
 **Done when**
-- [ ] After each specialist phase passes the build gate, a `review` step asks the Tester
+- [x] After each specialist phase passes the build gate, a `review` step asks the QA
   role to check the phase diff against the retrieved standards and return
   `violations[]` (section, file, line, severity, fix hint); `none` passes
-- [ ] `blocking` violations send the phase back to the same specialist with the list
+- [x] `blocking` violations send the phase back to the same specialist with the list
   (max 2 rounds, then the job waits at a new `awaiting_review_approval` gate where the
   human can accept or reject); `advisory` ones are recorded and shown, never block
-- [ ] The review step is per project configurable (`review: off|advisory|blocking`) under
-  Settings → Agents and defaults to `advisory`
-- [ ] Violations appear on the job page (per phase) and on the board (task badge); Jira
+- [x] The review step is per project configurable (`review: off|advisory|blocking`) in the
+  project's edit dialog (and on creation through the API) and defaults to `advisory`
+- [x] Violations appear on the job page (per phase) and on the board (task badge); Jira
   gets a comment on the task when blocking violations were found (through T7.4's sync)
-- [ ] Tests: scripted violations trigger exactly two fix rounds and then the gate; an
+- [x] Tests: scripted violations trigger exactly two fix rounds and then the gate; an
   advisory project never blocks
+
+> Design note for T9.5: new states `review` / `awaiting_review_approval` between the build
+> gate and the next phase (`_build_gate` → `REVIEW` unless the mode is `off`).
+> `slipwright/roles/review.py` runs QA with review instructions; `QAResult.violations`
+> (`Violation`: section, file, line, severity, message, fix) is the output. The reviewer
+> receives the *specialist's* retrieval (`standards_for(job, specialist, profile)`), never
+> QA's testing domain, and the phase diff from `job.data.phase_base_commit` (HEAD when the
+> phase first started) to HEAD, so fix rounds are reviewed as a whole. Blocking mode: the
+> phase index steps back, the specialist gets `standards_review` (violations, round,
+> feedback) and the `REVIEW_FIX` instructions, the build gate commits again (`review fix N`
+> in the note) — two rounds (`Engine.max_review_rounds`), then the gate. Approve keeps the
+> phase; reject steps the phase back with the feedback and resets the rounds. Records live
+> in `job.data.reviews` (the board reads `latest_reviews` for the task badge; Jira gets a
+> one-shot comment per blocking record via `jira_marks` `review:<phase>:<round>`).
+> `Engine(review=...)` forces a mode (older tests use `off`); otherwise `Project.review`.
+> Pipeline: the phase card stays running while the review is open and a
+> `review_gate:<n>` card appears when the human is asked.
 
 ### T9.6 — Standards in the UI
 The standards are reached **through the agent**: each agent card's *Standards* tab is the

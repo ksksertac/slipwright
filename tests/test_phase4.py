@@ -103,6 +103,7 @@ def _engine(
         git_host=host or FakeHost(),
         ci_poll_s=0.0,
         ci_timeout_s=1.0,
+        review="off",  # the standards review has its own tests (T9.5)
     )
 
 

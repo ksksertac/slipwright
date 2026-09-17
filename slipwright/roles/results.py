@@ -201,12 +201,28 @@ class TestCase(BaseModel):
     description: str = Field(min_length=1)
 
 
+class Violation(BaseModel):
+    """One breach of a standards section found in a phase diff (T9.5)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    section: str = Field(min_length=1, description="Heading of the section breached.")
+    file: str = Field(min_length=1)
+    line: int | None = Field(default=None, ge=1)
+    severity: Literal["blocking", "advisory"] = "advisory"
+    message: str = Field(min_length=1)
+    fix: str = Field(default="", description="How to bring the change in line.")
+
+
 class QAResult(RoleOutput):
     test_cases: list[TestCase] = Field(
         default_factory=list, description="Stage one: proposed test cases."
     )
     changes: list[FileChange] = Field(
         default_factory=list, description="Stage two: test files to write."
+    )
+    violations: list[Violation] = Field(
+        default_factory=list, description="Standards review: breaches found in the diff."
     )
 
 

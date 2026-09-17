@@ -8,6 +8,8 @@ export function pendingApproval(job: Job): string | null {
       return "backlog";
     case "awaiting_architecture_approval":
       return "architecture";
+    case "awaiting_review_approval":
+      return "review";
     case "awaiting_test_approval":
       return job.data.qa_stage === 1 ? "test cases" : "written tests";
     default:

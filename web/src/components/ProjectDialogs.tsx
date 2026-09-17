@@ -13,6 +13,7 @@ export function EditProjectModal({ project, onClose }: { project: Project; onClo
   const [description, setDescription] = useState(project.description);
   const [jiraKey, setJiraKey] = useState(project.jira_project_key ?? "");
   const [githubRepo, setGithubRepo] = useState(project.github_repo ?? "");
+  const [review, setReview] = useState<Project["review"]>(project.review);
 
   const save = () => {
     patch.mutate(
@@ -21,6 +22,7 @@ export function EditProjectModal({ project, onClose }: { project: Project; onClo
         description: description.trim(),
         jira_project_key: jiraKey.trim() || null,
         github_repo: githubRepo.trim() || null,
+        review,
       },
       {
         onSuccess: () => {
@@ -80,9 +82,25 @@ export function EditProjectModal({ project, onClose }: { project: Project; onClo
           />
         </div>
       </div>
+      <div className="field">
+        <label htmlFor="ep-review">Standards review after each phase</label>
+        <select
+          id="ep-review"
+          value={review}
+          onChange={(e) => setReview(e.target.value as Project["review"])}
+        >
+          <option value="off">off — never review</option>
+          <option value="advisory">advisory — record findings, never block</option>
+          <option value="blocking">blocking — the specialist fixes, then you decide</option>
+        </select>
+        <div className="help faint small">
+          QA checks every phase's diff against the standards its specialist was given. In blocking
+          mode a blocking finding sends the phase back (two rounds) before it waits for you.
+        </div>
+      </div>
       <div className="help faint small">
         The checkout path ({project.repo_path ?? "—"}) cannot be changed here; models and
-        permissions per role live under Settings → Agents.
+        permissions per role live under Agents.
       </div>
       {patch.error && <div className="callout error">{describeError(patch.error)}</div>}
     </Modal>

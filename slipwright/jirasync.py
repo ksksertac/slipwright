@@ -133,6 +133,34 @@ class JiraSync:
                 self.client.comment(key, text)
             marks.append("pr")
             report.note(f"commented PR link on {len(set(job.data.jira_keys.values()))} issue(s)")
+        for record in job.data.reviews:
+            if not record.get("blocking"):
+                continue
+            mark = f"review:{record.get('phase')}:{record.get('round')}"
+            if mark in marks:
+                continue
+            task = next(
+                (
+                    t
+                    for t in _flatten(epics)
+                    if isinstance(t, TaskView) and t.phase == record.get("phase")
+                ),
+                None,
+            )
+            issue = job.data.jira_keys.get(task.id) if task is not None else None
+            if issue is None:
+                continue
+            lines = [
+                f"Slipwright standards review of phase {record.get('phase')} found "
+                f"{record.get('blocking')} blocking violation(s) ({record.get('verdict', '')}):"
+            ]
+            for v in record.get("violations", []):
+                if v.get("severity") == "blocking":
+                    where = f"{v.get('file')}:{v.get('line')}" if v.get("line") else v.get("file")
+                    lines.append(f"- [{v.get('section')}] {where}: {v.get('message')}")
+            self.client.comment(issue, "\n".join(lines)[:MAX_COMMENT_CHARS])
+            marks.append(mark)
+            report.note(f"commented review findings on {issue}")
         if job.state is JobState.FAILED:
             reason = next(
                 (t.note for t in reversed(job.history) if t.to_state is JobState.FAILED), None

@@ -25,6 +25,8 @@ class JobState(StrEnum):
     AWAITING_ARCHITECTURE_APPROVAL = "awaiting_architecture_approval"
     DEVELOPING = "developing"
     BUILD_GATE = "build_gate"
+    REVIEW = "review"  # QA checks the phase diff against the standards (T9.5)
+    AWAITING_REVIEW_APPROVAL = "awaiting_review_approval"
     QA = "qa"
     AWAITING_TEST_APPROVAL = "awaiting_test_approval"
     DEVOPS = "devops"
@@ -36,6 +38,7 @@ APPROVAL_STATES: frozenset[JobState] = frozenset(
     {
         JobState.AWAITING_BACKLOG_APPROVAL,
         JobState.AWAITING_ARCHITECTURE_APPROVAL,
+        JobState.AWAITING_REVIEW_APPROVAL,
         JobState.AWAITING_TEST_APPROVAL,
     }
 )
@@ -97,6 +100,19 @@ class JobData(BaseModel):
     phase_index: int = Field(default=0, ge=0, description="Next plan phase to execute.")
     build_attempts: int = Field(default=0, ge=0)
     last_build_output: str | None = None
+    phase_base_commit: str | None = Field(
+        default=None, description="HEAD when the current phase started; the review diffs from it."
+    )
+    review_rounds: int = Field(
+        default=0, ge=0, description="Fix rounds the current phase went through after review."
+    )
+    review_violations: list[dict[str, Any]] = Field(
+        default_factory=list, description="Blocking violations the specialist must fix now."
+    )
+    reviews: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Every standards review: phase, round, mode, violations, verdict.",
+    )
     test_cases: list[dict[str, Any]] = Field(default_factory=list)
     qa_stage: int = Field(default=1, ge=1, le=2)
     pr_url: str | None = None

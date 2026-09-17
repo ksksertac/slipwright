@@ -1229,6 +1229,18 @@
             ],
             "title": "Last Build Output"
           },
+          "phase_base_commit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "HEAD when the current phase started; the review diffs from it.",
+            "title": "Phase Base Commit"
+          },
           "phase_index": {
             "default": 0,
             "description": "Next plan phase to execute.",
@@ -1273,6 +1285,31 @@
             "title": "Reject Rounds",
             "type": "integer"
           },
+          "review_rounds": {
+            "default": 0,
+            "description": "Fix rounds the current phase went through after review.",
+            "minimum": 0.0,
+            "title": "Review Rounds",
+            "type": "integer"
+          },
+          "review_violations": {
+            "description": "Blocking violations the specialist must fix now.",
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Review Violations",
+            "type": "array"
+          },
+          "reviews": {
+            "description": "Every standards review: phase, round, mode, violations, verdict.",
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Reviews",
+            "type": "array"
+          },
           "test_cases": {
             "items": {
               "additionalProperties": true,
@@ -1296,11 +1333,15 @@
           "jira_queue",
           "jira_status",
           "last_build_output",
+          "phase_base_commit",
           "phase_index",
           "plan",
           "pr_url",
           "qa_stage",
           "reject_rounds",
+          "review_rounds",
+          "review_violations",
+          "reviews",
           "test_cases"
         ],
         "title": "JobData",
@@ -1395,6 +1436,8 @@
           "awaiting_architecture_approval",
           "developing",
           "build_gate",
+          "review",
+          "awaiting_review_approval",
           "qa",
           "awaiting_test_approval",
           "devops",
@@ -1567,6 +1610,16 @@
               }
             ],
             "title": "Repo Path"
+          },
+          "review": {
+            "default": "advisory",
+            "enum": [
+              "off",
+              "advisory",
+              "blocking"
+            ],
+            "title": "Review",
+            "type": "string"
           }
         },
         "required": [
@@ -1960,6 +2013,17 @@
             ],
             "description": "Local checkout; filled in after cloning when absent.",
             "title": "Repo Path"
+          },
+          "review": {
+            "default": "advisory",
+            "description": "Standards review after each phase: off, advisory (recorded, never blocks) or blocking (the specialist fixes, then a human gate).",
+            "enum": [
+              "off",
+              "advisory",
+              "blocking"
+            ],
+            "title": "Review",
+            "type": "string"
           }
         },
         "required": [
@@ -1972,7 +2036,8 @@
           "jira_transitions",
           "name",
           "profile",
-          "repo_path"
+          "repo_path",
+          "review"
         ],
         "title": "Project",
         "type": "object"
@@ -2049,6 +2114,22 @@
                 "type": "null"
               }
             ]
+          },
+          "review": {
+            "anyOf": [
+              {
+                "enum": [
+                  "off",
+                  "advisory",
+                  "blocking"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review"
           }
         },
         "title": "ProjectPatch",
@@ -2734,6 +2815,12 @@
       "TaskView": {
         "additionalProperties": false,
         "properties": {
+          "blocking": {
+            "default": 0,
+            "description": "Of which blocking.",
+            "title": "Blocking",
+            "type": "integer"
+          },
           "description": {
             "default": "",
             "title": "Description",
@@ -2793,9 +2880,16 @@
           "title": {
             "title": "Title",
             "type": "string"
+          },
+          "violations": {
+            "default": 0,
+            "description": "Findings of the latest standards review.",
+            "title": "Violations",
+            "type": "integer"
           }
         },
         "required": [
+          "blocking",
           "description",
           "domain",
           "files",
@@ -2804,7 +2898,8 @@
           "job_id",
           "phase",
           "status",
-          "title"
+          "title",
+          "violations"
         ],
         "title": "TaskView",
         "type": "object"

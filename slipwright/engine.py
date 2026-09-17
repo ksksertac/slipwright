@@ -44,7 +44,7 @@ from slipwright.providers.registry import (
     RoutingProvider,
     list_models,
 )
-from slipwright.roles import architect, developer, devops, po, qa
+from slipwright.roles import architect, developer, devops, po, qa, review
 from slipwright.roles.common import apply_changes, require_worktree
 from slipwright.roles.results import (
     ArchitectResult,
@@ -85,6 +85,7 @@ WORKING_STATES: frozenset[JobState] = frozenset(
         JobState.ARCHITECTURE,
         JobState.DEVELOPING,
         JobState.BUILD_GATE,
+        JobState.REVIEW,
         JobState.QA,
         JobState.DEVOPS,
     }
@@ -94,6 +95,9 @@ WORKING_STATES: frozenset[JobState] = frozenset(
 APPROVAL_EDGES: dict[JobState, tuple[JobState, JobState]] = {
     JobState.AWAITING_BACKLOG_APPROVAL: (JobState.ARCHITECTURE, JobState.BACKLOG),
     JobState.AWAITING_ARCHITECTURE_APPROVAL: (JobState.DEVELOPING, JobState.ARCHITECTURE),
+    # accepting the violations continues with the next phase (or QA); rejecting sends the
+    # phase back to its specialist
+    JobState.AWAITING_REVIEW_APPROVAL: (JobState.DEVELOPING, JobState.DEVELOPING),
     # stage 1 (test list) approved -> QA writes the tests; stage 2 approved -> DevOps
     JobState.AWAITING_TEST_APPROVAL: (JobState.DEVOPS, JobState.QA),
 }
@@ -107,6 +111,10 @@ def approval_edges(job: Job) -> tuple[JobState, JobState] | None:
         and job.data.qa_stage == 1
     ):
         return (JobState.QA, JobState.QA)
+    if edges is not None and job.state is JobState.AWAITING_REVIEW_APPROVAL:
+        phases = (job.data.plan or {}).get("phases", [])
+        if job.data.phase_index >= len(phases):
+            return (JobState.QA, JobState.DEVELOPING)
     return edges
 
 
@@ -139,6 +147,8 @@ class Engine:
         max_reject_rounds: int = 3,
         max_build_attempts: int = 3,
         max_ci_attempts: int = 3,
+        max_review_rounds: int = 2,
+        review: str | None = None,
         gate_timeout_s: float | None = None,
         git_host: GitHost | None = None,
         ci_poll_s: float = 15.0,
@@ -161,6 +171,9 @@ class Engine:
         self.max_reject_rounds = max_reject_rounds
         self.max_build_attempts = max_build_attempts
         self.max_ci_attempts = max_ci_attempts
+        self.max_review_rounds = max_review_rounds
+        # a forced standards-review mode (off/advisory/blocking); None follows the project
+        self.review_override = review
         self.gate_timeout_s = gate_timeout_s
         self._git_host = git_host
         # tests answer GitHub/Jira HTTP locally through a mock transport
@@ -172,6 +185,7 @@ class Engine:
             JobState.ARCHITECTURE: self._architecture,
             JobState.DEVELOPING: self._develop,
             JobState.BUILD_GATE: self._build_gate,
+            JobState.REVIEW: self._review,
             JobState.QA: self._qa,
             JobState.DEVOPS: self._devops,
         }
@@ -728,6 +742,11 @@ class Engine:
             job.data.build_attempts = 0
             job.data.last_build_output = None
             note = f"approved {len(job.data.test_cases)} test cases"
+        if job.state is JobState.AWAITING_REVIEW_APPROVAL:
+            # the violations stand as recorded; the phase is accepted as built
+            job.data.review_violations = []
+            job.data.review_rounds = 0
+            note = f"approved phase {job.data.phase_index} despite the review"
         job.data.feedback = None
         job.data.reject_rounds = 0
         self.store.save(job)
@@ -741,6 +760,11 @@ class Engine:
             raise NotAwaitingApproval(job)
         job.data.feedback = feedback
         job.data.reject_rounds += 1
+        if job.state is JobState.AWAITING_REVIEW_APPROVAL:
+            # back to the specialist for another round on the same phase
+            job.data.phase_index = max(job.data.phase_index - 1, 0)
+            job.data.review_rounds = 0
+            job.data.reject_rounds = 0
         self.store.save(job)
         job = self.orchestrator.transition(job, edges[1], note=f"rejected: {feedback}")
         return self._run(job) if run else job
@@ -1109,16 +1133,30 @@ class Engine:
         if index >= len(phases):
             return self._fail(job, f"no plan phase {index + 1} to develop")
         role = specialist_for(phases[index].get("domain"))
-        result = self._invoke(role, developer.run, job, profile=profile, as_role=role)
+        worktree = require_worktree(job)
+        if job.data.build_attempts == 0 and job.data.review_rounds == 0:
+            job.data.phase_base_commit = g.head_commit(worktree)  # the review diffs from here
+            self.store.save(job)
+        review_ctx: dict[str, Any] | None = None
+        if job.data.review_violations:
+            review_ctx = {
+                "round": job.data.review_rounds,
+                "violations": job.data.review_violations,
+                "feedback": job.data.feedback,
+            }
+        result = self._invoke(
+            role, developer.run, job, profile=profile, as_role=role, review=review_ctx
+        )
         if not result.ok:
             return self._invocation_failed(job, result)
         assert isinstance(result.output, DeveloperResult)
 
-        worktree = require_worktree(job)
         touched = apply_changes(job, profile, role, result.output.changes)
         g.stage_all(worktree)
         diff = g.staged_diff(worktree)
         attempt = f", fix attempt {job.data.build_attempts}" if job.data.build_attempts else ""
+        if job.data.review_rounds and not attempt:
+            attempt = f", review fix {job.data.review_rounds}"
         return self.orchestrator.transition(
             job,
             JobState.BUILD_GATE,
@@ -1151,9 +1189,13 @@ class Engine:
             job.data.last_build_output = None
             self.store.save(job)
             done = job.data.phase_index >= len(phases)
+            if self.review_mode(job) != "off":
+                after = JobState.REVIEW
+            else:
+                after = JobState.QA if done else JobState.DEVELOPING
             return self.orchestrator.transition(
                 job,
-                JobState.QA if done else JobState.DEVELOPING,
+                after,
                 note=f"build gate passed for phase {index + 1}/{len(phases)}",
                 detail=gate.tail,
             )
@@ -1175,6 +1217,107 @@ class Engine:
                 f"(attempt {job.data.build_attempts}/{self.max_build_attempts})"
             ),
             detail=gate.tail,
+        )
+
+    # -- standards review (T9.5) -----------------------------------------------------------
+
+    def review_mode(self, job: Job) -> str:
+        if self.review_override is not None:
+            return self.review_override
+        project = self._project_of(job)
+        return "advisory" if project is None else str(project.review)
+
+    def _phase_diff(self, job: Job) -> str:
+        worktree = require_worktree(job)
+        base = job.data.phase_base_commit
+        if base is None:
+            return "(phase base unknown)"
+        return g.run(worktree, "diff", "--no-color", base, "HEAD").stdout or "(no changes)"
+
+    def _review(self, job: Job) -> Job:
+        """QA reviews the phase just built against the standards its specialist read.
+        Advisory projects record the findings and move on; blocking projects send blocking
+        findings back to the specialist (two rounds), then ask the human."""
+        profile = self._profile(job)
+        phases = self._phases(job)
+        index = job.data.phase_index - 1
+        if index < 0 or index >= len(phases):
+            return self._fail(job, "no phase to review")
+        phase = phases[index]
+        mode = self.review_mode(job)
+        specialist = specialist_for(phase.get("domain"))
+        # the reviewer reads exactly the sections the specialist was given
+        retrieved = self.standards_for(job, specialist, profile)
+        result = self._invoke(
+            RoleName.QA,
+            review.run,
+            job,
+            profile=profile,
+            phase=phase,
+            phase_number=index + 1,
+            phase_diff=self._phase_diff(job),
+            standards=retrieved.as_context() if retrieved else None,
+        )
+        if not result.ok:
+            return self._invocation_failed(job, result)
+        assert isinstance(result.output, QAResult)
+        violations = [v.model_dump(mode="json") for v in result.output.violations]
+        blocking = [v for v in violations if v["severity"] == "blocking"]
+        advisory = [v for v in violations if v["severity"] != "blocking"]
+        done = job.data.phase_index >= len(phases)
+        next_state = JobState.QA if done else JobState.DEVELOPING
+        label = f"review phase {index + 1}/{len(phases)}"
+        counts = (
+            f"{len(violations)} violation(s), {len(blocking)} blocking, {len(advisory)} advisory"
+            if violations
+            else "clean"
+        )
+        record: dict[str, Any] = {
+            "phase": index + 1,
+            "round": job.data.review_rounds,
+            "mode": mode,
+            "summary": result.output.summary,
+            "violations": violations,
+            "blocking": len(blocking),
+            "advisory": len(advisory),
+            "verdict": "",
+        }
+        detail = json.dumps(record, indent=2)
+
+        if blocking and mode == "blocking":
+            job.data.review_violations = blocking
+            if job.data.review_rounds < self.max_review_rounds:
+                job.data.review_rounds += 1
+                job.data.phase_index = index  # the specialist reworks this phase
+                record["verdict"] = f"fix round {job.data.review_rounds}/{self.max_review_rounds}"
+                job.data.reviews.append(record)
+                self.store.save(job)
+                return self.orchestrator.transition(
+                    job,
+                    JobState.DEVELOPING,
+                    note=f"{label}: {counts}; {record['verdict']}",
+                    detail=json.dumps(record, indent=2),
+                )
+            record["verdict"] = "needs your decision"
+            job.data.reviews.append(record)
+            self.store.save(job)
+            return self.orchestrator.transition(
+                job,
+                JobState.AWAITING_REVIEW_APPROVAL,
+                note=(
+                    f"{label}: {counts} after {job.data.review_rounds} fix round(s); "
+                    "needs your decision"
+                ),
+                detail=json.dumps(record, indent=2),
+            )
+
+        record["verdict"] = "passed" if not violations else f"passed ({mode})"
+        job.data.reviews.append(record)
+        job.data.review_violations = []
+        job.data.review_rounds = 0
+        self.store.save(job)
+        return self.orchestrator.transition(
+            job, next_state, note=f"{label}: {counts}", detail=detail
         )
 
     def _qa(self, job: Job) -> Job:

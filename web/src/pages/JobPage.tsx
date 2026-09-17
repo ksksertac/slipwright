@@ -23,6 +23,7 @@ import { DomainBadge } from "../components/agents";
 import { Crumbs } from "../components/Crumbs";
 import { Detail } from "../components/Detail";
 import { Diff } from "../components/Diff";
+import { ReviewDetail, ViolationsTable, type ReviewRecord } from "../components/Review";
 import { GateActions, pendingApproval } from "../components/GateActions";
 import { IconCheck, IconExternal, IconTrash, IconX } from "../components/icons";
 import { JiraLink } from "../components/JiraLink";
@@ -38,6 +39,8 @@ const STEPS: { state: JobState; label: string; gate?: boolean }[] = [
   { state: "awaiting_architecture_approval", label: "architecture approval", gate: true },
   { state: "developing", label: "develop" },
   { state: "build_gate", label: "build gate" },
+  { state: "review", label: "review" },
+  { state: "awaiting_review_approval", label: "review decision", gate: true },
   { state: "qa", label: "qa" },
   { state: "awaiting_test_approval", label: "test approval", gate: true },
   { state: "devops", label: "devops" },
@@ -199,6 +202,7 @@ function GatePanel({ job }: { job: Job }) {
       </div>
       {job.state === "awaiting_backlog_approval" && <BacklogGate job={job} />}
       {job.state === "awaiting_architecture_approval" && <ArchitectureGate job={job} />}
+      {job.state === "awaiting_review_approval" && <ReviewGate job={job} />}
       {job.state === "awaiting_test_approval" && job.data.qa_stage === 1 && (
         <TestCasesGate job={job} />
       )}
@@ -300,6 +304,24 @@ function ArchitectureGate({ job }: { job: Job }) {
           <ProfileGate job={job} profile={job.profile} />
         </>
       )}
+    </div>
+  );
+}
+
+/** The findings QA could not get the specialist to fix: accept them or send it back. */
+function ReviewGate({ job }: { job: Job }) {
+  const reviews = job.data.reviews as unknown as ReviewRecord[];
+  const last = reviews[reviews.length - 1];
+  if (!last) return null;
+  return (
+    <div style={{ marginTop: 12 }}>
+      <p className="muted small">
+        Phase {last.phase} passed the build but still breaks {last.blocking} blocking standard
+        {last.blocking === 1 ? "" : "s"} after {last.round} fix round{last.round === 1 ? "" : "s"}.
+        Approving keeps the phase as built and continues; rejecting sends it back to the specialist
+        with your feedback.
+      </p>
+      <ViolationsTable violations={last.violations} />
     </div>
   );
 }
@@ -558,35 +580,56 @@ function Phases({ job }: { job: Job }) {
               {g.files.length > 0 && <div className="muted small mono">{g.files.join(", ")}</div>}
             </div>
             <span className="muted small">
-              {job.data.phase_index > g.number - 1
-                ? "done"
-                : job.data.phase_index === g.number - 1 &&
-                    (job.state === "developing" || job.state === "build_gate")
-                  ? "in progress"
-                  : job.state === "failed" && job.data.phase_index === g.number - 1
-                    ? "failed"
-                    : "pending"}
+              {(job.state === "review" || job.state === "awaiting_review_approval") &&
+              job.data.phase_index === g.number
+                ? "in review"
+                : job.data.phase_index > g.number - 1
+                  ? "done"
+                  : job.data.phase_index === g.number - 1 &&
+                      (job.state === "developing" || job.state === "build_gate")
+                    ? "in progress"
+                    : job.state === "failed" && job.data.phase_index === g.number - 1
+                      ? "failed"
+                      : "pending"}
             </span>
           </div>
           {g.entries.map((t, i) => {
             const note = t.note ?? "";
             const isGate = note.startsWith("build gate");
             const isStandards = note.startsWith("standards");
-            const badge = isStandards ? "standards" : isGate ? "gate" : "diff";
-            const cls = isStandards
-              ? "idle"
-              : isGate
-                ? note.includes("passed")
-                  ? "ok"
-                  : "bad"
-                : "work";
+            const isReview = note.startsWith("review phase");
+            const badge = isReview
+              ? "review"
+              : isStandards
+                ? "standards"
+                : isGate
+                  ? "gate"
+                  : "diff";
+            const cls = isReview
+              ? note.includes("clean")
+                ? "ok"
+                : note.includes("blocking, 0 advisory") || note.includes("needs your decision")
+                  ? "bad"
+                  : "work"
+              : isStandards
+                ? "idle"
+                : isGate
+                  ? note.includes("passed")
+                    ? "ok"
+                    : "bad"
+                  : "work";
             return (
-              <details key={i} open={!isGate && !isStandards && i === g.entries.length - 1}>
+              <details
+                key={i}
+                open={!isGate && !isStandards && !isReview && i === g.entries.length - 1}
+              >
                 <summary>
                   <span className={`badge ${cls}`}>{badge}</span> {note}{" "}
                   <span className="muted small">· {formatTime(t.at)}</span>
                 </summary>
-                {isStandards ? (
+                {isReview ? (
+                  <ReviewDetail text={t.detail ?? ""} />
+                ) : isStandards ? (
                   <StandardsList text={t.detail ?? ""} />
                 ) : isGate ? (
                   <pre>{t.detail}</pre>

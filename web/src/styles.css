@@ -1583,3 +1583,14 @@ a.pcard:hover {
   font-size: 12.5px;
   cursor: pointer;
 }
+
+/* standards review (T9.5) */
+table.violations {
+  font-size: 13px;
+  margin-top: 6px;
+}
+table.violations td,
+table.violations th {
+  padding: 6px 10px;
+  vertical-align: top;
+}

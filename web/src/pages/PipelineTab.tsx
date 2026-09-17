@@ -18,6 +18,7 @@ import {
 import { AgentIcon, DomainBadge, ROLE_LABEL } from "../components/agents";
 import { BulkBar } from "../components/BulkBar";
 import { Detail } from "../components/Detail";
+import { ReviewDetail } from "../components/Review";
 import {
   BacklogEditor,
   PlanEditor,
@@ -285,7 +286,11 @@ function Output({ jobId, index }: { jobId: string; index: number }) {
   return (
     <details className="output" open={open}>
       <summary>{note || `${entry.data.from_state} → ${entry.data.to_state}`}</summary>
-      <Detail text={entry.data.detail} />
+      {note.startsWith("review phase") ? (
+        <ReviewDetail text={entry.data.detail ?? ""} />
+      ) : (
+        <Detail text={entry.data.detail} />
+      )}
     </details>
   );
 }

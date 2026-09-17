@@ -11,6 +11,7 @@ from __future__ import annotations
 import re
 from datetime import datetime
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -19,6 +20,9 @@ from slipwright.schemas.profile import Profile
 
 _GITHUB_REPO = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 _JIRA_KEY = re.compile(r"^[A-Z][A-Z0-9_]*$")
+
+
+ReviewMode = Literal["off", "advisory", "blocking"]
 
 
 class Project(BaseModel):
@@ -41,6 +45,11 @@ class Project(BaseModel):
         description="Task status -> Jira transition name (todo/in_progress/done/failed).",
     )
     profile: Profile | None = Field(default=None, description="Seed profile for new jobs.")
+    review: ReviewMode = Field(
+        default="advisory",
+        description="Standards review after each phase: off, advisory (recorded, never "
+        "blocks) or blocking (the specialist fixes, then a human gate).",
+    )
     created_at: datetime = Field(default_factory=utcnow)
 
     @field_validator("github_repo")
@@ -79,6 +88,7 @@ class ProjectPatch(BaseModel):
     jira_project_key: str | None = None
     jira_transitions: dict[str, str] | None = None
     profile: Profile | None = None
+    review: ReviewMode | None = None
 
 
-__all__ = ["Project", "ProjectPatch"]
+__all__ = ["Project", "ProjectPatch", "ReviewMode"]
