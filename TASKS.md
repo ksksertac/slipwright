@@ -36,7 +36,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 
 ## Progress
 
-> **Resume here:** Phases 0–7, T8.1 and T8.2 are complete. Next task is **T8.3 — Project page**.
+> **Resume here:** Phases 0–7 and T8.1–T8.3 are complete. Next task is **T8.4 — Job page**.
 > Design note for T1.3: `run_cmd` is executed as a subprocess in the worktree (Docker is used
 > only if the profile's `run_cmd` itself invokes it).
 > Design note for T2.2: `invoke_role` talks to a `ModelProvider` (`slipwright/providers/`);
@@ -111,7 +111,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 | 7 | T7.5 Agents act in Jira | [x] |
 | 8 | T8.1 React app skeleton | [x] |
 | 8 | T8.2 Login and projects list | [x] |
-| 8 | T8.3 Project page: board, progress, developments | [ ] |
+| 8 | T8.3 Project page: board, progress, developments | [x] |
 | 8 | T8.4 Job page: gates, plan, diffs, steering | [ ] |
 | 8 | T8.5 Test results page | [ ] |
 | 8 | T8.6 Settings page: GitHub, Jira, agent access and users | [ ] |
@@ -506,18 +506,18 @@ talks only to `/api/*` and the SSE stream; it holds no business logic.
 
 ### T8.3 — Project page: board, progress, developments
 **Done when**
-- [ ] `/projects/:id` with tabs **Overview**, **Board**, **Developments**, **Tests**,
+- [x] `/projects/:id` with tabs **Overview**, **Board**, **Developments**, **Tests**,
   **Activity**
-- [ ] Overview: progress bar (tasks done/total), current stage of each running job, pending
+- [x] Overview: progress bar (tasks done/total), current stage of each running job, pending
   approvals with approve/reject inline
-- [ ] Board: epic → story → task tree from `GET /projects/{id}/board`, each row with status
+- [x] Board: epic → story → task tree from `GET /projects/{id}/board`, each row with status
   badge, a link to the job and the phase's diff, and the Jira key when synced
-- [ ] Developments: list of jobs (past and running) and a "New development" form that takes
+- [x] Developments: list of jobs (past and running) and a "New development" form that takes
   the request text and starts a job; the resulting breakdown appears on the board once the
   plan is approved
-- [ ] Activity: the itemised feed from T6.3, newest first, each item expandable to its
+- [x] Activity: the itemised feed from T6.3, newest first, each item expandable to its
   detail (diff, build log, profile JSON)
-- [ ] The page updates live from `/api/events`; no manual refresh needed
+- [x] The page updates live from `/api/events`; no manual refresh needed
 
 ### T8.4 — Job page: gates, plan, diffs, steering
 **Done when**

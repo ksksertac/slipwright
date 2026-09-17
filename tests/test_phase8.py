@@ -121,3 +121,29 @@ def test_login_and_projects_pages_use_the_api() -> None:
     hooks = _src("api/hooks.ts")
     for path in ("/api/projects", "/api/settings/github/repos", "/api/projects/${id}/progress"):
         assert path in hooks, path
+
+
+# --- T8.3 project page --------------------------------------------------------------------
+
+
+def test_project_page_has_the_five_tabs_and_lives_on_events() -> None:
+    page = _src("pages/ProjectPage.tsx")
+    assert '["overview", "board", "developments", "tests", "activity"]' in page
+    for expected in (
+        "useBoard",
+        "useProgress",
+        "useActivity",
+        "useStartJob",
+        "GateActions",  # approve / reject inline on the overview
+        "JiraLink",  # jira key on board rows
+        "#phase-",  # task rows link to the phase diff on the job page
+        "useTransition",  # activity items expand to their detail
+    ):
+        assert expected in page, expected
+    events = _src("api/events.ts")
+    assert "EventSource" in events and "/api/events" in events
+    assert "invalidateQueries" in events
+    layout = _src("components/Layout.tsx")
+    assert "useLiveEvents" in layout  # every page updates live
+    detail = _src("components/Detail.tsx")
+    assert "Diff" in detail and "looksLikeDiff" in detail
