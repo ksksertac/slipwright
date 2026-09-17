@@ -203,3 +203,28 @@ def test_job_page_covers_every_gate_and_the_parity_list() -> None:
     rows = [line for line in parity.splitlines() if line.startswith("| ") and "[" in line]
     assert len(rows) >= 12
     assert all("[x]" in r for r in rows), [r for r in rows if "[x]" not in r]
+
+
+# --- T8.5 test results page ---------------------------------------------------------------
+
+
+def test_tests_tab_lists_runs_and_scrolls_to_the_failure() -> None:
+    tab = _src("pages/TestsTab.tsx")
+    for expected in (
+        "useTestRuns",
+        "useStartTestRun",
+        "on the main checkout",  # run target: main checkout or a job's worktree
+        "worktree_path",
+        "build gate",  # gate runs are listed alongside manual ones
+        "any status",  # filters
+        "any job",
+        "useTestRunOutput",
+        "scrollIntoView",  # failing section scrolled into view
+        "still running",
+    ):
+        assert expected in tab, expected
+    hooks = _src("api/hooks.ts")
+    assert "/api/projects/${projectId}/test-runs" in hooks
+    assert "/api/test-runs/${id}/output" in hooks
+    events = _src("api/events.ts")
+    assert "test_run.state" in events  # rows flip via SSE

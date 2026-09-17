@@ -36,7 +36,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 
 ## Progress
 
-> **Resume here:** Phases 0–7 and T8.1–T8.4 are complete. Next task is **T8.5 — Test results page**.
+> **Resume here:** Phases 0–7 and T8.1–T8.5 are complete. Next task is **T8.6 — Settings page**.
 > Design note for T1.3: `run_cmd` is executed as a subprocess in the worktree (Docker is used
 > only if the profile's `run_cmd` itself invokes it).
 > Design note for T2.2: `invoke_role` talks to a `ModelProvider` (`slipwright/providers/`);
@@ -114,7 +114,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 | 8 | T8.2 Login and projects list | [x] |
 | 8 | T8.3 Project page: board, progress, developments | [x] |
 | 8 | T8.4 Job page: gates, plan, diffs, steering | [x] |
-| 8 | T8.5 Test results page | [ ] |
+| 8 | T8.5 Test results page | [x] |
 | 8 | T8.6 Settings page: GitHub, Jira, agent access and users | [ ] |
 | 8 | T8.7 Retire the server-rendered dashboard | [ ] |
 
@@ -536,12 +536,12 @@ talks only to `/api/*` and the SSE stream; it holds no business logic.
 
 ### T8.5 — Test results page
 **Done when**
-- [ ] Tests tab lists every `TestRun` (gate and on-demand) with status, duration, command,
+- [x] Tests tab lists every `TestRun` (gate and on-demand) with status, duration, command,
   job if any
-- [ ] "Run tests" button starts a run on the main checkout or on a chosen job's worktree;
+- [x] "Run tests" button starts a run on the main checkout or on a chosen job's worktree;
   the row appears immediately as `running` and flips via SSE
-- [ ] Clicking a run shows the full output with the failing section scrolled into view
-- [ ] Filter by status and by job
+- [x] Clicking a run shows the full output with the failing section scrolled into view
+- [x] Filter by status and by job
 
 ### T8.6 — Settings page: GitHub, Jira, agent access and users
 **Done when**
