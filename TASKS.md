@@ -35,7 +35,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 
 ## Progress
 
-> **Resume here:** Phases 0 and 1 are complete; T2.1 and T2.2 are done. Next task is **T2.3 — Analyst role**.
+> **Resume here:** Phases 0, 1 and 2 are complete. Next task is **T3.1 — Planner role**.
 > Design note for T1.3: `run_cmd` is executed as a subprocess in the worktree (Docker is used
 > only if the profile's `run_cmd` itself invokes it).
 > Design note for T2.2: `invoke_role` talks to a `ModelProvider` (`slipwright/providers/`);
@@ -43,6 +43,13 @@ These hold at every point in the build. If a task seems to require breaking one,
 > raw text; parsing and per-role schema validation (`slipwright/roles/results.py`) live in
 > `slipwright/invoke.py` so all providers share one error path. `thinking_depth` maps to
 > adaptive thinking + `output_config.effort` (`off` disables thinking).
+> Design note for T2.3/T2.4: `slipwright/engine.py` drives phases; each working state has a
+> handler, approval states have none. Jobs start from a **seed profile** (`--profile`); the
+> Analyst proposes language/commands/port and the seed's `roles` are always kept, so model
+> routing is never decided by a model. `Job.data` holds working state (plan, phase index,
+> attempt counters, inbox); `Transition.detail` holds long-form records (profile JSON, diffs,
+> build logs). The API runs phases in background tasks and resumes in-flight jobs on startup.
+> `slipwright serve --provider scripted` runs the whole pipeline offline.
 
 | Phase | Task | Status |
 |-------|------|--------|
@@ -54,8 +61,8 @@ These hold at every point in the build. If a task seems to require breaking one,
 | 1 | T1.3 Live environment | [x] |
 | 2 | T2.1 Orchestrator state machine | [x] |
 | 2 | T2.2 Agent invocation layer | [x] |
-| 2 | T2.3 Analyst role | [ ] |
-| 2 | T2.4 Minimal API and CLI | [ ] |
+| 2 | T2.3 Analyst role | [x] |
+| 2 | T2.4 Minimal API and CLI | [x] |
 | 3 | T3.1 Planner role | [ ] |
 | 3 | T3.2 Developer role, phase by phase | [ ] |
 | 3 | T3.3 Build gate | [ ] |
@@ -159,19 +166,19 @@ One place where the engine talks to a model.
 The first real agent.
 
 **Done when**
-- [ ] Analyst scans the worktree and emits a profile matching `profile.schema.json`
-- [ ] On success the job moves to `awaiting_profile_approval` and **stops**
-- [ ] `POST /jobs/{id}/approve` resumes; `POST /jobs/{id}/reject` with feedback re-runs Analyst
-- [ ] Integration test: start a job, kill the process, restart, assert the job is still
+- [x] Analyst scans the worktree and emits a profile matching `profile.schema.json`
+- [x] On success the job moves to `awaiting_profile_approval` and **stops**
+- [x] `POST /jobs/{id}/approve` resumes; `POST /jobs/{id}/reject` with feedback re-runs Analyst
+- [x] Integration test: start a job, kill the process, restart, assert the job is still
   awaiting approval and still resumable
 
 ### T2.4 — Minimal API and CLI
 Enough surface to drive a job by hand.
 
 **Done when**
-- [ ] `POST /jobs`, `GET /jobs`, `GET /jobs/{id}`, approve/reject endpoints
-- [ ] CLI wraps these: `slipwright new`, `slipwright status`, `slipwright approve`
-- [ ] `GET /jobs/{id}` shows current state and phase history
+- [x] `POST /jobs`, `GET /jobs`, `GET /jobs/{id}`, approve/reject endpoints
+- [x] CLI wraps these: `slipwright new`, `slipwright status`, `slipwright approve`
+- [x] `GET /jobs/{id}` shows current state and phase history
 
 ---
 

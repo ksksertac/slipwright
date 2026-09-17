@@ -14,6 +14,9 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
+import traceback
+from collections import defaultdict
 from collections.abc import Callable
 from pathlib import Path
 
@@ -75,6 +78,7 @@ class Engine:
         self.handlers: dict[JobState, Handler] = {
             JobState.ANALYZING: self._analyze,
         }
+        self._locks: defaultdict[str, threading.Lock] = defaultdict(threading.Lock)
         # ports held by jobs that outlived a previous process must stay taken
         self.workspace.reserve_ports(store.list())
 
@@ -89,11 +93,13 @@ class Engine:
     def create_job(self, request: str, repo_path: Path) -> Job:
         return self.store.create(Job(request=request, repo_path=repo_path))
 
-    def start(self, job_id: str) -> Job:
+    def start(self, job_id: str, *, run: bool = True) -> Job:
+        """Move a new job into analysis. With ``run=False`` only the transition happens;
+        call ``resume`` later (e.g. from a background worker) to execute the phase."""
         job = self.orchestrator.transition(job_id, JobState.ANALYZING, note="job started")
-        return self._run(job)
+        return self._run(job) if run else job
 
-    def approve(self, job_id: str) -> Job:
+    def approve(self, job_id: str, *, run: bool = True) -> Job:
         job = self.store.get(job_id)
         edges = APPROVAL_EDGES.get(job.state)
         if edges is None:
@@ -102,9 +108,9 @@ class Engine:
         job.data.reject_rounds = 0
         self.store.save(job)
         job = self.orchestrator.transition(job, edges[0], note="approved")
-        return self._run(job)
+        return self._run(job) if run else job
 
-    def reject(self, job_id: str, feedback: str) -> Job:
+    def reject(self, job_id: str, feedback: str, *, run: bool = True) -> Job:
         job = self.store.get(job_id)
         edges = APPROVAL_EDGES.get(job.state)
         if edges is None:
@@ -113,14 +119,11 @@ class Engine:
         job.data.reject_rounds += 1
         self.store.save(job)
         job = self.orchestrator.transition(job, edges[1], note=f"rejected: {feedback}")
-        return self._run(job)
+        return self._run(job) if run else job
 
     def resume(self, job_id: str) -> Job:
         """Continue a job from its persisted state; a no-op unless it was mid-phase."""
-        job = self.store.get(job_id)
-        if job.state in WORKING_STATES:
-            return self._run(job)
-        return job
+        return self._run(self.store.get(job_id))
 
     def resume_all(self) -> list[Job]:
         return [self.resume(job.id) for job in self.store.list()]
@@ -136,16 +139,31 @@ class Engine:
     # -- driver --------------------------------------------------------------------------
 
     def _run(self, job: Job) -> Job:
-        while job.state in WORKING_STATES:
-            handler = self.handlers.get(job.state)
-            if handler is None:
-                log.warning("no handler for state %s; job %s left as is", job.state, job.id)
-                return job
-            before = job.state
-            job = handler(job)
-            if job.state is before:  # a handler must always move the job
-                raise RuntimeError(f"handler for {before.value} did not change job {job.id}")
-        return job
+        """Run phase handlers until the job stops at a gate or ends.
+
+        One job runs in one thread at a time; a second caller waits, then re-reads the
+        persisted state so it never acts on a stale view.
+        """
+        with self._locks[job.id]:
+            job = self.store.get(job.id)
+            while job.state in WORKING_STATES:
+                handler = self.handlers.get(job.state)
+                if handler is None:
+                    log.warning("no handler for state %s; job %s left as is", job.state, job.id)
+                    return job
+                before = job.state
+                try:
+                    job = handler(job)
+                except Exception as exc:  # noqa: BLE001 - a crashed phase fails the job
+                    log.exception("job %s: %s phase crashed", job.id, before.value)
+                    return self._fail(
+                        job,
+                        f"{before.value} crashed: {type(exc).__name__}: {exc}",
+                        detail=traceback.format_exc(),
+                    )
+                if job.state is before:  # a handler must always move the job
+                    raise RuntimeError(f"handler for {before.value} did not change job {job.id}")
+            return job
 
     def _fail(self, job: Job, note: str, detail: str | None = None) -> Job:
         try:
@@ -156,7 +174,8 @@ class Engine:
     def _ensure_workspace(self, job: Job) -> Job:
         if job.worktree_path is not None and job.worktree_path.is_dir():
             return job
-        job.worktree_path = None
+        if job.worktree_path is not None:  # recorded but gone from disk: start clean
+            self.workspace.destroy(job)
         self.workspace.create(job)
         return self.store.save(job)
 
