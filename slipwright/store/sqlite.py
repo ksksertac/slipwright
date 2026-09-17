@@ -109,6 +109,13 @@ class TestRunNotFound(KeyError):
         return f"test run not found: {self.run_id}"
 
 
+class JobInProgress(ValueError):
+    def __init__(self, job_id: str, state: JobState) -> None:
+        super().__init__(f"job {job_id} is still {state.value}; only finished jobs can be deleted")
+        self.job_id = job_id
+        self.state = state
+
+
 class ProjectInUse(ValueError):
     def __init__(self, project_id: str, active: int) -> None:
         super().__init__(f"project {project_id} still has {active} unfinished job(s)")
@@ -336,6 +343,24 @@ class JobStore(UserStoreMixin, SettingsStoreMixin):
             conn.execute("DELETE FROM jobs WHERE project_id = ?", (project_id,))
             conn.execute("DELETE FROM projects WHERE id = ?", (project_id,))
         self.events.emit("project", project_id=project_id, payload={"action": "deleted"})
+
+    def delete_job(self, job_id: str) -> None:
+        """Delete a finished job with its history and test runs."""
+        from slipwright.schemas.job import TERMINAL_STATES
+
+        with self._tx() as conn:
+            row = conn.execute(
+                "SELECT state, project_id FROM jobs WHERE id = ?", (job_id,)
+            ).fetchone()
+            if row is None:
+                raise JobNotFound(job_id)
+            if JobState(row["state"]) not in TERMINAL_STATES:
+                raise JobInProgress(job_id, JobState(row["state"]))
+            conn.execute("DELETE FROM test_runs WHERE job_id = ?", (job_id,))
+            conn.execute("DELETE FROM jobs WHERE id = ?", (job_id,))
+        self.events.emit(
+            "job.state", project_id=row["project_id"], job_id=job_id, payload={"state": "deleted"}
+        )
 
     # -- writes ------------------------------------------------------------------------
 

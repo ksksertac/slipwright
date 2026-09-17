@@ -21,14 +21,27 @@ from fastapi.responses import FileResponse, PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from slipwright.activity import ActivityItem, ProjectProgress, project_activity, project_progress
+from slipwright.activity import (
+    ActivityItem,
+    Overview,
+    ProjectProgress,
+    overview,
+    project_activity,
+    project_progress,
+)
 from slipwright.board import Board, project_board
 from slipwright.engine import Engine, NotAwaitingApproval, ProjectCloneError
 from slipwright.schemas.job import Job, Transition
 from slipwright.schemas.profile import Profile
 from slipwright.schemas.project import Project, ProjectPatch
 from slipwright.schemas.testrun import TestRun
-from slipwright.store import JobNotFound, ProjectInUse, ProjectNotFound, TestRunNotFound
+from slipwright.store import (
+    JobInProgress,
+    JobNotFound,
+    ProjectInUse,
+    ProjectNotFound,
+    TestRunNotFound,
+)
 
 log = logging.getLogger(__name__)
 
@@ -155,6 +168,18 @@ def create_app(
         job = eng.start(job.id, run=False)
         background.add_task(_resume, eng, job.id)
         return job
+
+    # -- dashboard -----------------------------------------------------------------------
+
+    @api.get("/overview", response_model=Overview)
+    def get_overview(request: Request, recent: int = 20) -> Overview:
+        """Numbers, pending approvals and recent activity across every project."""
+        eng = _engine(request)
+        return overview(len(eng.store.list_projects()), eng.store.list(), recent=recent)
+
+    @api.get("/activity", response_model=list[ActivityItem])
+    def get_all_activity(request: Request, limit: int | None = 50) -> list[ActivityItem]:
+        return project_activity(_engine(request).store.list(), limit=limit)
 
     # -- projects ------------------------------------------------------------------------
 
@@ -302,6 +327,16 @@ def create_app(
     @api.get("/jobs/{job_id}", response_model=Job)
     def get_job(job_id: str, request: Request) -> Job:
         return _get(_engine(request), job_id)
+
+    @api.delete("/jobs/{job_id}", status_code=204)
+    def delete_job(job_id: str, request: Request) -> None:
+        """Delete a finished job (worktree, branch, port and rows). Running jobs: 409."""
+        eng = _engine(request)
+        _get(eng, job_id)
+        try:
+            eng.delete_job(job_id)
+        except JobInProgress as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     @api.get("/jobs/{job_id}/history/{index}", response_model=Transition)
     def get_transition(job_id: str, index: int, request: Request) -> Transition:

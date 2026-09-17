@@ -2,7 +2,8 @@ import { useState, type FormEvent } from "react";
 import { describeError } from "../../api/client";
 import { useGitHubSettings, useSaveGitHubSettings, useTestGitHub } from "../../api/hooks";
 import { useAuth } from "../../auth/AuthProvider";
-import { ErrorBox, Loading } from "../../components/ui";
+import { ErrorBox, Loading, PageHead } from "../../components/ui";
+import { Crumbs } from "../../components/Crumbs";
 
 export function GitHubSettingsPage() {
   const { user } = useAuth();
@@ -39,7 +40,8 @@ export function GitHubSettingsPage() {
 
   return (
     <div>
-      <h1>GitHub</h1>
+      <Crumbs items={[{ label: "Settings" }, { label: "GitHub" }]} />
+      <PageHead title="GitHub" subtitle="Clone, push and open pull requests." />
       <p className="muted">
         The token is used to clone private repositories, push job branches and open pull requests.
         It is stored encrypted and never shown again.
@@ -83,8 +85,8 @@ export function GitHubSettingsPage() {
             />
           </div>
         </div>
-        {save.error && <div className="error">{describeError(save.error)}</div>}
-        {saved && <div className="notice">Saved.</div>}
+        {save.error && <div className="callout error">{describeError(save.error)}</div>}
+        {saved && <div className="callout notice">Saved.</div>}
         {admin ? (
           <div className="row">
             <button className="btn primary" disabled={save.isPending}>
@@ -112,14 +114,14 @@ export function GitHubSettingsPage() {
           <div className="muted small">Only admins can change these settings.</div>
         )}
         {test.data && (
-          <div className="notice">
+          <div className="callout notice">
             Connected as <strong>{test.data.login}</strong>
             {test.data.name ? ` (${test.data.name})` : ""}
             {test.data.rate_limit_remaining !== null &&
               ` · ${test.data.rate_limit_remaining}/${test.data.rate_limit_limit} API calls left`}
           </div>
         )}
-        {test.error && <div className="error">{describeError(test.error)}</div>}
+        {test.error && <div className="callout error">{describeError(test.error)}</div>}
       </form>
     </div>
   );

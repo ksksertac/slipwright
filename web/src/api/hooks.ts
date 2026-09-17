@@ -17,6 +17,7 @@ import {
   type JiraTestResult,
   type Job,
   type NewProject,
+  type Overview,
   type Project,
   type ProjectPatch,
   type ProjectProgress,
@@ -31,6 +32,7 @@ import {
 
 export const keys = {
   me: ["me"] as const,
+  overview: ["overview"] as const,
   projects: ["projects"] as const,
   project: (id: string) => ["projects", id] as const,
   projectJobs: (id: string) => ["projects", id, "jobs"] as const,
@@ -51,6 +53,15 @@ export const keys = {
   providerModels: (name: string) => ["settings", "providers", name, "models"] as const,
   tokens: (userId: string) => ["users", userId, "tokens"] as const,
 };
+
+// -- dashboard -------------------------------------------------------------------------
+
+export function useOverview() {
+  return useQuery({
+    queryKey: keys.overview,
+    queryFn: () => api.get<Overview>("/api/overview?recent=25"),
+  });
+}
 
 // -- projects --------------------------------------------------------------------------
 
@@ -175,6 +186,14 @@ export function useSendMessage(jobId: string) {
   return useMutation({
     mutationFn: (text: string) => api.post<Job>(`/api/jobs/${jobId}/message`, { text }),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.job(jobId) }),
+  });
+}
+
+export function useDeleteJob() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete<void>(`/api/jobs/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.projects }),
   });
 }
 

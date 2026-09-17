@@ -26,6 +26,8 @@ export function useLiveEvents(projectId?: string) {
         void qc.invalidateQueries({ queryKey: keys.project(pid) }); // jobs/board/progress/...
       }
       void qc.invalidateQueries({ queryKey: keys.projects });
+      void qc.invalidateQueries({ queryKey: keys.overview });
+      void qc.invalidateQueries({ queryKey: ["overview", "badge"] });
       if (event.job_id) {
         void qc.invalidateQueries({ queryKey: keys.job(event.job_id) });
       }

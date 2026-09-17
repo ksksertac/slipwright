@@ -1,4 +1,5 @@
 from slipwright.store.sqlite import (
+    JobInProgress,
     JobNotFound,
     JobStore,
     ProjectInUse,
@@ -8,6 +9,7 @@ from slipwright.store.sqlite import (
 from slipwright.store.users import UsernameTaken, UserNotFound
 
 __all__ = [
+    "JobInProgress",
     "JobNotFound",
     "JobStore",
     "ProjectInUse",

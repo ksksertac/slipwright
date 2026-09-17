@@ -36,6 +36,7 @@ class ActivityItem(BaseModel):
 
     job_id: str
     job_request: str
+    project_id: str | None = None
     index: int  # position in ``job.history``; the detail endpoint takes it
     at: datetime
     from_state: JobState
@@ -50,6 +51,7 @@ class JobProgress(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     job_id: str
+    project_id: str | None = None
     request: str
     state: JobState
     pending_approval: str | None
@@ -58,6 +60,23 @@ class JobProgress(BaseModel):
     tasks_total: int
     last_activity: datetime
     pr_url: str | None = None
+
+
+class Overview(BaseModel):
+    """Dashboard numbers across every project."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    projects: int
+    jobs_total: int
+    jobs_running: int
+    jobs_done: int
+    jobs_failed: int
+    pending_approvals: int
+    tasks_done: int
+    tasks_total: int
+    waiting: list[JobProgress]
+    recent: list[ActivityItem]
 
 
 class ProjectProgress(BaseModel):
@@ -109,6 +128,7 @@ def job_progress(job: Job) -> JobProgress:
     tasks = [t for e in job_epics(job) for s in e.stories for t in s.tasks]
     return JobProgress(
         job_id=job.id,
+        project_id=job.project_id,
         request=job.request,
         state=job.state,
         pending_approval=pending_approval(job),
@@ -134,6 +154,24 @@ def project_progress(project_id: str, jobs: list[Job]) -> ProjectProgress:
         tasks_done=sum(r.tasks_done for r in rows),
         tasks_total=sum(r.tasks_total for r in rows),
         last_activity=max((r.last_activity for r in rows), default=None),
+    )
+
+
+def overview(projects: int, jobs: list[Job], *, recent: int = 20) -> Overview:
+    rows = [job_progress(j) for j in jobs]
+    return Overview(
+        projects=projects,
+        jobs_total=len(jobs),
+        jobs_running=sum(
+            1 for j in jobs if j.state not in TERMINAL_STATES and j.state not in APPROVAL_STATES
+        ),
+        jobs_done=sum(1 for j in jobs if j.state is JobState.DONE),
+        jobs_failed=sum(1 for j in jobs if j.state is JobState.FAILED),
+        pending_approvals=sum(1 for j in jobs if j.state in APPROVAL_STATES),
+        tasks_done=sum(r.tasks_done for r in rows),
+        tasks_total=sum(r.tasks_total for r in rows),
+        waiting=[r for r in rows if r.pending_approval],
+        recent=project_activity(jobs, limit=recent),
     )
 
 
@@ -193,6 +231,7 @@ def job_activity(job: Job) -> list[ActivityItem]:
             ActivityItem(
                 job_id=job.id,
                 job_request=job.request,
+                project_id=job.project_id,
                 index=index,
                 at=t.at,
                 from_state=t.from_state,
@@ -218,6 +257,8 @@ __all__ = [
     "ActivityItem",
     "ActivityKind",
     "JobProgress",
+    "Overview",
+    "overview",
     "ProjectProgress",
     "classify",
     "current_phase",

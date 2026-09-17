@@ -74,7 +74,7 @@ export function GateActions({ job, compact = false }: { job: Job; compact?: bool
           </>
         )}
       </div>
-      {error && <div className="error small">{describeError(error)}</div>}
+      {error && <div className="callout error">{describeError(error)}</div>}
     </div>
   );
 }

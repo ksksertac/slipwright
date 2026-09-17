@@ -2,7 +2,8 @@ import { useState, type FormEvent } from "react";
 import { describeError, type JiraSettingsIn } from "../../api/client";
 import { useJiraSettings, useSaveJiraSettings, useTestJira } from "../../api/hooks";
 import { useAuth } from "../../auth/AuthProvider";
-import { ErrorBox, Loading } from "../../components/ui";
+import { ErrorBox, Loading, PageHead } from "../../components/ui";
+import { Crumbs } from "../../components/Crumbs";
 
 const TYPE_KEYS = ["epic", "story", "task", "bug"] as const;
 
@@ -36,7 +37,8 @@ export function JiraSettingsPage() {
 
   return (
     <div>
-      <h1>Jira</h1>
+      <Crumbs items={[{ label: "Settings" }, { label: "Jira" }]} />
+      <PageHead title="Jira" subtitle="Mirror epics, stories and tasks into your tracker." />
       <p className="muted">
         With Jira connected, every approved plan is mirrored as epics, stories and sub-tasks in the
         project's Jira project, issues move as tasks complete, and PR links and failures are
@@ -102,8 +104,8 @@ export function JiraSettingsPage() {
           ))}
         </div>
 
-        {save.error && <div className="error">{describeError(save.error)}</div>}
-        {saved && <div className="notice">Saved.</div>}
+        {save.error && <div className="callout error">{describeError(save.error)}</div>}
+        {saved && <div className="callout notice">Saved.</div>}
         {admin ? (
           <div className="row">
             <button className="btn primary" disabled={save.isPending}>
@@ -131,7 +133,7 @@ export function JiraSettingsPage() {
           <div className="muted small">Only admins can change these settings.</div>
         )}
         {test.data && (
-          <div className="notice">
+          <div className="callout notice">
             Connected as <strong>{test.data.account.display_name}</strong>
             {test.data.agent_account && (
               <>
@@ -144,7 +146,7 @@ export function JiraSettingsPage() {
             </div>
           </div>
         )}
-        {test.error && <div className="error">{describeError(test.error)}</div>}
+        {test.error && <div className="callout error">{describeError(test.error)}</div>}
       </form>
     </div>
   );

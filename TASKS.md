@@ -121,6 +121,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 | 8 | T8.6 Settings page: GitHub, Jira, agent access and users | [x] |
 | 8 | T8.7 Retire the server-rendered dashboard | [x] |
 | 8 | T8.8 Docker image and compose | [x] |
+| 8 | T8.9 UI redesign: dashboard, cards, edit/delete flows, theme | [x] |
 
 ---
 
@@ -606,6 +607,23 @@ Added after Phase 8: run the whole thing locally with one command.
   scripted job reaching the plan gate with its worktree and port inside the container
 - [x] README documents the Docker path; `tests/test_docker.py` checks the files stay
   consistent (ports, state dir, volume, ignored paths)
+
+### T8.9 — UI redesign: dashboard, cards, edit/delete flows, theme
+Added after Phase 8: the first React pass was a bare skeleton.
+
+**Done when**
+- [x] Design tokens (light base, dark under `prefers-color-scheme` or a pinned
+  `data-theme`), Inter/JetBrains Mono, icon sidebar with pending-approval count, top bar
+  with breadcrumbs and a light/dark/system switch
+- [x] `/` is a dashboard: stat tiles (projects, running, waiting, tasks, outcomes), pending
+  approvals with inline approve/reject, recent activity across projects
+  (`GET /api/overview`, `GET /api/activity`)
+- [x] Projects as cards with search, an action menu, edit modal (name, description, GitHub
+  repo, Jira key) and a confirm-delete modal; the project page has the same actions
+- [x] Developments can be deleted once finished (`DELETE /api/jobs/{id}` removes worktree,
+  branch, port and rows; 409 while running), from the table and the job page
+- [x] Numbered stepper with connectors, toasts, modals, skeleton loading, empty states,
+  status badges with dots; every page checked in both themes with Playwright screenshots
 
 ---
 

@@ -57,7 +57,7 @@ from slipwright.schemas.job import APPROVAL_STATES, Job, JobState, utcnow
 from slipwright.schemas.profile import Permission, Profile, RoleName
 from slipwright.schemas.project import Project
 from slipwright.schemas.testrun import TestRun, TestRunSource, TestRunStatus
-from slipwright.store import JobStore, ProjectNotFound
+from slipwright.store import JobInProgress, JobStore, ProjectNotFound
 from slipwright.workspace import Workspace
 from slipwright.workspace import git as g
 
@@ -534,6 +534,16 @@ class Engine:
         return self.store.create(
             Job(project_id=project.id, request=request, repo_path=project.repo_path)
         )
+
+    def delete_job(self, job_id: str) -> None:
+        """Remove a finished job: its worktree and branch, its port, its rows."""
+        job = self.store.get(job_id)
+        if not job.is_terminal:
+            raise JobInProgress(job.id, job.state)
+        with self._locks[job.id]:
+            if job.worktree_path is not None or job.port is not None:
+                self.workspace.destroy(job)
+            self.store.delete_job(job.id)
 
     def seed_for(self, job: Job) -> Profile:
         """The seed profile a job starts from: its project's, else the engine's default."""

@@ -31,6 +31,17 @@
           "kind": {
             "$ref": "#/components/schemas/ActivityKind"
           },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
           "role": {
             "anyOf": [
               {
@@ -57,6 +68,7 @@
           "job_id",
           "job_request",
           "kind",
+          "project_id",
           "role",
           "title",
           "to_state"
@@ -1123,6 +1135,17 @@
             ],
             "title": "Pr Url"
           },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
           "request": {
             "title": "Request",
             "type": "string"
@@ -1145,6 +1168,7 @@
           "last_activity",
           "pending_approval",
           "pr_url",
+          "project_id",
           "request",
           "state",
           "tasks_done",
@@ -1361,6 +1385,72 @@
           "password"
         ],
         "title": "NewUser",
+        "type": "object"
+      },
+      "Overview": {
+        "additionalProperties": false,
+        "description": "Dashboard numbers across every project.",
+        "properties": {
+          "jobs_done": {
+            "title": "Jobs Done",
+            "type": "integer"
+          },
+          "jobs_failed": {
+            "title": "Jobs Failed",
+            "type": "integer"
+          },
+          "jobs_running": {
+            "title": "Jobs Running",
+            "type": "integer"
+          },
+          "jobs_total": {
+            "title": "Jobs Total",
+            "type": "integer"
+          },
+          "pending_approvals": {
+            "title": "Pending Approvals",
+            "type": "integer"
+          },
+          "projects": {
+            "title": "Projects",
+            "type": "integer"
+          },
+          "recent": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityItem"
+            },
+            "title": "Recent",
+            "type": "array"
+          },
+          "tasks_done": {
+            "title": "Tasks Done",
+            "type": "integer"
+          },
+          "tasks_total": {
+            "title": "Tasks Total",
+            "type": "integer"
+          },
+          "waiting": {
+            "items": {
+              "$ref": "#/components/schemas/JobProgress"
+            },
+            "title": "Waiting",
+            "type": "array"
+          }
+        },
+        "required": [
+          "jobs_done",
+          "jobs_failed",
+          "jobs_running",
+          "jobs_total",
+          "pending_approvals",
+          "projects",
+          "recent",
+          "tasks_done",
+          "tasks_total",
+          "waiting"
+        ],
+        "title": "Overview",
         "type": "object"
       },
       "Permission": {
@@ -2307,6 +2397,57 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/activity": {
+      "get": {
+        "operationId": "get_all_activity_api_activity_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ActivityItem"
+                  },
+                  "title": "Response Get All Activity Api Activity Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get All Activity"
+      }
+    },
     "/api/auth/login": {
       "post": {
         "operationId": "login_api_auth_login_post",
@@ -2514,6 +2655,37 @@
       }
     },
     "/api/jobs/{job_id}": {
+      "delete": {
+        "description": "Delete a finished job (worktree, branch, port and rows). Running jobs: 409.",
+        "operationId": "delete_job_api_jobs__job_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Job"
+      },
       "get": {
         "operationId": "get_job_api_jobs__job_id__get",
         "parameters": [
@@ -2836,6 +3008,47 @@
           }
         },
         "summary": "Set Tests"
+      }
+    },
+    "/api/overview": {
+      "get": {
+        "description": "Numbers, pending approvals and recent activity across every project.",
+        "operationId": "get_overview_api_overview_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "recent",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "title": "Recent",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Overview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Overview"
       }
     },
     "/api/projects": {

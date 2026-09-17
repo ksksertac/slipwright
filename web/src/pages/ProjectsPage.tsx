@@ -1,81 +1,163 @@
-import { Link, useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { Link } from "react-router-dom";
 import type { Project } from "../api/client";
 import { useProgress, useProjects } from "../api/hooks";
-import { Empty, ErrorBox, Loading, ProgressBar, timeAgo } from "../components/ui";
+import { Crumbs } from "../components/Crumbs";
+import {
+  IconEdit,
+  IconGit,
+  IconPlus,
+  IconSearch,
+  IconTicket,
+  IconTrash,
+} from "../components/icons";
+import { Menu } from "../components/Menu";
+import { DeleteProjectModal, EditProjectModal } from "../components/ProjectDialogs";
+import { Empty, ErrorBox, Loading, PageHead, ProgressBar, timeAgo } from "../components/ui";
 
 export function ProjectsPage() {
   const projects = useProjects();
+  const [query, setQuery] = useState("");
+  const [editing, setEditing] = useState<Project | null>(null);
+  const [deleting, setDeleting] = useState<Project | null>(null);
+  const visible = (projects.data ?? []).filter((p) =>
+    `${p.name} ${p.description} ${p.github_repo ?? ""}`.toLowerCase().includes(query.toLowerCase()),
+  );
 
   return (
     <div>
-      <div className="row spread">
-        <h1>Projects</h1>
-        <Link className="btn primary" to="/projects/new">
-          New project
-        </Link>
-      </div>
+      <Crumbs items={[{ label: "Projects" }]} />
+      <PageHead
+        title="Projects"
+        subtitle="Repositories the agents work on."
+        actions={
+          <>
+            <div style={{ position: "relative" }}>
+              <IconSearch
+                style={{
+                  position: "absolute",
+                  left: 9,
+                  top: 9,
+                  width: 15,
+                  height: 15,
+                  color: "var(--text-3)",
+                }}
+              />
+              <input
+                type="text"
+                placeholder="Search…"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                style={{ paddingLeft: 30, width: 220 }}
+              />
+            </div>
+            <Link className="btn primary" to="/projects/new">
+              <IconPlus /> New project
+            </Link>
+          </>
+        }
+      />
       <ErrorBox error={projects.error} />
       {projects.isLoading && <Loading />}
       {projects.data && projects.data.length === 0 && (
-        <Empty>
-          No projects yet. A project is a repository Slipwright works on: add one from a local
-          checkout or a GitHub repository, then start a development by describing what you want.{" "}
-          <Link to="/projects/new">Add the first project</Link>.
+        <Empty
+          title="No projects yet"
+          action={
+            <Link className="btn primary" to="/projects/new">
+              <IconPlus /> Add the first project
+            </Link>
+          }
+        >
+          A project is a repository Slipwright works on: add one from a local checkout or a GitHub
+          repository, then start a development by describing what you want.
         </Empty>
       )}
-      {projects.data && projects.data.length > 0 && (
-        <div className="card" style={{ padding: 0 }}>
-          <table>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Repository</th>
-                <th>Running</th>
-                <th>Pending approvals</th>
-                <th style={{ width: 200 }}>Tasks</th>
-                <th>Last activity</th>
-              </tr>
-            </thead>
-            <tbody>
-              {projects.data.map((p) => (
-                <ProjectRow key={p.id} project={p} />
-              ))}
-            </tbody>
-          </table>
+      {visible.length > 0 && (
+        <div className="grid-3">
+          {visible.map((p) => (
+            <ProjectCard
+              key={p.id}
+              project={p}
+              onEdit={() => setEditing(p)}
+              onDelete={() => setDeleting(p)}
+            />
+          ))}
         </div>
       )}
+      {projects.data && projects.data.length > 0 && visible.length === 0 && (
+        <Empty>No project matches “{query}”.</Empty>
+      )}
+      {editing && <EditProjectModal project={editing} onClose={() => setEditing(null)} />}
+      {deleting && <DeleteProjectModal project={deleting} onClose={() => setDeleting(null)} />}
     </div>
   );
 }
 
-function ProjectRow({ project }: { project: Project }) {
-  const navigate = useNavigate();
+function ProjectCard({
+  project,
+  onEdit,
+  onDelete,
+}: {
+  project: Project;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
   const progress = useProgress(project.id);
   const p = progress.data;
-  const remote = project.github_repo ?? project.clone_url;
   return (
-    <tr className="clickable" onClick={() => navigate(`/projects/${project.id}`)}>
-      <td>
-        <Link to={`/projects/${project.id}`} onClick={(e) => e.stopPropagation()}>
-          <strong>{project.name}</strong>
-        </Link>
-        {project.jira_project_key && <span className="tag">{project.jira_project_key}</span>}
-        {project.description && <div className="muted small">{project.description}</div>}
-      </td>
-      <td className="mono small">
-        {remote ? <div>{remote}</div> : null}
-        <div className="muted">{project.repo_path ?? "—"}</div>
-      </td>
-      <td>{p ? p.jobs_running : "…"}</td>
-      <td>
-        {p && p.pending_approvals > 0 ? (
-          <span className="badge wait">{p.pending_approvals} waiting</span>
-        ) : (
-          <span className="muted">none</span>
+    <div className="card pcard">
+      <div className="row spread" style={{ flexWrap: "nowrap" }}>
+        <div className="title truncate">
+          <Link to={`/projects/${project.id}`}>{project.name}</Link>
+        </div>
+        <div className="row" style={{ gap: 4, flexWrap: "nowrap" }}>
+          {p && p.pending_approvals > 0 && (
+            <span className="badge wait">{p.pending_approvals} waiting</span>
+          )}
+          {p && p.jobs_running > 0 && <span className="badge work">{p.jobs_running} running</span>}
+          <Menu>
+            <button onClick={onEdit}>
+              <IconEdit /> Edit
+            </button>
+            <button className="danger" onClick={onDelete}>
+              <IconTrash /> Delete
+            </button>
+          </Menu>
+        </div>
+      </div>
+      {project.description ? (
+        <div className="muted small" style={{ minHeight: 20 }}>
+          {project.description}
+        </div>
+      ) : (
+        <div className="faint small" style={{ minHeight: 20 }}>
+          No description
+        </div>
+      )}
+      <div className="meta">
+        <span title={project.repo_path ?? ""}>
+          <IconGit /> {project.github_repo ?? project.clone_url ?? "local checkout"}
+        </span>
+        {project.jira_project_key && (
+          <span>
+            <IconTicket /> {project.jira_project_key}
+          </span>
         )}
-      </td>
-      <td>{p ? <ProgressBar done={p.tasks_done} total={p.tasks_total} /> : "…"}</td>
-      <td className="muted small">{p ? timeAgo(p.last_activity) : "…"}</td>
-    </tr>
+      </div>
+      <div>
+        {p ? (
+          <ProgressBar done={p.tasks_done} total={p.tasks_total} />
+        ) : (
+          <div className="skeleton" style={{ height: 8 }} />
+        )}
+      </div>
+      <div className="row spread faint tiny">
+        <span>
+          {p ? `${p.jobs.length} development${p.jobs.length === 1 ? "" : "s"}` : "…"}
+          {p && p.jobs_failed > 0 ? ` · ${p.jobs_failed} failed` : ""}
+        </span>
+        <span>{p ? `active ${timeAgo(p.last_activity)}` : ""}</span>
+      </div>
+    </div>
   );
 }

@@ -137,9 +137,10 @@ def test_project_page_has_the_five_tabs_and_lives_on_events() -> None:
         "GateActions",  # approve / reject inline on the overview
         "JiraLink",  # jira key on board rows
         "#phase-",  # task rows link to the phase diff on the job page
-        "useTransition",  # activity items expand to their detail
+        "ActivityRow",  # activity items expand to their detail (components/ActivityRow.tsx)
     ):
         assert expected in page, expected
+    assert "useTransition" in _src("components/ActivityRow.tsx")
     events = _src("api/events.ts")
     assert "EventSource" in events and "/api/events" in events
     assert "invalidateQueries" in events
@@ -265,8 +266,8 @@ def test_settings_pages_cover_github_jira_agents_and_users() -> None:
         assert expected in users, expected
     job_page = _src("pages/JobPage.tsx")
     assert "jira_keys" in job_page  # jira actions / keys visible on the job page
-    activity = _src("pages/ProjectPage.tsx")
-    assert 'jira: "jira"' in activity  # refused/executed agent actions show in the feed
+    activity = _src("components/ActivityRow.tsx")
+    assert "jira: {" in activity  # refused/executed agent actions show in the feed
 
 
 def test_default_profile_endpoint(engine: Engine, seed: Profile) -> None:
@@ -294,3 +295,31 @@ def test_legacy_dashboard_is_gone_and_readme_documents_the_flow() -> None:
         "PR link",
     ):
         assert expected in readme, expected
+
+
+# --- dashboard and deletions --------------------------------------------------------------
+
+
+def test_overview_and_job_deletion(engine: Engine, repo: Path) -> None:
+    from slipwright.schemas.job import JobState
+
+    app = create_app(engine, resume_on_startup=False, require_auth=False)
+    with TestClient(app) as client:
+        assert client.get("/api/overview").json()["projects"] == 0
+        project = client.post("/api/projects", json={"name": "demo", "repo_path": str(repo)}).json()
+        job = client.post(f"/api/projects/{project['id']}/jobs", json={"request": "x"}).json()
+        ov = client.get("/api/overview").json()
+        assert (ov["projects"], ov["jobs_total"], ov["pending_approvals"]) == (1, 1, 1)
+        assert ov["waiting"][0]["job_id"] == job["id"]
+        assert ov["recent"][0]["project_id"] == project["id"]
+        assert client.get("/api/activity?limit=1").json()[0]["job_id"] == job["id"]
+
+        assert client.delete(f"/api/jobs/{job['id']}").status_code == 409  # still running
+        engine.store.update_state(job["id"], JobState.FAILED, note="abandoned")
+        worktree = Path(engine.store.get(job["id"]).worktree_path or "")
+        assert worktree.is_dir()
+        assert client.delete(f"/api/jobs/{job['id']}").status_code == 204
+        assert not worktree.exists()
+        assert client.get(f"/api/jobs/{job['id']}").status_code == 404
+        assert client.delete(f"/api/jobs/{job['id']}").status_code == 404
+        assert client.get("/api/overview").json()["jobs_total"] == 0

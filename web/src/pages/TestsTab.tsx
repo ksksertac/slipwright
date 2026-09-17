@@ -8,6 +8,7 @@ import {
   useTestRunOutput,
   useTestRuns,
 } from "../api/hooks";
+import { IconFlask, IconPlay } from "../components/icons";
 import { Empty, ErrorBox, Loading, formatTime } from "../components/ui";
 
 const STATUS_CLASS: Record<TestRun["status"], string> = {
@@ -59,7 +60,7 @@ export function TestsTab({ projectId }: { projectId: string }) {
                 start.mutate(target || null, { onSuccess: (run) => setSelected(run.id) })
               }
             >
-              {start.isPending ? "Starting…" : "Run tests"}
+              <IconPlay /> {start.isPending ? "Starting…" : "Run tests"}
             </button>
           </div>
           <div className="row">
@@ -80,19 +81,19 @@ export function TestsTab({ projectId }: { projectId: string }) {
             </select>
           </div>
         </div>
-        {start.error && <div className="error small">{describeError(start.error)}</div>}
+        {start.error && <div className="callout error">{describeError(start.error)}</div>}
       </div>
 
       <ErrorBox error={runs.error} />
       {runs.isLoading && <Loading />}
       {runs.data && runs.data.length === 0 && (
-        <Empty>
-          No test runs yet. Every build gate the engine runs is recorded here, and you can run the
-          project's test command yourself at any time.
+        <Empty title="No test runs yet" icon={<IconFlask />}>
+          Every build gate the engine runs is recorded here, and you can run the project's test
+          command yourself at any time.
         </Empty>
       )}
       {visible.length > 0 && (
-        <div className="card" style={{ padding: 0 }}>
+        <div className="card flush">
           <table>
             <thead>
               <tr>

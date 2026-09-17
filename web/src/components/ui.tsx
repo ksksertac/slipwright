@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { JobState, TaskStatus } from "../api/client";
+import { IconFolder } from "./icons";
 
 const STATE_CLASS: Record<JobState, string> = {
   created: "idle",
@@ -16,8 +17,23 @@ const STATE_CLASS: Record<JobState, string> = {
   failed: "bad",
 };
 
+export const STATE_LABEL: Record<JobState, string> = {
+  created: "created",
+  analyzing: "analyzing",
+  awaiting_profile_approval: "needs profile approval",
+  planning: "planning",
+  awaiting_plan_approval: "needs plan approval",
+  developing: "developing",
+  build_gate: "build gate",
+  qa: "qa",
+  awaiting_test_approval: "needs test approval",
+  devops: "devops",
+  done: "done",
+  failed: "failed",
+};
+
 export function StateBadge({ state }: { state: JobState }) {
-  return <span className={`badge ${STATE_CLASS[state]}`}>{state.replaceAll("_", " ")}</span>;
+  return <span className={`badge ${STATE_CLASS[state]}`}>{STATE_LABEL[state]}</span>;
 }
 
 const STATUS_CLASS: Record<TaskStatus, string> = {
@@ -35,16 +51,31 @@ export function StatusDot({ status }: { status: TaskStatus }) {
   return <span className={`status-dot ${status}`} title={status} />;
 }
 
-export function ProgressBar({ done, total }: { done: number; total: number }) {
+export function ProgressBar({
+  done,
+  total,
+  showText = true,
+}: {
+  done: number;
+  total: number;
+  showText?: boolean;
+}) {
   const pct = total === 0 ? 0 : Math.round((done / total) * 100);
   return (
-    <div className="row" style={{ gap: 8 }}>
-      <div className="progress" style={{ flex: 1, minWidth: 80 }}>
+    <div className="row" style={{ gap: 8, flexWrap: "nowrap" }}>
+      <div
+        className={`progress ${pct === 100 ? "good" : ""}`}
+        style={{ flex: 1, minWidth: 60 }}
+        role="progressbar"
+        aria-valuenow={pct}
+      >
         <div style={{ width: `${pct}%` }} />
       </div>
-      <span className="muted small mono">
-        {done}/{total}
-      </span>
+      {showText && (
+        <span className="faint small mono" style={{ whiteSpace: "nowrap" }}>
+          {done}/{total}
+        </span>
+      )}
     </div>
   );
 }
@@ -66,20 +97,85 @@ export function formatTime(iso: string | null | undefined): string {
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-    second: "2-digit",
   });
 }
 
-export function Empty({ children }: { children: ReactNode }) {
-  return <div className="card muted">{children}</div>;
+export function Empty({
+  title,
+  children,
+  icon,
+  action,
+}: {
+  title?: string;
+  children: ReactNode;
+  icon?: ReactNode;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="card empty">
+      <div className="glyph">{icon ?? <IconFolder />}</div>
+      {title && <h3>{title}</h3>}
+      <div className="small">{children}</div>
+      {action && <div style={{ marginTop: 14 }}>{action}</div>}
+    </div>
+  );
 }
 
 export function ErrorBox({ error }: { error: unknown }) {
   if (!error) return null;
   const text = error instanceof Error ? error.message : String(error);
-  return <div className="error">{text}</div>;
+  return <div className="callout error">{text}</div>;
 }
 
-export function Loading() {
-  return <div className="muted">Loading…</div>;
+export function Loading({ rows = 3 }: { rows?: number }) {
+  return (
+    <div className="stack" style={{ gap: 10 }} aria-busy="true">
+      {Array.from({ length: rows }, (_, i) => (
+        <div key={i} className="skeleton" style={{ width: `${90 - i * 15}%` }} />
+      ))}
+    </div>
+  );
+}
+
+export function StatTile({
+  label,
+  value,
+  sub,
+  icon,
+}: {
+  label: string;
+  value: ReactNode;
+  sub?: ReactNode;
+  icon?: ReactNode;
+}) {
+  return (
+    <div className="tile">
+      <div className="label">
+        {icon}
+        {label}
+      </div>
+      <div className="value">{value}</div>
+      {sub && <div className="sub">{sub}</div>}
+    </div>
+  );
+}
+
+export function PageHead({
+  title,
+  subtitle,
+  actions,
+}: {
+  title: ReactNode;
+  subtitle?: ReactNode;
+  actions?: ReactNode;
+}) {
+  return (
+    <div className="page-head">
+      <div>
+        <h1>{title}</h1>
+        {subtitle && <p>{subtitle}</p>}
+      </div>
+      {actions && <div className="row">{actions}</div>}
+    </div>
+  );
 }

@@ -10,7 +10,8 @@ import {
   useUsers,
 } from "../../api/hooks";
 import { useAuth } from "../../auth/AuthProvider";
-import { ErrorBox, Loading, formatTime } from "../../components/ui";
+import { ErrorBox, Loading, PageHead, formatTime } from "../../components/ui";
+import { Crumbs } from "../../components/Crumbs";
 
 export function UsersSettingsPage() {
   const { user: me } = useAuth();
@@ -22,7 +23,7 @@ export function UsersSettingsPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
 
-  if (!me?.is_admin) return <div className="error">Admins only.</div>;
+  if (!me?.is_admin) return <div className="callout error">Admins only.</div>;
   if (users.isLoading) return <Loading />;
   if (users.error) return <ErrorBox error={users.error} />;
 
@@ -42,7 +43,8 @@ export function UsersSettingsPage() {
 
   return (
     <div>
-      <h1>Users</h1>
+      <Crumbs items={[{ label: "Settings" }, { label: "Users" }]} />
+      <PageHead title="Users" subtitle="Logins and API tokens." />
       <div className="card" style={{ padding: 0 }}>
         <table>
           <thead>
@@ -66,7 +68,7 @@ export function UsersSettingsPage() {
             ))}
           </tbody>
         </table>
-        {remove.error && <div className="error small">{describeError(remove.error)}</div>}
+        {remove.error && <div className="callout error">{describeError(remove.error)}</div>}
       </div>
 
       <form className="form card" onSubmit={submit} style={{ marginTop: 16 }}>
@@ -97,7 +99,7 @@ export function UsersSettingsPage() {
           <input type="checkbox" checked={isAdmin} onChange={(e) => setIsAdmin(e.target.checked)} />{" "}
           admin
         </label>
-        {create.error && <div className="error">{describeError(create.error)}</div>}
+        {create.error && <div className="callout error">{describeError(create.error)}</div>}
         <button
           className="btn primary"
           disabled={!username.trim() || !password || create.isPending}
@@ -183,8 +185,10 @@ function UserDetails({ user, me, onDelete }: { user: User; me: User; onDelete: (
             Set
           </button>
         </div>
-        {setPassword.isSuccess && <div className="notice small">Password changed.</div>}
-        {setPassword.error && <div className="error small">{describeError(setPassword.error)}</div>}
+        {setPassword.isSuccess && <div className="callout notice">Password changed.</div>}
+        {setPassword.error && (
+          <div className="callout error">{describeError(setPassword.error)}</div>
+        )}
         {user.id !== me.id && (
           <div style={{ marginTop: 16 }}>
             <button
@@ -247,13 +251,13 @@ function UserDetails({ user, me, onDelete }: { user: User; me: User; onDelete: (
           </button>
         </div>
         {secret && (
-          <div className="notice small">
+          <div className="callout notice">
             Copy it now; it will not be shown again:
             <pre style={{ marginTop: 6 }}>{secret}</pre>
           </div>
         )}
         {(issue.error || revoke.error) && (
-          <div className="error small">{describeError(issue.error ?? revoke.error)}</div>
+          <div className="callout error">{describeError(issue.error ?? revoke.error)}</div>
         )}
       </div>
     </div>

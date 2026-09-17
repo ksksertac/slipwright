@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   describeError,
@@ -8,15 +8,27 @@ import {
   type Profile,
   type Transition,
 } from "../api/client";
-import { keys, useJob, useProject, useSendMessage, useSetTestCases } from "../api/hooks";
+import { useNavigate } from "react-router-dom";
+import {
+  keys,
+  useDeleteJob,
+  useJob,
+  useProject,
+  useSendMessage,
+  useSetTestCases,
+} from "../api/hooks";
 import { api } from "../api/client";
+import { ActivityRow } from "../components/ActivityRow";
+import { Crumbs } from "../components/Crumbs";
 import { Detail } from "../components/Detail";
 import { Diff } from "../components/Diff";
 import { GateActions, pendingApproval } from "../components/GateActions";
+import { IconCheck, IconExternal, IconTrash, IconX } from "../components/icons";
 import { JiraLink } from "../components/JiraLink";
+import { ConfirmModal } from "../components/Modal";
 import { ProfileForm } from "../components/ProfileForm";
+import { useToast } from "../components/Toast";
 import { ErrorBox, Loading, StateBadge, formatTime } from "../components/ui";
-import { ActivityRow } from "./ProjectPage";
 
 const STEPS: { state: JobState; label: string; gate?: boolean }[] = [
   { state: "analyzing", label: "analyze" },
@@ -42,25 +54,31 @@ export function JobPage() {
 
   return (
     <div>
-      <p className="muted small">
-        <Link to="/projects">Projects</Link> /{" "}
-        <Link to={`/projects/${projectId}`}>{project.data?.name ?? "project"}</Link> / job{" "}
-        <span className="mono">{j.id}</span>
-      </p>
-      <div className="row spread">
-        <h1 style={{ marginBottom: 4 }}>
-          {j.request} <StateBadge state={j.state} />
-        </h1>
-        {j.data.pr_url && (
-          <a className="btn" href={j.data.pr_url} target="_blank" rel="noreferrer">
-            Pull request ↗
-          </a>
-        )}
-      </div>
-      <div className="muted small mono">
-        branch slipwright/{j.id}
-        {j.port ? ` · port ${j.port}` : ""}
-        {j.worktree_path ? ` · ${j.worktree_path}` : ""}
+      <Crumbs
+        items={[
+          { label: "Projects", to: "/projects" },
+          { label: project.data?.name ?? "project", to: `/projects/${projectId}` },
+          { label: j.request },
+        ]}
+      />
+      <div className="page-head">
+        <div style={{ minWidth: 0 }}>
+          <h1>
+            {j.request} <StateBadge state={j.state} />
+          </h1>
+          <p className="faint small mono">
+            {j.id} · branch slipwright/{j.id}
+            {j.port ? ` · port ${j.port}` : ""}
+          </p>
+        </div>
+        <div className="row" style={{ flexWrap: "nowrap" }}>
+          {j.data.pr_url && (
+            <a className="btn" href={j.data.pr_url} target="_blank" rel="noreferrer">
+              <IconExternal /> Pull request
+            </a>
+          )}
+          <DeleteJobButton job={j} projectId={projectId} />
+        </div>
       </div>
 
       <Stepper job={j} />
@@ -79,23 +97,75 @@ function Stepper({ job }: { job: Job }) {
   const reached = new Set(job.history.map((t) => t.to_state));
   reached.add(job.state);
   const currentIndex = STEPS.findIndex((s) => s.state === job.state);
+  const failed = job.state === "failed";
   return (
     <div className="stepper">
       {STEPS.map((step, i) => {
+        const done = failed ? reached.has(step.state) : i < currentIndex || job.state === "done";
+        const current = step.state === job.state;
         let cls = "step";
-        if (step.gate) cls += " gate";
-        if (job.state === "failed") {
-          if (reached.has(step.state)) cls += " done";
-        } else if (i < currentIndex || job.state === "done") cls += " done";
-        if (step.state === job.state) cls += " current";
+        if (step.gate) cls += " is-gate";
+        if (done) cls += " done";
+        if (current) cls += " current";
         return (
-          <span key={step.state} className={cls}>
-            {step.label}
+          <span key={step.state} style={{ display: "contents" }}>
+            {i > 0 && <span className={`step-line ${done || current ? "done" : ""}`} />}
+            <span className={cls}>
+              <span className="dot">{done ? <IconCheck style={{ width: 12 }} /> : i + 1}</span>
+              {step.label}
+            </span>
           </span>
         );
       })}
-      {job.state === "failed" && <span className="step failed current">failed</span>}
+      {failed && (
+        <>
+          <span className="step-line" />
+          <span className="step failed current">
+            <span className="dot">
+              <IconX style={{ width: 12 }} />
+            </span>
+            failed
+          </span>
+        </>
+      )}
     </div>
+  );
+}
+
+function DeleteJobButton({ job, projectId }: { job: Job; projectId: string }) {
+  const remove = useDeleteJob();
+  const toast = useToast();
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  if (job.state !== "done" && job.state !== "failed") return null;
+  return (
+    <>
+      <button className="btn danger" onClick={() => setOpen(true)}>
+        <IconTrash /> Delete
+      </button>
+      {open && (
+        <ConfirmModal
+          title="Delete development"
+          body={
+            <>
+              Delete <strong>{job.request}</strong>? Its worktree, branch, history and test runs are
+              removed. A pull request already opened stays on GitHub.
+            </>
+          }
+          busy={remove.isPending}
+          error={remove.error ? describeError(remove.error) : null}
+          onClose={() => setOpen(false)}
+          onConfirm={() =>
+            remove.mutate(job.id, {
+              onSuccess: () => {
+                toast.ok("Development deleted");
+                navigate(`/projects/${projectId}/developments`);
+              },
+            })
+          }
+        />
+      )}
+    </>
   );
 }
 
@@ -107,7 +177,7 @@ function GatePanel({ job }: { job: Job }) {
     if (job.state === "failed") {
       const last = [...job.history].reverse().find((t) => t.to_state === "failed");
       return (
-        <div className="error">
+        <div className="callout error" style={{ display: "block" }}>
           <strong>Failed:</strong> {last?.note}
           {last?.detail && (
             <details style={{ marginTop: 6 }}>
@@ -563,6 +633,7 @@ function History({ job, projectId }: { job: Job; projectId: string }) {
         .map((t, index) => ({
           job_id: job.id,
           job_request: job.request,
+          project_id: job.project_id,
           index,
           at: t.at,
           from_state: t.from_state,
@@ -578,10 +649,10 @@ function History({ job, projectId }: { job: Job; projectId: string }) {
   return (
     <section>
       <h2>History</h2>
-      <div className="card" style={{ padding: "4px 14px" }}>
+      <div className="card">
         <ul className="feed">
           {items.map((item) => (
-            <ActivityRow key={item.index} item={item} projectId={projectId} />
+            <ActivityRow key={item.index} item={item} projectId={projectId} showJob={false} />
           ))}
         </ul>
       </div>

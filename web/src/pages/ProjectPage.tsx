@@ -1,18 +1,24 @@
 import { useState, type FormEvent } from "react";
 import { Link, NavLink, useNavigate, useParams } from "react-router-dom";
-import { describeError, type ActivityItem, type Job } from "../api/client";
+import { describeError, type Job, type Project } from "../api/client";
 import {
   useActivity,
   useBoard,
+  useDeleteJob,
   useProgress,
   useProject,
   useProjectJobs,
   useStartJob,
-  useTransition,
 } from "../api/hooks";
-import { Detail } from "../components/Detail";
+import { ActivityRow } from "../components/ActivityRow";
+import { Crumbs } from "../components/Crumbs";
 import { GateActions } from "../components/GateActions";
+import { IconEdit, IconExternal, IconPlus, IconTrash } from "../components/icons";
 import { JiraLink } from "../components/JiraLink";
+import { Menu } from "../components/Menu";
+import { ConfirmModal } from "../components/Modal";
+import { DeleteProjectModal, EditProjectModal } from "../components/ProjectDialogs";
+import { useToast } from "../components/Toast";
 import {
   Empty,
   ErrorBox,
@@ -41,23 +47,8 @@ export function ProjectPage() {
 
   return (
     <div>
-      <p className="muted small">
-        <Link to="/projects">Projects</Link> / {p.name}
-      </p>
-      <div className="row spread">
-        <div>
-          <h1 style={{ marginBottom: 2 }}>
-            {p.name} {p.jira_project_key && <JiraLink issueKey={p.jira_project_key} />}
-          </h1>
-          <div className="muted small mono">
-            {p.github_repo ?? p.clone_url ?? ""} {p.repo_path ? `· ${p.repo_path}` : ""}
-          </div>
-          {p.description && <p style={{ marginTop: 8 }}>{p.description}</p>}
-        </div>
-        <Link className="btn primary" to={`/projects/${p.id}/developments`}>
-          New development
-        </Link>
-      </div>
+      <Crumbs items={[{ label: "Projects", to: "/projects" }, { label: p.name }]} />
+      <ProjectHeader project={p} />
 
       <nav className="tabs">
         {TABS.map((t) => (
@@ -72,6 +63,41 @@ export function ProjectPage() {
       {current === "developments" && <DevelopmentsTab projectId={p.id} />}
       {current === "tests" && <TestsTab projectId={p.id} />}
       {current === "activity" && <ActivityTab projectId={p.id} />}
+    </div>
+  );
+}
+
+function ProjectHeader({ project: p }: { project: Project }) {
+  const [editing, setEditing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  return (
+    <div className="page-head">
+      <div style={{ minWidth: 0 }}>
+        <h1>
+          {p.name} {p.jira_project_key && <JiraLink issueKey={p.jira_project_key} />}
+        </h1>
+        <div className="faint small mono truncate">
+          {p.github_repo ?? p.clone_url ?? ""} {p.repo_path ? `· ${p.repo_path}` : ""}
+        </div>
+        {p.description && <p>{p.description}</p>}
+      </div>
+      <div className="row" style={{ flexWrap: "nowrap" }}>
+        <Link className="btn primary" to={`/projects/${p.id}/developments`}>
+          <IconPlus /> New development
+        </Link>
+        <Menu>
+          <button onClick={() => setEditing(true)}>
+            <IconEdit /> Edit project
+          </button>
+          <button className="danger" onClick={() => setDeleting(true)}>
+            <IconTrash /> Delete project
+          </button>
+        </Menu>
+      </div>
+      {editing && <EditProjectModal project={p} onClose={() => setEditing(false)} />}
+      {deleting && (
+        <DeleteProjectModal project={p} onClose={() => setDeleting(false)} redirectTo="/projects" />
+      )}
     </div>
   );
 }
@@ -94,17 +120,17 @@ function OverviewTab({ projectId }: { projectId: string }) {
   return (
     <div className="stack">
       <div className="card">
-        <h3>Progress</h3>
+        <h3 style={{ marginBottom: 10 }}>Progress</h3>
         <ProgressBar done={p.tasks_done} total={p.tasks_total} />
-        <div className="muted small" style={{ marginTop: 6 }}>
+        <div className="muted small" style={{ marginTop: 8 }}>
           {p.jobs_running} running · {p.pending_approvals} waiting for approval · {p.jobs_done} done
           · {p.jobs_failed} failed · last activity {timeAgo(p.last_activity)}
         </div>
       </div>
 
       <div className="card">
-        <h3>Pending approvals</h3>
-        {waiting.length === 0 && <div className="muted">Nothing waits for you.</div>}
+        <h3 style={{ marginBottom: 10 }}>Pending approvals</h3>
+        {waiting.length === 0 && <div className="muted small">Nothing waits for you.</div>}
         {waiting.map((row) => {
           const job = byId.get(row.job_id);
           return (
@@ -124,8 +150,8 @@ function OverviewTab({ projectId }: { projectId: string }) {
       </div>
 
       <div className="card">
-        <h3>Running</h3>
-        {running.length === 0 && <div className="muted">No development is running.</div>}
+        <h3 style={{ marginBottom: 10 }}>Running</h3>
+        {running.length === 0 && <div className="muted small">No development is running.</div>}
         {running.length > 0 && (
           <table>
             <tbody>
@@ -167,10 +193,12 @@ function BoardTab({ projectId }: { projectId: string }) {
     );
   }
   return (
-    <div className="card" style={{ padding: 0 }}>
-      <div className="row spread" style={{ padding: "10px 14px" }}>
-        <strong>Epics → stories → tasks</strong>
-        <ProgressBar done={board.data.tasks_done} total={board.data.tasks_total} />
+    <div className="card flush">
+      <div className="card-head">
+        <h3>Epics → stories → tasks</h3>
+        <div style={{ width: 200 }}>
+          <ProgressBar done={board.data.tasks_done} total={board.data.tasks_total} />
+        </div>
       </div>
       <ul className="tree">
         {board.data.epics.map((epic) => (
@@ -250,7 +278,7 @@ function DevelopmentsTab({ projectId }: { projectId: string }) {
   return (
     <div className="stack">
       <form className="card" onSubmit={submit}>
-        <h3>New development</h3>
+        <h3 style={{ marginBottom: 6 }}>New development</h3>
         <p className="muted small">
           Describe what you want. The Analyst proposes how to build and test the project, the
           Planner breaks the work into epics, stories and tasks, and you approve each step.
@@ -263,16 +291,24 @@ function DevelopmentsTab({ projectId }: { projectId: string }) {
         {start.error && <div className="error">{describeError(start.error)}</div>}
         <div className="row" style={{ marginTop: 8 }}>
           <button className="btn primary" disabled={!request.trim() || start.isPending}>
-            {start.isPending ? "Starting…" : "Start development"}
+            <IconPlus /> {start.isPending ? "Starting…" : "Start development"}
           </button>
         </div>
       </form>
 
-      <div className="card" style={{ padding: 0 }}>
-        {jobs.isLoading && <Loading />}
+      <div className="card flush">
+        <div className="card-head">
+          <h3>Developments</h3>
+          <span className="faint small">{jobs.data?.length ?? 0}</span>
+        </div>
+        {jobs.isLoading && (
+          <div className="card-body">
+            <Loading />
+          </div>
+        )}
         {jobs.data && jobs.data.length === 0 && (
-          <div className="muted" style={{ padding: 14 }}>
-            No developments yet.
+          <div className="empty" style={{ padding: 28 }}>
+            <div className="small">No developments yet. Describe one above to start.</div>
           </div>
         )}
         {jobs.data && jobs.data.length > 0 && (
@@ -284,40 +320,82 @@ function DevelopmentsTab({ projectId }: { projectId: string }) {
                 <th>Started</th>
                 <th>Last activity</th>
                 <th>PR</th>
+                <th />
               </tr>
             </thead>
             <tbody>
               {[...jobs.data].reverse().map((job: Job) => (
-                <tr key={job.id}>
-                  <td>
-                    <Link to={`/projects/${projectId}/jobs/${job.id}`}>{job.request}</Link>
-                    <div className="muted small mono">{job.id}</div>
-                  </td>
-                  <td>
-                    <StateBadge state={job.state} />
-                  </td>
-                  <td className="muted small">{formatTime(job.created_at)}</td>
-                  <td className="muted small">
-                    {job.history.length > 0
-                      ? timeAgo(job.history[job.history.length - 1]!.at)
-                      : "—"}
-                  </td>
-                  <td>
-                    {job.data.pr_url ? (
-                      <a href={job.data.pr_url} target="_blank" rel="noreferrer">
-                        open
-                      </a>
-                    ) : (
-                      <span className="muted">—</span>
-                    )}
-                  </td>
-                </tr>
+                <JobRow key={job.id} job={job} projectId={projectId} />
               ))}
             </tbody>
           </table>
         )}
       </div>
     </div>
+  );
+}
+
+function JobRow({ job, projectId }: { job: Job; projectId: string }) {
+  const remove = useDeleteJob();
+  const toast = useToast();
+  const navigate = useNavigate();
+  const [confirm, setConfirm] = useState(false);
+  const terminal = job.state === "done" || job.state === "failed";
+  return (
+    <tr>
+      <td>
+        <Link to={`/projects/${projectId}/jobs/${job.id}`}>{job.request}</Link>
+        <div className="faint tiny mono">{job.id}</div>
+      </td>
+      <td>
+        <StateBadge state={job.state} />
+      </td>
+      <td className="muted small">{formatTime(job.created_at)}</td>
+      <td className="muted small">
+        {job.history.length > 0 ? timeAgo(job.history[job.history.length - 1]!.at) : "—"}
+      </td>
+      <td>
+        {job.data.pr_url ? (
+          <a href={job.data.pr_url} target="_blank" rel="noreferrer">
+            open ↗
+          </a>
+        ) : (
+          <span className="faint">—</span>
+        )}
+      </td>
+      <td className="actions">
+        <Menu>
+          <button onClick={() => navigate(`/projects/${projectId}/jobs/${job.id}`)}>
+            <IconExternal /> Open
+          </button>
+          <button className="danger" disabled={!terminal} onClick={() => setConfirm(true)}>
+            <IconTrash /> Delete{terminal ? "" : " (still running)"}
+          </button>
+        </Menu>
+        {confirm && (
+          <ConfirmModal
+            title="Delete development"
+            body={
+              <>
+                Delete <strong>{job.request}</strong>? Its worktree, branch, history and test runs
+                are removed. A pull request already opened stays on GitHub.
+              </>
+            }
+            busy={remove.isPending}
+            error={remove.error ? describeError(remove.error) : null}
+            onClose={() => setConfirm(false)}
+            onConfirm={() =>
+              remove.mutate(job.id, {
+                onSuccess: () => {
+                  toast.ok("Development deleted");
+                  setConfirm(false);
+                },
+              })
+            }
+          />
+        )}
+      </td>
+    </tr>
   );
 }
 
@@ -331,64 +409,12 @@ function ActivityTab({ projectId }: { projectId: string }) {
     return <Empty>Nothing has happened yet.</Empty>;
   }
   return (
-    <div className="card" style={{ padding: "4px 14px" }}>
+    <div className="card">
       <ul className="feed">
         {activity.data.map((item) => (
           <ActivityRow key={`${item.job_id}:${item.index}`} item={item} projectId={projectId} />
         ))}
       </ul>
     </div>
-  );
-}
-
-const KIND_LABEL: Record<ActivityItem["kind"], string> = {
-  started: "started",
-  role: "agent",
-  gate: "build gate",
-  approval: "you",
-  inbox: "steering",
-  jira: "jira",
-  crash: "crash",
-  failed: "failed",
-  done: "done",
-  other: "",
-};
-
-export function ActivityRow({ item, projectId }: { item: ActivityItem; projectId: string }) {
-  const [open, setOpen] = useState(false);
-  const detail = useTransition(item.job_id, open ? item.index : null);
-  const who = item.role ?? KIND_LABEL[item.kind];
-  const cls =
-    item.kind === "failed" || item.kind === "crash"
-      ? "bad"
-      : item.kind === "done"
-        ? "ok"
-        : item.kind === "approval"
-          ? "wait"
-          : item.kind === "gate"
-            ? "work"
-            : "idle";
-  return (
-    <li>
-      <span className="when" title={item.at}>
-        {formatTime(item.at)}
-      </span>
-      <span className="who">
-        <span className={`badge ${cls}`}>{who}</span>
-      </span>
-      <span>
-        {item.title}{" "}
-        <Link className="muted small" to={`/projects/${projectId}/jobs/${item.job_id}`}>
-          · {item.job_request}
-        </Link>
-        {item.has_detail && (
-          <details onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
-            <summary>detail</summary>
-            {detail.isLoading && <Loading />}
-            {detail.data && <Detail text={detail.data.detail} />}
-          </details>
-        )}
-      </span>
-    </li>
   );
 }

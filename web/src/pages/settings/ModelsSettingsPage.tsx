@@ -2,7 +2,8 @@ import { useState, type FormEvent } from "react";
 import { describeError, type ProviderSettings } from "../../api/client";
 import { useProviders, useSaveProvider, useTestProvider } from "../../api/hooks";
 import { useAuth } from "../../auth/AuthProvider";
-import { ErrorBox, Loading } from "../../components/ui";
+import { ErrorBox, Loading, PageHead } from "../../components/ui";
+import { Crumbs } from "../../components/Crumbs";
 
 /**
  * API keys for the model providers (Anthropic, OpenAI, DeepSeek). Which provider a role
@@ -14,7 +15,8 @@ export function ModelsSettingsPage() {
   if (providers.error) return <ErrorBox error={providers.error} />;
   return (
     <div>
-      <h1>Models</h1>
+      <Crumbs items={[{ label: "Settings" }, { label: "Models" }]} />
+      <PageHead title="Models" subtitle="API keys for Anthropic, OpenAI and DeepSeek." />
       <p className="muted">
         Enter an API key for each provider you want to use. Keys are stored encrypted and never
         shown again; a key from the server's environment is used when none is stored. Pick which
@@ -104,8 +106,8 @@ function ProviderCard({ provider: p }: { provider: ProviderSettings }) {
           <div className="muted small">Leave empty for {p.default_base_url}; set for proxies.</div>
         </div>
       </div>
-      {save.error && <div className="error small">{describeError(save.error)}</div>}
-      {saved && <div className="notice small">Saved.</div>}
+      {save.error && <div className="callout error">{describeError(save.error)}</div>}
+      {saved && <div className="callout notice">Saved.</div>}
       {admin && (
         <div className="row">
           <button className="btn primary small" disabled={save.isPending}>
@@ -140,14 +142,14 @@ function ProviderCard({ provider: p }: { provider: ProviderSettings }) {
         </div>
       )}
       {test.data && test.data.name === p.name && (
-        <div className="notice small">
+        <div className="callout notice">
           Connected. {test.data.models.length} model(s) available:{" "}
           <span className="mono">{test.data.models.slice(0, 12).join(", ")}</span>
           {test.data.models.length > 12 && " …"}
         </div>
       )}
       {test.error && test.variables === p.name && (
-        <div className="error small">{describeError(test.error)}</div>
+        <div className="callout error">{describeError(test.error)}</div>
       )}
     </form>
   );

@@ -13,7 +13,8 @@ import {
 } from "../../api/hooks";
 import { useAuth } from "../../auth/AuthProvider";
 import { ProfileForm } from "../../components/ProfileForm";
-import { ErrorBox, Loading } from "../../components/ui";
+import { ErrorBox, Loading, PageHead } from "../../components/ui";
+import { Crumbs } from "../../components/Crumbs";
 
 const STATUSES = ["todo", "in_progress", "done", "failed"] as const;
 
@@ -29,7 +30,11 @@ export function AgentsSettingsPage() {
 
   return (
     <div>
-      <h1>Agents</h1>
+      <Crumbs items={[{ label: "Settings" }, { label: "Agents" }]} />
+      <PageHead
+        title="Agents"
+        subtitle="Which model plays which role, and how the agents act in Jira."
+      />
       <AgentAccount />
 
       <h2>Per-project agent setup</h2>
@@ -96,12 +101,12 @@ function AgentAccount() {
         history shows the bot and not the person who configured the connection.
       </p>
       {!s.token_set && (
-        <div className="hint small">
+        <div className="callout hint">
           Jira is not connected yet: <Link to="/settings/jira">set up the connection</Link> first.
         </div>
       )}
       {s.token_set && !s.agent_token_set && (
-        <div className="hint small">
+        <div className="callout hint">
           No agent account is set: agents would act through the human connection ({s.email}).
         </div>
       )}
@@ -130,8 +135,8 @@ function AgentAccount() {
           />
         </div>
       </div>
-      {save.error && <div className="error">{describeError(save.error)}</div>}
-      {saved && <div className="notice">Saved.</div>}
+      {save.error && <div className="callout error">{describeError(save.error)}</div>}
+      {saved && <div className="callout notice">Saved.</div>}
       {admin && (
         <div className="row">
           <button className="btn primary" disabled={save.isPending}>
@@ -157,15 +162,15 @@ function AgentAccount() {
         </div>
       )}
       {test.data?.agent_account && (
-        <div className="notice">
+        <div className="callout notice">
           Agents act as <strong>{test.data.agent_account.display_name}</strong> (
           {test.data.agent_account.email})
         </div>
       )}
       {test.data && !test.data.agent_account && (
-        <div className="hint">The connection works but no agent account is configured.</div>
+        <div className="callout hint">The connection works but no agent account is configured.</div>
       )}
-      {test.error && <div className="error">{describeError(test.error)}</div>}
+      {test.error && <div className="callout error">{describeError(test.error)}</div>}
     </form>
   );
 }
@@ -302,8 +307,8 @@ function ProjectAgentsForm({ project, defaults }: { project: Project; defaults: 
           setDirty(true);
         }}
       />
-      {patch.error && <div className="error">{describeError(patch.error)}</div>}
-      {saved && <div className="notice">Saved.</div>}
+      {patch.error && <div className="callout error">{describeError(patch.error)}</div>}
+      {saved && <div className="callout notice">Saved.</div>}
       {admin && (
         <div className="row" style={{ marginTop: 10 }}>
           <button className="btn primary" disabled={!dirty || patch.isPending}>

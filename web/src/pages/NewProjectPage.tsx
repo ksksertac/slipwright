@@ -1,5 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { Crumbs } from "../components/Crumbs";
+import { PageHead } from "../components/ui";
 import { describeError, type NewProject } from "../api/client";
 import {
   useCreateProject,
@@ -52,10 +54,8 @@ export function NewProjectPage() {
 
   return (
     <div>
-      <p className="muted small">
-        <Link to="/projects">Projects</Link> / new
-      </p>
-      <h1>New project</h1>
+      <Crumbs items={[{ label: "Projects", to: "/projects" }, { label: "New project" }]} />
+      <PageHead title="New project" subtitle="A repository for the agents to work on." />
       <form className="form card" onSubmit={submit}>
         <div className="field">
           <label htmlFor="name">Name</label>
@@ -73,25 +73,21 @@ export function NewProjectPage() {
 
         <div className="field">
           <label>Source</label>
-          <div className="row">
-            <label className="row" style={{ marginBottom: 0 }}>
-              <input
-                type="radio"
-                name="source"
-                checked={source === "local"}
-                onChange={() => setSource("local")}
-              />{" "}
-              Local checkout
-            </label>
-            <label className="row" style={{ marginBottom: 0 }}>
-              <input
-                type="radio"
-                name="source"
-                checked={source === "github"}
-                onChange={() => setSource("github")}
-              />{" "}
+          <div className="segmented">
+            <button
+              type="button"
+              className={source === "github" ? "on" : ""}
+              onClick={() => setSource("github")}
+            >
               GitHub repository
-            </label>
+            </button>
+            <button
+              type="button"
+              className={source === "local" ? "on" : ""}
+              onClick={() => setSource("local")}
+            >
+              Local checkout
+            </button>
           </div>
         </div>
 
@@ -135,12 +131,12 @@ export function NewProjectPage() {
               />
             )}
             {!githubReady && (
-              <div className="hint small">
+              <div className="callout hint">
                 No GitHub token is configured, so private repositories cannot be cloned.{" "}
                 <Link to="/settings/github">Connect GitHub</Link> to pick from your repositories.
               </div>
             )}
-            {repos.error && <div className="error small">{describeError(repos.error)}</div>}
+            {repos.error && <div className="callout error">{describeError(repos.error)}</div>}
           </div>
         )}
 
@@ -172,7 +168,7 @@ export function NewProjectPage() {
           )}
         </div>
 
-        {error && <div className="error">{error}</div>}
+        {error && <div className="callout error">{error}</div>}
         <div className="row">
           <button className="btn primary" type="submit" disabled={!canSubmit || create.isPending}>
             {create.isPending ? (source === "github" ? "Cloning…" : "Creating…") : "Create project"}

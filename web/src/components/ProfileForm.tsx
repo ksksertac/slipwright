@@ -137,6 +137,7 @@ export function ProfileForm({
                   <select
                     value={cfg.thinking_depth}
                     disabled={disabled}
+                    style={{ minWidth: 110 }}
                     onChange={(e) =>
                       setRole(role, {
                         thinking_depth: e.target.value as RoleConfig["thinking_depth"],
