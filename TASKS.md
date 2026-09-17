@@ -35,7 +35,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 
 ## Progress
 
-> **Resume here:** Phases 0 and 1 are complete. Next task is **T2.1 — Orchestrator state machine**.
+> **Resume here:** Phases 0 and 1 are complete. Next task is **T2.2 — Agent invocation layer (in-progress)**.
 > Design note for T1.3: `run_cmd` is executed as a subprocess in the worktree (Docker is used
 > only if the profile's `run_cmd` itself invokes it).
 
@@ -47,7 +47,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 | 1 | T1.1 Worktree lifecycle | [x] |
 | 1 | T1.2 Port allocation | [x] |
 | 1 | T1.3 Live environment | [x] |
-| 2 | T2.1 Orchestrator state machine | [ ] |
+| 2 | T2.1 Orchestrator state machine | [x] |
 | 2 | T2.2 Agent invocation layer | [ ] |
 | 2 | T2.3 Analyst role | [ ] |
 | 2 | T2.4 Minimal API and CLI | [ ] |
@@ -133,12 +133,12 @@ Bring up the project under test in isolation.
 The core. No agents yet — transitions only.
 
 **Done when**
-- [ ] States are explicit: `created`, `analyzing`, `awaiting_profile_approval`, `planning`,
+- [x] States are explicit: `created`, `analyzing`, `awaiting_profile_approval`, `planning`,
   `awaiting_plan_approval`, `developing`, `build_gate`, `qa`, `awaiting_test_approval`,
   `devops`, `done`, `failed`
-- [ ] Illegal transitions raise; every legal transition is persisted before side effects run
-- [ ] `resume(job)` inspects persisted state and continues from it
-- [ ] Tests drive a job through every legal path with stub phase handlers
+- [x] Illegal transitions raise; every legal transition is persisted before side effects run
+- [x] `resume(job)` inspects persisted state and continues from it
+- [x] Tests drive a job through every legal path with stub phase handlers
 
 ### T2.2 — Agent invocation layer
 One place where the engine talks to a model.
