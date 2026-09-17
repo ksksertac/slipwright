@@ -107,6 +107,12 @@ class JobData(BaseModel):
     jira_last_error: str | None = Field(
         default=None, description="Why the last Jira sync failed; cleared when it succeeds."
     )
+    jira_done: list[str] = Field(
+        default_factory=list, description="Idempotency keys of agent Jira actions executed."
+    )
+    jira_queue: list[dict[str, Any]] = Field(
+        default_factory=list, description="Agent Jira actions waiting for Jira to come back."
+    )
 
 
 class Job(BaseModel):

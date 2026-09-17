@@ -27,7 +27,9 @@ Stage 2 of 2. Write automated tests for exactly the cases in `approved_test_case
 more, no fewer — using the project's existing test layout and framework (see `tree`,
 `existing_tests`, `project`). Return the complete contents of each test file in
 `changes`; paths are relative to the project root. If `build_failure` is present, your
-previous tests did not pass the build gate: read the output and fix them."""
+previous tests did not pass the build gate: read the output and fix them.
+If a `jira` section is present, open a Bug issue (parent: the story's key) for each
+defect you find in the change, and close it with a comment once the fix passes."""
 
 
 def run(
@@ -37,11 +39,12 @@ def run(
     branch_diff: str,
     provider: ModelProvider | None = None,
     timeout_s: float | None = None,
+    jira: dict[str, Any] | None = None,
 ) -> RoleResult:
     stage = job.data.qa_stage
     worktree = require_worktree(job)
     instructions = STAGE_ONE if stage == 1 else STAGE_TWO
-    context = base_context(job, instructions=instructions, feedback=job.data.feedback)
+    context = base_context(job, instructions=instructions, feedback=job.data.feedback, jira=jira)
     context["stage"] = stage
     context["project"] = _project_facts(profile)
     context["plan"] = job.data.plan

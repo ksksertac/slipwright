@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from slipwright.invoke import RoleResult, invoke_role
 from slipwright.providers import ModelProvider
 from slipwright.roles.common import base_context, require_worktree, scan_worktree
@@ -18,7 +20,8 @@ with tasks. Every task names exactly one phase by its 1-based number in `phase`,
 every phase must be covered by exactly one task. Use one epic per independent outcome
 of the request, one story per user-visible capability, and one task per phase.
 If `feedback` is present, a human rejected your previous plan (`previous_plan`); address
-every point in it."""
+every point in it. If a `jira` section is present you may add sub-tasks you discover
+through `jira_actions`; the breakdown itself is mirrored to Jira by the engine."""
 
 
 def run(
@@ -27,8 +30,9 @@ def run(
     *,
     provider: ModelProvider | None = None,
     timeout_s: float | None = None,
+    jira: dict[str, Any] | None = None,
 ) -> RoleResult:
-    context = base_context(job, instructions=INSTRUCTIONS, feedback=job.data.feedback)
+    context = base_context(job, instructions=INSTRUCTIONS, feedback=job.data.feedback, jira=jira)
     context["project"] = _project_facts(profile)
     context["previous_plan"] = job.data.plan
     context["worktree"] = scan_worktree(require_worktree(job))

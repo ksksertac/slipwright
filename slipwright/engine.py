@@ -31,6 +31,7 @@ from slipwright.githost import CiState, CiStatus, GitHost, GitHostError
 from slipwright.github import GitHubClient, GitHubError, GitHubSettings
 from slipwright.invoke import DEFAULT_TIMEOUT_S, RoleResult, get_default_provider
 from slipwright.jira import DEFAULT_ISSUE_TYPES, JiraClient, JiraError, JiraSettings
+from slipwright.jiraactions import ActionOutcome, ActionRunner, jira_context
 from slipwright.jirasync import JiraSync
 from slipwright.orchestrator import IllegalTransitionError, Orchestrator
 from slipwright.providers import ModelProvider
@@ -285,6 +286,73 @@ class Engine:
             transport=self.http_transport,
         )
 
+    def _project_of(self, job: Job) -> Project | None:
+        if job.project_id is None:
+            return None
+        try:
+            return self.store.get_project(job.project_id)
+        except ProjectNotFound:
+            return None
+
+    def _agent_jira_client(self) -> JiraClient | None:
+        try:
+            return self.jira_client(agent=True)
+        except JiraError:
+            return None
+
+    def _apply_jira_actions(
+        self, job: Job, role: RoleName, profile: Profile, project: Project, actions: list[Any]
+    ) -> None:
+        """Run a role's ``jira_actions`` (permission and confinement checked by the runner)
+        and record every outcome, executed or refused, in the job's history."""
+        if not actions:
+            return
+        client = self._agent_jira_client() if project.jira_project_key else None
+        runner = ActionRunner(client, project)
+        outcomes = runner.run(job, role, profile, list(actions))
+        self._record_jira_outcomes(job, role, outcomes)
+
+    def _retry_jira_queue(self, job: Job) -> Job:
+        if not job.data.jira_queue:
+            return job
+        project = self._project_of(job)
+        if project is None:
+            return job
+        client = self._agent_jira_client()
+        if client is None:
+            return job
+        outcomes = ActionRunner(client, project).retry_queued(job)
+        self._record_jira_outcomes(job, None, outcomes)
+        return self.store.get(job.id)
+
+    def _record_jira_outcomes(
+        self, job: Job, role: RoleName | None, outcomes: list[ActionOutcome]
+    ) -> None:
+        if not outcomes:
+            return
+        self.store.save(job)
+        done = sum(1 for o in outcomes if o.status == "done")
+        refused = sum(1 for o in outcomes if o.status == "refused")
+        queued = sum(1 for o in outcomes if o.status == "queued")
+        parts = []
+        if done:
+            parts.append(f"{done} done")
+        if refused:
+            parts.append(f"{refused} refused")
+        if queued:
+            parts.append(f"{queued} queued")
+        skipped = len(outcomes) - done - refused - queued
+        if skipped:
+            parts.append(f"{skipped} skipped")
+        who = f" ({role.value})" if role else " (retry)"
+        self.store.update_state(
+            job.id,
+            job.state,
+            note=f"jira{who}: {', '.join(parts)}",
+            detail="\n".join(o.line() for o in outcomes),
+        )
+        job.history = self.store.get(job.id).history
+
     def _jira_sync_for(self, job: Job) -> JiraSync | None:
         if job.project_id is None:
             return None
@@ -302,6 +370,7 @@ class Engine:
     def _jira_reconcile(self, job: Job) -> Job:
         """Mirror the job into Jira (no-op unless the project is linked and Jira is set up).
         Never raises: a Jira outage is recorded on the job and retried next time."""
+        job = self._retry_jira_queue(job)
         try:
             sync = self._jira_sync_for(job)
         except JiraError as exc:
@@ -601,7 +670,13 @@ class Engine:
         the job's history, so a message is delivered exactly once.
         """
         pending = job.pending_messages
+        project = self._project_of(job)
+        profile = kw.get("profile") or kw.get("seed") or job.profile or self.seed_for(job)
+        if project is not None and "jira" not in kw:
+            kw["jira"] = jira_context(job, role, profile, project)
         result = run(job, provider=self.provider, timeout_s=self.timeout_s, **kw)
+        if result.ok and result.output is not None and project is not None:
+            self._apply_jira_actions(job, role, profile, project, result.output.jira_actions)
         if pending:
             now = utcnow()
             for message in pending:

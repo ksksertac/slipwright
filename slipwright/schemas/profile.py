@@ -40,6 +40,7 @@ class Permission(StrEnum):
     RUN_COMMANDS = "run_commands"
     NETWORK = "network"
     GIT_PUSH = "git_push"
+    JIRA = "jira"  # may return jira_actions the engine executes (T7.5)
 
 
 class RoleConfig(BaseModel):

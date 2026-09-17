@@ -895,6 +895,14 @@
             "title": "Inbox",
             "type": "array"
           },
+          "jira_done": {
+            "description": "Idempotency keys of agent Jira actions executed.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Jira Done",
+            "type": "array"
+          },
           "jira_keys": {
             "additionalProperties": {
               "type": "string"
@@ -921,6 +929,15 @@
               "type": "string"
             },
             "title": "Jira Marks",
+            "type": "array"
+          },
+          "jira_queue": {
+            "description": "Agent Jira actions waiting for Jira to come back.",
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Jira Queue",
             "type": "array"
           },
           "jira_status": {
@@ -1281,7 +1298,8 @@
           "write_files",
           "run_commands",
           "network",
-          "git_push"
+          "git_push",
+          "jira"
         ],
         "title": "Permission",
         "type": "string"

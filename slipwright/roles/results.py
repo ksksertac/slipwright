@@ -8,10 +8,73 @@ registry and the "one schema per role" rule are the contract.
 
 from __future__ import annotations
 
+import hashlib
+import json
+from enum import StrEnum
+
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from slipwright.schemas.job import new_job_id
+from slipwright.schemas.job import Job, new_job_id
 from slipwright.schemas.profile import Profile, RoleName
+
+
+class JiraActionType(StrEnum):
+    CREATE_ISSUE = "create_issue"
+    TRANSITION = "transition"
+    COMMENT = "comment"
+    LOG_WORK = "log_work"
+    LINK_ISSUES = "link_issues"
+
+
+class JiraAction(BaseModel):
+    """One thing an agent wants done in Jira. Fields depend on ``action``."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    action: JiraActionType
+    issue: str | None = Field(
+        default=None, description="Issue key for transition/comment/log_work."
+    )
+    issue_type: str | None = Field(
+        default=None, description="create_issue: Task, Bug, Subtask, ..."
+    )
+    summary: str | None = Field(default=None, description="create_issue: title.")
+    description: str | None = Field(default=None, description="create_issue: body.")
+    parent: str | None = Field(default=None, description="create_issue: parent issue key.")
+    to: str | None = Field(default=None, description="transition: target transition/status name.")
+    body: str | None = Field(default=None, description="comment: text.")
+    minutes: int | None = Field(default=None, ge=1, description="log_work: time spent.")
+    note: str | None = Field(default=None, description="log_work: what was done.")
+    target: str | None = Field(default=None, description="link_issues: the other issue key.")
+    link_type: str = Field(default="Relates", description="link_issues: Relates, Blocks, ...")
+
+    @model_validator(mode="after")
+    def _required_fields(self) -> JiraAction:
+        need = {
+            JiraActionType.CREATE_ISSUE: ("issue_type", "summary"),
+            JiraActionType.TRANSITION: ("issue", "to"),
+            JiraActionType.COMMENT: ("issue", "body"),
+            JiraActionType.LOG_WORK: ("issue", "minutes"),
+            JiraActionType.LINK_ISSUES: ("issue", "target"),
+        }[self.action]
+        missing = [f for f in need if getattr(self, f) in (None, "")]
+        if missing:
+            raise ValueError(f"{self.action.value} needs {', '.join(missing)}")
+        return self
+
+    def idempotency_key(self, role: RoleName, job: Job) -> str:
+        payload = json.dumps(
+            {
+                "role": role.value,
+                "phase": job.data.phase_index,
+                "qa_stage": job.data.qa_stage,
+                "ci": job.data.ci_attempts,
+                "attempt": job.data.build_attempts,
+                **self.model_dump(mode="json"),
+            },
+            sort_keys=True,
+        )
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
 
 
 class RoleOutput(BaseModel):
@@ -20,6 +83,10 @@ class RoleOutput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     summary: str = Field(min_length=1, description="One-paragraph account of what was done.")
+    jira_actions: list[JiraAction] = Field(
+        default_factory=list,
+        description="Jira actions to perform on the role's behalf (needs the jira permission).",
+    )
 
 
 class AnalystResult(RoleOutput):
@@ -183,6 +250,8 @@ __all__ = [
     "DevOpsResult",
     "DeveloperResult",
     "FileChange",
+    "JiraAction",
+    "JiraActionType",
     "PlanPhase",
     "PlannerResult",
     "QAResult",

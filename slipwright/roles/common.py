@@ -97,11 +97,20 @@ def scan_worktree(root: Path) -> dict[str, Any]:
     return {"tree": list_tree(root), "files": read_files(root, MANIFEST_FILES)}
 
 
-def base_context(job: Job, *, instructions: str, feedback: str | None = None) -> dict[str, Any]:
-    """Context every role receives: the request, any rejection feedback, pending inbox."""
+def base_context(
+    job: Job,
+    *,
+    instructions: str,
+    feedback: str | None = None,
+    jira: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Context every role receives: the request, any rejection feedback, pending inbox,
+    and (only for roles allowed to act in Jira) the Jira section."""
     ctx: dict[str, Any] = {"instructions": instructions, "request": job.request}
     if feedback:
         ctx["feedback"] = feedback
+    if jira:
+        ctx["jira"] = jira
     pending = [m.text for m in job.pending_messages]
     if pending:
         ctx["messages_from_human"] = pending

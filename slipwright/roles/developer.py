@@ -23,7 +23,10 @@ complete new contents of every file you create or change (`content: null` delete
 file); paths are relative to the project root. Keep changes minimal and consistent with
 the existing code. Set `phase_complete` to true when the phase's goal is met.
 If `build_failure` is present, the build or tests failed after your previous attempt on
-this phase: read the output, fix the cause, and return the corrected files."""
+this phase: read the output, fix the cause, and return the corrected files.
+If a `jira` section is present you are expected to keep the tracker current: transition
+`current_task_key` to in progress, and add a short comment on it (and `log_work` with a
+realistic estimate) describing what you changed."""
 
 FIX_INSTRUCTIONS = """\
 The change set on this branch is complete but `ci_failure` shows the continuous
@@ -38,19 +41,20 @@ def run(
     provider: ModelProvider | None = None,
     timeout_s: float | None = None,
     ci_failure: str | None = None,
+    jira: dict[str, Any] | None = None,
 ) -> RoleResult:
     plan = job.data.plan or {}
     phases: list[dict[str, Any]] = plan.get("phases", [])
     worktree = require_worktree(job)
 
     if ci_failure is not None:
-        context = base_context(job, instructions=FIX_INSTRUCTIONS)
+        context = base_context(job, instructions=FIX_INSTRUCTIONS, jira=jira)
         context["ci_failure"] = ci_failure
         wanted = sorted({f for phase in phases for f in phase.get("files", [])})
     else:
         index = job.data.phase_index
         phase = phases[index] if index < len(phases) else {}
-        context = base_context(job, instructions=INSTRUCTIONS)
+        context = base_context(job, instructions=INSTRUCTIONS, jira=jira)
         context["current_phase"] = {"number": index + 1, "of": len(phases), **phase}
         if job.data.last_build_output:
             context["build_failure"] = job.data.last_build_output

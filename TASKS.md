@@ -36,7 +36,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 
 ## Progress
 
-> **Resume here:** Phases 0–6 and T7.1–T7.4 are complete. Next task is **T7.5 — Agents act in Jira**.
+> **Resume here:** Phases 0–7 are complete. Next task is **T8.1 — React app skeleton**.
 > Design note for T1.3: `run_cmd` is executed as a subprocess in the worktree (Docker is used
 > only if the profile's `run_cmd` itself invokes it).
 > Design note for T2.2: `invoke_role` talks to a `ModelProvider` (`slipwright/providers/`);
@@ -76,6 +76,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 > Design note for T7.2: `slipwright/secrets.py` (Fernet) encrypts settings flagged secret; the key comes from `SLIPWRIGHT_SECRET_KEY` or `<state>/secret.key`. `store/settings.py` is a name→JSON table; GitHub lives under `github` (owner, base_branch) and `github.token` (secret). `slipwright/github.py` is an httpx client (`Engine.http_transport` lets tests answer locally, see `tests/fakes.py`); `GhHost` passes the token as `GH_TOKEN` and clones embed it as `x-access-token`.
 > Design note for T7.3: JSON routes are mounted on an `APIRouter` under `/api` (the old HTML dashboard stays at `/` and `/ui/...` until T8.7). `slipwright/events.py` is an in-process bus the store publishes to on every write; `GET /api/events` streams it as SSE (`project_id` filter, `limit` for scripts, keepalive pings). `schemas/openapi.json` is exported by `scripts/export_schema.py` and checked by `tests/test_phase7_api.py`; `SLIPWRIGHT_DEV=1` enables CORS for the Vite origin. The Phase 0–5 API tests were updated only in their URL prefixes.
 > Design note for T7.4: `slipwright/jira.py` is the REST v3 client (basic auth, ADF bodies built from text); `slipwright/jirasync.py` reconciles a job idempotently (issue keys in `job.data.jira_keys`, last pushed statuses in `jira_status`, one-shot comments in `jira_marks`, outage in `jira_last_error`). The engine reconciles on entry to `_run` and after every handler, so approvals, restarts and failures all retry; each pass that did something is one `jira: N update(s)` history entry. Default issue types are Epic/Story/Subtask/Bug and default transitions To Do/In Progress/Done (per-project overrides in `Project.jira_transitions`).
+> Design note for T7.5: `JiraAction` lives in `roles/results.py` (every `RoleOutput` may carry `jira_actions`); `slipwright/jiraactions.py` executes them through the agent account (`Engine.jira_client(agent=True)`, falling back to the human connection) after checking `Permission.JIRA` and project confinement. Idempotency keys are content hashes stored in `job.data.jira_done`; outages queue actions in `job.data.jira_queue`, retried by `_jira_reconcile`. Roles get a `jira` context section (keys, current task, transitions) only when permitted; every outcome is a `jira (<role>): ...` history entry.
 
 | Phase | Task | Status |
 |-------|------|--------|
@@ -105,7 +106,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 | 7 | T7.2 Settings store and GitHub connection | [x] |
 | 7 | T7.3 API namespace and live events | [x] |
 | 7 | T7.4 Jira connection and issue sync | [x] |
-| 7 | T7.5 Agents act in Jira | [ ] |
+| 7 | T7.5 Agents act in Jira | [x] |
 | 8 | T8.1 React app skeleton | [ ] |
 | 8 | T8.2 Login and projects list | [ ] |
 | 8 | T8.3 Project page: board, progress, developments | [ ] |
@@ -439,38 +440,38 @@ wants, the engine *executes* them after checking permissions (like `FileChange` 
 `write_files`). No role ever holds the Jira token.
 
 **Done when**
-- [ ] New `Permission.JIRA` in the profile schema; the example profile grants it to
+- [x] New `Permission.JIRA` in the profile schema; the example profile grants it to
   `planner`, `developer`, `qa` and `devops`, not to `analyst`
-- [ ] Agent credentials are separate from the human's: Jira settings gain an **agent
+- [x] Agent credentials are separate from the human's: Jira settings gain an **agent
   account** (e-mail + API token, encrypted) used for everything agents do, so Jira history
   shows the bot, not the person who configured it. Without an agent account the engine
   falls back to the connection from T7.4
-- [ ] Every role result may carry `jira_actions[]`: `create_issue` (type, summary,
+- [x] Every role result may carry `jira_actions[]`: `create_issue` (type, summary,
   description, parent), `transition` (issue, to), `comment` (issue, body), `log_work`
   (issue, minutes, note), `link_issues` (from, to, type). Validated by the per-role result
   schema
-- [ ] The engine executes `jira_actions` only if the role has `Permission.JIRA`; a role
+- [x] The engine executes `jira_actions` only if the role has `Permission.JIRA`; a role
   without it that emits actions gets a typed error back and the actions are dropped and
   logged — never executed silently, never fatal to the job
-- [ ] Actions are confined to the project's `jira_project_key`; an action naming another
+- [x] Actions are confined to the project's `jira_project_key`; an action naming another
   project is refused and recorded
-- [ ] Each role's prompt gets a Jira section only when it has the permission: the project
+- [x] Each role's prompt gets a Jira section only when it has the permission: the project
   key, the issue keys of the breakdown items relevant to its current phase (T7.4), and the
   available transitions, so it can address existing issues instead of creating duplicates
-- [ ] Intended use per role, covered by scripted tests:
+- [x] Intended use per role, covered by scripted tests:
   - Planner may create extra sub-tasks it discovers while planning
   - Developer transitions its task to *in progress* when it starts a phase, comments a
     summary of the change and logs work when the build gate passes
   - QA opens `Bug` issues for failures it finds, linked to the story, and closes them when
     the fix passes the gate
   - DevOps comments the PR link and CI result and transitions the story on green CI
-- [ ] Every executed action is appended to the job's history and the activity feed
+- [x] Every executed action is appended to the job's history and the activity feed
   (role, action, issue key, result); every refused one too, with the reason
-- [ ] Executing the same result twice (restart mid-phase) does not duplicate issues or
+- [x] Executing the same result twice (restart mid-phase) does not duplicate issues or
   comments: actions carry a client-side idempotency key stored on the job
-- [ ] Jira outage: actions are queued on `Job.data` and retried on the next transition; the
+- [x] Jira outage: actions are queued on `Job.data` and retried on the next transition; the
   job itself never blocks on Jira
-- [ ] Test: engine-level test with a fake Jira server asserts the full sequence of calls for
+- [x] Test: engine-level test with a fake Jira server asserts the full sequence of calls for
   a scripted job, including one refused action from a role without the permission
 
 ---

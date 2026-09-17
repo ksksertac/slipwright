@@ -7,6 +7,8 @@ body a reviewer would want to read.
 
 from __future__ import annotations
 
+from typing import Any
+
 from slipwright.invoke import RoleResult, invoke_role
 from slipwright.providers import ModelProvider
 from slipwright.roles.common import base_context
@@ -18,7 +20,8 @@ Write the pull request for this branch. `draft` is a factual description assembl
 the approved plan and the job history; `branch_diff` is what changed. Produce a concise
 `pr_title` (imperative, under 70 characters) and a `pr_body` in Markdown that explains
 what changed and why, lists the phases, and mentions how it was tested. Do not invent
-anything that is not in the draft or the diff."""
+anything that is not in the draft or the diff. If a `jira` section is present, comment
+the outcome on the stories listed there (the PR link is added by the engine)."""
 
 
 def run(
@@ -28,8 +31,9 @@ def run(
     branch_diff: str,
     provider: ModelProvider | None = None,
     timeout_s: float | None = None,
+    jira: dict[str, Any] | None = None,
 ) -> RoleResult:
-    context = base_context(job, instructions=INSTRUCTIONS)
+    context = base_context(job, instructions=INSTRUCTIONS, jira=jira)
     context["draft"] = draft_description(job)
     context["branch_diff"] = branch_diff
     kwargs = {} if timeout_s is None else {"timeout_s": timeout_s}

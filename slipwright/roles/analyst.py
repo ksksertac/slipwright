@@ -7,6 +7,8 @@ routing stays a human decision (invariant 1).
 
 from __future__ import annotations
 
+from typing import Any
+
 from slipwright.invoke import RoleResult, invoke_role
 from slipwright.providers import ModelProvider
 from slipwright.roles.common import base_context, require_worktree, scan_worktree
@@ -28,9 +30,10 @@ def run(
     seed: Profile,
     provider: ModelProvider | None = None,
     timeout_s: float | None = None,
+    jira: dict[str, Any] | None = None,
 ) -> RoleResult:
     worktree = require_worktree(job)
-    context = base_context(job, instructions=INSTRUCTIONS, feedback=job.data.feedback)
+    context = base_context(job, instructions=INSTRUCTIONS, feedback=job.data.feedback, jira=jira)
     context["seed_profile"] = seed.model_dump(mode="json")
     context["previous_profile"] = (
         None if job.profile is None else job.profile.model_dump(mode="json")

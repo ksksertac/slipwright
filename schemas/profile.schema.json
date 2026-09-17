@@ -6,7 +6,8 @@
         "write_files",
         "run_commands",
         "network",
-        "git_push"
+        "git_push",
+        "jira"
       ],
       "title": "Permission",
       "type": "string"
