@@ -13,6 +13,7 @@ from slipwright.api.auth import require_admin
 from slipwright.engine import Engine
 from slipwright.github import GitHubError, GitHubIdentity, GitHubRepo, GitHubSettings
 from slipwright.jira import JiraAccount, JiraError, JiraProject, JiraSettings
+from slipwright.schemas.profile import Profile
 
 router = APIRouter(tags=["settings"])
 
@@ -85,6 +86,12 @@ def github_repos(request: Request) -> list[GitHubRepo]:
     except GitHubError as exc:
         status = 400 if "no GitHub token" in str(exc) else 502
         raise HTTPException(status_code=status, detail=str(exc)) from exc
+
+
+@router.get("/settings/profile", response_model=Profile)
+def default_profile(request: Request) -> Profile:
+    """The engine's default seed profile: what a project without its own starts from."""
+    return _engine(request).seed_profile
 
 
 # -- Jira ------------------------------------------------------------------------------------

@@ -3417,6 +3417,28 @@
         ]
       }
     },
+    "/api/settings/profile": {
+      "get": {
+        "description": "The engine's default seed profile: what a project without its own starts from.",
+        "operationId": "default_profile_api_settings_profile_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Profile"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Default Profile",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
     "/api/test-runs/{run_id}": {
       "get": {
         "operationId": "get_test_run_api_test_runs__run_id__get",

@@ -30,6 +30,6 @@ if (check) {
   process.exit(0);
 }
 
-const ast = await openapiTS(JSON.parse(spec), { alphabetize: true });
+const ast = await openapiTS(JSON.parse(spec), { alphabetize: true, defaultNonNullable: false });
 writeFileSync(outPath, header + astToString(ast));
 console.log(`wrote ${outPath}`);

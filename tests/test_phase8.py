@@ -228,3 +228,48 @@ def test_tests_tab_lists_runs_and_scrolls_to_the_failure() -> None:
     assert "/api/test-runs/${id}/output" in hooks
     events = _src("api/events.ts")
     assert "test_run.state" in events  # rows flip via SSE
+
+
+# --- T8.6 settings pages ------------------------------------------------------------------
+
+
+def test_settings_pages_cover_github_jira_agents_and_users() -> None:
+    github = _src("pages/settings/GitHubSettingsPage.tsx")
+    for expected in ('type="password"', "token_hint", "Test connection", "useTestGitHub", "login"):
+        assert expected in github, expected
+    jira = _src("pages/settings/JiraSettingsPage.tsx")
+    for expected in ("site_url", "issue_types", "useTestJira", "clear_token", "display_name"):
+        assert expected in jira, expected
+    agents = _src("pages/settings/AgentsSettingsPage.tsx")
+    for expected in (
+        "agent_email",
+        "agent_token",
+        "act through the human connection",  # warning when falling back to the human token
+        "/api/settings/profile",  # engine default seed as the starting point
+        "ProfileForm",  # per-role model, thinking depth and permissions (jira toggle)
+        "usePatchProject",  # written into the project's seed profile
+        "jira_transitions",
+    ):
+        assert expected in agents, expected
+    profile_form = _src("components/ProfileForm.tsx")
+    for perm in ("read_files", "write_files", "run_commands", "network", "git_push", "jira"):
+        assert f'"{perm}"' in profile_form, perm
+    users = _src("pages/settings/UsersSettingsPage.tsx")
+    for expected in (
+        "useCreateUser",
+        "useSetPassword",
+        "useIssueToken",
+        "useRevokeToken",
+        "useDeleteUser",
+    ):
+        assert expected in users, expected
+    job_page = _src("pages/JobPage.tsx")
+    assert "jira_keys" in job_page  # jira actions / keys visible on the job page
+    activity = _src("pages/ProjectPage.tsx")
+    assert 'jira: "jira"' in activity  # refused/executed agent actions show in the feed
+
+
+def test_default_profile_endpoint(engine: Engine, seed: Profile) -> None:
+    app = create_app(engine, resume_on_startup=False, require_auth=False)
+    with TestClient(app) as client:
+        assert client.get("/api/settings/profile").json() == seed.model_dump(mode="json")
