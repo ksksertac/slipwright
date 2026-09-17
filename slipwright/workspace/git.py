@@ -27,6 +27,19 @@ def run(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProce
     return proc
 
 
+def clone(url: str, target: Path) -> None:
+    """Clone ``url`` into ``target`` (which must not exist yet)."""
+    proc = subprocess.run(
+        ["git", "clone", "--quiet", url, str(target)],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    if proc.returncode != 0:
+        raise GitError(["clone", url, str(target)], proc.returncode, proc.stderr)
+
+
 def branch_exists(repo: Path, branch: str) -> bool:
     proc = run(repo, "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}", check=False)
     return proc.returncode == 0

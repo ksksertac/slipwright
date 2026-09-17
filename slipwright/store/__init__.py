@@ -1,3 +1,3 @@
-from slipwright.store.sqlite import JobNotFound, JobStore
+from slipwright.store.sqlite import JobNotFound, JobStore, ProjectInUse, ProjectNotFound
 
-__all__ = ["JobNotFound", "JobStore"]
+__all__ = ["JobNotFound", "JobStore", "ProjectInUse", "ProjectNotFound"]

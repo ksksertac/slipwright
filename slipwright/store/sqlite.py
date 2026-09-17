@@ -1,12 +1,14 @@
-"""SQLite persistence for jobs.
+"""SQLite persistence for projects and jobs.
 
 Jobs live in the ``jobs`` table; phase transitions live in ``job_history`` and are only
 ever inserted. ``update_state`` is the single write path for state changes and commits
 the history row and the new state in one transaction, so the two can never disagree.
+Projects live in ``projects``; a job's ``project_id`` points at one.
 """
 
 from __future__ import annotations
 
+import builtins
 import sqlite3
 import threading
 from collections.abc import Iterator, Sequence
@@ -18,10 +20,20 @@ from typing import Self
 
 from slipwright.schemas.job import Job, JobData, JobState, Transition, utcnow
 from slipwright.schemas.profile import Profile
+from slipwright.schemas.project import Project
 
 _SCHEMA = """
+CREATE TABLE IF NOT EXISTS projects (
+    id            TEXT PRIMARY KEY,
+    name          TEXT NOT NULL,
+    data_json     TEXT NOT NULL,
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS jobs (
     id            TEXT PRIMARY KEY,
+    project_id    TEXT,
     request       TEXT NOT NULL,
     repo_path     TEXT NOT NULL,
     worktree_path TEXT,
@@ -44,12 +56,14 @@ CREATE TABLE IF NOT EXISTS job_history (
 );
 
 CREATE INDEX IF NOT EXISTS job_history_job_id ON job_history(job_id, seq);
+CREATE INDEX IF NOT EXISTS jobs_project_id ON jobs(project_id, created_at);
 """
 
 # Columns added after the first release; applied to databases created before them.
 _MIGRATIONS: tuple[tuple[str, str, str], ...] = (
     ("jobs", "data_json", "ALTER TABLE jobs ADD COLUMN data_json TEXT"),
     ("job_history", "detail", "ALTER TABLE job_history ADD COLUMN detail TEXT"),
+    ("jobs", "project_id", "ALTER TABLE jobs ADD COLUMN project_id TEXT"),
 )
 
 
@@ -60,6 +74,22 @@ class JobNotFound(KeyError):
 
     def __str__(self) -> str:
         return f"job not found: {self.job_id}"
+
+
+class ProjectNotFound(KeyError):
+    def __init__(self, project_id: str) -> None:
+        super().__init__(project_id)
+        self.project_id = project_id
+
+    def __str__(self) -> str:
+        return f"project not found: {self.project_id}"
+
+
+class ProjectInUse(ValueError):
+    def __init__(self, project_id: str, active: int) -> None:
+        super().__init__(f"project {project_id} still has {active} unfinished job(s)")
+        self.project_id = project_id
+        self.active = active
 
 
 class JobStore:
@@ -125,15 +155,87 @@ class JobStore:
             ).fetchall()
         return self._row_to_job(row, history)
 
-    def list(self) -> list[Job]:
+    def list(self, project_id: str | None = None) -> list[Job]:
         with self._lock:
-            ids = [
-                r["id"]
-                for r in self._conn.execute(
-                    "SELECT id FROM jobs ORDER BY created_at, id"
-                ).fetchall()
-            ]
+            if project_id is None:
+                rows = self._conn.execute("SELECT id FROM jobs ORDER BY created_at, id")
+            else:
+                rows = self._conn.execute(
+                    "SELECT id FROM jobs WHERE project_id = ? ORDER BY created_at, id",
+                    (project_id,),
+                )
+            ids = [r["id"] for r in rows.fetchall()]
             return [self.get(job_id) for job_id in ids]
+
+    # -- projects ----------------------------------------------------------------------
+
+    def create_project(self, project: Project) -> Project:
+        now = utcnow()
+        with self._tx() as conn:
+            conn.execute(
+                "INSERT INTO projects (id, name, data_json, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (
+                    project.id,
+                    project.name,
+                    project.model_dump_json(),
+                    project.created_at.isoformat(),
+                    now.isoformat(),
+                ),
+            )
+        return self.get_project(project.id)
+
+    def get_project(self, project_id: str) -> Project:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT data_json FROM projects WHERE id = ?", (project_id,)
+            ).fetchone()
+        if row is None:
+            raise ProjectNotFound(project_id)
+        return Project.model_validate_json(row["data_json"])
+
+    def list_projects(self) -> builtins.list[Project]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT data_json FROM projects ORDER BY created_at, id"
+            ).fetchall()
+        return [Project.model_validate_json(r["data_json"]) for r in rows]
+
+    def find_project_by_repo(self, repo_path: Path) -> Project | None:
+        wanted = str(Path(repo_path).resolve())
+        for project in self.list_projects():
+            if project.repo_path is not None and str(project.repo_path.resolve()) == wanted:
+                return project
+        return None
+
+    def update_project(self, project: Project) -> Project:
+        with self._tx() as conn:
+            cur = conn.execute(
+                "UPDATE projects SET name = ?, data_json = ?, updated_at = ? WHERE id = ?",
+                (project.name, project.model_dump_json(), utcnow().isoformat(), project.id),
+            )
+            if cur.rowcount == 0:
+                raise ProjectNotFound(project.id)
+        return self.get_project(project.id)
+
+    def delete_project(self, project_id: str) -> None:
+        """Delete a project and its finished jobs. Refused while a job is still running."""
+        from slipwright.schemas.job import TERMINAL_STATES
+
+        with self._tx() as conn:
+            if (
+                conn.execute("SELECT 1 FROM projects WHERE id = ?", (project_id,)).fetchone()
+                is None
+            ):
+                raise ProjectNotFound(project_id)
+            rows = conn.execute(
+                "SELECT state FROM jobs WHERE project_id = ?", (project_id,)
+            ).fetchall()
+            active = sum(1 for r in rows if JobState(r["state"]) not in TERMINAL_STATES)
+            if active:
+                raise ProjectInUse(project_id, active)
+            conn.execute("DELETE FROM jobs WHERE project_id = ?", (project_id,))
+            conn.execute("DELETE FROM projects WHERE id = ?", (project_id,))
 
     # -- writes ------------------------------------------------------------------------
 
@@ -142,11 +244,12 @@ class JobStore:
         now = utcnow()
         with self._tx() as conn:
             conn.execute(
-                "INSERT INTO jobs (id, request, repo_path, worktree_path, port, state, "
-                "profile_json, data_json, created_at, updated_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO jobs (id, project_id, request, repo_path, worktree_path, port, "
+                "state, profile_json, data_json, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     job.id,
+                    job.project_id,
                     job.request,
                     str(job.repo_path),
                     None if job.worktree_path is None else str(job.worktree_path),
@@ -230,6 +333,7 @@ class JobStore:
     def _row_to_job(row: sqlite3.Row, history: Sequence[sqlite3.Row]) -> Job:
         return Job(
             id=row["id"],
+            project_id=row["project_id"],
             request=row["request"],
             repo_path=Path(row["repo_path"]),
             worktree_path=None if row["worktree_path"] is None else Path(row["worktree_path"]),

@@ -101,6 +101,11 @@ class Job(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     id: str = Field(default_factory=new_job_id, min_length=1)
+    project_id: str | None = Field(
+        default=None,
+        description="Owning project. Every job the engine creates has one; only workspace-"
+        "level code (and its tests) builds jobs without.",
+    )
     request: str = Field(min_length=1, description="What the job should accomplish.")
     repo_path: Path
     worktree_path: Path | None = None

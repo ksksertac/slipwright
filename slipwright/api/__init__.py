@@ -16,9 +16,11 @@ from pathlib import Path
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from slipwright.engine import Engine, NotAwaitingApproval
+from slipwright.engine import Engine, NotAwaitingApproval, ProjectCloneError
 from slipwright.schemas.job import Job
-from slipwright.store import JobNotFound
+from slipwright.schemas.profile import Profile
+from slipwright.schemas.project import Project, ProjectPatch
+from slipwright.store import JobNotFound, ProjectInUse, ProjectNotFound
 
 log = logging.getLogger(__name__)
 
@@ -26,6 +28,20 @@ log = logging.getLogger(__name__)
 class NewJob(BaseModel):
     request: str = Field(min_length=1)
     repo_path: Path
+
+
+class NewProjectJob(BaseModel):
+    request: str = Field(min_length=1)
+
+
+class NewProject(BaseModel):
+    name: str = Field(min_length=1)
+    description: str = ""
+    repo_path: Path | None = None
+    github_repo: str | None = None
+    clone_url: str | None = None
+    jira_project_key: str | None = None
+    profile: Profile | None = None
 
 
 class Rejection(BaseModel):
@@ -71,17 +87,91 @@ def create_app(engine: Engine, *, resume_on_startup: bool = True) -> FastAPI:
         except JobNotFound as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 
+    def _get_project(eng: Engine, project_id: str) -> Project:
+        try:
+            return eng.store.get_project(project_id)
+        except ProjectNotFound as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    def _start(eng: Engine, job: Job, background: BackgroundTasks) -> Job:
+        job = eng.start(job.id, run=False)
+        background.add_task(_resume, eng, job.id)
+        return job
+
+    # -- projects ------------------------------------------------------------------------
+
+    @app.post("/projects", response_model=Project, status_code=201)
+    def create_project(body: NewProject, request: Request) -> Project:
+        eng = _engine(request)
+        if body.repo_path is not None and not body.repo_path.is_dir():
+            raise HTTPException(
+                status_code=400, detail=f"repo_path is not a directory: {body.repo_path}"
+            )
+        if body.repo_path is None and body.github_repo is None and body.clone_url is None:
+            raise HTTPException(
+                status_code=400, detail="give a repo_path, a github_repo or a clone_url"
+            )
+        try:
+            return eng.create_project(Project(**body.model_dump()))
+        except ProjectCloneError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.get("/projects", response_model=list[Project])
+    def list_projects(request: Request) -> list[Project]:
+        return _engine(request).store.list_projects()
+
+    @app.get("/projects/{project_id}", response_model=Project)
+    def get_project(project_id: str, request: Request) -> Project:
+        return _get_project(_engine(request), project_id)
+
+    @app.patch("/projects/{project_id}", response_model=Project)
+    def patch_project(project_id: str, body: ProjectPatch, request: Request) -> Project:
+        eng = _engine(request)
+        project = _get_project(eng, project_id)
+        changes = body.model_dump(exclude_unset=True)
+        try:
+            updated = project.model_copy(update=changes)
+            updated = Project.model_validate(updated.model_dump())  # re-run validators
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return eng.store.update_project(updated)
+
+    @app.delete("/projects/{project_id}", status_code=204)
+    def delete_project(project_id: str, request: Request) -> None:
+        eng = _engine(request)
+        _get_project(eng, project_id)
+        try:
+            eng.store.delete_project(project_id)
+        except ProjectInUse as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    @app.post("/projects/{project_id}/jobs", response_model=Job, status_code=201)
+    def create_project_job(
+        project_id: str, body: NewProjectJob, request: Request, background: BackgroundTasks
+    ) -> Job:
+        eng = _engine(request)
+        _get_project(eng, project_id)
+        return _start(eng, eng.create_job(body.request, project_id=project_id), background)
+
+    @app.get("/projects/{project_id}/jobs", response_model=list[Job])
+    def list_project_jobs(project_id: str, request: Request) -> list[Job]:
+        eng = _engine(request)
+        _get_project(eng, project_id)
+        return eng.store.list(project_id)
+
+    # -- jobs ----------------------------------------------------------------------------
+
     @app.post("/jobs", response_model=Job, status_code=201)
     def create_job(body: NewJob, request: Request, background: BackgroundTasks) -> Job:
+        """Start a job straight from a repository path (its project is found or created)."""
         eng = _engine(request)
         if not body.repo_path.is_dir():
             raise HTTPException(
                 status_code=400, detail=f"repo_path is not a directory: {body.repo_path}"
             )
-        job = eng.create_job(body.request, body.repo_path)
-        job = eng.start(job.id, run=False)
-        background.add_task(_resume, eng, job.id)
-        return job
+        return _start(eng, eng.create_job(body.request, body.repo_path), background)
 
     @app.get("/jobs", response_model=list[Job])
     def list_jobs(request: Request) -> list[Job]:
@@ -151,4 +241,13 @@ def _resume_all(engine: Engine) -> None:
         thread.join()
 
 
-__all__ = ["Message", "NewJob", "Rejection", "TestCaseIn", "TestCases", "create_app"]
+__all__ = [
+    "Message",
+    "NewJob",
+    "NewProject",
+    "NewProjectJob",
+    "Rejection",
+    "TestCaseIn",
+    "TestCases",
+    "create_app",
+]

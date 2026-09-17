@@ -38,7 +38,8 @@ from slipwright.roles.results import (
 )
 from slipwright.schemas.job import APPROVAL_STATES, Job, JobState, utcnow
 from slipwright.schemas.profile import Permission, Profile, RoleName
-from slipwright.store import JobStore
+from slipwright.schemas.project import Project
+from slipwright.store import JobStore, ProjectNotFound
 from slipwright.workspace import Workspace
 from slipwright.workspace import git as g
 
@@ -78,6 +79,10 @@ def approval_edges(job: Job) -> tuple[JobState, JobState] | None:
 Handler = Callable[[Job], Job]
 
 
+class ProjectCloneError(RuntimeError):
+    pass
+
+
 class NotAwaitingApproval(ValueError):
     def __init__(self, job: Job) -> None:
         super().__init__(f"job {job.id} is not awaiting approval (state: {job.state.value})")
@@ -100,9 +105,12 @@ class Engine:
         git_host: GitHost | None = None,
         ci_poll_s: float = 15.0,
         ci_timeout_s: float = 3600.0,
+        repos_root: Path | None = None,
     ) -> None:
         self.store = store
         self.workspace = workspace
+        # clones of remote repositories live next to the worktrees
+        self.repos_root = repos_root or workspace.worktrees_root.parent / "repos"
         self.orchestrator = Orchestrator(store)
         self.seed_profile = seed_profile
         self._provider = provider
@@ -142,8 +150,59 @@ class Engine:
 
     # -- public API ----------------------------------------------------------------------
 
-    def create_job(self, request: str, repo_path: Path) -> Job:
-        return self.store.create(Job(request=request, repo_path=repo_path))
+    def create_project(self, project: Project) -> Project:
+        """Register a project; clone its remote first when it has no local checkout."""
+        if project.repo_path is None:
+            url = project.effective_clone_url
+            if url is None:
+                raise ValueError("project needs a repo_path or a github_repo/clone_url")
+            target = self.repos_root / project.id
+            target.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                g.clone(url, target)
+            except g.GitError as exc:
+                raise ProjectCloneError(f"could not clone {url}: {exc.stderr}") from exc
+            project = project.model_copy(update={"repo_path": target})
+        elif not project.repo_path.is_dir():
+            raise ValueError(f"repo_path is not a directory: {project.repo_path}")
+        return self.store.create_project(project)
+
+    def create_job(
+        self, request: str, repo_path: Path | None = None, *, project_id: str | None = None
+    ) -> Job:
+        """Create a job inside a project.
+
+        With ``project_id`` the job uses that project's checkout. With only ``repo_path``
+        the repository's project is looked up, or created on the spot, so callers that
+        predate projects keep working.
+        """
+        project: Project | None
+        if project_id is not None:
+            project = self.store.get_project(project_id)
+        elif repo_path is not None:
+            project = self.store.find_project_by_repo(repo_path)
+            if project is None:
+                project = self.store.create_project(
+                    Project(name=Path(repo_path).resolve().name or "project", repo_path=repo_path)
+                )
+        else:
+            raise ValueError("create_job needs a project_id or a repo_path")
+        if project.repo_path is None:
+            raise RuntimeError(f"project {project.id} has no checkout")
+        return self.store.create(
+            Job(project_id=project.id, request=request, repo_path=project.repo_path)
+        )
+
+    def seed_for(self, job: Job) -> Profile:
+        """The seed profile a job starts from: its project's, else the engine's default."""
+        if job.project_id is not None:
+            try:
+                project = self.store.get_project(job.project_id)
+            except ProjectNotFound:
+                return self.seed_profile
+            if project.profile is not None:
+                return project.profile
+        return self.seed_profile
 
     def start(self, job_id: str, *, run: bool = True) -> Job:
         """Move a new job into analysis. With ``run=False`` only the transition happens;
@@ -307,11 +366,12 @@ class Engine:
 
     def _analyze(self, job: Job) -> Job:
         job = self._ensure_workspace(job)
-        result = self._invoke(RoleName.ANALYST, analyst.run, job, seed=self.seed_profile)
+        seed = self.seed_for(job)
+        result = self._invoke(RoleName.ANALYST, analyst.run, job, seed=seed)
         if not result.ok:
             return self._invocation_failed(job, result)
         assert isinstance(result.output, AnalystResult)
-        job.profile = analyst.accepted_profile(result.output, self.seed_profile)
+        job.profile = analyst.accepted_profile(result.output, seed)
         self.store.save(job)
         return self.orchestrator.transition(
             job,
@@ -549,4 +609,10 @@ def is_approval_state(state: JobState) -> bool:
     return state in APPROVAL_STATES
 
 
-__all__ = ["APPROVAL_EDGES", "WORKING_STATES", "Engine", "NotAwaitingApproval"]
+__all__ = [
+    "APPROVAL_EDGES",
+    "WORKING_STATES",
+    "Engine",
+    "NotAwaitingApproval",
+    "ProjectCloneError",
+]
