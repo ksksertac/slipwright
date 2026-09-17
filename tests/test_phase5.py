@@ -218,24 +218,24 @@ def test_dashboard_lists_jobs_and_approves_from_the_page(
     job = engine.start(engine.create_job("dashboard job", repo).id)
 
     with TestClient(create_app(engine, resume_on_startup=False, require_auth=False)) as client:
-        page = client.get("/").text
+        page = client.get("/legacy").text
         assert job.id in page and "dashboard job" in page
         assert "awaiting_profile_approval" in page
         assert "Approve profile" in page
 
-        resp = client.post(f"/ui/jobs/{job.id}/approve", follow_redirects=False)
+        resp = client.post(f"/legacy/ui/jobs/{job.id}/approve", follow_redirects=False)
         assert resp.status_code == 303
-        assert resp.headers["location"] == f"/ui/jobs/{job.id}"
+        assert resp.headers["location"] == f"/legacy/ui/jobs/{job.id}"
         assert store.get(job.id).state is JobState.AWAITING_PLAN_APPROVAL
 
         resp = client.post(
-            f"/ui/jobs/{job.id}/reject", data={"feedback": "shorter"}, follow_redirects=False
+            f"/legacy/ui/jobs/{job.id}/reject", data={"feedback": "shorter"}, follow_redirects=False
         )
         assert resp.status_code == 303
         assert "shorter" in _requests(provider, RoleName.PLANNER)[-1].prompt
 
-        client.post(f"/ui/jobs/{job.id}/approve")  # plan -> develop -> gate -> qa stage 1
-        detail = client.get(f"/ui/jobs/{job.id}").text
+        client.post(f"/legacy/ui/jobs/{job.id}/approve")  # plan -> develop -> gate -> qa stage 1
+        detail = client.get(f"/legacy/ui/jobs/{job.id}").text
         assert "Awaiting approval: test cases" in detail
         assert "developing → build_gate" in detail
         assert "+yes" in detail  # the phase diff is viewable
@@ -243,7 +243,7 @@ def test_dashboard_lists_jobs_and_approves_from_the_page(
         assert "✅ step 1" in detail
 
         resp = client.post(
-            f"/ui/jobs/{job.id}/tests",
+            f"/legacy/ui/jobs/{job.id}/tests",
             data={"test_cases": '[{"name": "edited", "description": "from the page"}]'},
             follow_redirects=False,
         )
@@ -252,17 +252,17 @@ def test_dashboard_lists_jobs_and_approves_from_the_page(
             {"name": "edited", "description": "from the page"}
         ]
 
-        client.post(f"/ui/jobs/{job.id}/message", data={"text": "from the page"})
+        client.post(f"/legacy/ui/jobs/{job.id}/message", data={"text": "from the page"})
         assert store.get(job.id).pending_messages[0].text == "from the page"
 
-        client.post(f"/ui/jobs/{job.id}/approve")  # tests written
-        client.post(f"/ui/jobs/{job.id}/approve")  # ship
+        client.post(f"/legacy/ui/jobs/{job.id}/approve")  # tests written
+        client.post(f"/legacy/ui/jobs/{job.id}/approve")  # ship
         assert store.get(job.id).state is JobState.DONE
-        assert "https://example.test/pr/1" in client.get(f"/ui/jobs/{job.id}").text
-        assert client.get("/ui/jobs/nope").status_code == 404
+        assert "https://example.test/pr/1" in client.get(f"/legacy/ui/jobs/{job.id}").text
+        assert client.get("/legacy/ui/jobs/nope").status_code == 404
 
         resp = client.post(
-            "/ui/jobs",
+            "/legacy/ui/jobs",
             data={"repo_path": str(repo), "request": "from the form"},
             follow_redirects=False,
         )

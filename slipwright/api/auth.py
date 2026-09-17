@@ -1,7 +1,8 @@
 """Login, sessions, users and bearer tokens over HTTP.
 
-``auth_dependency`` is attached to the whole app: every route except the public ones
-(login, API docs) needs a session cookie or a bearer token. When no user exists yet the
+``auth_dependency`` is attached to the whole app: every ``/api`` and ``/legacy`` route
+except login needs a session cookie or a bearer token; the React shell and its static
+assets are public (the app itself shows the login page). When no user exists yet the
 API answers 503 with the command that creates the first one.
 """
 
@@ -68,7 +69,8 @@ def auth_dependency(*, enabled: bool) -> Callable[[Request], None]:
             request.state.user = User(id="anonymous", username="anonymous", is_admin=True)
             return
         path = request.url.path
-        if path in PUBLIC_PATHS or path.startswith("/docs/"):
+        protected = path.startswith(("/api/", "/legacy"))
+        if not protected or path in PUBLIC_PATHS:
             request.state.user = None
             return
         store = _store(request)

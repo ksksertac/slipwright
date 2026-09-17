@@ -35,12 +35,16 @@ def client(engine: Engine) -> Iterator[TestClient]:
         yield c
 
 
-def test_json_routes_live_under_api_only(client: TestClient, repo: Path) -> None:
-    assert client.get("/api/projects").status_code == 200
-    assert client.get("/projects").status_code == 404
-    assert client.get("/jobs").status_code == 404
-    assert client.post("/jobs", json={"request": "x", "repo_path": str(repo)}).status_code == 404
-    assert client.get("/api/auth/me").status_code == 200
+def test_json_routes_live_under_api_only(engine: Engine, repo: Path, tmp_path: Path) -> None:
+    app = create_app(engine, resume_on_startup=False, require_auth=False, static_dir=tmp_path)
+    with TestClient(app) as client:  # no built UI: nothing answers at the top level
+        assert client.get("/api/projects").status_code == 200
+        assert client.get("/projects").status_code == 404
+        assert client.get("/jobs").status_code == 404
+        resp = client.post("/jobs", json={"request": "x", "repo_path": str(repo)})
+        assert resp.status_code == 404
+        assert client.get("/api/auth/me").status_code == 200
+        assert client.get("/").status_code == 503  # build hint
     paths = openapi_schema()["paths"]
     assert all(p.startswith("/api/") for p in paths), [
         p for p in paths if not p.startswith("/api/")

@@ -17,7 +17,8 @@ from typing import Any, cast
 
 from fastapi import APIRouter, BackgroundTasks, Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import PlainTextResponse, StreamingResponse
+from fastapi.responses import FileResponse, PlainTextResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from slipwright.activity import ActivityItem, ProjectProgress, project_activity, project_progress
@@ -73,6 +74,11 @@ class NewTestRun(BaseModel):
 
 
 DEV_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
+STATIC_DIR = Path(__file__).resolve().parent / "static"
+BUILD_HINT = (
+    "The web UI is not built. Run: cd web && npm install && npm run build\n"
+    "(the JSON API is at /api, docs at /docs, the legacy dashboard at /legacy)\n"
+)
 
 
 def create_app(
@@ -81,9 +87,12 @@ def create_app(
     resume_on_startup: bool = True,
     require_auth: bool = True,
     dev: bool = False,
+    static_dir: Path | None = None,
 ) -> FastAPI:
     """Build the app. ``require_auth=False`` (tests, trusted local use) skips login;
-    ``dev=True`` allows the Vite dev server's origin (``SLIPWRIGHT_DEV=1``)."""
+    ``dev=True`` allows the Vite dev server's origin (``SLIPWRIGHT_DEV=1``); ``static_dir``
+    overrides where the built web UI is looked for (default: ``slipwright/api/static``)."""
+    static_dir = STATIC_DIR if static_dir is None else static_dir
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -356,7 +365,36 @@ def create_app(
         )
 
     app.include_router(api, prefix="/api")
+    _mount_spa(app, static_dir)
     return app
+
+
+def _mount_spa(app: FastAPI, static_dir: Path) -> None:
+    """Serve the built React app with an SPA fallback, or a build hint without one.
+
+    Registered last so ``/api`` and ``/legacy`` routes win; unknown ``/api`` paths stay
+    404 instead of falling back to the shell."""
+    index = static_dir / "index.html"
+    if not index.is_file():
+
+        @app.get("/", include_in_schema=False)
+        def build_hint() -> PlainTextResponse:
+            return PlainTextResponse(BUILD_HINT, status_code=503)
+
+        return
+
+    assets = static_dir / "assets"
+    if assets.is_dir():
+        app.mount("/assets", StaticFiles(directory=assets), name="assets")
+
+    @app.get("/{path:path}", include_in_schema=False)
+    def spa(path: str) -> FileResponse:
+        if path.startswith(("api/", "legacy")) or path == "api":
+            raise HTTPException(status_code=404)
+        candidate = static_dir / path
+        if path and candidate.is_file() and static_dir in candidate.resolve().parents:
+            return FileResponse(candidate)
+        return FileResponse(index)
 
 
 def openapi_schema() -> dict[str, Any]:

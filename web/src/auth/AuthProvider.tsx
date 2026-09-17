@@ -1,0 +1,88 @@
+import { createContext, useCallback, useContext, useEffect, useMemo, type ReactNode } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Navigate, useLocation } from "react-router-dom";
+import { api, ApiError, UNAUTHORIZED_EVENT, type User } from "../api/client";
+import { keys } from "../api/hooks";
+
+interface AuthState {
+  user: User | null;
+  loading: boolean;
+  /** 503 from the API: no user exists yet; the page shows how to create one. */
+  noUsers: boolean;
+  login: (username: string, password: string) => Promise<User>;
+  logout: () => Promise<void>;
+}
+
+const AuthContext = createContext<AuthState | null>(null);
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const qc = useQueryClient();
+  const me = useQuery({
+    queryKey: keys.me,
+    queryFn: async () => {
+      try {
+        return await api.get<User>("/api/auth/me");
+      } catch (error) {
+        if (error instanceof ApiError && (error.status === 401 || error.status === 503)) {
+          return { status: error.status } as const;
+        }
+        throw error;
+      }
+    },
+    retry: false,
+    staleTime: 60_000,
+  });
+
+  useEffect(() => {
+    const onUnauthorized = () => {
+      qc.setQueryData(keys.me, { status: 401 });
+    };
+    window.addEventListener(UNAUTHORIZED_EVENT, onUnauthorized);
+    return () => window.removeEventListener(UNAUTHORIZED_EVENT, onUnauthorized);
+  }, [qc]);
+
+  const login = useCallback(
+    async (username: string, password: string) => {
+      const user = await api.post<User>("/api/auth/login", { username, password });
+      qc.setQueryData(keys.me, user);
+      await qc.invalidateQueries();
+      return user;
+    },
+    [qc],
+  );
+
+  const logout = useCallback(async () => {
+    await api.post<void>("/api/auth/logout");
+    qc.clear();
+    qc.setQueryData(keys.me, { status: 401 });
+  }, [qc]);
+
+  const value = useMemo<AuthState>(() => {
+    const data = me.data;
+    const user = data && "username" in data ? data : null;
+    return {
+      user,
+      loading: me.isLoading,
+      noUsers: !!data && "status" in data && data.status === 503,
+      login,
+      logout,
+    };
+  }, [me.data, me.isLoading, login, logout]);
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+export function useAuth(): AuthState {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error("useAuth outside AuthProvider");
+  return ctx;
+}
+
+/** Wraps routes that need a session; unauthenticated visits go to /login and back. */
+export function RequireAuth({ children }: { children: ReactNode }) {
+  const { user, loading } = useAuth();
+  const location = useLocation();
+  if (loading) return <div className="centered muted">Loading…</div>;
+  if (!user) return <Navigate to="/login" replace state={{ from: location }} />;
+  return <>{children}</>;
+}

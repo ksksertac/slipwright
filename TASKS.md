@@ -18,7 +18,7 @@ job in its own git worktree, with human approval gates between phases.
 - SQLite for job state (single file, no server)
 - pytest for tests
 - Docker + docker compose for per-job live environments
-- React 18 + Vite + TypeScript for the web UI (`web/`), built to static files served by FastAPI
+- React 19 + Vite + TypeScript for the web UI (`web/`), built to static files served by FastAPI
 
 ## Non-negotiable invariants
 
@@ -36,7 +36,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 
 ## Progress
 
-> **Resume here:** Phases 0–7 are complete. Next task is **T8.1 — React app skeleton**.
+> **Resume here:** Phases 0–7 and T8.1 are complete. Next task is **T8.2 — Login and projects list**.
 > Design note for T1.3: `run_cmd` is executed as a subprocess in the worktree (Docker is used
 > only if the profile's `run_cmd` itself invokes it).
 > Design note for T2.2: `invoke_role` talks to a `ModelProvider` (`slipwright/providers/`);
@@ -77,6 +77,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 > Design note for T7.3: JSON routes are mounted on an `APIRouter` under `/api` (the old HTML dashboard stays at `/` and `/ui/...` until T8.7). `slipwright/events.py` is an in-process bus the store publishes to on every write; `GET /api/events` streams it as SSE (`project_id` filter, `limit` for scripts, keepalive pings). `schemas/openapi.json` is exported by `scripts/export_schema.py` and checked by `tests/test_phase7_api.py`; `SLIPWRIGHT_DEV=1` enables CORS for the Vite origin. The Phase 0–5 API tests were updated only in their URL prefixes.
 > Design note for T7.4: `slipwright/jira.py` is the REST v3 client (basic auth, ADF bodies built from text); `slipwright/jirasync.py` reconciles a job idempotently (issue keys in `job.data.jira_keys`, last pushed statuses in `jira_status`, one-shot comments in `jira_marks`, outage in `jira_last_error`). The engine reconciles on entry to `_run` and after every handler, so approvals, restarts and failures all retry; each pass that did something is one `jira: N update(s)` history entry. Default issue types are Epic/Story/Subtask/Bug and default transitions To Do/In Progress/Done (per-project overrides in `Project.jira_transitions`).
 > Design note for T7.5: `JiraAction` lives in `roles/results.py` (every `RoleOutput` may carry `jira_actions`); `slipwright/jiraactions.py` executes them through the agent account (`Engine.jira_client(agent=True)`, falling back to the human connection) after checking `Permission.JIRA` and project confinement. Idempotency keys are content hashes stored in `job.data.jira_done`; outages queue actions in `job.data.jira_queue`, retried by `_jira_reconcile`. Roles get a `jira` context section (keys, current task, transitions) only when permitted; every outcome is a `jira (<role>): ...` history entry.
+> Design note for T8.1: `web/` is Vite 7 + React 19 + TypeScript (strict), React Router 7 and TanStack Query 5; `npm run build` writes `slipwright/api/static/` (gitignored) which `create_app` serves at `/` with an SPA fallback, or a 503 build hint when absent. `npm run gen:api` generates `src/api/schema.d.ts` from `schemas/openapi.json` with a SHA-256 header that `tests/test_phase8.py` and `npm run check:api` verify. The legacy dashboard moved to `/legacy` (retired in T8.7); only `/api` and `/legacy` require a session.
 
 | Phase | Task | Status |
 |-------|------|--------|
@@ -107,7 +108,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 | 7 | T7.3 API namespace and live events | [x] |
 | 7 | T7.4 Jira connection and issue sync | [x] |
 | 7 | T7.5 Agents act in Jira | [x] |
-| 8 | T8.1 React app skeleton | [ ] |
+| 8 | T8.1 React app skeleton | [x] |
 | 8 | T8.2 Login and projects list | [ ] |
 | 8 | T8.3 Project page: board, progress, developments | [ ] |
 | 8 | T8.4 Job page: gates, plan, diffs, steering | [ ] |
@@ -484,14 +485,14 @@ talks only to `/api/*` and the SSE stream; it holds no business logic.
 
 ### T8.1 — React app skeleton
 **Done when**
-- [ ] `web/` scaffolded with Vite, TypeScript strict, ESLint, Prettier; `npm run build`
+- [x] `web/` scaffolded with Vite, TypeScript strict, ESLint, Prettier; `npm run build`
   produces `slipwright/api/static/`
-- [ ] A typed API client is generated from `schemas/openapi.json`; a CI step fails if the
+- [x] A typed API client is generated from `schemas/openapi.json`; a CI step fails if the
   client is stale
-- [ ] FastAPI serves the built app with SPA fallback; `slipwright serve` works with and
+- [x] FastAPI serves the built app with SPA fallback; `slipwright serve` works with and
   without a built `static/` (without it, `/` returns a hint to build)
-- [ ] Dev mode: `npm run dev` proxies `/api` to the Python server
-- [ ] Layout shell: sidebar (Projects, Settings), header with current user and logout
+- [x] Dev mode: `npm run dev` proxies `/api` to the Python server
+- [x] Layout shell: sidebar (Projects, Settings), header with current user and logout
 
 ### T8.2 — Login and projects list
 **Done when**

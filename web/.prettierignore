@@ -1,0 +1,3 @@
+node_modules
+src/api/schema.d.ts
+../slipwright/api/static

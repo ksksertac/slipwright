@@ -1,6 +1,6 @@
-"""Job dashboard: plain server-rendered HTML, no build step, no JavaScript required.
+"""Legacy job dashboard: plain server-rendered HTML, kept until the React UI reaches parity (T8.7).
 
-``GET /`` lists jobs with state, current phase and pending approvals; ``GET /ui/jobs/{id}``
+``GET /legacy`` lists jobs with state, current phase and pending approvals; ``GET /ui/jobs/{id}``
 shows one job with its full history (diffs, build logs, proposed profile and plan). Form
 posts under ``/ui/...`` call the engine exactly like the JSON API and redirect back.
 """
@@ -20,7 +20,7 @@ from slipwright.engine import Engine, NotAwaitingApproval, approval_edges
 from slipwright.schemas.job import APPROVAL_STATES, Job, JobState
 from slipwright.store import JobNotFound
 
-router = APIRouter(include_in_schema=False)
+router = APIRouter(prefix="/legacy", include_in_schema=False)
 
 _CSS = """
 :root{--bg:#fff;--fg:#1a1a1a;--muted:#666;--line:#e3e3e3;--ok:#1a7f37;--warn:#9a6700;--bad:#c62828;--wait:#0550ae;--code:#f6f8fa}
@@ -97,7 +97,7 @@ def _pending(job: Job) -> str:
 def _gate_forms(job: Job) -> str:
     if approval_edges(job) is None:
         return ""
-    base = f"/ui/jobs/{_e(job.id)}"
+    base = f"/legacy/ui/jobs/{_e(job.id)}"
     return (
         f"<form method='post' action='{base}/approve'><button class='ok'>Approve {_e(_pending(job))}</button></form>"
         f"<form method='post' action='{base}/reject'><input type='text' name='feedback' placeholder='why?' required>"
@@ -108,7 +108,7 @@ def _gate_forms(job: Job) -> str:
 def _job_row(job: Job) -> str:
     return (
         "<tr>"
-        f"<td><a href='/ui/jobs/{_e(job.id)}'><code>{_e(job.id)}</code></a></td>"
+        f"<td><a href='/legacy/ui/jobs/{_e(job.id)}'><code>{_e(job.id)}</code></a></td>"
         f"<td>{_e(job.request)}</td>"
         f"<td>{_state_badge(job.state)}</td>"
         f"<td>{_e(_current_phase(job))}</td>"
@@ -132,7 +132,7 @@ def _history(job: Job) -> str:
     return "".join(rows) or "<p class=muted>no history yet</p>"
 
 
-@router.get("/", response_class=HTMLResponse)
+@router.get("", response_class=HTMLResponse)
 def dashboard(request: Request) -> HTMLResponse:
     engine: Engine = request.app.state.engine
     jobs = engine.store.list()
@@ -144,7 +144,7 @@ def dashboard(request: Request) -> HTMLResponse:
         *(_job_row(j) for j in reversed(jobs)),
         "</table>",
         "<h2>New job</h2>",
-        "<form method='post' action='/ui/jobs' style='display:block'>"
+        "<form method='post' action='/legacy/ui/jobs' style='display:block'>"
         "<input type='text' name='repo_path' placeholder='absolute path to a git repo' required> "
         "<input type='text' name='request' placeholder='what should be done?' required> "
         "<button class='ok'>Start</button></form>",
@@ -166,7 +166,7 @@ def job_page(job_id: str, request: Request) -> HTMLResponse:
         if job.state is JobState.AWAITING_TEST_APPROVAL and job.data.qa_stage == 1:
             cases = json.dumps(job.data.test_cases, indent=2)
             extra = (
-                f"<form method='post' action='/ui/jobs/{_e(job.id)}/tests' style='display:block;margin-top:10px'>"
+                f"<form method='post' action='/legacy/ui/jobs/{_e(job.id)}/tests' style='display:block;margin-top:10px'>"
                 f"<label>Test cases (JSON list of {{name, description}}):</label>"
                 f"<textarea name='test_cases'>{_e(cases)}</textarea>"
                 "<button>Save test cases</button></form>"
@@ -192,7 +192,7 @@ def job_page(job_id: str, request: Request) -> HTMLResponse:
         inbox = f"<h2>Inbox</h2><ul>{rows}</ul>"
 
     body = [
-        "<p><a href='/'>← all jobs</a></p>",
+        "<p><a href='/legacy'>← all jobs</a></p>",
         f"<h1><code>{_e(job.id)}</code> {_state_badge(job.state)}</h1>",
         f"<p>{_e(job.request)}</p>",
         "<table>",
@@ -206,7 +206,7 @@ def job_page(job_id: str, request: Request) -> HTMLResponse:
         plan_html,
         inbox,
         "<h2>Steer</h2>",
-        f"<form method='post' action='/ui/jobs/{_e(job.id)}/message'><input type='text' name='text' placeholder='message for the next role' required> <button>Send</button></form>",
+        f"<form method='post' action='/legacy/ui/jobs/{_e(job.id)}/message'><input type='text' name='text' placeholder='message for the next role' required> <button>Send</button></form>",
         "<h2>History</h2>",
         _history(job),
     ]
@@ -214,7 +214,7 @@ def job_page(job_id: str, request: Request) -> HTMLResponse:
 
 
 def _back(job_id: str) -> RedirectResponse:
-    return RedirectResponse(f"/ui/jobs/{job_id}", status_code=303)
+    return RedirectResponse(f"/legacy/ui/jobs/{job_id}", status_code=303)
 
 
 @router.post("/ui/jobs")

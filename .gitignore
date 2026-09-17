@@ -15,3 +15,8 @@ build/
 *.sqlite3
 *.db
 .slipwright/
+
+# Built web UI (cd web && npm run build)
+slipwright/api/static/
+web/node_modules/
+web/dist/
