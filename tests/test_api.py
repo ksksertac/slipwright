@@ -43,7 +43,7 @@ def engine(
     store: JobStore, worktrees_root: Path, seed: Profile, provider: ScriptedProvider
 ) -> Engine:
     ws = Workspace(worktrees_root, PortAllocator(start=8400, end=8499))
-    eng = Engine(store, ws, seed_profile=seed, provider=provider)
+    eng = Engine(store, ws, seed_profile=seed, provider=provider, supervisor_mode="manual")
     eng.handlers.pop(JobState.ARCHITECTURE, None)  # stop after backlog approval
     return eng
 

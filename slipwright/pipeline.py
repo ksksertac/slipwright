@@ -46,6 +46,10 @@ class StepCard(BaseModel):
     finished_at: datetime | None = None
     elapsed_s: float | None = None
     outputs: list[int] = Field(default_factory=list, description="History indexes.")
+    recommendation: str | None = None  # the supervisor's decision, on a waiting gate
+    confidence: float | None = None
+    risk: str | None = None
+    auto_approved: bool = False  # this gate was approved by the supervisor
 
 
 class Lane(BaseModel):
@@ -354,6 +358,26 @@ def _review_gate(job: Job, r: _Reader, number: int) -> StepCard | None:
     )
 
 
+def _annotate_supervision(job: Job, steps: list[StepCard]) -> None:
+    """Put the supervisor's view on the gate it concerns: a recommendation chip while the
+    gate waits, an "approved by supervisor" mark once it acted."""
+    record = job.data.supervision or {}
+    for card in steps:
+        if not card.gate:
+            continue
+        if card.status is StepStatus.WAITING and record and record.get("acted") == "none":
+            card.recommendation = record.get("decision")
+            card.confidence = record.get("confidence")
+            card.risk = record.get("risk")
+        elif card.status is StepStatus.DONE and card.outputs:
+            visit = card.outputs[0]
+            state = job.history[visit].to_state
+            for t in job.history[visit + 1 :]:
+                if t.from_state is state and (t.note or "").startswith("approved"):
+                    card.auto_approved = " by supervisor" in (t.note or "")
+                    break
+
+
 def lane_for(job: Job) -> Lane:
     r = _Reader(job)
     stage1, stage2 = r.qa_spans()
@@ -438,6 +462,7 @@ def lane_for(job: Job) -> Lane:
             finished_at=job.history[-1].at if job.state is JobState.DONE else None,
         ),
     ]
+    _annotate_supervision(job, steps)
     return Lane(
         job_id=job.id,
         request=job.request,

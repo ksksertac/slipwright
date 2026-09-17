@@ -1,10 +1,11 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import type { Job } from "../api/client";
-import { useOverview, useProjects, useJob } from "../api/hooks";
+import { describeError, type Job } from "../api/client";
+import { useOverview, useProjects, useJob, useUndoAutoApproval } from "../api/hooks";
+import { useToast } from "../components/Toast";
 import { BulkBar } from "../components/BulkBar";
 import { Crumbs } from "../components/Crumbs";
-import { GateActions } from "../components/GateActions";
+import { GateActions, Recommendation } from "../components/GateActions";
 import {
   IconActivity,
   IconAlert,
@@ -200,6 +201,29 @@ export function DashboardPage() {
         labelOf={(id) => o.waiting.find((w) => w.job_id === id)?.request ?? id}
       />
 
+      {o.auto_approved.length > 0 && (
+        <div className="card flush" style={{ marginTop: 18 }}>
+          <div className="card-head">
+            <h3>Approved by the supervisor</h3>
+            <span className="badge plain idle">{o.auto_approved.length}</span>
+          </div>
+          <table>
+            <tbody>
+              {o.auto_approved.map((w) => (
+                <AutoApprovedRow
+                  key={w.job_id}
+                  jobId={w.job_id}
+                  request={w.request}
+                  projectId={w.project_id ?? ""}
+                  projectName={byId.get(w.project_id ?? "")?.name}
+                  phase={w.current_phase}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       {projects.data && projects.data.length === 0 && (
         <div style={{ marginTop: 18 }}>
           <Empty
@@ -216,6 +240,75 @@ export function DashboardPage() {
         </div>
       )}
     </div>
+  );
+}
+
+/** A gate the supervisor approved: the job runs on; the human can still overrule it. */
+function AutoApprovedRow({
+  jobId,
+  request,
+  projectId,
+  projectName,
+  phase,
+}: {
+  jobId: string;
+  request: string;
+  projectId: string;
+  projectName?: string;
+  phase: string;
+}) {
+  const undo = useUndoAutoApproval(jobId);
+  const toast = useToast();
+  const [open, setOpen] = useState(false);
+  const [feedback, setFeedback] = useState("");
+  return (
+    <tr>
+      <td style={{ width: "100%" }}>
+        <Link to={`/projects/${projectId}/jobs/${jobId}`}>
+          <strong>{request}</strong>
+        </Link>
+        <div className="faint tiny">
+          {projectName ? `${projectName} · ` : ""}
+          {phase || "running"}
+        </div>
+      </td>
+      <td className="actions" style={{ whiteSpace: "nowrap" }}>
+        {!open ? (
+          <button className="btn bad small" onClick={() => setOpen(true)}>
+            Undo…
+          </button>
+        ) : (
+          <div className="row">
+            <input
+              type="text"
+              style={{ width: 240 }}
+              placeholder="what the supervisor missed"
+              value={feedback}
+              autoFocus
+              onChange={(e) => setFeedback(e.target.value)}
+            />
+            <button
+              className="btn bad small"
+              disabled={!feedback.trim() || undo.isPending}
+              onClick={() =>
+                undo.mutate(feedback.trim(), {
+                  onSuccess: () => {
+                    toast.ok("Feedback queued for the next agent");
+                    setOpen(false);
+                  },
+                  onError: (e) => toast.bad(describeError(e)),
+                })
+              }
+            >
+              Send
+            </button>
+            <button className="btn small" onClick={() => setOpen(false)}>
+              Cancel
+            </button>
+          </div>
+        )}
+      </td>
+    </tr>
   );
 }
 
@@ -258,6 +351,11 @@ function WaitingRow({
           {projectName ? `${projectName} · ` : ""}needs <strong>{pending}</strong> approval ·{" "}
           {timeAgo(at)}
         </div>
+        {j && (
+          <div style={{ marginTop: 4 }}>
+            <Recommendation job={j} />
+          </div>
+        )}
       </td>
       <td className="actions" style={{ whiteSpace: "nowrap" }}>
         {j && <GateActions job={j} compact />}

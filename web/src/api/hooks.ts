@@ -220,6 +220,17 @@ export function useReject(jobId: string) {
   });
 }
 
+export function useUndoAutoApproval(jobId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (feedback: string) => api.post<Job>(`/api/jobs/${jobId}/undo`, { feedback }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.job(jobId) });
+      void qc.invalidateQueries({ queryKey: keys.overview });
+    },
+  });
+}
+
 export function useSendMessage(jobId: string) {
   const qc = useQueryClient();
   return useMutation({

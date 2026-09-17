@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import { useLiveEvents } from "../api/events";
+import { useToast } from "./Toast";
 import { useAuth } from "../auth/AuthProvider";
 import {
   IconBot,
@@ -28,7 +29,8 @@ export function Layout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [theme, setTheme] = useTheme();
-  useLiveEvents();
+  const toast = useToast();
+  useLiveEvents(undefined, toast.ok);
   const overview = useQuery({
     queryKey: ["overview", "badge"],
     queryFn: () => api.get<{ pending_approvals: number }>("/api/overview?recent=0"),

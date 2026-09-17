@@ -1649,3 +1649,34 @@ ol.hits li {
 ol.hits summary {
   cursor: pointer;
 }
+
+/* supervisor (T9.8) */
+.chip {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  color: var(--text-2);
+  align-self: flex-start;
+}
+.chip.ok {
+  background: var(--good-soft);
+  color: var(--good-text);
+}
+.chip.work {
+  background: var(--warn-soft);
+  color: var(--warn-text);
+}
+.chip.bad {
+  background: var(--bad-soft);
+  color: var(--bad-text);
+}
+.chip.idle {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.recommendation {
+  margin-top: 8px;
+}

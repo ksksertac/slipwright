@@ -23,6 +23,24 @@ _JIRA_KEY = re.compile(r"^[A-Z][A-Z0-9_]*$")
 
 
 ReviewMode = Literal["off", "advisory", "blocking"]
+GateMode = Literal["manual", "assisted", "auto"]
+
+
+class SupervisorSettings(BaseModel):
+    """Who calls *approve* at the gates (T9.8). The gates themselves never change."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    mode: GateMode = Field(
+        default="assisted",
+        description="manual: no supervisor; assisted: a recommendation next to the gate; "
+        "auto: confident low-risk approvals are made for you.",
+    )
+    threshold: float = Field(default=0.8, ge=0.0, le=1.0, description="Auto needs at least this.")
+    cap: int = Field(default=3, ge=0, description="Automatic approvals per job.")
+    allow_final_gate: bool = Field(
+        default=False, description="Let auto approve the written tests (the PR gate)."
+    )
 
 
 class Project(BaseModel):
@@ -50,6 +68,7 @@ class Project(BaseModel):
         description="Standards review after each phase: off, advisory (recorded, never "
         "blocks) or blocking (the specialist fixes, then a human gate).",
     )
+    supervisor: SupervisorSettings = Field(default_factory=SupervisorSettings)
     created_at: datetime = Field(default_factory=utcnow)
 
     @field_validator("github_repo")
@@ -89,6 +108,7 @@ class ProjectPatch(BaseModel):
     jira_transitions: dict[str, str] | None = None
     profile: Profile | None = None
     review: ReviewMode | None = None
+    supervisor: SupervisorSettings | None = None
 
 
-__all__ = ["Project", "ProjectPatch", "ReviewMode"]
+__all__ = ["GateMode", "Project", "ProjectPatch", "ReviewMode", "SupervisorSettings"]

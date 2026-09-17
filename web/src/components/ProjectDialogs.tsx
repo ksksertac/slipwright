@@ -14,6 +14,7 @@ export function EditProjectModal({ project, onClose }: { project: Project; onClo
   const [jiraKey, setJiraKey] = useState(project.jira_project_key ?? "");
   const [githubRepo, setGithubRepo] = useState(project.github_repo ?? "");
   const [review, setReview] = useState<Project["review"]>(project.review);
+  const [supervisor, setSupervisor] = useState<Project["supervisor"]>(project.supervisor);
 
   const save = () => {
     patch.mutate(
@@ -23,6 +24,7 @@ export function EditProjectModal({ project, onClose }: { project: Project; onClo
         jira_project_key: jiraKey.trim() || null,
         github_repo: githubRepo.trim() || null,
         review,
+        supervisor,
       },
       {
         onSuccess: () => {
@@ -98,6 +100,65 @@ export function EditProjectModal({ project, onClose }: { project: Project; onClo
           mode a blocking finding sends the phase back (two rounds) before it waits for you.
         </div>
       </div>
+      <fieldset className="field" style={{ border: 0, padding: 0 }}>
+        <label htmlFor="ep-gate">Supervisor at the gates</label>
+        <select
+          id="ep-gate"
+          value={supervisor.mode}
+          onChange={(e) =>
+            setSupervisor({ ...supervisor, mode: e.target.value as Project["supervisor"]["mode"] })
+          }
+        >
+          <option value="manual">manual — no supervisor, you decide every gate</option>
+          <option value="assisted">
+            assisted — a recommendation next to each gate, you decide
+          </option>
+          <option value="auto">auto — confident low-risk approvals are made for you</option>
+        </select>
+        {supervisor.mode === "auto" && (
+          <div className="grid-2" style={{ marginTop: 8 }}>
+            <div className="field">
+              <label htmlFor="ep-threshold">Confidence needed</label>
+              <input
+                id="ep-threshold"
+                type="number"
+                min={0}
+                max={1}
+                step={0.05}
+                value={supervisor.threshold}
+                onChange={(e) =>
+                  setSupervisor({ ...supervisor, threshold: Number(e.target.value) })
+                }
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="ep-cap">Automatic approvals per development</label>
+              <input
+                id="ep-cap"
+                type="number"
+                min={0}
+                max={20}
+                value={supervisor.cap}
+                onChange={(e) => setSupervisor({ ...supervisor, cap: Number(e.target.value) })}
+              />
+            </div>
+            <label className="row small" style={{ gridColumn: "1 / -1" }}>
+              <input
+                type="checkbox"
+                checked={supervisor.allow_final_gate}
+                onChange={(e) =>
+                  setSupervisor({ ...supervisor, allow_final_gate: e.target.checked })
+                }
+              />
+              let it approve the written tests too (the gate before the pull request)
+            </label>
+          </div>
+        )}
+        <div className="help faint small">
+          Rejections are never automatic; every automatic approval is recorded on the job and can be
+          undone from the dashboard while the next step runs.
+        </div>
+      </fieldset>
       <div className="help faint small">
         The checkout path ({project.repo_path ?? "—"}) cannot be changed here; models and
         permissions per role live under Agents.

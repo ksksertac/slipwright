@@ -43,7 +43,9 @@ def _engine(
     store: JobStore, worktrees_root: Path, seed: Profile, provider: ScriptedProvider
 ) -> Engine:
     ws = Workspace(worktrees_root, PortAllocator(start=8500, end=8599))
-    engine = Engine(store, ws, seed_profile=seed, provider=provider, review="off")
+    engine = Engine(
+        store, ws, seed_profile=seed, provider=provider, review="off", supervisor_mode="manual"
+    )
     engine.handlers.pop(JobState.QA, None)  # phase 3 ends when the job reaches QA
     return engine
 

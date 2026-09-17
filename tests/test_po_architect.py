@@ -44,7 +44,7 @@ def _engine(
     """An engine that stops right after the backlog gate (default) or, with
     ``stop_after=JobState.DEVELOPING``, right after the architecture gate."""
     ws = Workspace(worktrees_root, PortAllocator(start=8300, end=8399))
-    engine = Engine(store, ws, seed_profile=seed, provider=provider)
+    engine = Engine(store, ws, seed_profile=seed, provider=provider, supervisor_mode="manual")
     engine.handlers.pop(stop_after, None)
     return engine
 
@@ -281,7 +281,7 @@ db, repo, wt, prof = sys.argv[1:5]
 seed = load_profile(Path(prof))
 engine = Engine(
     JobStore(db), Workspace(Path(wt), PortAllocator(start=8300, end=8399)),
-    seed_profile=seed, provider=canned(seed),
+    seed_profile=seed, provider=canned(seed), supervisor_mode="manual",
 )
 job = engine.start(engine.create_job("survive a restart", Path(repo)).id)
 print(job.id, job.state.value, flush=True)

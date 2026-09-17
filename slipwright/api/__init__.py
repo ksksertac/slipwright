@@ -263,8 +263,8 @@ def create_app(
         project = _get_project(eng, project_id)
         changes = body.model_dump(exclude_unset=True)
         try:
-            updated = project.model_copy(update=changes)
-            updated = Project.model_validate(updated.model_dump())  # re-run validators
+            # merge as plain data so nested models (profile, supervisor) validate cleanly
+            updated = Project.model_validate({**project.model_dump(), **changes})
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return eng.store.update_project(updated)
@@ -509,6 +509,19 @@ def create_app(
             return eng.set_test_cases(job_id, [c.model_dump() for c in body.test_cases])
         except NotAwaitingApproval as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    @api.post("/jobs/{job_id}/undo", response_model=Job)
+    def undo(job_id: str, body: Rejection, request: Request) -> Job:
+        """Overrule the supervisor's automatic approval: the feedback reaches the next role
+        through the inbox and the approval is marked undone."""
+        eng = _engine(request)
+        _get(eng, job_id)
+        try:
+            return eng.undo_auto_approval(job_id, body.feedback)
+        except NotAwaitingApproval as exc:
+            raise HTTPException(
+                status_code=409, detail="nothing the supervisor approved is left to undo"
+            ) from exc
 
     @api.post("/jobs/{job_id}/message", response_model=Job)
     def message(job_id: str, body: Message, request: Request) -> Job:

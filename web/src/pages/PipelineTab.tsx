@@ -44,6 +44,15 @@ export function PipelineTab({ projectId }: { projectId: string }) {
     [lanes],
   );
   const selected = useMemo(() => chosen.filter((id) => waiting.has(id)), [chosen, waiting]);
+  const recommended = useMemo(
+    () =>
+      lanes
+        .filter((l) =>
+          l.steps.some((s) => s.status === "waiting" && s.recommendation === "approve"),
+        )
+        .map((l) => l.job_id),
+    [lanes],
+  );
 
   if (pipeline.isLoading) return <Loading rows={4} />;
   if (pipeline.error) return <ErrorBox error={pipeline.error} />;
@@ -74,15 +83,26 @@ export function PipelineTab({ projectId }: { projectId: string }) {
             ? "Nothing waits for you."
             : `${waiting.size} development${waiting.size === 1 ? "" : "s"} waiting for your approval`}
         </div>
-        {waiting.size > 0 && (
-          <button
-            className="btn small"
-            onClick={() => setSelected([...waiting])}
-            disabled={selected.length === waiting.size}
-          >
-            Select all waiting
-          </button>
-        )}
+        <div className="row">
+          {recommended.length > 0 && (
+            <button
+              className="btn small"
+              onClick={() => setSelected(recommended)}
+              title="the gates the supervisor recommends approving"
+            >
+              Select all recommended ({recommended.length})
+            </button>
+          )}
+          {waiting.size > 0 && (
+            <button
+              className="btn small"
+              onClick={() => setSelected([...waiting])}
+              disabled={selected.length === waiting.size}
+            >
+              Select all waiting
+            </button>
+          )}
+        </div>
       </div>
       {lanes.map((lane) => (
         <LaneRow
@@ -191,6 +211,16 @@ function StepCardView({
       </div>
       <div className="label">{step.label}</div>
       {step.task_title && <div className="task truncate">{step.task_title}</div>}
+      {step.recommendation && (
+        <div
+          className={`chip ${step.recommendation === "approve" ? (step.risk === "low" ? "ok" : "work") : "bad"}`}
+          title={`the supervisor recommends ${step.recommendation}`}
+        >
+          {step.recommendation === "approve" ? "recommends approve" : "recommends reject"} ·{" "}
+          {(step.confidence ?? 0).toFixed(2)}
+        </div>
+      )}
+      {step.auto_approved && <div className="chip idle">approved by supervisor</div>}
       <div className="meta">
         <span className={`badge ${STATUS_CLASS[step.status]} plain`}>
           {step.status === "waiting" ? `needs ${step.pending}` : step.status}

@@ -440,3 +440,29 @@ def delete_standards_page(path: str, request: Request, project_id: str | None = 
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=f"no page {path}") from exc
     eng.ensure_standards_indexed(project_id)
+
+
+# -- notifications (T9.8) ----------------------------------------------------------------------
+
+
+class NotificationSettings(BaseModel):
+    webhook_url: str | None = Field(
+        default=None, description="POSTed a JSON event on every automatic approval."
+    )
+
+
+@router.get("/settings/notifications", response_model=NotificationSettings)
+def get_notifications(request: Request) -> NotificationSettings:
+    eng = _engine(request)
+    return NotificationSettings(webhook_url=eng.store.get_setting("notifications.webhook_url"))
+
+
+@router.put("/settings/notifications", response_model=NotificationSettings)
+def put_notifications(body: NotificationSettings, request: Request) -> NotificationSettings:
+    require_admin(request)
+    eng = _engine(request)
+    url = (body.webhook_url or "").strip() or None
+    if url and not url.startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="webhook_url must be http(s)")
+    eng.store.set_setting("notifications.webhook_url", url)
+    return NotificationSettings(webhook_url=url)

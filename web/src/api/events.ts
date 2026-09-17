@@ -12,7 +12,7 @@ interface LiveEvent {
   payload: Record<string, unknown>;
 }
 
-export function useLiveEvents(projectId?: string) {
+export function useLiveEvents(projectId?: string, onNotice?: (text: string) => void) {
   const qc = useQueryClient();
   useEffect(() => {
     let source: EventSource | null = null;
@@ -33,6 +33,11 @@ export function useLiveEvents(projectId?: string) {
       if (event.job_id) {
         void qc.invalidateQueries({ queryKey: keys.job(event.job_id) });
       }
+      if (event.type === "supervisor.auto_approved" && onNotice) {
+        const gate = String(event.payload.gate ?? "gate");
+        const confidence = Number(event.payload.confidence ?? 0);
+        onNotice(`Supervisor approved the ${gate} (confidence ${confidence.toFixed(2)})`);
+      }
       if (event.type === "test_run.state" && typeof event.payload.run_id === "string") {
         void qc.invalidateQueries({ queryKey: keys.testRun(event.payload.run_id) });
         void qc.invalidateQueries({ queryKey: keys.testRunOutput(event.payload.run_id) });
@@ -51,7 +56,14 @@ export function useLiveEvents(projectId?: string) {
           /* ignore malformed frames */
         }
       };
-      for (const type of ["job.state", "job.data", "test_run.state", "activity", "project"]) {
+      for (const type of [
+        "job.state",
+        "job.data",
+        "test_run.state",
+        "activity",
+        "project",
+        "supervisor.auto_approved",
+      ]) {
         source.addEventListener(type, onMessage as EventListener);
       }
       source.onerror = () => {
@@ -67,5 +79,5 @@ export function useLiveEvents(projectId?: string) {
       if (timer) window.clearTimeout(timer);
       source?.close();
     };
-  }, [projectId, qc]);
+  }, [projectId, qc, onNotice]);
 }

@@ -152,6 +152,7 @@ def full_engine(
     ws = Workspace(worktrees_root, PortAllocator(start=8300, end=8399))
     if "git_host" not in kw:
         kw["git_host"] = FakeHost()
+    kw.setdefault("supervisor_mode", "manual")  # the supervisor has its own tests (T9.8)
     return Engine(store, ws, seed_profile=seed, provider=provider, ci_poll_s=0.0, **kw)
 
 

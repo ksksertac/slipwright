@@ -24,7 +24,7 @@ import { Crumbs } from "../components/Crumbs";
 import { Detail } from "../components/Detail";
 import { Diff } from "../components/Diff";
 import { ReviewDetail, ViolationsTable, type ReviewRecord } from "../components/Review";
-import { GateActions, pendingApproval } from "../components/GateActions";
+import { GateActions, Recommendation, pendingApproval } from "../components/GateActions";
 import { IconCheck, IconExternal, IconTrash, IconX } from "../components/icons";
 import { JiraLink } from "../components/JiraLink";
 import { ConfirmModal } from "../components/Modal";
@@ -200,6 +200,7 @@ function GatePanel({ job }: { job: Job }) {
         <strong>Waiting for your approval of the {pending}</strong>
         <GateActions job={job} compact />
       </div>
+      <Recommendation job={job} detailed />
       {job.state === "awaiting_backlog_approval" && <BacklogGate job={job} />}
       {job.state === "awaiting_architecture_approval" && <ArchitectureGate job={job} />}
       {job.state === "awaiting_review_approval" && <ReviewGate job={job} />}

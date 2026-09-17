@@ -113,6 +113,12 @@ class JobData(BaseModel):
         default_factory=list,
         description="Every standards review: phase, round, mode, violations, verdict.",
     )
+    supervision: dict[str, Any] | None = Field(
+        default=None,
+        description="The supervisor's view of the current or last gate: gate, decision, "
+        "confidence, risk, reasons, feedback, acted (none | auto | error), undone.",
+    )
+    auto_approvals: int = Field(default=0, ge=0, description="Gates the supervisor approved.")
     test_cases: list[dict[str, Any]] = Field(default_factory=list)
     qa_stage: int = Field(default=1, ge=1, le=2)
     pr_url: str | None = None

@@ -36,7 +36,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 
 ## Progress
 
-> **Resume here:** Phases 0–8, T9.0–T9.6 and T9.9 are complete. Next: **T9.8** (supervisor at the gates), then T9.7.
+> **Resume here:** Phases 0–8 and T9.0–T9.6, T9.8, T9.9 are complete. Next: **T9.7** (orchestrator hardening), then the Phase 9 definition of done.
 > Design note for T1.3: `run_cmd` is executed as a subprocess in the worktree (Docker is used
 > only if the profile's `run_cmd` itself invokes it).
 > Design note for T2.2: `invoke_role` talks to a `ModelProvider` (`slipwright/providers/`);
@@ -133,7 +133,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 | 9 | T9.5 Standards review gate | [x] |
 | 9 | T9.6 Standards in the UI | [x] |
 | 9 | T9.7 Orchestrator hardening: budgets, retries, supervisor decisions | [ ] |
-| 9 | T9.8 Supervisor at the gates: manual / assisted / auto | [ ] |
+| 9 | T9.8 Supervisor at the gates: manual / assisted / auto | [x] |
 | 9 | T9.9 Project pipeline view and bulk approvals | [x] |
 
 ---
@@ -910,27 +910,46 @@ editor for that agent's domain, so "what does the Backend agent follow?" is one 
 The gates stay in the state machine (invariant 2); what changes is who calls *approve*.
 
 **Done when**
-- [ ] A `supervisor` role (model/provider from the profile like every role) is invoked when
+- [x] A `supervisor` role (model/provider from the profile like every role) is invoked when
   a job reaches a gate and returns `{decision: approve|reject, confidence, risk:
   low|medium|high, reasons[], feedback}` after reading the same material the human sees
   (profile / plan + standards / test cases / written tests) plus the relevant standards
-- [ ] Gate mode per project (Settings → Agents → Supervisor card): `manual` — no
+- [x] Gate mode per project (project edit dialog, `Project.supervisor`): `manual` — no
   supervisor; `assisted` (default) — the recommendation, confidence and reasons are shown
   on the gate panel and the dashboard, the human decides; `auto` — the supervisor approves
   when `decision=approve`, `risk=low` and confidence ≥ a threshold, otherwise the gate
   waits for the human; rejections are never automatic
-- [ ] Every automatic approval is a normal `approve` call recorded as
+- [x] Every automatic approval is a normal `approve` call recorded as
   `approved by supervisor (confidence 0.92): <reasons>`; the human can still reject
   afterwards while the next phase runs (the inbox carries the feedback), and can switch
   the project back to `manual` at any time
-- [ ] A per-job cap on automatic approvals (default 3) and a hard rule: the final
+- [x] A per-job cap on automatic approvals (default 3) and a hard rule: the final
   DevOps/PR gate is never auto-approved unless the project explicitly allows it
-- [ ] Dashboard: "approved by supervisor" items are listed separately with an *Undo*
-  (reject with feedback) action; notifications (T9.6 toast + optional webhook) on every
+- [x] Dashboard: "approved by supervisor" items are listed separately with an *Undo*
+  (reject with feedback) action; notifications (toast over SSE + optional webhook under Settings → notifications) on every
   automatic approval
-- [ ] Tests: assisted mode never changes state; auto mode approves a low-risk plan and
+- [x] Tests: assisted mode never changes state; auto mode approves a low-risk plan and
   stops at a high-risk one; the cap and the DevOps rule hold; a supervisor error falls
   back to manual
+
+> Design note for T9.8: `slipwright/roles/supervisor.py` builds the gate material the
+> human sees (`material(job)`: backlog / profile+plan / last review / test cases / the
+> branch diff for written tests) and the recent history; `Engine._supervise` runs after
+> every handler that lands on a gate (inside `_run`, so an automatic approval simply lets
+> the loop continue). `Project.supervisor` = `SupervisorSettings(mode, threshold, cap,
+> allow_final_gate)`; `Engine(supervisor_mode=...)` forces a mode for tests
+> (`tests/pipeline.full_engine` defaults to manual). The record lives in
+> `job.data.supervision` (`acted`: none | auto | error, `blockers[]` in auto mode) and
+> as a history entry `supervisor: recommends …`; an automatic approval is
+> `Engine.approve(by="supervisor (confidence x): reasons")` → note `approved by supervisor
+> (…)`, `job.data.auto_approvals` counts against the cap, the final gate (written tests,
+> `qa_stage == 2`) is refused unless `allow_final_gate`. `undo_auto_approval` marks the
+> record undone and queues an inbox message for the next role (`POST /api/jobs/{id}/undo`).
+> An SSE event `supervisor.auto_approved` drives the toast (`useLiveEvents(_, onNotice)`)
+> and `_notify_webhook` POSTs to `notifications.webhook_url`. Pipeline cards carry
+> `recommendation` / `confidence` / `risk` / `auto_approved`; `JobProgress` and
+> `Overview.auto_approved` feed the dashboard's Undo list. The pipeline "Select all
+> recommended" button closes T9.9's last item.
 
 ### T9.9 — Project pipeline view and bulk approvals
 Inside a project, every development is a row of **step cards** (Backlog → Backlog gate →
@@ -953,7 +972,7 @@ in bulk.
 - [x] Editable gates edit in place: the profile form, the plan/breakdown (reorder phases,
   rename tasks, change a task's domain), and the test-case list open in the side panel;
   **Save & approve** sends the edited version and continues, **Save** only stores it
-- [ ] Supervisor recommendations (T9.8, assisted mode) appear on the waiting cards as a
+- [x] Supervisor recommendations (T9.8, assisted mode) appear on the waiting cards as a
   chip (recommends approve · 0.92) so bulk approval can follow them with one click
   ("Select all recommended")
 - [x] The dashboard's pending list gains the same checkboxes and bulk bar

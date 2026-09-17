@@ -88,7 +88,13 @@ def _engine(
 ) -> Engine:
     ws = Workspace(worktrees_root, PortAllocator(start=8700, end=8799))
     return Engine(
-        store, ws, seed_profile=seed, provider=provider, git_host=FakeHost(), ci_poll_s=0.0
+        store,
+        ws,
+        seed_profile=seed,
+        provider=provider,
+        git_host=FakeHost(),
+        ci_poll_s=0.0,
+        supervisor_mode="manual",
     )
 
 

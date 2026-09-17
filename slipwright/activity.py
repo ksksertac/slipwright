@@ -10,8 +10,9 @@ from __future__ import annotations
 import re
 from datetime import datetime
 from enum import StrEnum
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from slipwright.board import TaskStatus, job_epics
 from slipwright.roles.specialists import LABEL, SCOPE, STANDARDS_DOMAIN
@@ -62,6 +63,10 @@ class JobProgress(BaseModel):
     tasks_total: int
     last_activity: datetime
     pr_url: str | None = None
+    recommendation: str | None = None  # the supervisor's decision at the current gate
+    confidence: float | None = None
+    risk: str | None = None
+    auto_approved: bool = False  # the last gate was approved by the supervisor, not undone
 
 
 class Overview(BaseModel):
@@ -79,6 +84,7 @@ class Overview(BaseModel):
     tasks_total: int
     waiting: list[JobProgress]
     recent: list[ActivityItem]
+    auto_approved: list[JobProgress] = Field(default_factory=list)
 
 
 class AgentSummary(BaseModel):
@@ -187,7 +193,22 @@ def job_progress(job: Job) -> JobProgress:
         tasks_total=len(tasks),
         last_activity=last_activity(job),
         pr_url=job.data.pr_url,
+        **supervision_summary(job),
     )
+
+
+def supervision_summary(job: Job) -> dict[str, Any]:
+    record = job.data.supervision or {}
+    waiting = job.state in APPROVAL_STATES and record.get("acted") in ("none", None)
+    return {
+        "recommendation": record.get("decision") if waiting and record else None,
+        "confidence": record.get("confidence") if waiting and record else None,
+        "risk": record.get("risk") if waiting and record else None,
+        "auto_approved": bool(record)
+        and record.get("acted") == "auto"
+        and not record.get("undone")
+        and job.state not in TERMINAL_STATES,
+    }
 
 
 def project_progress(project_id: str, jobs: list[Job]) -> ProjectProgress:
@@ -224,6 +245,7 @@ def overview(projects: int, jobs: list[Job], *, recent: int = 20) -> Overview:
         tasks_done=sum(r.tasks_done for r in rows),
         tasks_total=sum(r.tasks_total for r in rows),
         waiting=[r for r in rows if r.pending_approval],
+        auto_approved=[r for r in rows if r.auto_approved],
         recent=project_activity(jobs, limit=recent),
     )
 
@@ -256,7 +278,11 @@ def classify(t: Transition) -> tuple[ActivityKind, RoleName | None]:
         )
     if note == "job started":
         return ActivityKind.STARTED, None
-    if note.startswith(("approved", "rejected")):
+    if note.startswith("supervisor"):
+        return ActivityKind.ROLE, RoleName.SUPERVISOR
+    if note.startswith("approved") and " by supervisor" in note:
+        return ActivityKind.APPROVAL, RoleName.SUPERVISOR
+    if note.startswith(("approved", "rejected", "undo:")):
         return ActivityKind.APPROVAL, None
     if note.startswith("build gate"):
         return ActivityKind.GATE, None

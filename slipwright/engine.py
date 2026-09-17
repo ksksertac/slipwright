@@ -44,7 +44,7 @@ from slipwright.providers.registry import (
     RoutingProvider,
     list_models,
 )
-from slipwright.roles import architect, developer, devops, po, qa, review
+from slipwright.roles import architect, developer, devops, po, qa, review, supervisor
 from slipwright.roles.common import apply_changes, require_worktree
 from slipwright.roles.results import (
     ArchitectResult,
@@ -54,11 +54,12 @@ from slipwright.roles.results import (
     PlanPhase,
     POResult,
     QAResult,
+    SupervisorResult,
 )
 from slipwright.roles.specialists import specialist_for
 from slipwright.schemas.job import APPROVAL_STATES, Job, JobState, utcnow
 from slipwright.schemas.profile import Permission, Profile, RoleName
-from slipwright.schemas.project import Project
+from slipwright.schemas.project import Project, SupervisorSettings
 from slipwright.schemas.testrun import TestRun, TestRunSource, TestRunStatus
 from slipwright.standards import GLOBAL_DIR, PROJECT_SUBDIR, load_corpus
 from slipwright.standards.editing import StandardsEditor
@@ -150,6 +151,7 @@ class Engine:
         max_ci_attempts: int = 3,
         max_review_rounds: int = 2,
         review: str | None = None,
+        supervisor_mode: str | None = None,
         gate_timeout_s: float | None = None,
         git_host: GitHost | None = None,
         ci_poll_s: float = 15.0,
@@ -176,6 +178,8 @@ class Engine:
         self.max_review_rounds = max_review_rounds
         # a forced standards-review mode (off/advisory/blocking); None follows the project
         self.review_override = review
+        # a forced gate mode (manual/assisted/auto); None follows the project
+        self.supervisor_override = supervisor_mode
         self.gate_timeout_s = gate_timeout_s
         self._git_host = git_host
         # tests answer GitHub/Jira HTTP locally through a mock transport
@@ -750,7 +754,7 @@ class Engine:
         job = self.orchestrator.transition(job_id, JobState.BACKLOG, note="job started")
         return self._run(job) if run else job
 
-    def approve(self, job_id: str, *, run: bool = True) -> Job:
+    def approve(self, job_id: str, *, run: bool = True, by: str | None = None) -> Job:
         job = self.store.get(job_id)
         edges = approval_edges(job)
         if edges is None:
@@ -766,6 +770,8 @@ class Engine:
             job.data.review_violations = []
             job.data.review_rounds = 0
             note = f"approved phase {job.data.phase_index} despite the review"
+        if by:
+            note = f"{note} by {by}"
         job.data.feedback = None
         job.data.reject_rounds = 0
         self.store.save(job)
@@ -864,6 +870,162 @@ class Engine:
         job = self.store.get(job_id)
         job.data.inbox.append(InboxMessage(text=text))
         return self.store.save(job)
+
+    # -- the supervisor at the gates (T9.8) --------------------------------------------------
+
+    def supervisor_settings(self, job: Job) -> SupervisorSettings:
+        """The project's gate mode; a job without a project has nowhere to configure
+        one and stays manual."""
+        project = self._project_of(job)
+        settings = SupervisorSettings(mode="manual") if project is None else project.supervisor
+        if self.supervisor_override is not None:
+            settings = settings.model_copy(update={"mode": self.supervisor_override})
+        return settings
+
+    def _is_final_gate(self, job: Job) -> bool:
+        """The written-tests approval hands the branch to DevOps: the last human gate."""
+        return job.state is JobState.AWAITING_TEST_APPROVAL and job.data.qa_stage == 2
+
+    def _supervise(self, job: Job) -> Job:
+        """Ask the supervisor at a gate. Assisted: record the recommendation. Auto: turn a
+        confident, low-risk approval into an ordinary approve call, within the per-job cap
+        and never at the final gate unless the project allows it. Errors leave the gate to
+        the human."""
+        settings = self.supervisor_settings(job)
+        if settings.mode == "manual" or job.state not in APPROVAL_STATES:
+            return job
+        profile = job.profile or self.seed_for(job)
+        gate = supervisor.gate_name(job)
+        written = None
+        if job.state is JobState.AWAITING_TEST_APPROVAL and job.data.qa_stage == 2:
+            written = self._branch_diff(job) if job.worktree_path else None
+        record: dict[str, Any] = {
+            "gate": gate,
+            "mode": settings.mode,
+            "at": utcnow().isoformat(),
+            "acted": "none",
+            "undone": False,
+        }
+        result = self._invoke(
+            RoleName.SUPERVISOR,
+            supervisor.run,
+            job,
+            profile=profile,
+            gate_material=supervisor.material(job, written_tests=written),
+            jira=None,
+        )
+        if not result.ok:
+            assert result.error is not None
+            record.update({"acted": "error", "error": result.error.message})
+            job.data.supervision = record
+            self.store.save(job)
+            self.store.update_state(
+                job.id,
+                job.state,
+                note=f"supervisor failed: {result.error.kind.value}; the gate waits for you",
+                detail=result.error.message,
+            )
+            return self.store.get(job.id)
+        assert isinstance(result.output, SupervisorResult)
+        out = result.output
+        record.update(
+            {
+                "decision": out.decision,
+                "confidence": round(out.confidence, 3),
+                "risk": out.risk,
+                "reasons": out.reasons,
+                "feedback": out.feedback,
+                "summary": out.summary,
+            }
+        )
+        reasons = "; ".join(out.reasons) or out.summary
+        blockers: list[str] = []
+        if out.decision != "approve":
+            blockers.append("recommends rejecting")
+        if out.risk != "low":
+            blockers.append(f"risk {out.risk}")
+        if out.confidence < settings.threshold:
+            blockers.append(f"confidence {out.confidence:.2f} < {settings.threshold:.2f}")
+        if job.data.auto_approvals >= settings.cap:
+            blockers.append(f"cap of {settings.cap} automatic approval(s) reached")
+        if self._is_final_gate(job) and not settings.allow_final_gate:
+            blockers.append("the final gate is never automatic")
+        auto = settings.mode == "auto" and not blockers
+        if settings.mode != "auto":
+            blockers = []  # assisted: the human decides, nothing is "blocked"
+        record["blockers"] = blockers
+        record["acted"] = "auto" if auto else "none"
+        job.data.supervision = record
+        self.store.save(job)
+        self.store.update_state(
+            job.id,
+            job.state,
+            note=(
+                f"supervisor: recommends {out.decision} "
+                f"(confidence {out.confidence:.2f}, risk {out.risk})"
+                + ("" if auto else (f"; waits for you: {', '.join(blockers)}" if blockers else ""))
+            ),
+            detail=json.dumps(record, indent=2),
+        )
+        job = self.store.get(job.id)
+        if not auto:
+            return job
+        job.data.auto_approvals += 1
+        self.store.save(job)
+        job = self.approve(
+            job.id, run=False, by=f"supervisor (confidence {out.confidence:.2f}): {reasons}"
+        )
+        self.events.emit(
+            "supervisor.auto_approved",
+            project_id=job.project_id,
+            job_id=job.id,
+            payload={"gate": gate, "confidence": out.confidence, "reasons": out.reasons},
+        )
+        self._notify_webhook(job, gate, record)
+        return job
+
+    def undo_auto_approval(self, job_id: str, feedback: str) -> Job:
+        """The human overrules the supervisor after the fact: the feedback reaches the
+        next role through the inbox and the record shows the approval was undone."""
+        job = self.store.get(job_id)
+        record = job.data.supervision
+        if not record or record.get("acted") != "auto" or record.get("undone"):
+            raise NotAwaitingApproval(job)
+        record["undone"] = True
+        record["undo_feedback"] = feedback
+        job.data.supervision = record
+        from slipwright.schemas.job import InboxMessage
+
+        job.data.inbox.append(
+            InboxMessage(
+                text=f"[the human overruled the supervisor's approval of the {record['gate']}] "
+                f"{feedback}"
+            )
+        )
+        self.store.save(job)
+        self.store.update_state(job.id, job.state, note=f"undo: {feedback}")
+        return self.store.get(job.id)
+
+    def _notify_webhook(self, job: Job, gate: str, record: dict[str, Any]) -> None:
+        url = self.store.get_setting("notifications.webhook_url")
+        if not url:
+            return
+        try:
+            with httpx.Client(transport=self.http_transport, timeout=10.0) as client:
+                client.post(
+                    str(url),
+                    json={
+                        "event": "supervisor.auto_approved",
+                        "job_id": job.id,
+                        "project_id": job.project_id,
+                        "request": job.request,
+                        "gate": gate,
+                        "confidence": record.get("confidence"),
+                        "reasons": record.get("reasons", []),
+                    },
+                )
+        except httpx.HTTPError as exc:  # a broken webhook never stops a job
+            log.warning("webhook %s failed: %s", url, exc)
 
     # -- test runs -----------------------------------------------------------------------
 
@@ -979,6 +1141,8 @@ class Engine:
                 if job.state is before:  # a handler must always move the job
                     raise RuntimeError(f"handler for {before.value} did not change job {job.id}")
                 job = self._jira_reconcile(job)
+                if job.state in APPROVAL_STATES:
+                    job = self._supervise(job)  # may approve, in which case the loop goes on
             return job
 
     def _fail(self, job: Job, note: str, detail: str | None = None) -> Job:

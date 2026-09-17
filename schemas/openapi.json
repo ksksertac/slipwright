@@ -1109,6 +1109,13 @@
         "additionalProperties": false,
         "description": "Working state that phases read and write. Persisted with the job, never in history.",
         "properties": {
+          "auto_approvals": {
+            "default": 0,
+            "description": "Gates the supervisor approved.",
+            "minimum": 0.0,
+            "title": "Auto Approvals",
+            "type": "integer"
+          },
           "backlog": {
             "anyOf": [
               {
@@ -1310,6 +1317,19 @@
             "title": "Reviews",
             "type": "array"
           },
+          "supervision": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The supervisor's view of the current or last gate: gate, decision, confidence, risk, reasons, feedback, acted (none | auto | error), undone.",
+            "title": "Supervision"
+          },
           "test_cases": {
             "items": {
               "additionalProperties": true,
@@ -1320,6 +1340,7 @@
           }
         },
         "required": [
+          "auto_approvals",
           "backlog",
           "base_commit",
           "build_attempts",
@@ -1342,6 +1363,7 @@
           "review_rounds",
           "review_violations",
           "reviews",
+          "supervision",
           "test_cases"
         ],
         "title": "JobData",
@@ -1350,6 +1372,22 @@
       "JobProgress": {
         "additionalProperties": false,
         "properties": {
+          "auto_approved": {
+            "default": false,
+            "title": "Auto Approved",
+            "type": "boolean"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
           "current_phase": {
             "title": "Current Phase",
             "type": "string"
@@ -1396,9 +1434,31 @@
             ],
             "title": "Project Id"
           },
+          "recommendation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recommendation"
+          },
           "request": {
             "title": "Request",
             "type": "string"
+          },
+          "risk": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk"
           },
           "state": {
             "$ref": "#/components/schemas/JobState"
@@ -1413,13 +1473,17 @@
           }
         },
         "required": [
+          "auto_approved",
+          "confidence",
           "current_phase",
           "job_id",
           "last_activity",
           "pending_approval",
           "pr_url",
           "project_id",
+          "recommendation",
           "request",
+          "risk",
           "state",
           "tasks_done",
           "tasks_total"
@@ -1698,10 +1762,35 @@
         "title": "NewUser",
         "type": "object"
       },
+      "NotificationSettings": {
+        "properties": {
+          "webhook_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "POSTed a JSON event on every automatic approval.",
+            "title": "Webhook Url"
+          }
+        },
+        "title": "NotificationSettings",
+        "type": "object"
+      },
       "Overview": {
         "additionalProperties": false,
         "description": "Dashboard numbers across every project.",
         "properties": {
+          "auto_approved": {
+            "items": {
+              "$ref": "#/components/schemas/JobProgress"
+            },
+            "title": "Auto Approved",
+            "type": "array"
+          },
           "jobs_done": {
             "title": "Jobs Done",
             "type": "integer"
@@ -1750,6 +1839,7 @@
           }
         },
         "required": [
+          "auto_approved",
           "jobs_done",
           "jobs_failed",
           "jobs_running",
@@ -2084,6 +2174,9 @@
             ],
             "title": "Review",
             "type": "string"
+          },
+          "supervisor": {
+            "$ref": "#/components/schemas/SupervisorSettings"
           }
         },
         "required": [
@@ -2097,7 +2190,8 @@
           "name",
           "profile",
           "repo_path",
-          "review"
+          "review",
+          "supervisor"
         ],
         "title": "Project",
         "type": "object"
@@ -2190,6 +2284,16 @@
               }
             ],
             "title": "Review"
+          },
+          "supervisor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SupervisorSettings"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "title": "ProjectPatch",
@@ -2770,6 +2874,22 @@
       "StepCard": {
         "additionalProperties": false,
         "properties": {
+          "auto_approved": {
+            "default": false,
+            "title": "Auto Approved",
+            "type": "boolean"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
           "domain": {
             "anyOf": [
               {
@@ -2852,6 +2972,28 @@
             ],
             "title": "Phase"
           },
+          "recommendation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recommendation"
+          },
+          "risk": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk"
+          },
           "role": {
             "anyOf": [
               {
@@ -2890,6 +3032,8 @@
           }
         },
         "required": [
+          "auto_approved",
+          "confidence",
           "domain",
           "editable",
           "elapsed_s",
@@ -2900,6 +3044,8 @@
           "outputs",
           "pending",
           "phase",
+          "recommendation",
+          "risk",
           "role",
           "started_at",
           "status",
@@ -2971,6 +3117,46 @@
           "title"
         ],
         "title": "StoryView",
+        "type": "object"
+      },
+      "SupervisorSettings": {
+        "additionalProperties": false,
+        "description": "Who calls *approve* at the gates (T9.8). The gates themselves never change.",
+        "properties": {
+          "allow_final_gate": {
+            "default": false,
+            "description": "Let auto approve the written tests (the PR gate).",
+            "title": "Allow Final Gate",
+            "type": "boolean"
+          },
+          "cap": {
+            "default": 3,
+            "description": "Automatic approvals per job.",
+            "minimum": 0.0,
+            "title": "Cap",
+            "type": "integer"
+          },
+          "mode": {
+            "default": "assisted",
+            "description": "manual: no supervisor; assisted: a recommendation next to the gate; auto: confident low-risk approvals are made for you.",
+            "enum": [
+              "manual",
+              "assisted",
+              "auto"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "threshold": {
+            "default": 0.8,
+            "description": "Auto needs at least this.",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Threshold",
+            "type": "number"
+          }
+        },
+        "title": "SupervisorSettings",
         "type": "object"
       },
       "TaskStatus": {
@@ -4210,6 +4396,56 @@
         "summary": "Set Tests"
       }
     },
+    "/api/jobs/{job_id}/undo": {
+      "post": {
+        "description": "Overrule the supervisor's automatic approval: the feedback reaches the next role\nthrough the inbox and the approval is marked undone.",
+        "operationId": "undo_api_jobs__job_id__undo_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Rejection"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Undo"
+      }
+    },
     "/api/overview": {
       "get": {
         "description": "Numbers, pending approvals and recent activity across every project.",
@@ -5010,6 +5246,66 @@
           }
         },
         "summary": "Test Jira",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/settings/notifications": {
+      "get": {
+        "operationId": "get_notifications_api_settings_notifications_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationSettings"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Notifications",
+        "tags": [
+          "settings"
+        ]
+      },
+      "put": {
+        "operationId": "put_notifications_api_settings_notifications_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationSettings"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationSettings"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Notifications",
         "tags": [
           "settings"
         ]

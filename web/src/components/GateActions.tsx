@@ -17,6 +17,61 @@ export function pendingApproval(job: Job): string | null {
   }
 }
 
+/** The supervisor's view of the gate the job waits at (assisted / auto modes). */
+export function Recommendation({ job, detailed = false }: { job: Job; detailed?: boolean }) {
+  const s = job.data.supervision as
+    | {
+        decision?: string;
+        confidence?: number;
+        risk?: string;
+        reasons?: string[];
+        feedback?: string;
+        acted?: string;
+        blockers?: string[];
+        error?: string;
+      }
+    | null
+    | undefined;
+  if (!s || !pendingApproval(job)) return null;
+  if (s.acted === "error") {
+    return (
+      <span className="badge plain idle" title={s.error ?? ""}>
+        supervisor unavailable
+      </span>
+    );
+  }
+  if (!s.decision || s.acted !== "none") return null;
+  const cls = s.decision === "approve" ? (s.risk === "low" ? "ok" : "work") : "bad";
+  const chip = (
+    <span className={`badge plain ${cls}`} title={(s.reasons ?? []).join("; ")}>
+      supervisor recommends {s.decision} · {(s.confidence ?? 0).toFixed(2)} · risk {s.risk}
+    </span>
+  );
+  if (!detailed) return chip;
+  return (
+    <div className="recommendation">
+      {chip}
+      {s.reasons && s.reasons.length > 0 && (
+        <ul className="small" style={{ margin: "6px 0 0 18px" }}>
+          {s.reasons.map((r, i) => (
+            <li key={i}>{r}</li>
+          ))}
+        </ul>
+      )}
+      {s.decision === "reject" && s.feedback && (
+        <div className="small muted" style={{ marginTop: 4 }}>
+          suggested feedback: {s.feedback}
+        </div>
+      )}
+      {s.blockers && s.blockers.length > 0 && (
+        <div className="small muted" style={{ marginTop: 4 }}>
+          not approved automatically: {s.blockers.join(", ")}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Approve / reject buttons for a job at a gate; reject asks for feedback inline. */
 export function GateActions({ job, compact = false }: { job: Job; compact?: boolean }) {
   const approve = useApprove(job.id);
