@@ -36,7 +36,8 @@ These hold at every point in the build. If a task seems to require breaking one,
 
 ## Progress
 
-> **Resume here:** All phases (0–8) are complete; both definitions of done are verified by tests.
+> **Resume here:** Phases 0–8 are complete. Next task is **T9.1 — Specialist agents** (Phase 9
+> is planned, not started).
 > Design note for T1.3: `run_cmd` is executed as a subprocess in the worktree (Docker is used
 > only if the profile's `run_cmd` itself invokes it).
 > Design note for T2.2: `invoke_role` talks to a `ModelProvider` (`slipwright/providers/`);
@@ -122,6 +123,13 @@ These hold at every point in the build. If a task seems to require breaking one,
 | 8 | T8.7 Retire the server-rendered dashboard | [x] |
 | 8 | T8.8 Docker image and compose | [x] |
 | 8 | T8.9 UI redesign: dashboard, cards, edit/delete flows, theme | [x] |
+| 9 | T9.1 Specialist agents: backend, web UI, mobile UI | [ ] |
+| 9 | T9.2 Standards corpus | [ ] |
+| 9 | T9.3 Standards index (RAG) | [ ] |
+| 9 | T9.4 Retrieval into every role's prompt | [ ] |
+| 9 | T9.5 Standards review gate | [ ] |
+| 9 | T9.6 Standards in the UI | [ ] |
+| 9 | T9.7 Orchestrator hardening: budgets, retries, supervisor decisions | [ ] |
 
 ---
 
@@ -624,6 +632,177 @@ Added after Phase 8: the first React pass was a bare skeleton.
   branch, port and rows; 409 while running), from the table and the job page
 - [x] Numbered stepper with connectors, toasts, modals, skeleton loading, empty states,
   status badges with dots; every page checked in both themes with Playwright screenshots
+
+---
+
+## Phase 9 — Specialist agents and a standards knowledge base (RAG)
+
+### Where this sits in the architecture
+
+Slipwright already is an orchestrator in the "restaurant" sense: the engine is the kitchen
+manager (state machine + SQLite checkpoints + human gates), roles are the cooks, and
+structured outputs (`FileChange`, `jira_actions`) are how a cook uses equipment. Decisions
+are mixed on purpose: the skeleton is code (which state runs next, gates, retries), the
+Planner is the one LLM decision that shapes the work. Phase 9 keeps that and adds two
+things: **specialist cooks** (analysis, backend, web UI, mobile UI, tester, devops) and a
+**shared cookbook** every cook is handed the right page of before they start — the
+standards, retrieved per task (RAG) rather than pasted whole into every prompt.
+
+Design decisions, made up front so tasks do not re-litigate them:
+
+- **Specialists are roles, not new pipelines.** The pipeline stays analyst → planner →
+  develop → build gate → QA → DevOps. The Planner tags every phase with a `domain`
+  (`backend`, `web`, `mobile`, `infra`, `docs`, `general`) and the engine invokes the
+  matching specialist for that phase. Model, thinking depth, provider and permissions per
+  specialist come from the profile (invariant 1 untouched). `developer` remains the
+  generic fallback for `general`/unknown domains so existing profiles keep working.
+- **Analysis = Analyst, Tester = QA, DevOps = DevOps.** No new roles for these; the UI
+  shows the friendlier names.
+- **Standards live in Markdown under version control** (`standards/<domain>/*.md` in this
+  repo, plus optional per-project overrides in `<repo>/.slipwright/standards/`). Editing
+  in the UI writes those files; the index is derived, never the source of truth.
+- **Retrieval storage stays in SQLite** for v1: a `standards_chunks` table with an FTS5
+  index (keyword/BM25, zero dependencies, works offline) plus an optional embedding blob
+  for semantic search. Embeddings come from a pluggable `Embedder`: `openai`
+  (`text-embedding-3-small`, uses the stored OpenAI key), `local` (sentence-transformers,
+  e.g. `BAAI/bge-m3`, an optional extra because the model is ~2 GB and slows the Docker
+  image), or `none` (FTS5 only). Hybrid ranking when both exist. Chroma/pgvector/Qdrant
+  can replace the store later behind the same `StandardsIndex` interface; they are not
+  needed to start.
+- **Core rules never depend on retrieval.** `standards/core.md` (security, secrets, no
+  destructive git, licensing) is always in the prompt; RAG adds the domain pages.
+- **Retrieval is traceable.** Every role invocation records which chunks it was given, so
+  a wrong page can be found and the corpus fixed.
+- **Sequential per job.** Phases of one job still run one after another in one worktree;
+  parallelism stays at the job level (several developments at once). Parallel phases in
+  one job would need sub-worktrees and a merge step — a later phase, if ever.
+- **Mobile toolchains are a profile concern.** The mobile specialist writes code like any
+  other; whether `build_cmd` can run Flutter/React Native depends on the project's profile
+  and the machine/image running Slipwright (the default image ships Python and Node only).
+
+### T9.1 — Specialist agents: backend, web UI, mobile UI
+**Done when**
+- [ ] `RoleName` gains `backend`, `web_ui`, `mobile_ui`; `Profile.roles` requires them;
+  the example profile and `schemas/profile.schema.json` are updated; `developer` stays as
+  the generic fallback
+- [ ] `PlanPhase.domain` (`backend|web|mobile|infra|docs|general`) is required from the
+  Planner; breakdown tasks show it; the board and job page show a domain badge per task
+- [ ] The engine's develop step dispatches by domain: `backend`→`backend`, `web`→`web_ui`,
+  `mobile`→`mobile_ui`, `infra`→`devops`, everything else →`developer`; CI-fix rounds use
+  the same specialist that wrote the phase
+- [ ] Each specialist has its own instructions file (`slipwright/roles/specialists/*.py`)
+  stating scope and hand-off rules (a web change that needs a new endpoint goes back to the
+  Planner as a new phase, never done by the web agent)
+- [ ] Settings → Agents lists the six agents with model/provider/thinking/permissions; the
+  friendly names are Analysis, Backend, Web UI, Mobile UI, Tester, DevOps
+- [ ] Tests: a scripted plan with phases in three domains asserts the requests went to the
+  three specialists with exactly the profile's model for each (extends T5.2's routing test)
+
+### T9.2 — Standards corpus
+**Done when**
+- [ ] `standards/` in this repo: `core.md` (always-on rules) and one folder per domain —
+  `analysis/`, `backend/`, `web/`, `mobile/`, `testing/`, `devops/` — each file with
+  front-matter (`domain`, `tags`, `applies_to` languages/frameworks) and `##` sections that
+  each cover one topic (the chunking unit)
+- [ ] Initial content written for every domain (coding conventions, error handling,
+  logging, API design, state management, accessibility, test pyramid, CI/CD, secrets,
+  observability) — concrete enough that a retrieved section answers "how do we do X here"
+- [ ] `<repo>/.slipwright/standards/` in a project overrides or extends the global corpus
+  (same layout); project pages take precedence on ties
+- [ ] A linter (`scripts/check_standards.py`, run in tests) rejects files without
+  front-matter, sections over 400 words, or duplicate headings within a domain
+
+### T9.3 — Standards index (RAG)
+**Done when**
+- [ ] `slipwright/standards/`: `chunker` (split by `##`, keep the file title and domain in
+  every chunk), `Embedder` protocol with `openai`, `local` (optional extra
+  `uv sync --extra local-embeddings`) and `none` implementations, `StandardsIndex` over
+  SQLite (`standards_chunks` + FTS5 virtual table + embedding blob)
+- [ ] `search(query, domain, k=4)` returns ranked chunks with scores and source
+  (file, heading); hybrid rank = FTS5 BM25 merged with cosine when embeddings exist;
+  project chunks outrank global ones on equal score
+- [ ] `slipwright standards reindex [--project <id>]` and automatic reindex on server
+  start and when a project's `.slipwright/standards/` changes (mtime check); indexing is
+  incremental by content hash so unchanged chunks are not re-embedded
+- [ ] Settings store the embedder choice (`standards.embedder`); OpenAI embeddings use the
+  key from Settings → Models
+- [ ] Tests use a deterministic fake embedder: "Kafka consumer yaz" retrieves the retry
+  policy section; a `web` query never returns backend chunks; reindex after editing a file
+  replaces only that file's chunks
+
+### T9.4 — Retrieval into every role's prompt
+**Done when**
+- [ ] `base_context` gains a `standards` section: `core` (full `core.md`) plus `retrieved`
+  chunks for the role's domain, chosen by a query built from the request, the current
+  phase goal, its files and the breakdown task title; capped by a token budget per role
+  (default 2 000 tokens, profile-configurable)
+- [ ] Role → domain mapping: analyst→analysis, planner→all domains (k=2 each), specialists
+  →their domain, qa→testing, devops→devops; the Planner also receives the list of domains
+  so it can tag phases
+- [ ] Every invocation records the chunk ids and headings it was given as a history entry
+  (`standards: 3 section(s) for backend`) and in `RoleResult.usage`-style metadata; the
+  job page lists them per phase
+- [ ] Prompts tell the role that retrieved standards are binding unless they contradict
+  `core`, and to say so in `summary` when a standard could not be followed
+- [ ] Tests: the developer prompt for a Kafka phase contains the retry section and not the
+  accessibility section; the token budget truncates deterministically
+
+### T9.5 — Standards review gate
+**Done when**
+- [ ] After each specialist phase passes the build gate, a `review` step asks the Tester
+  role to check the phase diff against the retrieved standards and return
+  `violations[]` (section, file, line, severity, fix hint); `none` passes
+- [ ] `blocking` violations send the phase back to the same specialist with the list
+  (max 2 rounds, then the job waits at a new `awaiting_review_approval` gate where the
+  human can accept or reject); `advisory` ones are recorded and shown, never block
+- [ ] The review step is per project configurable (`review: off|advisory|blocking`) under
+  Settings → Agents and defaults to `advisory`
+- [ ] Violations appear on the job page (per phase) and on the board (task badge); Jira
+  gets a comment on the task when blocking violations were found (through T7.4's sync)
+- [ ] Tests: scripted violations trigger exactly two fix rounds and then the gate; an
+  advisory project never blocks
+
+### T9.6 — Standards in the UI
+**Done when**
+- [ ] Settings → Standards: domains as tabs, files as a list with search; a Markdown editor
+  with preview; save writes the file (global corpus or a chosen project's override) and
+  triggers an incremental reindex; delete with confirmation
+- [ ] "Try a search" box: enter a task sentence, pick a domain, see the ranked chunks with
+  scores — the tool for tuning headings and chunking
+- [ ] Embedder settings (none / openai / local) with a status line (chunks indexed, last
+  reindex, model) and a *Reindex now* button
+- [ ] Job page: per phase, the standards sections that were given to the agent and any
+  review violations; project page Overview shows review health (advisory/blocking counts)
+- [ ] Git: files edited in the UI are committed on a `slipwright/standards` branch of this
+  repo (or the project repo for overrides) so changes are reviewable
+
+### T9.7 — Orchestrator hardening: budgets, retries, supervisor decisions
+**Done when**
+- [ ] Per-job budget: max total tokens, max wall-clock, max invocations (profile or
+  project settings); exceeding one fails the job with a readable reason, never silently
+- [ ] Per-role retry policy for provider errors (timeouts, 5xx, malformed JSON):
+  exponential backoff, bounded attempts, all recorded in history
+- [ ] Loop detection: the same (role, phase, output hash) twice in a row stops the loop and
+  routes to a gate instead of a third identical attempt
+- [ ] One explicit LLM decision point where code cannot decide: on a failed build gate the
+  supervisor (Planner model) chooses between "same specialist fixes", "re-plan this phase"
+  or "ask the human", returning JSON; the choice and its reason are recorded
+- [ ] Context hygiene: each role receives only what its instructions list (no full plan
+  dumps into the Tester, no diffs into the Planner); prompt sizes are measured and shown
+  on the job page per invocation
+- [ ] Tests cover budget exhaustion, retry-then-success, loop detection and each
+  supervisor branch with the scripted provider
+
+### Definition of done for Phase 9
+
+- [ ] A request touching backend and web is planned into domain-tagged phases, each phase
+  is implemented by its specialist with that specialist's model, and every specialist
+  prompt contains the relevant standards sections (verified by an end-to-end scripted test)
+- [ ] Editing a standard in the UI changes what the next invocation retrieves, with no
+  restart
+- [ ] A phase violating a blocking standard is fixed by the specialist or stopped at the
+  review gate; nothing ships past it without a human
+- [ ] All Phase 0–8 invariants hold; no module names a model
 
 ---
 
