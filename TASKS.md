@@ -130,6 +130,8 @@ These hold at every point in the build. If a task seems to require breaking one,
 | 9 | T9.5 Standards review gate | [ ] |
 | 9 | T9.6 Standards in the UI | [ ] |
 | 9 | T9.7 Orchestrator hardening: budgets, retries, supervisor decisions | [ ] |
+| 9 | T9.8 Supervisor at the gates: manual / assisted / auto | [ ] |
+| 9 | T9.9 Project pipeline view and bulk approvals | [ ] |
 
 ---
 
@@ -693,8 +695,14 @@ Design decisions, made up front so tasks do not re-litigate them:
 - [ ] Each specialist has its own instructions file (`slipwright/roles/specialists/*.py`)
   stating scope and hand-off rules (a web change that needs a new endpoint goes back to the
   Planner as a new phase, never done by the web agent)
-- [ ] Settings → Agents lists the six agents with model/provider/thinking/permissions; the
-  friendly names are Analysis, Backend, Web UI, Mobile UI, Tester, DevOps
+- [ ] `/agents` shows the six agents as **cards** (Analysis, Backend, Web UI, Mobile UI,
+  Tester, DevOps): icon, one-line scope, provider + model, thinking depth, permissions as
+  chips, Jira on/off, number of standards sections, last used; the sidebar gets an
+  "Agents" entry and Settings → Agents becomes this page
+- [ ] Clicking a card opens the agent's detail page `/agents/<role>` with tabs
+  **Setup** (per project: provider, model, thinking depth, permissions — the roles table
+  reduced to one row), **Standards** (T9.6: the domain's pages, editable) and
+  **Activity** (recent invocations across projects with prompt size and standards used)
 - [ ] Tests: a scripted plan with phases in three domains asserts the requests went to the
   three specialists with exactly the profile's model for each (extends T5.2's routing test)
 
@@ -763,10 +771,16 @@ Design decisions, made up front so tasks do not re-litigate them:
   advisory project never blocks
 
 ### T9.6 — Standards in the UI
+The standards are reached **through the agent**: each agent card's *Standards* tab is the
+editor for that agent's domain, so "what does the Backend agent follow?" is one click.
+
 **Done when**
-- [ ] Settings → Standards: domains as tabs, files as a list with search; a Markdown editor
-  with preview; save writes the file (global corpus or a chosen project's override) and
-  triggers an incremental reindex; delete with confirmation
+- [ ] Agent detail → Standards tab: the domain's pages as a list with search, page count
+  and last edit; **New page** (title + Markdown), edit in a Markdown editor with preview,
+  delete with confirmation; a *Scope* switch chooses the global corpus or a project's
+  override; save writes the file and triggers an incremental reindex
+- [ ] `core.md` is shown on every agent's Standards tab as a read-only "applies to all"
+  block with a link to edit it (admin only)
 - [ ] "Try a search" box: enter a task sentence, pick a domain, see the ranked chunks with
   scores — the tool for tuning headings and chunking
 - [ ] Embedder settings (none / openai / local) with a status line (chunks indexed, last
@@ -793,6 +807,65 @@ Design decisions, made up front so tasks do not re-litigate them:
 - [ ] Tests cover budget exhaustion, retry-then-success, loop detection and each
   supervisor branch with the scripted provider
 
+### T9.8 — Supervisor at the gates: manual / assisted / auto
+The gates stay in the state machine (invariant 2); what changes is who calls *approve*.
+
+**Done when**
+- [ ] A `supervisor` role (model/provider from the profile like every role) is invoked when
+  a job reaches a gate and returns `{decision: approve|reject, confidence, risk:
+  low|medium|high, reasons[], feedback}` after reading the same material the human sees
+  (profile / plan + standards / test cases / written tests) plus the relevant standards
+- [ ] Gate mode per project (Settings → Agents → Supervisor card): `manual` — no
+  supervisor; `assisted` (default) — the recommendation, confidence and reasons are shown
+  on the gate panel and the dashboard, the human decides; `auto` — the supervisor approves
+  when `decision=approve`, `risk=low` and confidence ≥ a threshold, otherwise the gate
+  waits for the human; rejections are never automatic
+- [ ] Every automatic approval is a normal `approve` call recorded as
+  `approved by supervisor (confidence 0.92): <reasons>`; the human can still reject
+  afterwards while the next phase runs (the inbox carries the feedback), and can switch
+  the project back to `manual` at any time
+- [ ] A per-job cap on automatic approvals (default 3) and a hard rule: the final
+  DevOps/PR gate is never auto-approved unless the project explicitly allows it
+- [ ] Dashboard: "approved by supervisor" items are listed separately with an *Undo*
+  (reject with feedback) action; notifications (T9.6 toast + optional webhook) on every
+  automatic approval
+- [ ] Tests: assisted mode never changes state; auto mode approves a low-risk plan and
+  stops at a high-risk one; the cap and the DevOps rule hold; a supervisor error falls
+  back to manual
+
+### T9.9 — Project pipeline view and bulk approvals
+Inside a project, every development is a row of **step cards** (Analysis → Profile gate →
+Plan → Plan gate → Backend/Web/Mobile phases → Build gate → Tester → Test gate → DevOps →
+Done), each card showing its state; what waits for the human is actionable in place and
+in bulk.
+
+**Done when**
+- [ ] Project page gets a **Pipeline** tab (and it becomes the default tab): one lane per
+  development, step cards coloured by state (pending / running with a pulse / done /
+  failed / waiting for you), the agent's name on each card, elapsed time, and the phase
+  cards expanded per domain (a Backend card, a Web UI card, …) with the task title
+- [ ] Clicking a card opens a side panel with that step's output (profile, plan, diff,
+  gate log, test cases, PR) — the same material the job page shows, without leaving the
+  lane
+- [ ] Cards waiting for approval carry a **checkbox**; a sticky action bar shows
+  "N selected" with **Approve selected** and **Reject selected…** (one feedback text
+  applied to all); selection can span several developments; each approval is an ordinary
+  gate call recorded per job
+- [ ] Editable gates edit in place: the profile form, the plan/breakdown (reorder phases,
+  rename tasks, change a task's domain), and the test-case list open in the side panel;
+  **Save & approve** sends the edited version and continues, **Save** only stores it
+- [ ] Supervisor recommendations (T9.8, assisted mode) appear on the waiting cards as a
+  chip (recommends approve · 0.92) so bulk approval can follow them with one click
+  ("Select all recommended")
+- [ ] The dashboard's pending list gains the same checkboxes and bulk bar
+- [ ] Live: cards move as SSE events arrive; a bulk approval of three gates shows three
+  lanes advancing without a refresh
+- [ ] `PUT /api/jobs/{id}/plan` (edit the proposed plan/breakdown while awaiting plan
+  approval, validated like the Planner's output) and `POST /api/jobs/approve` /
+  `POST /api/jobs/reject` for batches (`job_ids[]`, per-job result) back the UI
+- [ ] Tests: batch endpoints approve the eligible jobs and report the rest (409 per job,
+  not for the batch); plan edits are validated (orphan phases rejected); UI source checks
+
 ### Definition of done for Phase 9
 
 - [ ] A request touching backend and web is planned into domain-tagged phases, each phase
@@ -802,6 +875,10 @@ Design decisions, made up front so tasks do not re-litigate them:
   restart
 - [ ] A phase violating a blocking standard is fixed by the specialist or stopped at the
   review gate; nothing ships past it without a human
+- [ ] In `auto` mode a low-risk development reaches the PR with the human only reading
+  notifications; in `manual` mode nothing moves without a click
+- [ ] From the project's Pipeline tab a human can see every step of every development,
+  edit a plan in place and approve three waiting gates with one action
 - [ ] All Phase 0–8 invariants hold; no module names a model
 
 ---
