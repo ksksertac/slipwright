@@ -36,7 +36,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 
 ## Progress
 
-> **Resume here:** Phases 0–7 and T8.1–T8.6 are complete. Next task is **T8.7 — Retire the server-rendered dashboard**.
+> **Resume here:** All phases (0–8) are complete; both definitions of done are verified by tests.
 > Design note for T1.3: `run_cmd` is executed as a subprocess in the worktree (Docker is used
 > only if the profile's `run_cmd` itself invokes it).
 > Design note for T2.2: `invoke_role` talks to a `ModelProvider` (`slipwright/providers/`);
@@ -81,6 +81,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 > Design note for T8.2: the OpenAPI export marks every property of response-only models as required (`_tighten_response_schemas`, since pydantic leaves defaulted fields optional), so the TypeScript client sees `job.id: string`, not `string | undefined`; input models keep their optional fields.
 > Design note for T8.4: `PUT /api/jobs/{id}/profile` lets the human edit the Analyst's proposal before approving (engine `set_profile`, only in `awaiting_profile_approval`). Per-phase diffs and gate attempts are grouped from history notes (`developer phase N`, `build gate ... phase N`). Forms follow the server value until edited (state adjusted during render, no effects). `web/PARITY.md` is the legacy-dashboard parity list.
 > Design note for T8.6: `GET /api/settings/profile` returns the engine's default seed so the Agents page can materialise a project's own profile (saved with `PATCH /api/projects/{id}`, validated server-side by pydantic). The generated client uses `defaultNonNullable: false` so defaulted input fields stay optional in TypeScript.
+> Design note for T8.7: `slipwright/api/ui.py` and its T5.3 test are gone; the React app at `/` is the dashboard (`web/PARITY.md`). `tests/test_phase8_e2e.py` is the Phase 6–8 definition of done driven through the API exactly as the browser does it, with fake GitHub/Jira and the scripted provider.
 
 | Phase | Task | Status |
 |-------|------|--------|
@@ -101,7 +102,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 | 4 | T4.2 DevOps role | [x] |
 | 5 | T5.1 Inbox steering | [x] |
 | 5 | T5.2 Per-role model routing, verified | [x] |
-| 5 | T5.3 Job dashboard | [x] |
+| 5 | T5.3 Job dashboard (replaced by the React app in T8.7) | [x] |
 | 6 | T6.1 Project entity | [x] |
 | 6 | T6.2 Work breakdown: epics, stories, tasks | [x] |
 | 6 | T6.3 Progress and activity feed | [x] |
@@ -117,7 +118,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 | 8 | T8.4 Job page: gates, plan, diffs, steering | [x] |
 | 8 | T8.5 Test results page | [x] |
 | 8 | T8.6 Settings page: GitHub, Jira, agent access and users | [x] |
-| 8 | T8.7 Retire the server-rendered dashboard | [ ] |
+| 8 | T8.7 Retire the server-rendered dashboard | [x] |
 
 ---
 
@@ -564,25 +565,32 @@ talks only to `/api/*` and the SSE stream; it holds no business logic.
 
 ### T8.7 — Retire the server-rendered dashboard
 **Done when**
-- [ ] Every flow in `slipwright/api/ui.py` has a React equivalent (parity list from T8.4
+- [x] Every flow in `slipwright/api/ui.py` has a React equivalent (parity list from T8.4
   is fully checked)
-- [ ] `ui.py` and its tests are deleted; `/` serves the React app
-- [ ] README documents: build the UI, create the first user, connect GitHub, create a
+- [x] `ui.py` and its tests are deleted; `/` serves the React app
+- [x] README documents: build the UI, create the first user, connect GitHub, create a
   project, start a development, approve gates, run tests
 
 ---
 
 ## Definition of done for Phases 6–8
 
-- [ ] A new user can, from the browser alone: log in, connect GitHub, create a project from
+- [x] A new user can, from the browser alone: log in, connect GitHub, create a project from
   a GitHub repo, type a request, approve the profile and plan, watch the board fill in task
   by task, run the tests, read the results, and see the PR link — with no CLI use
-- [ ] Two developments on the same project run concurrently and the board shows both
-- [ ] With Jira connected, the same flow produces the epic / story / task tree in Jira and
+  (`tests/test_phase8_e2e.py::test_a_new_user_ships_a_change_from_the_browser_alone`)
+- [x] Two developments on the same project run concurrently and the board shows both
+  (`tests/test_phase8_e2e.py::test_two_developments_run_concurrently_and_share_the_board`,
+  isolation proven in `tests/test_phase5.py`)
+- [x] With Jira connected, the same flow produces the epic / story / task tree in Jira and
   the issues move to done as the tasks complete
-- [ ] With an agent account configured, Jira history shows the agents' own comments,
+  (`tests/test_phase7_jira.py::test_plan_approval_mirrors_the_breakdown_and_tracks_status`)
+- [x] With an agent account configured, Jira history shows the agents' own comments,
   transitions and bug issues under the bot account, and nothing under the human's
-- [ ] Every Phase 0–5 invariant still holds and the Phase 0–5 test suite is untouched
+  (`tests/test_phase7_agents.py::test_agents_act_in_jira_through_the_engine`)
+- [x] Every Phase 0–5 invariant still holds; the Phase 0–5 suite changed only in URL
+  prefixes (`/api`), `require_auth=False` in app fixtures, and the removal of the T5.3
+  dashboard test whose flows moved to the React app (`web/PARITY.md`)
 
 ---
 

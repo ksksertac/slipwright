@@ -71,7 +71,7 @@ def test_spa_is_served_with_fallback(engine: Engine, tmp_path: Path) -> None:
         assert client.get("/favicon.svg").text == "<svg/>"
         assert client.get("/api/nope").status_code == 404  # never falls back to the shell
         assert client.get("/api/projects").status_code == 200
-        assert client.get("/legacy").status_code == 200  # old dashboard still reachable
+        assert client.get("/docs").status_code == 200  # interactive API docs stay public
         assert client.get("/../secret.txt").status_code in (200, 404)  # no traversal
 
 
@@ -85,7 +85,7 @@ def test_shell_is_public_but_api_is_not(engine: Engine, tmp_path: Path) -> None:
         assert client.get("/").status_code == 200  # the app shows its own login page
         assert client.get("/projects").status_code == 200
         assert client.get("/api/projects").status_code == 401
-        assert client.get("/legacy").status_code == 401
+        assert client.get("/api/settings/github").status_code == 401
         assert client.get("/healthz").status_code == 200
 
 
@@ -273,3 +273,24 @@ def test_default_profile_endpoint(engine: Engine, seed: Profile) -> None:
     app = create_app(engine, resume_on_startup=False, require_auth=False)
     with TestClient(app) as client:
         assert client.get("/api/settings/profile").json() == seed.model_dump(mode="json")
+
+
+# --- T8.7 retire the server-rendered dashboard --------------------------------------------
+
+
+def test_legacy_dashboard_is_gone_and_readme_documents_the_flow() -> None:
+    assert not (ROOT / "slipwright" / "api" / "ui.py").exists()
+    api_src = (ROOT / "slipwright" / "api" / "__init__.py").read_text(encoding="utf-8")
+    assert "legacy" not in api_src and "ui_router" not in api_src
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    for expected in (
+        "npm run build",
+        "slipwright user add",
+        "Settings → GitHub",
+        "New project",
+        "New development",
+        "Approve the gates",
+        "Tests",
+        "PR link",
+    ):
+        assert expected in readme, expected

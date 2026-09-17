@@ -77,7 +77,7 @@ DEV_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 BUILD_HINT = (
     "The web UI is not built. Run: cd web && npm install && npm run build\n"
-    "(the JSON API is at /api, docs at /docs, the legacy dashboard at /legacy)\n"
+    "(the JSON API is at /api, interactive docs at /docs)\n"
 )
 
 
@@ -107,7 +107,6 @@ def create_app(
     from slipwright.api.auth import auth_dependency
     from slipwright.api.auth import router as auth_router
     from slipwright.api.settings import router as settings_router
-    from slipwright.api.ui import router as ui_router
 
     app = FastAPI(
         title="Slipwright",
@@ -131,7 +130,6 @@ def create_app(
     api = APIRouter()
     app.include_router(auth_router, prefix="/api")
     app.include_router(settings_router, prefix="/api")
-    app.include_router(ui_router)
 
     @app.get("/healthz", include_in_schema=False)
     def healthz() -> dict[str, str]:
@@ -388,8 +386,8 @@ def create_app(
 def _mount_spa(app: FastAPI, static_dir: Path) -> None:
     """Serve the built React app with an SPA fallback, or a build hint without one.
 
-    Registered last so ``/api`` and ``/legacy`` routes win; unknown ``/api`` paths stay
-    404 instead of falling back to the shell."""
+    Registered last so ``/api`` routes win; unknown ``/api`` paths stay 404 instead of
+    falling back to the shell."""
     index = static_dir / "index.html"
     if not index.is_file():
 
@@ -405,7 +403,7 @@ def _mount_spa(app: FastAPI, static_dir: Path) -> None:
 
     @app.get("/{path:path}", include_in_schema=False)
     def spa(path: str) -> FileResponse:
-        if path.startswith(("api/", "legacy")) or path == "api":
+        if path.startswith("api/") or path == "api":
             raise HTTPException(status_code=404)
         candidate = static_dir / path
         if path and candidate.is_file() and static_dir in candidate.resolve().parents:

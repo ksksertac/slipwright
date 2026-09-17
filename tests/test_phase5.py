@@ -7,9 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from fastapi.testclient import TestClient
 
-from slipwright.api import create_app
 from slipwright.engine import WORKING_STATES, Engine
 from slipwright.githost import CiState, CiStatus
 from slipwright.providers import ModelRequest
@@ -208,66 +206,8 @@ def test_switching_models_in_the_profile_changes_routing_without_code_changes(
 
 
 # --- T5.3 dashboard -----------------------------------------------------------------------
-
-
-def test_dashboard_lists_jobs_and_approves_from_the_page(
-    store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
-) -> None:
-    provider = _provider(seed, phases=1)
-    engine = _engine(store, worktrees_root, seed, provider)
-    job = engine.start(engine.create_job("dashboard job", repo).id)
-
-    with TestClient(create_app(engine, resume_on_startup=False, require_auth=False)) as client:
-        page = client.get("/legacy").text
-        assert job.id in page and "dashboard job" in page
-        assert "awaiting_profile_approval" in page
-        assert "Approve profile" in page
-
-        resp = client.post(f"/legacy/ui/jobs/{job.id}/approve", follow_redirects=False)
-        assert resp.status_code == 303
-        assert resp.headers["location"] == f"/legacy/ui/jobs/{job.id}"
-        assert store.get(job.id).state is JobState.AWAITING_PLAN_APPROVAL
-
-        resp = client.post(
-            f"/legacy/ui/jobs/{job.id}/reject", data={"feedback": "shorter"}, follow_redirects=False
-        )
-        assert resp.status_code == 303
-        assert "shorter" in _requests(provider, RoleName.PLANNER)[-1].prompt
-
-        client.post(f"/legacy/ui/jobs/{job.id}/approve")  # plan -> develop -> gate -> qa stage 1
-        detail = client.get(f"/legacy/ui/jobs/{job.id}").text
-        assert "Awaiting approval: test cases" in detail
-        assert "developing → build_gate" in detail
-        assert "+yes" in detail  # the phase diff is viewable
-        assert "build gate passed" in detail
-        assert "✅ step 1" in detail
-
-        resp = client.post(
-            f"/legacy/ui/jobs/{job.id}/tests",
-            data={"test_cases": '[{"name": "edited", "description": "from the page"}]'},
-            follow_redirects=False,
-        )
-        assert resp.status_code == 303
-        assert store.get(job.id).data.test_cases == [
-            {"name": "edited", "description": "from the page"}
-        ]
-
-        client.post(f"/legacy/ui/jobs/{job.id}/message", data={"text": "from the page"})
-        assert store.get(job.id).pending_messages[0].text == "from the page"
-
-        client.post(f"/legacy/ui/jobs/{job.id}/approve")  # tests written
-        client.post(f"/legacy/ui/jobs/{job.id}/approve")  # ship
-        assert store.get(job.id).state is JobState.DONE
-        assert "https://example.test/pr/1" in client.get(f"/legacy/ui/jobs/{job.id}").text
-        assert client.get("/legacy/ui/jobs/nope").status_code == 404
-
-        resp = client.post(
-            "/legacy/ui/jobs",
-            data={"repo_path": str(repo), "request": "from the form"},
-            follow_redirects=False,
-        )
-        assert resp.status_code == 303
-        assert any(j.request == "from the form" for j in store.list())
+# The server-rendered dashboard was replaced by the React app in T8.7; its flows are listed
+# in web/PARITY.md and covered by tests/test_phase8.py.
 
 
 # --- definition of done -------------------------------------------------------------------

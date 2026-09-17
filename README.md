@@ -31,35 +31,78 @@ created ─▶ analyzing ─▶ awaiting_profile_approval ─▶ planning ─▶
 Every transition is persisted to SQLite before the next phase runs. Kill the server at
 any point and restart it: in-flight jobs resume, jobs waiting on you keep waiting.
 
-## Running it
+## Getting started
 
 ```sh
-uv sync
-uv run slipwright serve                 # API + dashboard on http://127.0.0.1:8500
-uv run slipwright new /path/to/repo "add a /health endpoint"
+uv sync                                  # Python side
+cd web && npm install && npm run build   # web UI -> slipwright/api/static/
+cd ..
+uv run slipwright user add ada           # first login (prompted for a password; becomes admin)
+uv run slipwright serve                  # http://127.0.0.1:8500
+```
+
+Then, in the browser:
+
+1. **Log in** with the user you just created.
+2. **Settings → GitHub**: paste a personal access token and click *Test connection*. The
+   token clones private repositories, pushes job branches and opens pull requests. It is
+   stored encrypted (key in `SLIPWRIGHT_SECRET_KEY` or `<state>/secret.key`).
+3. **Settings → Jira** (optional): site URL, e-mail and API token. Approved plans are then
+   mirrored as epics → stories → sub-tasks, issues move as tasks complete, PR links and
+   failures are commented. **Settings → Agents** holds the separate bot account the agents
+   act as, and per project which roles may act in Jira (the `jira` permission), which
+   model and thinking depth each role uses, the Jira project and its transition names.
+4. **Projects → New project**: pick a GitHub repository (or a local path) and, if you use
+   Jira, the Jira project.
+5. On the project page, **Developments → New development**: describe what you want.
+6. **Approve the gates** as they come — the Analyst's profile (editable), the Planner's
+   epics/stories/tasks, QA's test cases (editable), the written tests. Pending approvals
+   are also shown on the project overview and on the projects list.
+7. Watch the **Board** fill in task by task, read every diff and build log under the job's
+   **Phases** and **History**, and steer a running job with a message.
+8. **Tests**: run the project's test command on the main checkout or in a job's worktree
+   and read the output; every build gate the engine ran is listed there too.
+9. When the job is done, the **PR link** is on the job page and in the activity feed.
+
+Every transition is persisted to SQLite before the next phase runs. Kill the server at
+any point and restart it: in-flight jobs resume, jobs waiting on you keep waiting.
+
+### CLI
+
+Client commands talk to the API with a bearer token (`slipwright token new <user>` prints
+one; pass it as `--token` or `SLIPWRIGHT_TOKEN`).
+
+```sh
+uv run slipwright project new demo --github octocat/demo --jira DEM
+uv run slipwright project list
+uv run slipwright new <project-id> "add a /health endpoint"
 uv run slipwright status                # or: slipwright status <job-id>
 uv run slipwright approve <job-id>      # leave the current gate
 uv run slipwright reject <job-id> "use poetry, not pip"
 uv run slipwright message <job-id> "keep the public API unchanged"
 ```
 
-The dashboard at `/` lists jobs, their current phase and pending approvals; approve,
-reject, edit test cases and send steering messages from the page. `/ui/jobs/<id>` shows
-the full history with every diff and build log. The JSON API lives at `/jobs` (see
-`/docs`).
+The JSON API is documented at `/docs`; `GET /api/events` streams server-sent events for
+every change. `slipwright serve --no-auth` skips login for trusted local use.
+
+### Configuration
 
 Settings come from the environment (or `serve` flags):
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `SLIPWRIGHT_STATE_DIR` | `.slipwright` | SQLite file and worktrees |
-| `SLIPWRIGHT_PROFILE` | `examples/python-fastapi.profile.json` | seed profile (see below) |
+| `SLIPWRIGHT_STATE_DIR` | `.slipwright` | SQLite file, secret key, worktrees, clones, test logs |
+| `SLIPWRIGHT_PROFILE` | `examples/python-fastapi.profile.json` | default seed profile (see below) |
 | `SLIPWRIGHT_PROVIDER` | `anthropic` | `anthropic` or `scripted` (offline, canned replies) |
 | `SLIPWRIGHT_PORT` | `8500` | API port |
 | `SLIPWRIGHT_PORT_RANGE` | `8100-8999` | ports handed to jobs' live environments |
+| `SLIPWRIGHT_AUTH` | `1` | set to `0` to serve without login |
+| `SLIPWRIGHT_SECRET_KEY` | generated into the state dir | Fernet key for stored tokens |
+| `SLIPWRIGHT_DEV` | `0` | allow the Vite dev server origin (CORS) |
 
 The Anthropic provider reads credentials the way the SDK does (`ANTHROPIC_API_KEY`, or
-an `ant auth login` profile). DevOps uses the `gh` CLI for pushing and pull requests.
+an `ant auth login` profile). DevOps pushes and opens pull requests through the `gh` CLI,
+using the stored GitHub token when one is set.
 
 ## Tuning model and thinking depth per role
 
@@ -94,13 +137,22 @@ supports adaptive thinking.
 To verify routing, `tests/test_phase5.py::test_each_role_uses_exactly_the_model_named_in_the_profile`
 runs a whole job and asserts every request carried the profile's model for its role.
 
+Projects can carry their own seed profile (Settings → Agents), which is what the web UI
+edits; jobs of a project without one start from `SLIPWRIGHT_PROFILE`.
+
 ## Development
 
 ```sh
 uv run pytest
 uv run ruff check .
 uv run mypy
+uv run python scripts/export_schema.py   # after changing models or routes
+cd web && npm run gen:api && npm run lint && npm run typecheck && npm run build
 ```
 
-`SLIPWRIGHT_PROVIDER=scripted uv run slipwright serve` drives the full pipeline with
-canned model replies, useful for exercising the dashboard and the CLI without a network.
+`schemas/openapi.json` and the generated TypeScript client (`web/src/api/schema.d.ts`) are
+committed; tests fail when either is stale. `npm run dev` in `web/` serves the UI with
+hot reload and proxies `/api` to a `slipwright serve` started with `SLIPWRIGHT_DEV=1`.
+
+`SLIPWRIGHT_PROVIDER=scripted uv run slipwright serve --no-auth` drives the full pipeline
+with canned model replies, useful for exercising the UI and the CLI without a network.
