@@ -16,7 +16,7 @@ from pathlib import Path
 from types import TracebackType
 from typing import Self
 
-from slipwright.schemas.job import Job, JobState, Transition, utcnow
+from slipwright.schemas.job import Job, JobData, JobState, Transition, utcnow
 from slipwright.schemas.profile import Profile
 
 _SCHEMA = """
@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     port          INTEGER,
     state         TEXT NOT NULL,
     profile_json  TEXT,
+    data_json     TEXT,
     created_at    TEXT NOT NULL,
     updated_at    TEXT NOT NULL
 );
@@ -38,11 +39,18 @@ CREATE TABLE IF NOT EXISTS job_history (
     from_state TEXT NOT NULL,
     to_state   TEXT NOT NULL,
     at         TEXT NOT NULL,
-    note       TEXT
+    note       TEXT,
+    detail     TEXT
 );
 
 CREATE INDEX IF NOT EXISTS job_history_job_id ON job_history(job_id, seq);
 """
+
+# Columns added after the first release; applied to databases created before them.
+_MIGRATIONS: tuple[tuple[str, str, str], ...] = (
+    ("jobs", "data_json", "ALTER TABLE jobs ADD COLUMN data_json TEXT"),
+    ("job_history", "detail", "ALTER TABLE job_history ADD COLUMN detail TEXT"),
+)
 
 
 class JobNotFound(KeyError):
@@ -66,6 +74,13 @@ class JobStore:
         self._conn.execute("PRAGMA foreign_keys=ON")
         self._conn.execute("PRAGMA synchronous=FULL")
         self._conn.executescript(_SCHEMA)
+        self._migrate()
+
+    def _migrate(self) -> None:
+        for table, column, ddl in _MIGRATIONS:
+            columns = {r["name"] for r in self._conn.execute(f"PRAGMA table_info({table})")}
+            if column not in columns:
+                self._conn.execute(ddl)
 
     # -- lifecycle ---------------------------------------------------------------------
 
@@ -104,7 +119,7 @@ class JobStore:
             if row is None:
                 raise JobNotFound(job_id)
             history = self._conn.execute(
-                "SELECT from_state, to_state, at, note FROM job_history "
+                "SELECT from_state, to_state, at, note, detail FROM job_history "
                 "WHERE job_id = ? ORDER BY seq",
                 (job_id,),
             ).fetchall()
@@ -128,7 +143,8 @@ class JobStore:
         with self._tx() as conn:
             conn.execute(
                 "INSERT INTO jobs (id, request, repo_path, worktree_path, port, state, "
-                "profile_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "profile_json, data_json, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     job.id,
                     job.request,
@@ -137,6 +153,7 @@ class JobStore:
                     job.port,
                     job.state.value,
                     None if job.profile is None else job.profile.model_dump_json(),
+                    job.data.model_dump_json(),
                     job.created_at.isoformat(),
                     now.isoformat(),
                 ),
@@ -145,14 +162,24 @@ class JobStore:
                 self._insert_transition(conn, job.id, t)
         return self.get(job.id)
 
-    def update_state(self, job_id: str, to_state: JobState, note: str | None = None) -> Job:
+    def update_state(
+        self,
+        job_id: str,
+        to_state: JobState,
+        note: str | None = None,
+        detail: str | None = None,
+    ) -> Job:
         """Append a transition and move the job to ``to_state`` atomically."""
         with self._tx() as conn:
             row = conn.execute("SELECT state FROM jobs WHERE id = ?", (job_id,)).fetchone()
             if row is None:
                 raise JobNotFound(job_id)
             transition = Transition(
-                from_state=JobState(row["state"]), to_state=to_state, at=utcnow(), note=note
+                from_state=JobState(row["state"]),
+                to_state=to_state,
+                at=utcnow(),
+                note=note,
+                detail=detail,
             )
             self._insert_transition(conn, job_id, transition)
             conn.execute(
@@ -162,7 +189,7 @@ class JobStore:
         return self.get(job_id)
 
     def save(self, job: Job) -> Job:
-        """Persist mutable non-state fields (worktree, port, profile).
+        """Persist mutable non-state fields (worktree, port, profile, data).
 
         State and history are deliberately not written here; use ``update_state``.
         """
@@ -176,12 +203,13 @@ class JobStore:
                     "use update_state()"
                 )
             conn.execute(
-                "UPDATE jobs SET worktree_path = ?, port = ?, profile_json = ?, updated_at = ? "
-                "WHERE id = ?",
+                "UPDATE jobs SET worktree_path = ?, port = ?, profile_json = ?, data_json = ?, "
+                "updated_at = ? WHERE id = ?",
                 (
                     None if job.worktree_path is None else str(job.worktree_path),
                     job.port,
                     None if job.profile is None else job.profile.model_dump_json(),
+                    job.data.model_dump_json(),
                     utcnow().isoformat(),
                     job.id,
                 ),
@@ -193,9 +221,9 @@ class JobStore:
     @staticmethod
     def _insert_transition(conn: sqlite3.Connection, job_id: str, t: Transition) -> None:
         conn.execute(
-            "INSERT INTO job_history (job_id, from_state, to_state, at, note) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (job_id, t.from_state.value, t.to_state.value, t.at.isoformat(), t.note),
+            "INSERT INTO job_history (job_id, from_state, to_state, at, note, detail) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (job_id, t.from_state.value, t.to_state.value, t.at.isoformat(), t.note, t.detail),
         )
 
     @staticmethod
@@ -219,7 +247,13 @@ class JobStore:
                     to_state=JobState(h["to_state"]),
                     at=datetime.fromisoformat(h["at"]),
                     note=h["note"],
+                    detail=h["detail"],
                 )
                 for h in history
             ],
+            data=(
+                JobData()
+                if row["data_json"] is None
+                else JobData.model_validate_json(row["data_json"])
+            ),
         )

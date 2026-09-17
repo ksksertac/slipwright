@@ -47,13 +47,14 @@ class Orchestrator:
         to_state: JobState,
         *,
         note: str | None = None,
+        detail: str | None = None,
         side_effect: Callable[[Job], Job | None] | None = None,
     ) -> Job:
         current = self._load_job(job)
         if not self.can_transition(current.state, to_state):
             raise IllegalTransitionError(current.state, to_state)
 
-        updated = self.store.update_state(current.id, to_state, note=note)
+        updated = self.store.update_state(current.id, to_state, note=note, detail=detail)
         if side_effect is not None:
             result = side_effect(updated)
             if result is not None:
@@ -66,9 +67,10 @@ class Orchestrator:
         to_state: JobState,
         *,
         note: str | None = None,
+        detail: str | None = None,
         side_effect: Callable[[Job], Job | None] | None = None,
     ) -> Job:
-        return self.transition(job, to_state, note=note, side_effect=side_effect)
+        return self.transition(job, to_state, note=note, detail=detail, side_effect=side_effect)
 
     def resume(
         self,

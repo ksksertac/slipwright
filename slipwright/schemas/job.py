@@ -9,6 +9,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
+from typing import Any
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -56,6 +57,43 @@ class Transition(BaseModel):
     to_state: JobState
     at: datetime
     note: str | None = None
+    detail: str | None = Field(
+        default=None, description="Long-form record for this step: a diff, a build log, ..."
+    )
+
+
+class InboxMessage(BaseModel):
+    """A steering message from the human, delivered to the next role invocation."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(default_factory=new_job_id)
+    text: str = Field(min_length=1)
+    at: datetime = Field(default_factory=utcnow)
+    consumed_at: datetime | None = None
+    consumed_by: str | None = None
+
+    @property
+    def pending(self) -> bool:
+        return self.consumed_at is None
+
+
+class JobData(BaseModel):
+    """Working state that phases read and write. Persisted with the job, never in history."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    feedback: str | None = Field(default=None, description="Rejection feedback for a re-run.")
+    reject_rounds: int = Field(default=0, ge=0)
+    plan: dict[str, Any] | None = Field(default=None, description="Approved PlannerResult.")
+    phase_index: int = Field(default=0, ge=0, description="Next plan phase to execute.")
+    build_attempts: int = Field(default=0, ge=0)
+    last_build_output: str | None = None
+    test_cases: list[dict[str, Any]] = Field(default_factory=list)
+    qa_stage: int = Field(default=1, ge=1, le=2)
+    pr_url: str | None = None
+    ci_attempts: int = Field(default=0, ge=0)
+    inbox: list[InboxMessage] = Field(default_factory=list)
 
 
 class Job(BaseModel):
@@ -70,6 +108,7 @@ class Job(BaseModel):
     profile: Profile | None = None
     created_at: datetime = Field(default_factory=utcnow)
     history: list[Transition] = Field(default_factory=list)
+    data: JobData = Field(default_factory=JobData)
 
     @property
     def branch(self) -> str:
@@ -82,3 +121,7 @@ class Job(BaseModel):
     @property
     def is_terminal(self) -> bool:
         return self.state in TERMINAL_STATES
+
+    @property
+    def pending_messages(self) -> list[InboxMessage]:
+        return [m for m in self.data.inbox if m.pending]

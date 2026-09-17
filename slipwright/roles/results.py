@@ -36,8 +36,17 @@ class PlannerResult(RoleOutput):
     phases: list[PlanPhase] = Field(min_length=1)
 
 
+class FileChange(BaseModel):
+    """Full new contents of one file; ``content: null`` deletes it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    path: str = Field(min_length=1, description="Path relative to the worktree root.")
+    content: str | None = Field(description="Complete file contents, or null to delete.")
+
+
 class DeveloperResult(RoleOutput):
-    files_changed: list[str] = Field(default_factory=list)
+    changes: list[FileChange] = Field(default_factory=list)
     phase_complete: bool = Field(description="Whether the assigned plan phase is finished.")
 
 
@@ -49,15 +58,17 @@ class TestCase(BaseModel):
 
 
 class QAResult(RoleOutput):
-    test_cases: list[TestCase] = Field(default_factory=list)
-    tests_written: list[str] = Field(
-        default_factory=list, description="Test files written in stage two."
+    test_cases: list[TestCase] = Field(
+        default_factory=list, description="Stage one: proposed test cases."
+    )
+    changes: list[FileChange] = Field(
+        default_factory=list, description="Stage two: test files to write."
     )
 
 
 class DevOpsResult(RoleOutput):
-    pr_url: str | None = None
-    ci_passed: bool | None = None
+    pr_title: str = Field(min_length=1)
+    pr_body: str = Field(min_length=1)
 
 
 RESULT_SCHEMAS: dict[RoleName, type[RoleOutput]] = {
@@ -78,6 +89,7 @@ __all__ = [
     "AnalystResult",
     "DevOpsResult",
     "DeveloperResult",
+    "FileChange",
     "PlanPhase",
     "PlannerResult",
     "QAResult",
