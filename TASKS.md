@@ -35,9 +35,14 @@ These hold at every point in the build. If a task seems to require breaking one,
 
 ## Progress
 
-> **Resume here:** Phases 0 and 1 are complete. Next task is **T2.2 — Agent invocation layer (in-progress)**.
+> **Resume here:** Phases 0 and 1 are complete; T2.1 and T2.2 are done. Next task is **T2.3 — Analyst role**.
 > Design note for T1.3: `run_cmd` is executed as a subprocess in the worktree (Docker is used
 > only if the profile's `run_cmd` itself invokes it).
+> Design note for T2.2: `invoke_role` talks to a `ModelProvider` (`slipwright/providers/`);
+> tests inject a fake provider, production defaults to `AnthropicProvider`. Providers return
+> raw text; parsing and per-role schema validation (`slipwright/roles/results.py`) live in
+> `slipwright/invoke.py` so all providers share one error path. `thinking_depth` maps to
+> adaptive thinking + `output_config.effort` (`off` disables thinking).
 
 | Phase | Task | Status |
 |-------|------|--------|
@@ -48,7 +53,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 | 1 | T1.2 Port allocation | [x] |
 | 1 | T1.3 Live environment | [x] |
 | 2 | T2.1 Orchestrator state machine | [x] |
-| 2 | T2.2 Agent invocation layer | [ ] |
+| 2 | T2.2 Agent invocation layer | [x] |
 | 2 | T2.3 Analyst role | [ ] |
 | 2 | T2.4 Minimal API and CLI | [ ] |
 | 3 | T3.1 Planner role | [ ] |
@@ -144,11 +149,11 @@ The core. No agents yet — transitions only.
 One place where the engine talks to a model.
 
 **Done when**
-- [ ] A single `invoke_role(role, profile, context) -> RoleResult` entry point exists
-- [ ] Model and thinking depth come from `profile.roles[role]` — grep the engine for hardcoded
+- [x] A single `invoke_role(role, profile, context) -> RoleResult` entry point exists
+- [x] Model and thinking depth come from `profile.roles[role]` — grep the engine for hardcoded
   model strings and find none
-- [ ] Structured output is parsed and validated against a per-role result schema
-- [ ] Failures (timeout, malformed output) return a typed error, never a raw exception upward
+- [x] Structured output is parsed and validated against a per-role result schema
+- [x] Failures (timeout, malformed output) return a typed error, never a raw exception upward
 
 ### T2.3 — Analyst role
 The first real agent.

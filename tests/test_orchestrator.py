@@ -29,7 +29,9 @@ def test_advance_persists_transition_before_side_effect(store: JobStore) -> None
         seen.append(updated.state.value)
         return updated
 
-    advanced = orchestrator.advance(job, JobState.ANALYZING, note="start analysis", side_effect=side_effect)
+    advanced = orchestrator.advance(
+        job, JobState.ANALYZING, note="start analysis", side_effect=side_effect
+    )
 
     assert advanced.state is JobState.ANALYZING
     assert advanced.history[-1].from_state is JobState.CREATED
