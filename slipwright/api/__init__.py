@@ -8,13 +8,16 @@ was mid-phase when the previous process died.
 from __future__ import annotations
 
 import logging
+import queue
 import threading
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Any, cast
 
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request
-from fastapi.responses import PlainTextResponse
+from fastapi import APIRouter, BackgroundTasks, Depends, FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import PlainTextResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from slipwright.activity import ActivityItem, ProjectProgress, project_activity, project_progress
@@ -69,10 +72,18 @@ class NewTestRun(BaseModel):
     job_id: str | None = Field(default=None, description="Run in this job's worktree.")
 
 
+DEV_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
+
+
 def create_app(
-    engine: Engine, *, resume_on_startup: bool = True, require_auth: bool = True
+    engine: Engine,
+    *,
+    resume_on_startup: bool = True,
+    require_auth: bool = True,
+    dev: bool = False,
 ) -> FastAPI:
-    """Build the app. ``require_auth=False`` (tests, trusted local use) skips login."""
+    """Build the app. ``require_auth=False`` (tests, trusted local use) skips login;
+    ``dev=True`` allows the Vite dev server's origin (``SLIPWRIGHT_DEV=1``)."""
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -94,8 +105,17 @@ def create_app(
         lifespan=lifespan,
         dependencies=[Depends(auth_dependency(enabled=require_auth))],
     )
-    app.include_router(auth_router)
-    app.include_router(settings_router)
+    if dev:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=DEV_ORIGINS,
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
+    api = APIRouter()
+    app.include_router(auth_router, prefix="/api")
+    app.include_router(settings_router, prefix="/api")
     app.include_router(ui_router)
 
     @app.get("/healthz", include_in_schema=False)
@@ -125,7 +145,7 @@ def create_app(
 
     # -- projects ------------------------------------------------------------------------
 
-    @app.post("/projects", response_model=Project, status_code=201)
+    @api.post("/projects", response_model=Project, status_code=201)
     def create_project(body: NewProject, request: Request) -> Project:
         eng = _engine(request)
         if body.repo_path is not None and not body.repo_path.is_dir():
@@ -143,15 +163,15 @@ def create_app(
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    @app.get("/projects", response_model=list[Project])
+    @api.get("/projects", response_model=list[Project])
     def list_projects(request: Request) -> list[Project]:
         return _engine(request).store.list_projects()
 
-    @app.get("/projects/{project_id}", response_model=Project)
+    @api.get("/projects/{project_id}", response_model=Project)
     def get_project(project_id: str, request: Request) -> Project:
         return _get_project(_engine(request), project_id)
 
-    @app.patch("/projects/{project_id}", response_model=Project)
+    @api.patch("/projects/{project_id}", response_model=Project)
     def patch_project(project_id: str, body: ProjectPatch, request: Request) -> Project:
         eng = _engine(request)
         project = _get_project(eng, project_id)
@@ -163,7 +183,7 @@ def create_app(
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return eng.store.update_project(updated)
 
-    @app.delete("/projects/{project_id}", status_code=204)
+    @api.delete("/projects/{project_id}", status_code=204)
     def delete_project(project_id: str, request: Request) -> None:
         eng = _engine(request)
         _get_project(eng, project_id)
@@ -172,7 +192,7 @@ def create_app(
         except ProjectInUse as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
 
-    @app.post("/projects/{project_id}/jobs", response_model=Job, status_code=201)
+    @api.post("/projects/{project_id}/jobs", response_model=Job, status_code=201)
     def create_project_job(
         project_id: str, body: NewProjectJob, request: Request, background: BackgroundTasks
     ) -> Job:
@@ -180,26 +200,26 @@ def create_app(
         _get_project(eng, project_id)
         return _start(eng, eng.create_job(body.request, project_id=project_id), background)
 
-    @app.get("/projects/{project_id}/jobs", response_model=list[Job])
+    @api.get("/projects/{project_id}/jobs", response_model=list[Job])
     def list_project_jobs(project_id: str, request: Request) -> list[Job]:
         eng = _engine(request)
         _get_project(eng, project_id)
         return eng.store.list(project_id)
 
-    @app.get("/projects/{project_id}/board", response_model=Board)
+    @api.get("/projects/{project_id}/board", response_model=Board)
     def get_board(project_id: str, request: Request) -> Board:
         """Epics, stories and tasks of every job whose plan was approved, with statuses."""
         eng = _engine(request)
         _get_project(eng, project_id)
         return project_board(project_id, eng.store.list(project_id))
 
-    @app.get("/projects/{project_id}/progress", response_model=ProjectProgress)
+    @api.get("/projects/{project_id}/progress", response_model=ProjectProgress)
     def get_progress(project_id: str, request: Request) -> ProjectProgress:
         eng = _engine(request)
         _get_project(eng, project_id)
         return project_progress(project_id, eng.store.list(project_id))
 
-    @app.get("/projects/{project_id}/activity", response_model=list[ActivityItem])
+    @api.get("/projects/{project_id}/activity", response_model=list[ActivityItem])
     def get_activity(
         project_id: str, request: Request, limit: int | None = None
     ) -> list[ActivityItem]:
@@ -210,7 +230,7 @@ def create_app(
 
     # -- test runs -----------------------------------------------------------------------
 
-    @app.post("/projects/{project_id}/test-runs", response_model=TestRun, status_code=202)
+    @api.post("/projects/{project_id}/test-runs", response_model=TestRun, status_code=202)
     def start_test_run(
         project_id: str, body: NewTestRun, request: Request, background: BackgroundTasks
     ) -> TestRun:
@@ -227,7 +247,7 @@ def create_app(
             background.add_task(_execute_test_run, eng, run.id)
         return run
 
-    @app.get("/projects/{project_id}/test-runs", response_model=list[TestRun])
+    @api.get("/projects/{project_id}/test-runs", response_model=list[TestRun])
     def list_test_runs(
         project_id: str, request: Request, job_id: str | None = None
     ) -> list[TestRun]:
@@ -241,18 +261,18 @@ def create_app(
         except TestRunNotFound as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 
-    @app.get("/test-runs/{run_id}", response_model=TestRun)
+    @api.get("/test-runs/{run_id}", response_model=TestRun)
     def get_test_run(run_id: str, request: Request) -> TestRun:
         return _get_run(_engine(request), run_id)
 
-    @app.get("/test-runs/{run_id}/output", response_class=PlainTextResponse)
+    @api.get("/test-runs/{run_id}/output", response_class=PlainTextResponse)
     def get_test_run_output(run_id: str, request: Request) -> str:
         eng = _engine(request)
         return eng.test_run_output(_get_run(eng, run_id))
 
     # -- jobs ----------------------------------------------------------------------------
 
-    @app.post("/jobs", response_model=Job, status_code=201)
+    @api.post("/jobs", response_model=Job, status_code=201)
     def create_job(body: NewJob, request: Request, background: BackgroundTasks) -> Job:
         """Start a job straight from a repository path (its project is found or created)."""
         eng = _engine(request)
@@ -262,15 +282,15 @@ def create_app(
             )
         return _start(eng, eng.create_job(body.request, body.repo_path), background)
 
-    @app.get("/jobs", response_model=list[Job])
+    @api.get("/jobs", response_model=list[Job])
     def list_jobs(request: Request) -> list[Job]:
         return _engine(request).store.list()
 
-    @app.get("/jobs/{job_id}", response_model=Job)
+    @api.get("/jobs/{job_id}", response_model=Job)
     def get_job(job_id: str, request: Request) -> Job:
         return _get(_engine(request), job_id)
 
-    @app.get("/jobs/{job_id}/history/{index}", response_model=Transition)
+    @api.get("/jobs/{job_id}/history/{index}", response_model=Transition)
     def get_transition(job_id: str, index: int, request: Request) -> Transition:
         """One history entry in full (its ``detail`` holds the diff, log or JSON)."""
         job = _get(_engine(request), job_id)
@@ -278,7 +298,7 @@ def create_app(
             raise HTTPException(status_code=404, detail=f"no history entry {index}")
         return job.history[index]
 
-    @app.post("/jobs/{job_id}/approve", response_model=Job)
+    @api.post("/jobs/{job_id}/approve", response_model=Job)
     def approve(job_id: str, request: Request, background: BackgroundTasks) -> Job:
         eng = _engine(request)
         _get(eng, job_id)
@@ -289,7 +309,7 @@ def create_app(
         background.add_task(_resume, eng, job.id)
         return job
 
-    @app.post("/jobs/{job_id}/reject", response_model=Job)
+    @api.post("/jobs/{job_id}/reject", response_model=Job)
     def reject(job_id: str, body: Rejection, request: Request, background: BackgroundTasks) -> Job:
         eng = _engine(request)
         _get(eng, job_id)
@@ -300,7 +320,7 @@ def create_app(
         background.add_task(_resume, eng, job.id)
         return job
 
-    @app.put("/jobs/{job_id}/tests", response_model=Job)
+    @api.put("/jobs/{job_id}/tests", response_model=Job)
     def set_tests(job_id: str, body: TestCases, request: Request) -> Job:
         """Edit the proposed test list while the job awaits its approval."""
         eng = _engine(request)
@@ -310,13 +330,59 @@ def create_app(
         except NotAwaitingApproval as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
 
-    @app.post("/jobs/{job_id}/message", response_model=Job)
+    @api.post("/jobs/{job_id}/message", response_model=Job)
     def message(job_id: str, body: Message, request: Request) -> Job:
         eng = _engine(request)
         _get(eng, job_id)
         return eng.message(job_id, body.text)
 
+    # -- live events ---------------------------------------------------------------------
+
+    @api.get("/events", include_in_schema=True)
+    async def events(
+        request: Request,
+        project_id: str | None = None,
+        limit: int | None = None,
+        keepalive_s: float = 15.0,
+    ) -> StreamingResponse:
+        """Server-sent events: ``job.state``, ``job.data``, ``test_run.state``,
+        ``activity`` and ``project``. ``project_id`` filters; ``limit`` closes the
+        stream after that many events (for scripts and tests)."""
+        eng = _engine(request)
+        return StreamingResponse(
+            _event_stream(eng, project_id=project_id, limit=limit, keepalive_s=keepalive_s),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+
+    app.include_router(api, prefix="/api")
     return app
+
+
+def openapi_schema() -> dict[str, Any]:
+    """The API description, independent of any engine (for ``schemas/openapi.json``)."""
+    app = create_app(cast(Engine, None), resume_on_startup=False, require_auth=False)
+    return app.openapi()
+
+
+async def _event_stream(
+    engine: Engine, *, project_id: str | None, limit: int | None, keepalive_s: float
+) -> AsyncIterator[str]:
+    import anyio
+
+    sent = 0
+    with engine.events.subscribe() as q:
+        yield ": connected\n\n"
+        while limit is None or sent < limit:
+            try:
+                event = await anyio.to_thread.run_sync(q.get, True, keepalive_s)
+            except queue.Empty:
+                yield ": ping\n\n"
+                continue
+            if project_id is not None and event.project_id != project_id:
+                continue
+            sent += 1
+            yield event.sse(sent)
 
 
 def _resume(engine: Engine, job_id: str) -> None:
@@ -354,4 +420,5 @@ __all__ = [
     "TestCaseIn",
     "TestCases",
     "create_app",
+    "openapi_schema",
 ]

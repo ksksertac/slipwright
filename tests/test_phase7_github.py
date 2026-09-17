@@ -87,16 +87,16 @@ def test_github_settings_endpoints(client: TestClient, engine: Engine) -> None:
     gh = FakeGitHub()
     engine.http_transport = gh.transport
 
-    assert client.get("/settings/github").json() == {
+    assert client.get("/api/settings/github").json() == {
         "owner": None,
         "base_branch": "main",
         "token_set": False,
         "token_hint": None,
     }
-    assert client.post("/settings/github/test").status_code == 400  # nothing stored
-    assert client.get("/settings/github/repos").status_code == 400
+    assert client.post("/api/settings/github/test").status_code == 400  # nothing stored
+    assert client.get("/api/settings/github/repos").status_code == 400
 
-    resp = client.put("/settings/github", json={"token": "ghp_secret", "owner": "acme"})
+    resp = client.put("/api/settings/github", json={"token": "ghp_secret", "owner": "acme"})
     assert resp.status_code == 200
     body = resp.json()
     assert body["token_set"] is True and body["token_hint"] == "…cret"
@@ -104,19 +104,19 @@ def test_github_settings_endpoints(client: TestClient, engine: Engine) -> None:
     assert engine.github_token() == "ghp_secret"
 
     # omitting the token keeps it; other fields change
-    resp = client.put("/settings/github", json={"base_branch": "develop"})
+    resp = client.put("/api/settings/github", json={"base_branch": "develop"})
     assert resp.json()["token_set"] is True and resp.json()["base_branch"] == "develop"
 
-    me = client.post("/settings/github/test").json()
+    me = client.post("/api/settings/github/test").json()
     assert me["login"] == "octocat" and me["rate_limit_limit"] == 5000
-    repos = client.get("/settings/github/repos").json()
+    repos = client.get("/api/settings/github/repos").json()
     assert [r["full_name"] for r in repos] == ["octocat/demo", "acme/secret"]
 
-    client.put("/settings/github", json={"token": "bad"})
-    assert client.post("/settings/github/test").status_code == 502
-    assert client.get("/settings/github/repos").status_code == 502
+    client.put("/api/settings/github", json={"token": "bad"})
+    assert client.post("/api/settings/github/test").status_code == 502
+    assert client.get("/api/settings/github/repos").status_code == 502
 
-    resp = client.put("/settings/github", json={"clear_token": True})
+    resp = client.put("/api/settings/github", json={"clear_token": True})
     assert resp.json()["token_set"] is False
     assert engine.github_token() is None
     assert all(call.startswith(("GET /user",)) for call in gh.calls)
@@ -126,10 +126,10 @@ def test_settings_writes_are_admin_only(engine: Engine) -> None:
     engine.store.create_user("ada", "pw")  # admin
     engine.store.create_user("bob", "pw")
     with TestClient(create_app(engine, resume_on_startup=False)) as c:
-        c.post("/auth/login", json={"username": "bob", "password": "pw"})
-        assert c.get("/settings/github").status_code == 200
-        assert c.put("/settings/github", json={"owner": "x"}).status_code == 403
-        assert c.post("/settings/github/test").status_code == 403
+        c.post("/api/auth/login", json={"username": "bob", "password": "pw"})
+        assert c.get("/api/settings/github").status_code == 200
+        assert c.put("/api/settings/github", json={"owner": "x"}).status_code == 403
+        assert c.post("/api/settings/github/test").status_code == 403
 
 
 def test_gh_host_passes_the_stored_token_to_gh(

@@ -94,21 +94,21 @@ def test_progress_activity_and_detail_endpoints(
 ) -> None:
     engine = full_engine(store, worktrees_root, seed, full_provider(seed, phases=1))
     with TestClient(create_app(engine, resume_on_startup=False, require_auth=False)) as client:
-        project = client.post("/projects", json={"name": "demo", "repo_path": str(repo)}).json()
-        job = client.post(f"/projects/{project['id']}/jobs", json={"request": "x"}).json()
-        progress = client.get(f"/projects/{project['id']}/progress").json()
+        project = client.post("/api/projects", json={"name": "demo", "repo_path": str(repo)}).json()
+        job = client.post(f"/api/projects/{project['id']}/jobs", json={"request": "x"}).json()
+        progress = client.get(f"/api/projects/{project['id']}/progress").json()
         assert progress["pending_approvals"] == 1
         assert progress["jobs"][0]["pending_approval"] == "profile"
 
-        feed = client.get(f"/projects/{project['id']}/activity").json()
+        feed = client.get(f"/api/projects/{project['id']}/activity").json()
         assert [i["kind"] for i in feed] == ["role", "started"]
         assert feed[0]["has_detail"] is True
-        assert client.get(f"/projects/{project['id']}/activity?limit=1").json()[0] == feed[0]
+        assert client.get(f"/api/projects/{project['id']}/activity?limit=1").json()[0] == feed[0]
 
-        detail = client.get(f"/jobs/{job['id']}/history/{feed[0]['index']}").json()
+        detail = client.get(f"/api/jobs/{job['id']}/history/{feed[0]['index']}").json()
         assert detail["to_state"] == "awaiting_profile_approval"
         assert '"language": "python"' in detail["detail"]
-        assert client.get(f"/jobs/{job['id']}/history/99").status_code == 404
-        assert client.get("/jobs/nope/history/0").status_code == 404
-        assert client.get("/projects/nope/progress").status_code == 404
-        assert client.get("/projects/nope/activity").status_code == 404
+        assert client.get(f"/api/jobs/{job['id']}/history/99").status_code == 404
+        assert client.get("/api/jobs/nope/history/0").status_code == 404
+        assert client.get("/api/projects/nope/progress").status_code == 404
+        assert client.get("/api/projects/nope/activity").status_code == 404

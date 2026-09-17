@@ -68,94 +68,106 @@ def test_user_store(store: JobStore) -> None:
 
 
 def test_api_answers_503_until_a_user_exists(client: TestClient) -> None:
-    resp = client.get("/projects")
+    resp = client.get("/api/projects")
     assert resp.status_code == 503
     assert "slipwright user add" in resp.json()["detail"]
-    assert client.post("/auth/login", json={"username": "a", "password": "b"}).status_code == 503
+    assert (
+        client.post("/api/auth/login", json={"username": "a", "password": "b"}).status_code == 503
+    )
     assert client.get("/healthz").status_code == 200  # public
 
 
 def test_login_logout_and_protected_routes(client: TestClient, engine: Engine) -> None:
     engine.store.create_user("ada", "pw1")
-    assert client.get("/projects").status_code == 401
-    assert client.get("/auth/me").status_code == 401
+    assert client.get("/api/projects").status_code == 401
+    assert client.get("/api/auth/me").status_code == 401
 
-    resp = client.post("/auth/login", json={"username": "ada", "password": "nope"})
+    resp = client.post("/api/auth/login", json={"username": "ada", "password": "nope"})
     assert resp.status_code == 401
-    resp = client.post("/auth/login", json={"username": "ada", "password": "pw1"})
+    resp = client.post("/api/auth/login", json={"username": "ada", "password": "pw1"})
     assert resp.status_code == 200
     assert resp.json()["username"] == "ada" and resp.json()["is_admin"] is True
     cookie = resp.cookies.get(SESSION_COOKIE)
     assert cookie
     assert "httponly" in resp.headers["set-cookie"].lower()
 
-    assert client.get("/auth/me").json()["username"] == "ada"  # cookie jar carries it
-    assert client.get("/projects").status_code == 200
+    assert client.get("/api/auth/me").json()["username"] == "ada"  # cookie jar carries it
+    assert client.get("/api/projects").status_code == 200
 
-    assert client.post("/auth/logout").status_code == 204
-    assert client.get("/auth/me").status_code == 401
-    assert client.get("/projects").status_code == 401
+    assert client.post("/api/auth/logout").status_code == 204
+    assert client.get("/api/auth/me").status_code == 401
+    assert client.get("/api/projects").status_code == 401
 
 
 def test_bearer_tokens(client: TestClient, engine: Engine) -> None:
     ada = engine.store.create_user("ada", "pw1")
     _, secret = engine.store.create_token(ada.id, "cli")
     headers = {"Authorization": f"Bearer {secret}"}
-    assert client.get("/auth/me", headers=headers).json()["id"] == ada.id
-    assert client.get("/auth/me", headers={"Authorization": "Bearer nope"}).status_code == 401
+    assert client.get("/api/auth/me", headers=headers).json()["id"] == ada.id
+    assert client.get("/api/auth/me", headers={"Authorization": "Bearer nope"}).status_code == 401
 
     # issue and revoke tokens over the API
-    resp = client.post(f"/users/{ada.id}/tokens", json={"name": "laptop"}, headers=headers)
+    resp = client.post(f"/api/users/{ada.id}/tokens", json={"name": "laptop"}, headers=headers)
     assert resp.status_code == 201
     issued = resp.json()
     fresh = {"Authorization": f"Bearer {issued['secret']}"}
-    assert client.get("/auth/me", headers=fresh).status_code == 200
-    listed = client.get(f"/users/{ada.id}/tokens", headers=headers).json()
+    assert client.get("/api/auth/me", headers=fresh).status_code == 200
+    listed = client.get(f"/api/users/{ada.id}/tokens", headers=headers).json()
     assert [t["name"] for t in listed] == ["cli", "laptop"]
-    resp = client.delete(f"/tokens/{issued['token']['id']}", headers=headers)
+    resp = client.delete(f"/api/tokens/{issued['token']['id']}", headers=headers)
     assert resp.status_code == 200 and resp.json()["revoked_at"] is not None
     assert (
-        client.get("/auth/me", headers={"Authorization": f"Bearer {issued['secret']}"}).status_code
+        client.get(
+            "/api/auth/me", headers={"Authorization": f"Bearer {issued['secret']}"}
+        ).status_code
         == 401
     )
-    assert client.delete("/tokens/nope", headers=headers).status_code == 404
+    assert client.delete("/api/tokens/nope", headers=headers).status_code == 404
 
 
 def test_user_administration(client: TestClient, engine: Engine) -> None:
     admin = engine.store.create_user("ada", "pw1")
-    client.post("/auth/login", json={"username": "ada", "password": "pw1"})
-    resp = client.post("/users", json={"username": "bob", "password": "pw2"})
+    client.post("/api/auth/login", json={"username": "ada", "password": "pw1"})
+    resp = client.post("/api/users", json={"username": "bob", "password": "pw2"})
     assert resp.status_code == 201
     bob = resp.json()
     assert bob["is_admin"] is False
-    assert client.post("/users", json={"username": "bob", "password": "x"}).status_code == 409
-    assert [u["username"] for u in client.get("/users").json()] == ["ada", "bob"]
-    assert client.put(f"/users/{bob['id']}/password", json={"password": "pw3"}).status_code == 204
-    assert client.delete(f"/users/{admin.id}").status_code == 400  # not yourself
-    assert client.delete("/users/nope").status_code == 404
+    assert client.post("/api/users", json={"username": "bob", "password": "x"}).status_code == 409
+    assert [u["username"] for u in client.get("/api/users").json()] == ["ada", "bob"]
+    assert (
+        client.put(f"/api/users/{bob['id']}/password", json={"password": "pw3"}).status_code == 204
+    )
+    assert client.delete(f"/api/users/{admin.id}").status_code == 400  # not yourself
+    assert client.delete("/api/users/nope").status_code == 404
 
     # bob is not an admin: may manage himself only
     with TestClient(create_app(engine, resume_on_startup=False)) as bob_client:
         assert (
-            bob_client.post("/auth/login", json={"username": "bob", "password": "pw3"}).status_code
+            bob_client.post(
+                "/api/auth/login", json={"username": "bob", "password": "pw3"}
+            ).status_code
             == 200
         )
-        assert bob_client.get("/users").status_code == 403
-        assert bob_client.post("/users", json={"username": "x", "password": "y"}).status_code == 403
-        assert bob_client.delete(f"/users/{admin.id}").status_code == 403
+        assert bob_client.get("/api/users").status_code == 403
         assert (
-            bob_client.put(f"/users/{admin.id}/password", json={"password": "z"}).status_code == 403
+            bob_client.post("/api/users", json={"username": "x", "password": "y"}).status_code
+            == 403
         )
-        assert bob_client.get(f"/users/{admin.id}/tokens").status_code == 403
-        assert bob_client.post(f"/users/{bob['id']}/tokens", json={}).status_code == 201
+        assert bob_client.delete(f"/api/users/{admin.id}").status_code == 403
         assert (
-            bob_client.put(f"/users/{bob['id']}/password", json={"password": "pw4"}).status_code
+            bob_client.put(f"/api/users/{admin.id}/password", json={"password": "z"}).status_code
+            == 403
+        )
+        assert bob_client.get(f"/api/users/{admin.id}/tokens").status_code == 403
+        assert bob_client.post(f"/api/users/{bob['id']}/tokens", json={}).status_code == 201
+        assert (
+            bob_client.put(f"/api/users/{bob['id']}/password", json={"password": "pw4"}).status_code
             == 204
         )
-        assert bob_client.get("/auth/me").status_code == 401  # password change ends sessions
+        assert bob_client.get("/api/auth/me").status_code == 401  # password change ends sessions
 
-    assert client.delete(f"/users/{bob['id']}").status_code == 204
-    assert client.get(f"/users/{bob['id']}/tokens").status_code == 404
+    assert client.delete(f"/api/users/{bob['id']}").status_code == 204
+    assert client.get(f"/api/users/{bob['id']}/tokens").status_code == 404
 
 
 def test_cli_user_and_token_commands(

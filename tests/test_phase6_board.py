@@ -148,18 +148,18 @@ def test_board_endpoint_merges_jobs(
     provider = full_provider(seed, phases=4, breakdown=BREAKDOWN)
     engine = full_engine(store, worktrees_root, seed, provider)
     with TestClient(create_app(engine, resume_on_startup=False, require_auth=False)) as client:
-        project = client.post("/projects", json={"name": "demo", "repo_path": str(repo)}).json()
+        project = client.post("/api/projects", json={"name": "demo", "repo_path": str(repo)}).json()
         ids = [
-            client.post(f"/projects/{project['id']}/jobs", json={"request": r}).json()["id"]
+            client.post(f"/api/projects/{project['id']}/jobs", json={"request": r}).json()["id"]
             for r in ("one", "two")
         ]
         for n, job_id in enumerate(ids):
-            client.post(f"/jobs/{job_id}/approve")  # profile
-            board = client.get(f"/projects/{project['id']}/board").json()
+            client.post(f"/api/jobs/{job_id}/approve")  # profile
+            board = client.get(f"/api/projects/{project['id']}/board").json()
             assert {e["job_id"] for e in board["epics"]} == set(ids[:n])  # plan not approved
-            client.post(f"/jobs/{job_id}/approve")  # plan -> runs to the QA gate
-        board = client.get(f"/projects/{project['id']}/board").json()
+            client.post(f"/api/jobs/{job_id}/approve")  # plan -> runs to the QA gate
+        board = client.get(f"/api/projects/{project['id']}/board").json()
         assert [e["job_id"] for e in board["epics"]] == [ids[0], ids[0], ids[1], ids[1]]
         assert (board["tasks_done"], board["tasks_total"]) == (8, 8)
         assert board["epics"][0]["stories"][0]["tasks"][0]["status"] == "done"
-        assert client.get("/projects/nope/board").status_code == 404
+        assert client.get("/api/projects/nope/board").status_code == 404

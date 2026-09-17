@@ -235,12 +235,12 @@ def test_put_tests_endpoint(
     job = _to_test_gate(engine, repo)
     with TestClient(create_app(engine, resume_on_startup=False, require_auth=False)) as client:
         resp = client.put(
-            f"/jobs/{job.id}/tests",
+            f"/api/jobs/{job.id}/tests",
             json={"test_cases": [{"name": "only", "description": "one case"}]},
         )
         assert resp.status_code == 200
         assert resp.json()["data"]["test_cases"] == [{"name": "only", "description": "one case"}]
-        assert client.put("/jobs/nope/tests", json={"test_cases": []}).status_code == 404
+        assert client.put("/api/jobs/nope/tests", json={"test_cases": []}).status_code == 404
 
 
 # --- T4.2 DevOps --------------------------------------------------------------------------

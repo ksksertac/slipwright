@@ -18,6 +18,7 @@ from pathlib import Path
 from types import TracebackType
 from typing import Self
 
+from slipwright.events import EventBus
 from slipwright.schemas.job import Job, JobData, JobState, Transition, utcnow
 from slipwright.schemas.profile import Profile
 from slipwright.schemas.project import Project
@@ -127,6 +128,8 @@ class JobStore(UserStoreMixin, SettingsStoreMixin):
         if secret_key is None:
             secret_key = load_or_create_key(self.path.parent)
         self.secret_box = SecretBox(secret_key)
+        # every persisted change is announced here (see ``GET /api/events``)
+        self.events = EventBus()
         self._lock = threading.RLock()
         self._conn = sqlite3.connect(self.path, check_same_thread=False, isolation_level=None)
         self._conn.row_factory = sqlite3.Row
@@ -215,6 +218,7 @@ class JobStore(UserStoreMixin, SettingsStoreMixin):
                     now.isoformat(),
                 ),
             )
+        self.events.emit("project", project_id=project.id, payload={"action": "created"})
         return self.get_project(project.id)
 
     def get_project(self, project_id: str) -> Project:
@@ -248,6 +252,7 @@ class JobStore(UserStoreMixin, SettingsStoreMixin):
                     run.model_dump_json(),
                 ),
             )
+        self._emit_run(run)
         return self.get_test_run(run.id)
 
     def update_test_run(self, run: TestRun) -> TestRun:
@@ -257,7 +262,16 @@ class JobStore(UserStoreMixin, SettingsStoreMixin):
             )
             if cur.rowcount == 0:
                 raise TestRunNotFound(run.id)
+        self._emit_run(run)
         return self.get_test_run(run.id)
+
+    def _emit_run(self, run: TestRun) -> None:
+        self.events.emit(
+            "test_run.state",
+            project_id=run.project_id,
+            job_id=run.job_id,
+            payload={"run_id": run.id, "status": run.status.value, "source": run.source.value},
+        )
 
     def get_test_run(self, run_id: str) -> TestRun:
         with self._lock:
@@ -299,6 +313,7 @@ class JobStore(UserStoreMixin, SettingsStoreMixin):
             )
             if cur.rowcount == 0:
                 raise ProjectNotFound(project.id)
+        self.events.emit("project", project_id=project.id, payload={"action": "updated"})
         return self.get_project(project.id)
 
     def delete_project(self, project_id: str) -> None:
@@ -320,6 +335,7 @@ class JobStore(UserStoreMixin, SettingsStoreMixin):
             conn.execute("DELETE FROM test_runs WHERE project_id = ?", (project_id,))
             conn.execute("DELETE FROM jobs WHERE project_id = ?", (project_id,))
             conn.execute("DELETE FROM projects WHERE id = ?", (project_id,))
+        self.events.emit("project", project_id=project_id, payload={"action": "deleted"})
 
     # -- writes ------------------------------------------------------------------------
 
@@ -347,6 +363,12 @@ class JobStore(UserStoreMixin, SettingsStoreMixin):
             )
             for t in job.history:
                 self._insert_transition(conn, job.id, t)
+        self.events.emit(
+            "job.state",
+            project_id=job.project_id,
+            job_id=job.id,
+            payload={"state": job.state.value, "request": job.request},
+        )
         return self.get(job.id)
 
     def update_state(
@@ -373,7 +395,24 @@ class JobStore(UserStoreMixin, SettingsStoreMixin):
                 "UPDATE jobs SET state = ?, updated_at = ? WHERE id = ?",
                 (to_state.value, transition.at.isoformat(), job_id),
             )
-        return self.get(job_id)
+        job = self.get(job_id)
+        self.events.emit(
+            "job.state",
+            project_id=job.project_id,
+            job_id=job.id,
+            payload={"state": job.state.value, "from_state": transition.from_state.value},
+        )
+        self.events.emit(
+            "activity",
+            project_id=job.project_id,
+            job_id=job.id,
+            payload={
+                "index": len(job.history) - 1,
+                "title": note or f"{transition.from_state.value} -> {to_state.value}",
+                "to_state": to_state.value,
+            },
+        )
+        return job
 
     def save(self, job: Job) -> Job:
         """Persist mutable non-state fields (worktree, port, profile, data).
@@ -401,6 +440,7 @@ class JobStore(UserStoreMixin, SettingsStoreMixin):
                     job.id,
                 ),
             )
+        self.events.emit("job.data", project_id=job.project_id, job_id=job.id)
         return self.get(job.id)
 
     # -- helpers -----------------------------------------------------------------------

@@ -134,37 +134,37 @@ def test_project_validation() -> None:
 
 
 def test_project_endpoints(client: TestClient, repo: Path, tmp_path: Path) -> None:
-    resp = client.post("/projects", json={"name": "demo"})
+    resp = client.post("/api/projects", json={"name": "demo"})
     assert resp.status_code == 400
-    resp = client.post("/projects", json={"name": "demo", "repo_path": str(tmp_path / "no")})
+    resp = client.post("/api/projects", json={"name": "demo", "repo_path": str(tmp_path / "no")})
     assert resp.status_code == 400
-    resp = client.post("/projects", json={"name": "demo", "repo_path": str(repo)})
+    resp = client.post("/api/projects", json={"name": "demo", "repo_path": str(repo)})
     assert resp.status_code == 201, resp.text
     project: dict[str, Any] = resp.json()
     assert project["repo_path"] == str(repo)
 
-    assert [p["id"] for p in client.get("/projects").json()] == [project["id"]]
-    assert client.get(f"/projects/{project['id']}").json()["name"] == "demo"
-    assert client.get("/projects/nope").status_code == 404
+    assert [p["id"] for p in client.get("/api/projects").json()] == [project["id"]]
+    assert client.get(f"/api/projects/{project['id']}").json()["name"] == "demo"
+    assert client.get("/api/projects/nope").status_code == 404
 
-    resp = client.patch(f"/projects/{project['id']}", json={"jira_project_key": "dem"})
+    resp = client.patch(f"/api/projects/{project['id']}", json={"jira_project_key": "dem"})
     assert resp.status_code == 200
     assert resp.json()["jira_project_key"] == "DEM"
     assert resp.json()["repo_path"] == str(repo)
-    resp = client.patch(f"/projects/{project['id']}", json={"github_repo": "bad"})
+    resp = client.patch(f"/api/projects/{project['id']}", json={"github_repo": "bad"})
     assert resp.status_code == 400
 
-    resp = client.post(f"/projects/{project['id']}/jobs", json={"request": "add /health"})
+    resp = client.post(f"/api/projects/{project['id']}/jobs", json={"request": "add /health"})
     assert resp.status_code == 201
     job = resp.json()
     assert job["project_id"] == project["id"]
-    assert client.get(f"/projects/{project['id']}/jobs").json()[0]["id"] == job["id"]
-    assert client.get(f"/jobs/{job['id']}").json()["state"] == "awaiting_profile_approval"
-    assert client.post("/projects/nope/jobs", json={"request": "x"}).status_code == 404
+    assert client.get(f"/api/projects/{project['id']}/jobs").json()[0]["id"] == job["id"]
+    assert client.get(f"/api/jobs/{job['id']}").json()["state"] == "awaiting_profile_approval"
+    assert client.post("/api/projects/nope/jobs", json={"request": "x"}).status_code == 404
 
-    assert client.delete(f"/projects/{project['id']}").status_code == 409
-    client.post(f"/jobs/{job['id']}/approve")  # planning has no handler here: stays put
-    assert client.delete("/projects/nope").status_code == 404
+    assert client.delete(f"/api/projects/{project['id']}").status_code == 409
+    client.post(f"/api/jobs/{job['id']}/approve")  # planning has no handler here: stays put
+    assert client.delete("/api/projects/nope").status_code == 404
 
 
 class _FakeApi:

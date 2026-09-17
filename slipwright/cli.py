@@ -183,20 +183,20 @@ def main(argv: Sequence[str] | None = None) -> int:
                 job = call(
                     base_url,
                     "POST",
-                    "/jobs",
+                    "/api/jobs",
                     {"request": args.request, "repo_path": str(target.resolve())},
                 )
             else:
                 job = call(
-                    base_url, "POST", f"/projects/{args.target}/jobs", {"request": args.request}
+                    base_url, "POST", f"/api/projects/{args.target}/jobs", {"request": args.request}
                 )
             print(format_job(job))
         elif args.command == "status":
             if args.job_id:
-                job = call(base_url, "GET", f"/jobs/{args.job_id}")
+                job = call(base_url, "GET", f"/api/jobs/{args.job_id}")
                 print(json.dumps(job, indent=2) if args.as_json else format_job(job, history=True))
             else:
-                jobs = call(base_url, "GET", "/jobs")
+                jobs = call(base_url, "GET", "/api/jobs")
                 if args.as_json:
                     print(json.dumps(jobs, indent=2))
                 elif not jobs:
@@ -204,12 +204,14 @@ def main(argv: Sequence[str] | None = None) -> int:
                 else:
                     print("\n".join(format_job(j) for j in jobs))
         elif args.command == "approve":
-            print(format_job(call(base_url, "POST", f"/jobs/{args.job_id}/approve")))
+            print(format_job(call(base_url, "POST", f"/api/jobs/{args.job_id}/approve")))
         elif args.command == "reject":
-            job = call(base_url, "POST", f"/jobs/{args.job_id}/reject", {"feedback": args.feedback})
+            job = call(
+                base_url, "POST", f"/api/jobs/{args.job_id}/reject", {"feedback": args.feedback}
+            )
             print(format_job(job))
         elif args.command == "message":
-            job = call(base_url, "POST", f"/jobs/{args.job_id}/message", {"text": args.text})
+            job = call(base_url, "POST", f"/api/jobs/{args.job_id}/message", {"text": args.text})
             print(format_job(job))
     except ApiError as exc:
         print(f"error: {exc}", file=sys.stderr)
@@ -228,16 +230,16 @@ def _project(base_url: str, args: argparse.Namespace) -> int:
         }
         if args.repo is not None:
             body["repo_path"] = str(args.repo.resolve())
-        print(format_project(call(base_url, "POST", "/projects", body)))
+        print(format_project(call(base_url, "POST", "/api/projects", body)))
     elif args.project_command == "list":
-        projects = call(base_url, "GET", "/projects")
+        projects = call(base_url, "GET", "/api/projects")
         print("\n".join(format_project(p) for p in projects) if projects else "no projects")
     elif args.project_command == "show":
-        project = call(base_url, "GET", f"/projects/{args.project_id}")
+        project = call(base_url, "GET", f"/api/projects/{args.project_id}")
         print(format_project(project))
         if project.get("description"):
             print(f"  {project['description']}")
-        jobs = call(base_url, "GET", f"/projects/{args.project_id}/jobs")
+        jobs = call(base_url, "GET", f"/api/projects/{args.project_id}/jobs")
         print("  jobs:" if jobs else "  jobs: none")
         for job in jobs:
             print("    " + format_job(job))
@@ -307,7 +309,7 @@ def _serve(settings: Settings, args: argparse.Namespace) -> int:
     if args.no_auth:
         settings.require_auth = False
 
-    app = create_app(build_engine(settings), require_auth=settings.require_auth)
+    app = create_app(build_engine(settings), require_auth=settings.require_auth, dev=settings.dev)
     uvicorn.run(app, host=settings.host, port=settings.port, log_level="info")
     return 0
 

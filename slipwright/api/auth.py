@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 from slipwright.auth import SESSION_COOKIE, SESSION_TTL, ApiToken, User
 from slipwright.store import JobStore, UsernameTaken, UserNotFound
 
-PUBLIC_PATHS = frozenset({"/auth/login", "/docs", "/redoc", "/openapi.json", "/healthz"})
+PUBLIC_PATHS = frozenset({"/api/auth/login", "/docs", "/redoc", "/openapi.json", "/healthz"})
 NO_USERS_HINT = "no users exist yet; create one with: slipwright user add <name>"
 
 

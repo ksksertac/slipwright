@@ -24,6 +24,7 @@ from typing import Any
 
 import httpx
 
+from slipwright.events import EventBus
 from slipwright.gates import DEFAULT_TIMEOUT_S as GATE_TIMEOUT_S
 from slipwright.gates import GateResult, build_gate, run_command
 from slipwright.githost import CiState, CiStatus, GitHost, GitHostError
@@ -145,6 +146,10 @@ class Engine:
         self._checkout_locks: defaultdict[str, threading.Lock] = defaultdict(threading.Lock)
         # ports held by jobs that outlived a previous process must stay taken
         self.workspace.reserve_ports(store.list())
+
+    @property
+    def events(self) -> EventBus:
+        return self.store.events
 
     @property
     def provider(self) -> ModelProvider:

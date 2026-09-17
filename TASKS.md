@@ -36,7 +36,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 
 ## Progress
 
-> **Resume here:** Phases 0–6, T7.1 and T7.2 are complete. Next task is **T7.3 — API namespace and live events**.
+> **Resume here:** Phases 0–6 and T7.1–T7.3 are complete. Next task is **T7.4 — Jira connection and issue sync**.
 > Design note for T1.3: `run_cmd` is executed as a subprocess in the worktree (Docker is used
 > only if the profile's `run_cmd` itself invokes it).
 > Design note for T2.2: `invoke_role` talks to a `ModelProvider` (`slipwright/providers/`);
@@ -74,6 +74,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 > Design note for T6.4: `TestRun` rows live in `test_runs`; output goes to `<state>/test-runs/<id>.log`. `Engine.start_test_run` records a pending run and `execute_test_run` (background task in the API) runs `profile.test_cmd` under a per-checkout lock shared with the build gate; every gate execution is also recorded (`source=gate`). The main checkout's profile is the project's, else the newest approved job profile, else the seed (`Engine.project_profile`).
 > Design note for T7.1: passwords are hashed with stdlib scrypt (memory-hard, no native dependency) instead of argon2/bcrypt; sessions and bearer tokens are random secrets stored as SHA-256 hashes (`slipwright/auth.py`, `store/users.py`). `create_app(require_auth=...)` attaches an app-wide dependency (`api/auth.py`) that exempts `/auth/login`, `/healthz` and the docs; tests pass `require_auth=False`. `slipwright user add` / `slipwright token new` work directly on the state dir.
 > Design note for T7.2: `slipwright/secrets.py` (Fernet) encrypts settings flagged secret; the key comes from `SLIPWRIGHT_SECRET_KEY` or `<state>/secret.key`. `store/settings.py` is a name→JSON table; GitHub lives under `github` (owner, base_branch) and `github.token` (secret). `slipwright/github.py` is an httpx client (`Engine.http_transport` lets tests answer locally, see `tests/fakes.py`); `GhHost` passes the token as `GH_TOKEN` and clones embed it as `x-access-token`.
+> Design note for T7.3: JSON routes are mounted on an `APIRouter` under `/api` (the old HTML dashboard stays at `/` and `/ui/...` until T8.7). `slipwright/events.py` is an in-process bus the store publishes to on every write; `GET /api/events` streams it as SSE (`project_id` filter, `limit` for scripts, keepalive pings). `schemas/openapi.json` is exported by `scripts/export_schema.py` and checked by `tests/test_phase7_api.py`; `SLIPWRIGHT_DEV=1` enables CORS for the Vite origin. The Phase 0–5 API tests were updated only in their URL prefixes.
 
 | Phase | Task | Status |
 |-------|------|--------|
@@ -101,7 +102,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 | 6 | T6.4 Test runs on demand | [x] |
 | 7 | T7.1 Users and login | [x] |
 | 7 | T7.2 Settings store and GitHub connection | [x] |
-| 7 | T7.3 API namespace and live events | [ ] |
+| 7 | T7.3 API namespace and live events | [x] |
 | 7 | T7.4 Jira connection and issue sync | [ ] |
 | 7 | T7.5 Agents act in Jira | [ ] |
 | 8 | T8.1 React app skeleton | [ ] |
@@ -389,13 +390,13 @@ Single-tenant, local users. No external identity provider.
 
 ### T7.3 — API namespace and live events
 **Done when**
-- [ ] All JSON routes live under `/api/...`; old top-level paths are removed and the CLI is
+- [x] All JSON routes live under `/api/...`; old top-level paths are removed and the CLI is
   updated
-- [ ] `GET /api/events` is a server-sent-events stream emitting `job.state`, `test_run.state`
+- [x] `GET /api/events` is a server-sent-events stream emitting `job.state`, `test_run.state`
   and `activity` events; the engine publishes on every persisted transition
-- [ ] OpenAPI schema is exported to `schemas/openapi.json` by `scripts/export_schema.py` and a
+- [x] OpenAPI schema is exported to `schemas/openapi.json` by `scripts/export_schema.py` and a
   test fails if it is stale
-- [ ] CORS is enabled for the Vite dev origin only when `SLIPWRIGHT_DEV=1`
+- [x] CORS is enabled for the Vite dev origin only when `SLIPWRIGHT_DEV=1`
 
 ---
 

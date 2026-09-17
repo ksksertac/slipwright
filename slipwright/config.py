@@ -33,6 +33,7 @@ class Settings:
     port_range: tuple[int, int] = (8100, 8999)
     require_auth: bool = True
     token: str | None = None
+    dev: bool = False
 
     @property
     def db_path(self) -> Path:
@@ -64,6 +65,7 @@ class Settings:
         if "SLIPWRIGHT_AUTH" in env:
             settings.require_auth = env["SLIPWRIGHT_AUTH"].strip().lower() not in _OFF
         settings.token = env.get("SLIPWRIGHT_TOKEN") or None
+        settings.dev = env.get("SLIPWRIGHT_DEV", "").strip().lower() not in ("", *_OFF)
         return settings
 
 

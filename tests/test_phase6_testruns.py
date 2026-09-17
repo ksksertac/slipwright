@@ -109,31 +109,33 @@ def test_test_run_endpoints(
     failing = seed.model_copy(update={"test_cmd": MISSING})
     engine = full_engine(store, worktrees_root, failing, full_provider(failing))
     with TestClient(create_app(engine, resume_on_startup=False, require_auth=False)) as client:
-        project = client.post("/projects", json={"name": "demo", "repo_path": str(repo)}).json()
-        resp = client.post(f"/projects/{project['id']}/test-runs", json={})
+        project = client.post("/api/projects", json={"name": "demo", "repo_path": str(repo)}).json()
+        resp = client.post(f"/api/projects/{project['id']}/test-runs", json={})
         assert resp.status_code == 202, resp.text
         run = resp.json()
         assert run["status"] == "running"  # the response never waits for the command
 
         # TestClient runs background tasks before returning: the run has finished
-        listed = client.get(f"/projects/{project['id']}/test-runs").json()
+        listed = client.get(f"/api/projects/{project['id']}/test-runs").json()
         assert [r["id"] for r in listed] == [run["id"]]
         assert listed[0]["status"] == "failed"
-        got = client.get(f"/test-runs/{run['id']}").json()
+        got = client.get(f"/api/test-runs/{run['id']}").json()
         assert got["exit_code"] == 3
-        out = client.get(f"/test-runs/{run['id']}/output")
+        out = client.get(f"/api/test-runs/{run['id']}/output")
         assert out.status_code == 200
         assert "no such test" in out.text
         assert out.headers["content-type"].startswith("text/plain")
 
-        assert client.get("/test-runs/nope").status_code == 404
-        assert client.get("/test-runs/nope/output").status_code == 404
-        assert client.post("/projects/nope/test-runs", json={}).status_code == 404
-        resp = client.post(f"/projects/{project['id']}/test-runs", json={"job_id": "nope"})
+        assert client.get("/api/test-runs/nope").status_code == 404
+        assert client.get("/api/test-runs/nope/output").status_code == 404
+        assert client.post("/api/projects/nope/test-runs", json={}).status_code == 404
+        resp = client.post(f"/api/projects/{project['id']}/test-runs", json={"job_id": "nope"})
         assert resp.status_code == 404
 
-        other = client.post("/projects", json={"name": "o", "repo_path": str(repo)}).json()
-        job = client.post(f"/projects/{other['id']}/jobs", json={"request": "x"}).json()
-        resp = client.post(f"/projects/{project['id']}/test-runs", json={"job_id": job["id"]})
+        other = client.post("/api/projects", json={"name": "o", "repo_path": str(repo)}).json()
+        job = client.post(f"/api/projects/{other['id']}/jobs", json={"request": "x"}).json()
+        resp = client.post(f"/api/projects/{project['id']}/test-runs", json={"job_id": job["id"]})
         assert resp.status_code == 400  # job belongs to another project
-        assert client.get(f"/projects/{project['id']}/test-runs?job_id={job['id']}").json() == []
+        assert (
+            client.get(f"/api/projects/{project['id']}/test-runs?job_id={job['id']}").json() == []
+        )

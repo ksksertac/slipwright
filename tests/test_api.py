@@ -55,7 +55,7 @@ def client(engine: Engine) -> Iterator[TestClient]:
 
 
 def _new(client: TestClient, repo: Path, request: str = "add /health") -> dict[str, Any]:
-    resp = client.post("/jobs", json={"request": request, "repo_path": str(repo)})
+    resp = client.post("/api/jobs", json={"request": request, "repo_path": str(repo)})
     assert resp.status_code == 201, resp.text
     body: dict[str, Any] = resp.json()
     return body
@@ -68,7 +68,7 @@ def test_post_jobs_starts_job_and_runs_analyst_in_background(
     assert created["state"] == "analyzing"  # the response never waits for the model
 
     # TestClient runs background tasks before returning, so the job has moved on
-    job = client.get(f"/jobs/{created['id']}").json()
+    job = client.get(f"/api/jobs/{created['id']}").json()
     assert job["state"] == "awaiting_profile_approval"
     assert job["profile"]["language"] == "python"
     assert [t["to_state"] for t in job["history"]] == [
@@ -79,7 +79,7 @@ def test_post_jobs_starts_job_and_runs_analyst_in_background(
 
 
 def test_post_jobs_rejects_missing_repo(client: TestClient, tmp_path: Path) -> None:
-    resp = client.post("/jobs", json={"request": "x", "repo_path": str(tmp_path / "nope")})
+    resp = client.post("/api/jobs", json={"request": "x", "repo_path": str(tmp_path / "nope")})
     assert resp.status_code == 400
 
 
@@ -87,10 +87,10 @@ def test_list_and_get(client: TestClient, repo: Path) -> None:
     a = _new(client, repo, "first")
     b = _new(client, repo, "second")
 
-    listed = client.get("/jobs").json()
+    listed = client.get("/api/jobs").json()
     assert [j["id"] for j in listed] == [a["id"], b["id"]]
-    assert client.get(f"/jobs/{a['id']}").json()["request"] == "first"
-    assert client.get("/jobs/nope").status_code == 404
+    assert client.get(f"/api/jobs/{a['id']}").json()["request"] == "first"
+    assert client.get("/api/jobs/nope").status_code == 404
 
 
 def test_approve_and_reject_endpoints(
@@ -98,26 +98,26 @@ def test_approve_and_reject_endpoints(
 ) -> None:
     job_id = _new(client, repo)["id"]
 
-    resp = client.post(f"/jobs/{job_id}/reject", json={"feedback": "use poetry"})
+    resp = client.post(f"/api/jobs/{job_id}/reject", json={"feedback": "use poetry"})
     assert resp.status_code == 200
     assert resp.json()["state"] == "analyzing"
-    job = client.get(f"/jobs/{job_id}").json()
+    job = client.get(f"/api/jobs/{job_id}").json()
     assert job["state"] == "awaiting_profile_approval"
     assert "use poetry" in provider.requests[-1].prompt
 
-    resp = client.post(f"/jobs/{job_id}/approve")
+    resp = client.post(f"/api/jobs/{job_id}/approve")
     assert resp.status_code == 200
     assert resp.json()["state"] == "planning"
 
     # not at a gate any more
-    assert client.post(f"/jobs/{job_id}/approve").status_code == 409
-    assert client.post(f"/jobs/{job_id}/reject", json={"feedback": "x"}).status_code == 409
-    assert client.post("/jobs/nope/approve").status_code == 404
+    assert client.post(f"/api/jobs/{job_id}/approve").status_code == 409
+    assert client.post(f"/api/jobs/{job_id}/reject", json={"feedback": "x"}).status_code == 409
+    assert client.post("/api/jobs/nope/approve").status_code == 404
 
 
 def test_message_endpoint_queues_inbox(client: TestClient, repo: Path) -> None:
     job_id = _new(client, repo)["id"]
-    resp = client.post(f"/jobs/{job_id}/message", json={"text": "prefer poetry"})
+    resp = client.post(f"/api/jobs/{job_id}/message", json={"text": "prefer poetry"})
     assert resp.status_code == 200
     inbox = resp.json()["data"]["inbox"]
     assert [m["text"] for m in inbox] == ["prefer poetry"]
@@ -133,7 +133,7 @@ def test_startup_resumes_jobs_left_mid_phase(
 
     with TestClient(create_app(engine, require_auth=False)) as client:
         client.app.state.resume_thread.join(timeout=60)
-        assert client.get(f"/jobs/{job.id}").json()["state"] == "awaiting_profile_approval"
+        assert client.get(f"/api/jobs/{job.id}").json()["state"] == "awaiting_profile_approval"
     assert len(provider.requests) == 1
 
 
