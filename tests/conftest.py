@@ -1,7 +1,11 @@
 import subprocess
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+
+from slipwright.schemas.profile import Profile
+from slipwright.store import JobStore
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -28,3 +32,17 @@ def repo(tmp_path: Path) -> Path:
 @pytest.fixture
 def worktrees_root(tmp_path: Path) -> Path:
     return tmp_path / "worktrees"
+
+
+@pytest.fixture
+def store(tmp_path: Path) -> Iterator[JobStore]:
+    with JobStore(tmp_path / "jobs.sqlite3") as s:
+        yield s
+
+
+@pytest.fixture
+def seed() -> Profile:
+    """Example profile whose build and test commands always pass (see tests/pipeline.py)."""
+    from tests.pipeline import full_seed
+
+    return full_seed()

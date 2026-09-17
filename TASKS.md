@@ -36,7 +36,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 
 ## Progress
 
-> **Resume here:** Phases 0–5, T6.1 and T6.2 are complete. Next task is **T6.3 — Progress and activity feed**.
+> **Resume here:** Phases 0–5 and T6.1–T6.3 are complete. Next task is **T6.4 — Test runs on demand**.
 > Design note for T1.3: `run_cmd` is executed as a subprocess in the worktree (Docker is used
 > only if the profile's `run_cmd` itself invokes it).
 > Design note for T2.2: `invoke_role` talks to a `ModelProvider` (`slipwright/providers/`);
@@ -70,6 +70,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 > the `effort` parameter that other depths map to.
 > Design note for T6.1: `Job.project_id` is optional on the model so workspace-level code and its tests can build bare jobs, but every job the engine or API creates belongs to a project (`create_job` finds or creates one for a bare `repo_path`). Projects without a checkout are cloned into `<state>/repos/<id>`; `clone_url` overrides the GitHub URL (tests clone local bare repos). A project's `profile` is the seed for its jobs (`Engine.seed_for`).
 > Design note for T6.2: the breakdown lives inside `PlannerResult` (`breakdown.epics[].stories[].tasks[]`, task.phase is 1-based); a plan the model returns without one gets `default_breakdown` (one epic/story, one task per phase) before it is persisted. `slipwright/board.py` derives task/story/epic statuses from job state and `phase_index`; a job is on the board only once its plan is approved (`plan_is_active`).
+> Design note for T6.3: `slipwright/activity.py` projects progress (`/projects/{id}/progress`) and the feed (`/projects/{id}/activity`) from job history; entries are classified by note prefix (`ActivityKind`, role) and carry the history index for `GET /jobs/{id}/history/{index}`. Shared pipeline test helpers live in `tests/pipeline.py`; `store`/`seed` fixtures in `conftest.py`.
 
 | Phase | Task | Status |
 |-------|------|--------|
@@ -93,7 +94,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 | 5 | T5.3 Job dashboard | [x] |
 | 6 | T6.1 Project entity | [x] |
 | 6 | T6.2 Work breakdown: epics, stories, tasks | [x] |
-| 6 | T6.3 Progress and activity feed | [ ] |
+| 6 | T6.3 Progress and activity feed | [x] |
 | 6 | T6.4 Test runs on demand | [ ] |
 | 7 | T7.1 Users and login | [ ] |
 | 7 | T7.2 Settings store and GitHub connection | [ ] |
@@ -324,13 +325,13 @@ and its invariants are unchanged.
 
 ### T6.3 — Progress and activity feed
 **Done when**
-- [ ] `GET /projects/{id}/progress` returns per-job and per-project counts: tasks done /
+- [x] `GET /projects/{id}/progress` returns per-job and per-project counts: tasks done /
   total, current state, pending approval, last activity time
-- [ ] `GET /projects/{id}/activity` returns an itemised, newest-first list built from every
+- [x] `GET /projects/{id}/activity` returns an itemised, newest-first list built from every
   job's `history` and consumed inbox messages: what happened, which role, when, with a link
   to the transition detail (diff, build log, profile)
-- [ ] Both endpoints are read-only projections over existing data — no new tables
-- [ ] Test: after a scripted end-to-end job, the activity feed lists analyst → planner →
+- [x] Both endpoints are read-only projections over existing data — no new tables
+- [x] Test: after a scripted end-to-end job, the activity feed lists analyst → planner →
   each developer phase → qa stages → devops PR in order
 
 ### T6.4 — Test runs on demand

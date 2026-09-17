@@ -16,9 +16,10 @@ from pathlib import Path
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from slipwright.activity import ActivityItem, ProjectProgress, project_activity, project_progress
 from slipwright.board import Board, project_board
 from slipwright.engine import Engine, NotAwaitingApproval, ProjectCloneError
-from slipwright.schemas.job import Job
+from slipwright.schemas.job import Job, Transition
 from slipwright.schemas.profile import Profile
 from slipwright.schemas.project import Project, ProjectPatch
 from slipwright.store import JobNotFound, ProjectInUse, ProjectNotFound
@@ -169,6 +170,21 @@ def create_app(engine: Engine, *, resume_on_startup: bool = True) -> FastAPI:
         _get_project(eng, project_id)
         return project_board(project_id, eng.store.list(project_id))
 
+    @app.get("/projects/{project_id}/progress", response_model=ProjectProgress)
+    def get_progress(project_id: str, request: Request) -> ProjectProgress:
+        eng = _engine(request)
+        _get_project(eng, project_id)
+        return project_progress(project_id, eng.store.list(project_id))
+
+    @app.get("/projects/{project_id}/activity", response_model=list[ActivityItem])
+    def get_activity(
+        project_id: str, request: Request, limit: int | None = None
+    ) -> list[ActivityItem]:
+        """Every job's history, newest first; ``index`` addresses the detail endpoint."""
+        eng = _engine(request)
+        _get_project(eng, project_id)
+        return project_activity(eng.store.list(project_id), limit=limit)
+
     # -- jobs ----------------------------------------------------------------------------
 
     @app.post("/jobs", response_model=Job, status_code=201)
@@ -188,6 +204,14 @@ def create_app(engine: Engine, *, resume_on_startup: bool = True) -> FastAPI:
     @app.get("/jobs/{job_id}", response_model=Job)
     def get_job(job_id: str, request: Request) -> Job:
         return _get(_engine(request), job_id)
+
+    @app.get("/jobs/{job_id}/history/{index}", response_model=Transition)
+    def get_transition(job_id: str, index: int, request: Request) -> Transition:
+        """One history entry in full (its ``detail`` holds the diff, log or JSON)."""
+        job = _get(_engine(request), job_id)
+        if index < 0 or index >= len(job.history):
+            raise HTTPException(status_code=404, detail=f"no history entry {index}")
+        return job.history[index]
 
     @app.post("/jobs/{job_id}/approve", response_model=Job)
     def approve(job_id: str, request: Request, background: BackgroundTasks) -> Job:
