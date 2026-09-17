@@ -14,13 +14,16 @@ class GitError(RuntimeError):
         super().__init__(f"git {' '.join(args)} failed ({returncode}): {self.stderr}")
 
 
-def run(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+def run(
+    repo: Path, *args: str, check: bool = True, env: dict[str, str] | None = None
+) -> subprocess.CompletedProcess[str]:
     proc = subprocess.run(
         ["git", "-C", str(repo), *args],
         capture_output=True,
         text=True,
         encoding="utf-8",
         errors="replace",
+        env=env,
     )
     if check and proc.returncode != 0:
         raise GitError(list(args), proc.returncode, proc.stderr)

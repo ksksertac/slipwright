@@ -14,6 +14,7 @@ from pathlib import Path
 from slipwright.engine import Engine
 from slipwright.providers import ModelProvider
 from slipwright.schemas.profile import Profile, load_profile
+from slipwright.secrets import load_or_create_key
 from slipwright.store import JobStore
 from slipwright.workspace import PortAllocator, Workspace
 
@@ -82,7 +83,7 @@ def build_engine(settings: Settings) -> Engine:
     seed = load_profile(settings.profile_path)
     lo, hi = settings.port_range
     return Engine(
-        JobStore(settings.db_path),
+        JobStore(settings.db_path, secret_key=load_or_create_key(settings.state_dir)),
         Workspace(settings.worktrees_root, PortAllocator(start=lo, end=hi)),
         seed_profile=seed,
         provider=build_provider(settings.provider, seed),

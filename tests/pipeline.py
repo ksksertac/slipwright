@@ -95,7 +95,8 @@ def full_engine(
     store: JobStore, worktrees_root: Path, seed: Profile, provider: ScriptedProvider, **kw: Any
 ) -> Engine:
     ws = Workspace(worktrees_root, PortAllocator(start=8300, end=8399))
-    kw.setdefault("git_host", FakeHost())
+    if "git_host" not in kw:
+        kw["git_host"] = FakeHost()
     return Engine(store, ws, seed_profile=seed, provider=provider, ci_poll_s=0.0, **kw)
 
 

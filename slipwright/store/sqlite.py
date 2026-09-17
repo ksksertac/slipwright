@@ -22,6 +22,8 @@ from slipwright.schemas.job import Job, JobData, JobState, Transition, utcnow
 from slipwright.schemas.profile import Profile
 from slipwright.schemas.project import Project
 from slipwright.schemas.testrun import TestRun
+from slipwright.secrets import SecretBox, load_or_create_key
+from slipwright.store.settings import SETTINGS_SCHEMA, SettingsStoreMixin
 from slipwright.store.users import USERS_SCHEMA, UserStoreMixin
 
 _SCHEMA = """
@@ -113,11 +115,18 @@ class ProjectInUse(ValueError):
         self.active = active
 
 
-class JobStore(UserStoreMixin):
-    """One store per SQLite file. Safe to share across threads within a process."""
+class JobStore(UserStoreMixin, SettingsStoreMixin):
+    """One store per SQLite file. Safe to share across threads within a process.
 
-    def __init__(self, path: Path | str) -> None:
+    ``secret_key`` encrypts stored secrets; when omitted it is read from (or created
+    in) ``secret.key`` next to the database.
+    """
+
+    def __init__(self, path: Path | str, *, secret_key: bytes | str | None = None) -> None:
         self.path = Path(path)
+        if secret_key is None:
+            secret_key = load_or_create_key(self.path.parent)
+        self.secret_box = SecretBox(secret_key)
         self._lock = threading.RLock()
         self._conn = sqlite3.connect(self.path, check_same_thread=False, isolation_level=None)
         self._conn.row_factory = sqlite3.Row
@@ -126,6 +135,7 @@ class JobStore(UserStoreMixin):
         self._conn.execute("PRAGMA synchronous=FULL")
         self._conn.executescript(_SCHEMA)
         self._conn.executescript(USERS_SCHEMA)
+        self._conn.executescript(SETTINGS_SCHEMA)
         self._migrate()
 
     def _migrate(self) -> None:

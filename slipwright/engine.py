@@ -22,9 +22,12 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+import httpx
+
 from slipwright.gates import DEFAULT_TIMEOUT_S as GATE_TIMEOUT_S
 from slipwright.gates import GateResult, build_gate, run_command
 from slipwright.githost import CiState, CiStatus, GitHost, GitHostError
+from slipwright.github import GitHubClient, GitHubError, GitHubSettings
 from slipwright.invoke import DEFAULT_TIMEOUT_S, RoleResult, get_default_provider
 from slipwright.orchestrator import IllegalTransitionError, Orchestrator
 from slipwright.providers import ModelProvider
@@ -109,6 +112,7 @@ class Engine:
         ci_poll_s: float = 15.0,
         ci_timeout_s: float = 3600.0,
         repos_root: Path | None = None,
+        http_transport: httpx.BaseTransport | None = None,
     ) -> None:
         self.store = store
         self.workspace = workspace
@@ -124,6 +128,8 @@ class Engine:
         self.max_ci_attempts = max_ci_attempts
         self.gate_timeout_s = gate_timeout_s
         self._git_host = git_host
+        # tests answer GitHub/Jira HTTP locally through a mock transport
+        self.http_transport = http_transport
         self.ci_poll_s = ci_poll_s
         self.ci_timeout_s = ci_timeout_s
         self.handlers: dict[JobState, Handler] = {
@@ -151,8 +157,51 @@ class Engine:
         if self._git_host is None:
             from slipwright.githost import GhHost
 
-            self._git_host = GhHost()
+            self._git_host = GhHost(token=self.github_token)
         return self._git_host
+
+    # -- GitHub connection -----------------------------------------------------------------
+
+    def github_token(self) -> str | None:
+        token = self.store.get_setting("github.token")
+        return str(token) if token else None
+
+    def github_settings(self) -> GitHubSettings:
+        data: dict[str, Any] = self.store.get_setting("github", {}) or {}
+        token = self.github_token()
+        return GitHubSettings(
+            owner=data.get("owner"),
+            base_branch=data.get("base_branch") or "main",
+            token_set=token is not None,
+            token_hint=f"…{token[-4:]}" if token else None,
+        )
+
+    def update_github_settings(
+        self,
+        *,
+        token: str | None = None,
+        owner: str | None = None,
+        base_branch: str | None = None,
+        clear_token: bool = False,
+    ) -> GitHubSettings:
+        """Change what is given; an omitted token keeps the stored one."""
+        current: dict[str, Any] = self.store.get_setting("github", {}) or {}
+        if owner is not None:
+            current["owner"] = owner.strip() or None
+        if base_branch is not None:
+            current["base_branch"] = base_branch.strip() or "main"
+        self.store.set_setting("github", current)
+        if clear_token:
+            self.store.delete_setting("github.token")
+        elif token is not None and token.strip():
+            self.store.set_setting("github.token", token.strip(), secret=True)
+        return self.github_settings()
+
+    def github_client(self) -> GitHubClient:
+        token = self.github_token()
+        if token is None:
+            raise GitHubError("no GitHub token configured")
+        return GitHubClient(token, transport=self.http_transport)
 
     # -- public API ----------------------------------------------------------------------
 
@@ -165,13 +214,22 @@ class Engine:
             target = self.repos_root / project.id
             target.parent.mkdir(parents=True, exist_ok=True)
             try:
-                g.clone(url, target)
+                g.clone(self._authenticated(url), target)
             except g.GitError as exc:
                 raise ProjectCloneError(f"could not clone {url}: {exc.stderr}") from exc
             project = project.model_copy(update={"repo_path": target})
         elif not project.repo_path.is_dir():
             raise ValueError(f"repo_path is not a directory: {project.repo_path}")
         return self.store.create_project(project)
+
+    def _authenticated(self, url: str) -> str:
+        """Embed the stored token into a GitHub HTTPS URL for cloning; never persisted."""
+        token = self.github_token()
+        if token and url.startswith("https://github.com/"):
+            return url.replace(
+                "https://github.com/", f"https://x-access-token:{token}@github.com/", 1
+            )
+        return url
 
     def create_job(
         self, request: str, repo_path: Path | None = None, *, project_id: str | None = None

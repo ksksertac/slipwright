@@ -7,7 +7,9 @@ The engine only talks to the ``GitHost`` protocol. ``GhHost`` implements it with
 from __future__ import annotations
 
 import json
+import os
 import subprocess
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -47,15 +49,38 @@ class GitHost(Protocol):
 
 
 class GhHost:
-    """GitHub through ``gh``; every call runs inside the job's worktree."""
+    """GitHub through ``gh``; every call runs inside the job's worktree.
 
-    def __init__(self, remote: str = "origin", gh: str = "gh") -> None:
+    ``token`` (a value or a callable returning the current one) is passed to ``gh`` and
+    ``git`` as ``GH_TOKEN``; without it the user's own ``gh auth`` login applies.
+    """
+
+    def __init__(
+        self,
+        remote: str = "origin",
+        gh: str = "gh",
+        token: str | Callable[[], str | None] | None = None,
+    ) -> None:
         self.remote = remote
         self.gh = gh
+        self._token = token
+
+    def token(self) -> str | None:
+        return self._token() if callable(self._token) else self._token
+
+    def _env(self) -> dict[str, str]:
+        env = dict(os.environ)
+        token = self.token()
+        if token:
+            env["GH_TOKEN"] = token
+            env["GITHUB_TOKEN"] = token
+        return env
 
     def push(self, worktree: Path, branch: str) -> None:
         try:
-            g.run(worktree, "push", "--force-with-lease", "-u", self.remote, branch)
+            g.run(
+                worktree, "push", "--force-with-lease", "-u", self.remote, branch, env=self._env()
+            )
         except g.GitError as exc:
             raise GitHostError(f"push failed: {exc.stderr}") from exc
 
@@ -118,6 +143,7 @@ class GhHost:
             text=True,
             encoding="utf-8",
             errors="replace",
+            env=self._env(),
         )
         if check and proc.returncode != 0:
             raise GitHostError(

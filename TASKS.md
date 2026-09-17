@@ -36,7 +36,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 
 ## Progress
 
-> **Resume here:** Phases 0–6 and T7.1 are complete. Next task is **T7.2 — Settings store and GitHub connection**.
+> **Resume here:** Phases 0–6, T7.1 and T7.2 are complete. Next task is **T7.3 — API namespace and live events**.
 > Design note for T1.3: `run_cmd` is executed as a subprocess in the worktree (Docker is used
 > only if the profile's `run_cmd` itself invokes it).
 > Design note for T2.2: `invoke_role` talks to a `ModelProvider` (`slipwright/providers/`);
@@ -73,6 +73,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 > Design note for T6.3: `slipwright/activity.py` projects progress (`/projects/{id}/progress`) and the feed (`/projects/{id}/activity`) from job history; entries are classified by note prefix (`ActivityKind`, role) and carry the history index for `GET /jobs/{id}/history/{index}`. Shared pipeline test helpers live in `tests/pipeline.py`; `store`/`seed` fixtures in `conftest.py`.
 > Design note for T6.4: `TestRun` rows live in `test_runs`; output goes to `<state>/test-runs/<id>.log`. `Engine.start_test_run` records a pending run and `execute_test_run` (background task in the API) runs `profile.test_cmd` under a per-checkout lock shared with the build gate; every gate execution is also recorded (`source=gate`). The main checkout's profile is the project's, else the newest approved job profile, else the seed (`Engine.project_profile`).
 > Design note for T7.1: passwords are hashed with stdlib scrypt (memory-hard, no native dependency) instead of argon2/bcrypt; sessions and bearer tokens are random secrets stored as SHA-256 hashes (`slipwright/auth.py`, `store/users.py`). `create_app(require_auth=...)` attaches an app-wide dependency (`api/auth.py`) that exempts `/auth/login`, `/healthz` and the docs; tests pass `require_auth=False`. `slipwright user add` / `slipwright token new` work directly on the state dir.
+> Design note for T7.2: `slipwright/secrets.py` (Fernet) encrypts settings flagged secret; the key comes from `SLIPWRIGHT_SECRET_KEY` or `<state>/secret.key`. `store/settings.py` is a name→JSON table; GitHub lives under `github` (owner, base_branch) and `github.token` (secret). `slipwright/github.py` is an httpx client (`Engine.http_transport` lets tests answer locally, see `tests/fakes.py`); `GhHost` passes the token as `GH_TOKEN` and clones embed it as `x-access-token`.
 
 | Phase | Task | Status |
 |-------|------|--------|
@@ -99,7 +100,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 | 6 | T6.3 Progress and activity feed | [x] |
 | 6 | T6.4 Test runs on demand | [x] |
 | 7 | T7.1 Users and login | [x] |
-| 7 | T7.2 Settings store and GitHub connection | [ ] |
+| 7 | T7.2 Settings store and GitHub connection | [x] |
 | 7 | T7.3 API namespace and live events | [ ] |
 | 7 | T7.4 Jira connection and issue sync | [ ] |
 | 7 | T7.5 Agents act in Jira | [ ] |
@@ -373,18 +374,18 @@ Single-tenant, local users. No external identity provider.
 
 ### T7.2 — Settings store and GitHub connection
 **Done when**
-- [ ] `settings` table keyed by name; secrets are encrypted at rest with a key from
+- [x] `settings` table keyed by name; secrets are encrypted at rest with a key from
   `SLIPWRIGHT_SECRET_KEY` (generated into the state dir on first run if unset)
-- [ ] GitHub settings: personal access token, default owner/org, default base branch
-- [ ] `GET /settings/github` never returns the token, only whether one is set and its last
+- [x] GitHub settings: personal access token, default owner/org, default base branch
+- [x] `GET /settings/github` never returns the token, only whether one is set and its last
   four characters; `PUT /settings/github` stores it
-- [ ] `POST /settings/github/test` calls the GitHub API with the stored token and returns the
+- [x] `POST /settings/github/test` calls the GitHub API with the stored token and returns the
   authenticated login and rate limit, or a readable error
-- [ ] `githost.py` passes the stored token to `gh` via `GH_TOKEN` when set; without it the
+- [x] `githost.py` passes the stored token to `gh` via `GH_TOKEN` when set; without it the
   existing `gh auth` behaviour is unchanged
-- [ ] `GET /settings/github/repos` lists repositories the token can see, for the project
+- [x] `GET /settings/github/repos` lists repositories the token can see, for the project
   creation form
-- [ ] Tests use a fake GitHub HTTP server; no test touches the network
+- [x] Tests use a fake GitHub HTTP server; no test touches the network
 
 ### T7.3 — API namespace and live events
 **Done when**

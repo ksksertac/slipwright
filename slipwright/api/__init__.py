@@ -86,6 +86,7 @@ def create_app(
 
     from slipwright.api.auth import auth_dependency
     from slipwright.api.auth import router as auth_router
+    from slipwright.api.settings import router as settings_router
     from slipwright.api.ui import router as ui_router
 
     app = FastAPI(
@@ -94,6 +95,7 @@ def create_app(
         dependencies=[Depends(auth_dependency(enabled=require_auth))],
     )
     app.include_router(auth_router)
+    app.include_router(settings_router)
     app.include_router(ui_router)
 
     @app.get("/healthz", include_in_schema=False)

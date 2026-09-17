@@ -11,6 +11,8 @@ dependencies = [
     "pydantic>=2.7",
     "anthropic>=1.6.0",
     "python-multipart>=0.0.32",
+    "httpx>=0.28",
+    "cryptography>=42",
 ]
 
 [project.scripts]
