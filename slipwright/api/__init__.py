@@ -335,6 +335,16 @@ def create_app(
         background.add_task(_resume, eng, job.id)
         return job
 
+    @api.put("/jobs/{job_id}/profile", response_model=Job)
+    def set_profile(job_id: str, body: Profile, request: Request) -> Job:
+        """Edit the proposed profile while the job awaits its approval."""
+        eng = _engine(request)
+        _get(eng, job_id)
+        try:
+            return eng.set_profile(job_id, body)
+        except NotAwaitingApproval as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+
     @api.put("/jobs/{job_id}/tests", response_model=Job)
     def set_tests(job_id: str, body: TestCases, request: Request) -> Job:
         """Edit the proposed test list while the job awaits its approval."""

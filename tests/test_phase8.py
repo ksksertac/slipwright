@@ -147,3 +147,59 @@ def test_project_page_has_the_five_tabs_and_lives_on_events() -> None:
     assert "useLiveEvents" in layout  # every page updates live
     detail = _src("components/Detail.tsx")
     assert "Diff" in detail and "looksLikeDiff" in detail
+
+
+# --- T8.4 job page ------------------------------------------------------------------------
+
+
+def test_profile_can_be_edited_while_awaiting_approval(engine: Engine, repo: Path) -> None:
+    from slipwright.schemas.job import JobState
+
+    job = engine.start(engine.create_job("x", repo).id)
+    assert job.state is JobState.AWAITING_PROFILE_APPROVAL
+    app = create_app(engine, resume_on_startup=False, require_auth=False)
+    with TestClient(app) as client:
+        assert job.profile is not None
+        edited = job.profile.model_dump(mode="json")
+        edited["test_cmd"] = "make test"
+        resp = client.put(f"/api/jobs/{job.id}/profile", json=edited)
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["profile"]["test_cmd"] == "make test"
+        edited["roles"].pop("qa")
+        assert client.put(f"/api/jobs/{job.id}/profile", json=edited).status_code == 422
+        client.post(f"/api/jobs/{job.id}/approve")
+        assert (
+            client.put(
+                f"/api/jobs/{job.id}/profile", json=job.profile.model_dump(mode="json")
+            ).status_code
+            == 409
+        )
+        assert engine.store.get(job.id).profile is not None
+        assert engine.store.get(job.id).profile.test_cmd == "make test"  # type: ignore[union-attr]
+
+
+def test_job_page_covers_every_gate_and_the_parity_list() -> None:
+    page = _src("pages/JobPage.tsx")
+    for expected in (
+        "Stepper",
+        "ProfileGate",
+        "/api/jobs/${job.id}/profile",
+        "PlanGate",
+        "BreakdownTree",
+        "TestCasesGate",
+        "useSetTestCases",
+        "WrittenTestsGate",
+        "Phases",
+        "phase-${g.number}",
+        "build gate",
+        "Steering",
+        "useSendMessage",
+        "consumed_by",
+        "History",
+    ):
+        assert expected in page, expected
+    assert "Diff" in _src("components/Diff.tsx")
+    parity = (WEB / "PARITY.md").read_text(encoding="utf-8")
+    rows = [line for line in parity.splitlines() if line.startswith("| ") and "[" in line]
+    assert len(rows) >= 12
+    assert all("[x]" in r for r in rows), [r for r in rows if "[x]" not in r]

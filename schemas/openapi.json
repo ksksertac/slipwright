@@ -2544,6 +2544,56 @@
         "summary": "Message"
       }
     },
+    "/api/jobs/{job_id}/profile": {
+      "put": {
+        "description": "Edit the proposed profile while the job awaits its approval.",
+        "operationId": "set_profile_api_jobs__job_id__profile_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Profile"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Profile"
+      }
+    },
     "/api/jobs/{job_id}/reject": {
       "post": {
         "operationId": "reject_api_jobs__job_id__reject_post",

@@ -36,7 +36,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 
 ## Progress
 
-> **Resume here:** Phases 0–7 and T8.1–T8.3 are complete. Next task is **T8.4 — Job page**.
+> **Resume here:** Phases 0–7 and T8.1–T8.4 are complete. Next task is **T8.5 — Test results page**.
 > Design note for T1.3: `run_cmd` is executed as a subprocess in the worktree (Docker is used
 > only if the profile's `run_cmd` itself invokes it).
 > Design note for T2.2: `invoke_role` talks to a `ModelProvider` (`slipwright/providers/`);
@@ -79,6 +79,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 > Design note for T7.5: `JiraAction` lives in `roles/results.py` (every `RoleOutput` may carry `jira_actions`); `slipwright/jiraactions.py` executes them through the agent account (`Engine.jira_client(agent=True)`, falling back to the human connection) after checking `Permission.JIRA` and project confinement. Idempotency keys are content hashes stored in `job.data.jira_done`; outages queue actions in `job.data.jira_queue`, retried by `_jira_reconcile`. Roles get a `jira` context section (keys, current task, transitions) only when permitted; every outcome is a `jira (<role>): ...` history entry.
 > Design note for T8.1: `web/` is Vite 7 + React 19 + TypeScript (strict), React Router 7 and TanStack Query 5; `npm run build` writes `slipwright/api/static/` (gitignored) which `create_app` serves at `/` with an SPA fallback, or a 503 build hint when absent. `npm run gen:api` generates `src/api/schema.d.ts` from `schemas/openapi.json` with a SHA-256 header that `tests/test_phase8.py` and `npm run check:api` verify. The legacy dashboard moved to `/legacy` (retired in T8.7); only `/api` and `/legacy` require a session.
 > Design note for T8.2: the OpenAPI export marks every property of response-only models as required (`_tighten_response_schemas`, since pydantic leaves defaulted fields optional), so the TypeScript client sees `job.id: string`, not `string | undefined`; input models keep their optional fields.
+> Design note for T8.4: `PUT /api/jobs/{id}/profile` lets the human edit the Analyst's proposal before approving (engine `set_profile`, only in `awaiting_profile_approval`). Per-phase diffs and gate attempts are grouped from history notes (`developer phase N`, `build gate ... phase N`). Forms follow the server value until edited (state adjusted during render, no effects). `web/PARITY.md` is the legacy-dashboard parity list.
 
 | Phase | Task | Status |
 |-------|------|--------|
@@ -112,7 +113,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 | 8 | T8.1 React app skeleton | [x] |
 | 8 | T8.2 Login and projects list | [x] |
 | 8 | T8.3 Project page: board, progress, developments | [x] |
-| 8 | T8.4 Job page: gates, plan, diffs, steering | [ ] |
+| 8 | T8.4 Job page: gates, plan, diffs, steering | [x] |
 | 8 | T8.5 Test results page | [ ] |
 | 8 | T8.6 Settings page: GitHub, Jira, agent access and users | [ ] |
 | 8 | T8.7 Retire the server-rendered dashboard | [ ] |
@@ -521,17 +522,17 @@ talks only to `/api/*` and the SSE stream; it holds no business logic.
 
 ### T8.4 — Job page: gates, plan, diffs, steering
 **Done when**
-- [ ] `/projects/:id/jobs/:jid` shows the stage stepper (analyzing → … → done) with the
+- [x] `/projects/:id/jobs/:jid` shows the stage stepper (analyzing → … → done) with the
   current state highlighted and approval states marked
-- [ ] Profile approval: the proposed profile is shown as an editable form; approve or reject
+- [x] Profile approval: the proposed profile is shown as an editable form; approve or reject
   with feedback
-- [ ] Plan approval: epics/stories/tasks rendered with each task's goal and changed files;
+- [x] Plan approval: epics/stories/tasks rendered with each task's goal and changed files;
   approve or reject with feedback
-- [ ] Test approval: the QA case list is editable (add / remove / edit) and saved via
+- [x] Test approval: the QA case list is editable (add / remove / edit) and saved via
   `PUT .../tests` before approving
-- [ ] Per-phase diffs rendered with syntax highlighting; build-gate output shown per attempt
-- [ ] Steering: send an inbox message; consumed messages show which role consumed them
-- [ ] Feature parity with the server-rendered dashboard is checked against a written list
+- [x] Per-phase diffs rendered with syntax highlighting; build-gate output shown per attempt
+- [x] Steering: send an inbox message; consumed messages show which role consumed them
+- [x] Feature parity with the server-rendered dashboard is checked against a written list
 
 ### T8.5 — Test results page
 **Done when**

@@ -491,6 +491,14 @@ class Engine:
         job = self.orchestrator.transition(job, edges[1], note=f"rejected: {feedback}")
         return self._run(job) if run else job
 
+    def set_profile(self, job_id: str, profile: Profile) -> Job:
+        """Replace the proposed profile while the job waits for its approval."""
+        job = self.store.get(job_id)
+        if job.state is not JobState.AWAITING_PROFILE_APPROVAL:
+            raise NotAwaitingApproval(job)
+        job.profile = profile
+        return self.store.save(job)
+
     def set_test_cases(self, job_id: str, cases: list[dict[str, Any]]) -> Job:
         """Replace the proposed test list while the job waits for its approval."""
         job = self.store.get(job_id)
