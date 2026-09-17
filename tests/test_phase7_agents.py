@@ -63,7 +63,15 @@ def test_jira_action_schema() -> None:
 
 def test_example_profile_grants_jira_to_the_right_roles(seed: Profile) -> None:
     granted = {r for r in RoleName if Permission.JIRA in seed.roles[r].permissions}
-    assert granted == {RoleName.PLANNER, RoleName.DEVELOPER, RoleName.QA, RoleName.DEVOPS}
+    assert granted == {
+        RoleName.PLANNER,
+        RoleName.DEVELOPER,
+        RoleName.BACKEND,
+        RoleName.WEB_UI,
+        RoleName.MOBILE_UI,
+        RoleName.QA,
+        RoleName.DEVOPS,
+    }
 
 
 def _agentic_provider(seed: Profile) -> Any:

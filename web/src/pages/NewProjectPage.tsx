@@ -100,8 +100,13 @@ export function NewProjectPage() {
               className="mono"
               value={repoPath}
               onChange={(e) => setRepoPath(e.target.value)}
-              placeholder="C:\\src\\my-service or /home/me/my-service"
+              placeholder="/repos/my-service"
             />
+            <div className="help">
+              The path as the <em>server</em> sees it. In Docker only the mounted folder is visible:
+              put the checkout under <code>SLIPWRIGHT_REPOS</code> (default <code>./repos</code>)
+              and enter <code>/repos/&lt;name&gt;</code>.
+            </div>
           </div>
         ) : (
           <div className="field">

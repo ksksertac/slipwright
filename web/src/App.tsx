@@ -10,7 +10,8 @@ import { JobPage } from "./pages/JobPage";
 import { GitHubSettingsPage } from "./pages/settings/GitHubSettingsPage";
 import { ModelsSettingsPage } from "./pages/settings/ModelsSettingsPage";
 import { JiraSettingsPage } from "./pages/settings/JiraSettingsPage";
-import { AgentsSettingsPage } from "./pages/settings/AgentsSettingsPage";
+import { AgentsPage } from "./pages/AgentsPage";
+import { AgentDetailPage } from "./pages/AgentDetailPage";
 import { UsersSettingsPage } from "./pages/settings/UsersSettingsPage";
 
 export function App() {
@@ -34,7 +35,10 @@ export function App() {
         <Route path="/settings/models" element={<ModelsSettingsPage />} />
         <Route path="/settings/github" element={<GitHubSettingsPage />} />
         <Route path="/settings/jira" element={<JiraSettingsPage />} />
-        <Route path="/settings/agents" element={<AgentsSettingsPage />} />
+        <Route path="/settings/agents" element={<Navigate to="/agents" replace />} />
+        <Route path="/agents" element={<AgentsPage />} />
+        <Route path="/agents/:role" element={<AgentDetailPage />} />
+        <Route path="/agents/:role/:tab" element={<AgentDetailPage />} />
         <Route path="/settings/users" element={<UsersSettingsPage />} />
         <Route path="*" element={<div className="muted">Not found.</div>} />
       </Route>

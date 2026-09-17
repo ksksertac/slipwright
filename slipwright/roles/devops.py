@@ -32,8 +32,9 @@ def run(
     provider: ModelProvider | None = None,
     timeout_s: float | None = None,
     jira: dict[str, Any] | None = None,
+    standards: dict[str, Any] | None = None,
 ) -> RoleResult:
-    context = base_context(job, instructions=INSTRUCTIONS, jira=jira)
+    context = base_context(job, instructions=INSTRUCTIONS, jira=jira, standards=standards)
     context["draft"] = draft_description(job)
     context["branch_diff"] = branch_diff
     kwargs = {} if timeout_s is None else {"timeout_s": timeout_s}

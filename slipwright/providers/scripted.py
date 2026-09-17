@@ -44,7 +44,7 @@ class ScriptedProvider:
 
 def canned(profile: Profile) -> ScriptedProvider:
     """A script that takes any job through every phase with harmless outputs."""
-    return ScriptedProvider(
+    provider = ScriptedProvider(
         {
             RoleName.ANALYST: {
                 "summary": "scripted analysis",
@@ -77,8 +77,18 @@ def canned(profile: Profile) -> ScriptedProvider:
                 "pr_title": "Slipwright change",
                 "pr_body": "Automated change.",
             },
+            RoleName.SUPERVISOR: {
+                "summary": "scripted supervisor",
+                "decision": "approve",
+                "confidence": 0.9,
+                "risk": "low",
+                "reasons": ["scripted"],
+            },
         }
     )
+    for specialist in (RoleName.BACKEND, RoleName.WEB_UI, RoleName.MOBILE_UI):
+        provider.replies[specialist] = provider.replies[RoleName.DEVELOPER]
+    return provider
 
 
 def _request_from(req: ModelRequest) -> str:

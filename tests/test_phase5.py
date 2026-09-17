@@ -12,6 +12,7 @@ from slipwright.engine import WORKING_STATES, Engine
 from slipwright.githost import CiState, CiStatus
 from slipwright.providers import ModelRequest
 from slipwright.providers.scripted import ScriptedProvider, canned
+from slipwright.roles.specialists import DEVELOPER_ROLES
 from slipwright.schemas.job import APPROVAL_STATES, Job, JobState
 from slipwright.schemas.profile import Profile, RoleName, load_profile
 from slipwright.store import JobStore
@@ -53,17 +54,25 @@ def store(tmp_path: Path) -> Iterator[JobStore]:
         yield s
 
 
+DOMAINS = ["general", "backend", "web", "mobile"]
+
+
 def _provider(seed: Profile, phases: int = 2) -> ScriptedProvider:
+    """Phases cycle through the domains so every specialist gets a turn."""
     p = canned(seed)
     p.replies[RoleName.PLANNER] = {
         "summary": f"{phases} phases",
-        "phases": [{"goal": f"step {i + 1}", "files": ["OK"]} for i in range(phases)],
+        "phases": [
+            {"goal": f"step {i + 1}", "files": ["OK"], "domain": DOMAINS[i % len(DOMAINS)]}
+            for i in range(phases)
+        ],
     }
-    p.replies[RoleName.DEVELOPER] = {
-        "summary": "wrote OK",
-        "phase_complete": True,
-        "changes": [{"path": "OK", "content": "yes\n"}],
-    }
+    for role in DEVELOPER_ROLES:
+        p.replies[role] = {
+            "summary": "wrote OK",
+            "phase_complete": True,
+            "changes": [{"path": "OK", "content": "yes\n"}],
+        }
     p.replies[RoleName.QA] = lambda req: (
         {"summary": "cases", "test_cases": [{"name": "smoke", "description": "OK is yes"}]}
         if '"stage": 1' in req.prompt
@@ -123,7 +132,7 @@ def test_message_queued_mid_plan_reaches_next_developer_once(
 
     job = engine.approve(job.id)  # plan approved -> developer phase 1, phase 2, qa stage 1
 
-    dev = _requests(provider, RoleName.DEVELOPER)
+    dev = [r for r in provider.requests if r.role in DEVELOPER_ROLES]  # phase 1 general, 2 backend
     assert len(dev) == 2
     assert _context(dev[0])["messages_from_human"] == ["use snake_case everywhere"]
     assert "messages_from_human" not in _context(dev[1])  # never replayed
@@ -157,15 +166,20 @@ def test_every_role_drains_the_inbox(
             if m.consumed_by:
                 seen[m.text] = m.consumed_by
     assert job.state is JobState.DONE
-    assert set(seen.values()) == {r.value for r in RoleName}
+    assert set(seen.values()) == {r.value for r in PIPELINE_ROLES if r not in DEVELOPER_ROLES} | {
+        "developer"
+    }
     assert all(not m.pending for m in store.get(job.id).data.inbox)
 
 
 # --- T5.2 per-role model routing ----------------------------------------------------------
 
 
+PIPELINE_ROLES = [r for r in RoleName if r is not RoleName.SUPERVISOR]  # gates are manual here
+
+
 def _assert_routing(provider: ScriptedProvider, profile: Profile) -> None:
-    for role in RoleName:
+    for role in PIPELINE_ROLES:
         reqs = _requests(provider, role)
         assert reqs, f"{role.value} was never invoked"
         for req in reqs:
@@ -176,7 +190,7 @@ def _assert_routing(provider: ScriptedProvider, profile: Profile) -> None:
 def test_each_role_uses_exactly_the_model_named_in_the_profile(
     store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
 ) -> None:
-    provider = _provider(seed)
+    provider = _provider(seed, phases=4)
     engine = _engine(store, worktrees_root, seed, provider)
     job = _drive(engine, engine.start(engine.create_job("x", repo).id))
     assert job.state is JobState.DONE
@@ -189,11 +203,12 @@ def test_switching_models_in_the_profile_changes_routing_without_code_changes(
     store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
 ) -> None:
     data = seed.model_dump(mode="json")
+    depths = ["off", "low", "medium", "high", "max"]
     for i, role in enumerate(RoleName):
         data["roles"][role.value]["model"] = f"model-{i}-for-{role.value}"
-        data["roles"][role.value]["thinking_depth"] = ["off", "low", "medium", "high", "max"][i]
+        data["roles"][role.value]["thinking_depth"] = depths[i % len(depths)]
     swapped = Profile.model_validate(data)
-    provider = _provider(swapped)
+    provider = _provider(swapped, phases=4)
     engine = _engine(store, worktrees_root, swapped, provider)
 
     job = _drive(engine, engine.start(engine.create_job("x", repo).id))
@@ -201,7 +216,7 @@ def test_switching_models_in_the_profile_changes_routing_without_code_changes(
     assert job.state is JobState.DONE
     _assert_routing(provider, swapped)
     assert {r.model for r in provider.requests} == {
-        f"model-{i}-for-{role.value}" for i, role in enumerate(RoleName)
+        f"model-{i}-for-{role.value}" for i, role in enumerate(RoleName) if role in PIPELINE_ROLES
     }
 
 

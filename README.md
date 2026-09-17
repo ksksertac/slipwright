@@ -46,8 +46,9 @@ docker compose up --build -d            # http://localhost:8500
 docker compose exec slipwright slipwright user add ada   # first login (admin)
 ```
 
-- Local checkouts you want to work on go under `./repos/` (mounted at `/repos`; register
-  them with `repo_path = /repos/<name>`). GitHub repositories are cloned into the volume.
+- Local checkouts: the folder named by `SLIPWRIGHT_REPOS` in `.env` (default `./repos/`)
+  is mounted at `/repos` inside the container, so a checkout at `<that folder>/myapp` is
+  registered with `repo_path = /repos/myapp`. GitHub repositories are cloned into the volume.
 - Jobs' live environments use ports `8100–8130` (mapped through; change
   `SLIPWRIGHT_PORT_RANGE` and the port mapping in `compose.yaml` together).
 - Projects whose `run_cmd`/`build_cmd` call Docker need the socket mount that is commented

@@ -35,6 +35,7 @@ export type Permission = Schemas["Permission"];
 export type TestCaseIn = Schemas["TestCaseIn"];
 export type ProviderSettings = Schemas["ProviderSettings"];
 export type Overview = Schemas["Overview"];
+export type AgentSummary = Schemas["AgentSummary"];
 export type ProviderSettingsIn = Schemas["ProviderSettingsIn"];
 export type ProviderModels = Schemas["ProviderModels"];
 

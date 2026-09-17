@@ -21,9 +21,13 @@ PORT_PLACEHOLDER = "{port}"
 class RoleName(StrEnum):
     ANALYST = "analyst"
     PLANNER = "planner"
-    DEVELOPER = "developer"
+    DEVELOPER = "developer"  # generic implementer; specialists below take tagged phases
+    BACKEND = "backend"
+    WEB_UI = "web_ui"
+    MOBILE_UI = "mobile_ui"
     QA = "qa"
     DEVOPS = "devops"
+    SUPERVISOR = "supervisor"  # recommends (or, in auto mode, gives) gate approvals
 
 
 class ThinkingDepth(StrEnum):

@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 from enum import StrEnum
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -98,6 +99,11 @@ class PlanPhase(BaseModel):
 
     goal: str = Field(min_length=1)
     files: list[str] = Field(default_factory=list, description="Files expected to change.")
+    domain: Literal["backend", "web", "mobile", "infra", "docs", "general"] = Field(
+        default="general",
+        description="Which specialist implements the phase: backend, web, mobile, infra "
+        "(DevOps), docs or general (the generic developer).",
+    )
 
 
 class BreakdownTask(BaseModel):
@@ -226,12 +232,26 @@ class DevOpsResult(RoleOutput):
     pr_body: str = Field(min_length=1)
 
 
+class SupervisorResult(RoleOutput):
+    """Recommendation at a human gate (T9.8)."""
+
+    decision: Literal["approve", "reject"]
+    confidence: float = Field(ge=0.0, le=1.0)
+    risk: Literal["low", "medium", "high"]
+    reasons: list[str] = Field(default_factory=list)
+    feedback: str = Field(default="", description="What to change, when rejecting.")
+
+
 RESULT_SCHEMAS: dict[RoleName, type[RoleOutput]] = {
     RoleName.ANALYST: AnalystResult,
     RoleName.PLANNER: PlannerResult,
     RoleName.DEVELOPER: DeveloperResult,
+    RoleName.BACKEND: DeveloperResult,
+    RoleName.WEB_UI: DeveloperResult,
+    RoleName.MOBILE_UI: DeveloperResult,
     RoleName.QA: QAResult,
     RoleName.DEVOPS: DevOpsResult,
+    RoleName.SUPERVISOR: SupervisorResult,
 }
 
 
@@ -256,6 +276,7 @@ __all__ = [
     "PlannerResult",
     "QAResult",
     "RoleOutput",
+    "SupervisorResult",
     "TestCase",
     "result_schema_for",
 ]

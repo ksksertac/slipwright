@@ -23,8 +23,10 @@ from pydantic import BaseModel, Field
 
 from slipwright.activity import (
     ActivityItem,
+    AgentSummary,
     Overview,
     ProjectProgress,
+    agent_summaries,
     overview,
     project_activity,
     project_progress,
@@ -32,7 +34,7 @@ from slipwright.activity import (
 from slipwright.board import Board, project_board
 from slipwright.engine import Engine, NotAwaitingApproval, ProjectCloneError
 from slipwright.schemas.job import Job, Transition
-from slipwright.schemas.profile import Profile
+from slipwright.schemas.profile import Profile, RoleName
 from slipwright.schemas.project import Project, ProjectPatch
 from slipwright.schemas.testrun import TestRun
 from slipwright.store import (
@@ -178,8 +180,16 @@ def create_app(
         return overview(len(eng.store.list_projects()), eng.store.list(), recent=recent)
 
     @api.get("/activity", response_model=list[ActivityItem])
-    def get_all_activity(request: Request, limit: int | None = 50) -> list[ActivityItem]:
-        return project_activity(_engine(request).store.list(), limit=limit)
+    def get_all_activity(
+        request: Request, limit: int | None = 50, role: RoleName | None = None
+    ) -> list[ActivityItem]:
+        return project_activity(_engine(request).store.list(), limit=limit, role=role)
+
+    @api.get("/agents", response_model=list[AgentSummary])
+    def get_agents(request: Request) -> list[AgentSummary]:
+        """The agent cards: scope, default model routing and how much each has worked."""
+        eng = _engine(request)
+        return agent_summaries(eng.store.list(), eng.seed_profile)
 
     # -- projects ------------------------------------------------------------------------
 

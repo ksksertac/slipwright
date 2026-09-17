@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   api,
   type ActivityItem,
+  type AgentSummary,
   type ApiToken,
   type Board,
   type GitHubIdentity,
@@ -33,6 +34,8 @@ import {
 export const keys = {
   me: ["me"] as const,
   overview: ["overview"] as const,
+  agents: ["agents"] as const,
+  activityAll: (role: string) => ["activity", role] as const,
   projects: ["projects"] as const,
   project: (id: string) => ["projects", id] as const,
   projectJobs: (id: string) => ["projects", id, "jobs"] as const,
@@ -60,6 +63,20 @@ export function useOverview() {
   return useQuery({
     queryKey: keys.overview,
     queryFn: () => api.get<Overview>("/api/overview?recent=25"),
+  });
+}
+
+export function useAgents() {
+  return useQuery({
+    queryKey: keys.agents,
+    queryFn: () => api.get<AgentSummary[]>("/api/agents"),
+  });
+}
+
+export function useActivity_all(role: string, limit = 100) {
+  return useQuery({
+    queryKey: keys.activityAll(role),
+    queryFn: () => api.get<ActivityItem[]>(`/api/activity?role=${role}&limit=${limit}`),
   });
 }
 

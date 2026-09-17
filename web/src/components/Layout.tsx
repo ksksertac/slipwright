@@ -50,6 +50,9 @@ export function Layout() {
           <NavLink to="/projects">
             <IconFolder /> Projects
           </NavLink>
+          <NavLink to="/agents">
+            <IconBot /> Agents
+          </NavLink>
           <div className="nav-label">Settings</div>
           <NavLink to="/settings/models">
             <IconCpu /> Models
@@ -59,9 +62,6 @@ export function Layout() {
           </NavLink>
           <NavLink to="/settings/jira">
             <IconTicket /> Jira
-          </NavLink>
-          <NavLink to="/settings/agents">
-            <IconBot /> Agents
           </NavLink>
           {user?.is_admin && (
             <NavLink to="/settings/users">

@@ -53,6 +53,7 @@ from slipwright.roles.results import (
     QAResult,
     default_breakdown,
 )
+from slipwright.roles.specialists import specialist_for
 from slipwright.schemas.job import APPROVAL_STATES, Job, JobState, utcnow
 from slipwright.schemas.profile import Permission, Profile, RoleName
 from slipwright.schemas.project import Project
@@ -870,13 +871,14 @@ class Engine:
         index = job.data.phase_index
         if index >= len(phases):
             return self._fail(job, f"no plan phase {index + 1} to develop")
-        result = self._invoke(RoleName.DEVELOPER, developer.run, job, profile=profile)
+        role = specialist_for(phases[index].get("domain"))
+        result = self._invoke(role, developer.run, job, profile=profile, as_role=role)
         if not result.ok:
             return self._invocation_failed(job, result)
         assert isinstance(result.output, DeveloperResult)
 
         worktree = require_worktree(job)
-        touched = apply_changes(job, profile, RoleName.DEVELOPER, result.output.changes)
+        touched = apply_changes(job, profile, role, result.output.changes)
         g.stage_all(worktree)
         diff = g.staged_diff(worktree)
         attempt = f", fix attempt {job.data.build_attempts}" if job.data.build_attempts else ""
@@ -884,11 +886,19 @@ class Engine:
             job,
             JobState.BUILD_GATE,
             note=(
-                f"developer phase {index + 1}/{len(phases)}{attempt}: "
+                f"{role.value} phase {index + 1}/{len(phases)}{attempt}: "
                 f"{result.output.summary} ({len(touched)} files)"
             ),
             detail=diff or "(no changes)",
         )
+
+    def _last_specialist(self, job: Job) -> RoleName:
+        """The specialist that wrote the last phase: it also handles CI fixes."""
+        phases = self._phases(job)
+        if not phases:
+            return RoleName.DEVELOPER
+        index = min(max(job.data.phase_index - 1, 0), len(phases) - 1)
+        return specialist_for(phases[index].get("domain"))
 
     def _build_gate(self, job: Job) -> Job:
         phases = self._phases(job)
@@ -1037,17 +1047,19 @@ class Engine:
                     f"CI red after {self.max_ci_attempts} fix attempts",
                     detail=status.log or status.summary,
                 )
+            fixer = self._last_specialist(job)
             fix = self._invoke(
-                RoleName.DEVELOPER,
+                fixer,
                 developer.run,
                 job,
                 profile=profile,
                 ci_failure=status.log or status.summary,
+                as_role=fixer,
             )
             if not fix.ok:
                 return self._invocation_failed(job, fix)
             assert isinstance(fix.output, DeveloperResult)
-            apply_changes(job, profile, RoleName.DEVELOPER, fix.output.changes)
+            apply_changes(job, profile, fixer, fix.output.changes)
             g.stage_all(worktree)
             g.commit(worktree, f"slipwright: CI fix {job.data.ci_attempts}: {fix.output.summary}")
             try:

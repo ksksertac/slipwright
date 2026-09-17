@@ -57,8 +57,12 @@
         "analyst",
         "planner",
         "developer",
+        "backend",
+        "web_ui",
+        "mobile_ui",
         "qa",
-        "devops"
+        "devops",
+        "supervisor"
       ],
       "title": "RoleName",
       "type": "string"

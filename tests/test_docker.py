@@ -23,7 +23,7 @@ def test_compose_maps_ports_state_and_repos() -> None:
     compose = (ROOT / "compose.yaml").read_text(encoding="utf-8")
     assert '"8500:8500"' in compose
     assert "SLIPWRIGHT_PORT_RANGE" in compose and "8100-8130:8100-8130" in compose
-    assert "slipwright-state:/data" in compose and "./repos:/repos" in compose
+    assert "slipwright-state:/data" in compose and "${SLIPWRIGHT_REPOS:-./repos}:/repos" in compose
     for var in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "DEEPSEEK_API_KEY", "SLIPWRIGHT_SECRET_KEY"):
         assert var in compose, var
     example = (ROOT / ".env.example").read_text(encoding="utf-8")

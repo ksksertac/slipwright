@@ -241,15 +241,15 @@ def test_settings_pages_cover_github_jira_agents_and_users() -> None:
     jira = _src("pages/settings/JiraSettingsPage.tsx")
     for expected in ("site_url", "issue_types", "useTestJira", "clear_token", "display_name"):
         assert expected in jira, expected
-    agents = _src("pages/settings/AgentsSettingsPage.tsx")
+    agents = _src("components/JiraAgentSetup.tsx") + _src("pages/AgentDetailPage.tsx")
     for expected in (
         "agent_email",
         "agent_token",
         "act through the human connection",  # warning when falling back to the human token
         "/api/settings/profile",  # engine default seed as the starting point
-        "ProfileForm",  # per-role model, thinking depth and permissions (jira toggle)
         "usePatchProject",  # written into the project's seed profile
         "jira_transitions",
+        '"jira"',  # the jira permission toggle per role
     ):
         assert expected in agents, expected
     profile_form = _src("components/ProfileForm.tsx")

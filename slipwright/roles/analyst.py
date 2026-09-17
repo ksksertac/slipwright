@@ -31,9 +31,12 @@ def run(
     provider: ModelProvider | None = None,
     timeout_s: float | None = None,
     jira: dict[str, Any] | None = None,
+    standards: dict[str, Any] | None = None,
 ) -> RoleResult:
     worktree = require_worktree(job)
-    context = base_context(job, instructions=INSTRUCTIONS, feedback=job.data.feedback, jira=jira)
+    context = base_context(
+        job, instructions=INSTRUCTIONS, feedback=job.data.feedback, jira=jira, standards=standards
+    )
     context["seed_profile"] = seed.model_dump(mode="json")
     context["previous_profile"] = (
         None if job.profile is None else job.profile.model_dump(mode="json")

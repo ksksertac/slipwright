@@ -42,19 +42,25 @@ def run(
     timeout_s: float | None = None,
     ci_failure: str | None = None,
     jira: dict[str, Any] | None = None,
+    as_role: RoleName = RoleName.DEVELOPER,
+    standards: dict[str, Any] | None = None,
 ) -> RoleResult:
+    """Run the generic developer or, with ``role``, one of the specialists."""
+    from slipwright.roles.specialists import INSTRUCTIONS as SPECIALIST_INSTRUCTIONS
+
     plan = job.data.plan or {}
     phases: list[dict[str, Any]] = plan.get("phases", [])
     worktree = require_worktree(job)
+    instructions = SPECIALIST_INSTRUCTIONS.get(as_role, INSTRUCTIONS)
 
     if ci_failure is not None:
-        context = base_context(job, instructions=FIX_INSTRUCTIONS, jira=jira)
+        context = base_context(job, instructions=FIX_INSTRUCTIONS, jira=jira, standards=standards)
         context["ci_failure"] = ci_failure
         wanted = sorted({f for phase in phases for f in phase.get("files", [])})
     else:
         index = job.data.phase_index
         phase = phases[index] if index < len(phases) else {}
-        context = base_context(job, instructions=INSTRUCTIONS, jira=jira)
+        context = base_context(job, instructions=instructions, jira=jira, standards=standards)
         context["current_phase"] = {"number": index + 1, "of": len(phases), **phase}
         if job.data.last_build_output:
             context["build_failure"] = job.data.last_build_output
@@ -66,7 +72,7 @@ def run(
     context["files"] = read_files(worktree, wanted)
 
     kwargs = {} if timeout_s is None else {"timeout_s": timeout_s}
-    return invoke_role(RoleName.DEVELOPER, profile, context, provider=provider, **kwargs)
+    return invoke_role(as_role, profile, context, provider=provider, **kwargs)
 
 
 __all__ = ["FIX_INSTRUCTIONS", "INSTRUCTIONS", "run"]

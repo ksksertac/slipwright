@@ -14,8 +14,9 @@ from enum import StrEnum
 from pydantic import BaseModel, ConfigDict
 
 from slipwright.board import TaskStatus, job_epics
+from slipwright.roles.specialists import LABEL, SCOPE, STANDARDS_DOMAIN
 from slipwright.schemas.job import APPROVAL_STATES, TERMINAL_STATES, Job, JobState, Transition
-from slipwright.schemas.profile import RoleName
+from slipwright.schemas.profile import Profile, RoleName
 
 
 class ActivityKind(StrEnum):
@@ -77,6 +78,46 @@ class Overview(BaseModel):
     tasks_total: int
     waiting: list[JobProgress]
     recent: list[ActivityItem]
+
+
+class AgentSummary(BaseModel):
+    """One agent card: what it is and how much it has worked."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    role: RoleName
+    label: str
+    scope: str
+    standards_domain: str
+    invocations: int
+    last_used: datetime | None
+    model: str
+    provider: str | None
+    thinking_depth: str
+    permissions: list[str]
+
+
+def agent_summaries(jobs: list[Job], seed: Profile) -> list[AgentSummary]:
+    items = [i for job in jobs for i in job_activity(job) if i.kind is ActivityKind.ROLE]
+    out: list[AgentSummary] = []
+    for role in RoleName:
+        mine = [i for i in items if i.role is role]
+        cfg = seed.roles[role]
+        out.append(
+            AgentSummary(
+                role=role,
+                label=LABEL[role],
+                scope=SCOPE[role],
+                standards_domain=STANDARDS_DOMAIN[role],
+                invocations=len(mine),
+                last_used=max((i.at for i in mine), default=None),
+                model=cfg.model,
+                provider=cfg.provider,
+                thinking_depth=cfg.thinking_depth.value,
+                permissions=[p.value for p in cfg.permissions],
+            )
+        )
+    return out
 
 
 class ProjectProgress(BaseModel):
@@ -179,14 +220,10 @@ def overview(projects: int, jobs: list[Job], *, recent: int = 20) -> Overview:
 
 _INBOX = re.compile(r"^inbox: \d+ message\(s\) consumed by (\w+)")
 _JIRA = re.compile(r"^jira(?: \((\w+)\))?:")
-_ROLE_PREFIX = {
-    "analyst:": RoleName.ANALYST,
-    "planner:": RoleName.PLANNER,
-    "developer": RoleName.DEVELOPER,
-    "qa:": RoleName.QA,
-    "PR ": RoleName.DEVOPS,
-    "devops:": RoleName.DEVOPS,
-}
+_ROLE_PREFIX: dict[str, RoleName] = {"PR ": RoleName.DEVOPS}
+for _role in RoleName:
+    _ROLE_PREFIX[f"{_role.value}:"] = _role
+    _ROLE_PREFIX[f"{_role.value} phase"] = _role
 
 
 def classify(t: Transition) -> tuple[ActivityKind, RoleName | None]:
@@ -245,9 +282,13 @@ def job_activity(job: Job) -> list[ActivityItem]:
     return items
 
 
-def project_activity(jobs: list[Job], *, limit: int | None = None) -> list[ActivityItem]:
+def project_activity(
+    jobs: list[Job], *, limit: int | None = None, role: RoleName | None = None
+) -> list[ActivityItem]:
     """Every job's history, newest first (stable on ties so one job's order is kept)."""
     items = [i for job in jobs for i in job_activity(job)]
+    if role is not None:
+        items = [i for i in items if i.role is role]
     items.sort(key=lambda i: (i.at, i.index))
     items.reverse()
     return items[:limit] if limit else items
@@ -256,6 +297,8 @@ def project_activity(jobs: list[Job], *, limit: int | None = None) -> list[Activ
 __all__ = [
     "ActivityItem",
     "ActivityKind",
+    "AgentSummary",
+    "agent_summaries",
     "JobProgress",
     "Overview",
     "overview",

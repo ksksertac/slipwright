@@ -28,6 +28,8 @@ export function useLiveEvents(projectId?: string) {
       void qc.invalidateQueries({ queryKey: keys.projects });
       void qc.invalidateQueries({ queryKey: keys.overview });
       void qc.invalidateQueries({ queryKey: ["overview", "badge"] });
+      void qc.invalidateQueries({ queryKey: keys.agents });
+      void qc.invalidateQueries({ queryKey: ["activity"] });
       if (event.job_id) {
         void qc.invalidateQueries({ queryKey: keys.job(event.job_id) });
       }

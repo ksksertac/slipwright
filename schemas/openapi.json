@@ -92,6 +92,83 @@
         "title": "ActivityKind",
         "type": "string"
       },
+      "AgentSummary": {
+        "additionalProperties": false,
+        "description": "One agent card: what it is and how much it has worked.",
+        "properties": {
+          "invocations": {
+            "title": "Invocations",
+            "type": "integer"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "last_used": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "permissions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Permissions",
+            "type": "array"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "role": {
+            "$ref": "#/components/schemas/RoleName"
+          },
+          "scope": {
+            "title": "Scope",
+            "type": "string"
+          },
+          "standards_domain": {
+            "title": "Standards Domain",
+            "type": "string"
+          },
+          "thinking_depth": {
+            "title": "Thinking Depth",
+            "type": "string"
+          }
+        },
+        "required": [
+          "invocations",
+          "label",
+          "last_used",
+          "model",
+          "permissions",
+          "provider",
+          "role",
+          "scope",
+          "standards_domain",
+          "thinking_depth"
+        ],
+        "title": "AgentSummary",
+        "type": "object"
+      },
       "ApiToken": {
         "additionalProperties": false,
         "description": "A bearer token's public half; the secret is shown once at creation.",
@@ -1963,8 +2040,12 @@
           "analyst",
           "planner",
           "developer",
+          "backend",
+          "web_ui",
+          "mobile_ui",
           "qa",
-          "devops"
+          "devops",
+          "supervisor"
         ],
         "title": "RoleName",
         "type": "string"
@@ -2417,6 +2498,22 @@
               "default": 50,
               "title": "Limit"
             }
+          },
+          {
+            "in": "query",
+            "name": "role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/RoleName"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Role"
+            }
           }
         ],
         "responses": {
@@ -2446,6 +2543,29 @@
           }
         },
         "summary": "Get All Activity"
+      }
+    },
+    "/api/agents": {
+      "get": {
+        "description": "The agent cards: scope, default model routing and how much each has worked.",
+        "operationId": "get_agents_api_agents_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AgentSummary"
+                  },
+                  "title": "Response Get Agents Api Agents Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Agents"
       }
     },
     "/api/auth/login": {

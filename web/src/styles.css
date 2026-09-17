@@ -1293,3 +1293,32 @@ a.tag:hover {
   margin-bottom: 16px;
   font-size: 18px;
 }
+
+/* agents */
+.agent-ico {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  display: grid;
+  place-items: center;
+  flex: 0 0 38px;
+}
+.agent-ico svg {
+  width: 20px;
+  height: 20px;
+}
+.agent-ico.lg {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  flex-basis: 48px;
+}
+.agent-ico.lg svg {
+  width: 24px;
+  height: 24px;
+}
+a.pcard:hover {
+  text-decoration: none;
+}

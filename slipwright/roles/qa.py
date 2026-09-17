@@ -40,11 +40,14 @@ def run(
     provider: ModelProvider | None = None,
     timeout_s: float | None = None,
     jira: dict[str, Any] | None = None,
+    standards: dict[str, Any] | None = None,
 ) -> RoleResult:
     stage = job.data.qa_stage
     worktree = require_worktree(job)
     instructions = STAGE_ONE if stage == 1 else STAGE_TWO
-    context = base_context(job, instructions=instructions, feedback=job.data.feedback, jira=jira)
+    context = base_context(
+        job, instructions=instructions, feedback=job.data.feedback, jira=jira, standards=standards
+    )
     context["stage"] = stage
     context["project"] = _project_facts(profile)
     context["plan"] = job.data.plan

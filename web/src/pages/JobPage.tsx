@@ -19,6 +19,7 @@ import {
 } from "../api/hooks";
 import { api } from "../api/client";
 import { ActivityRow } from "../components/ActivityRow";
+import { DomainBadge } from "../components/agents";
 import { Crumbs } from "../components/Crumbs";
 import { Detail } from "../components/Detail";
 import { Diff } from "../components/Diff";
@@ -274,7 +275,7 @@ function PlanGate({ job }: { job: Job }) {
 
 interface PlanShape {
   summary?: string;
-  phases: { goal: string; files?: string[] }[];
+  phases: { goal: string; files?: string[]; domain?: string }[];
   breakdown?: {
     epics: {
       id: string;
@@ -336,7 +337,8 @@ function BreakdownTree({ plan }: { plan: PlanShape }) {
                           <span className="title">
                             {task.title}
                             <div className="muted small">
-                              phase {task.phase}: {phase?.goal}
+                              phase {task.phase}: {phase?.goal}{" "}
+                              <DomainBadge domain={phase?.domain} />
                               {phase?.files && phase.files.length > 0 && (
                                 <span className="mono"> — {phase.files.join(", ")}</span>
                               )}
@@ -471,6 +473,7 @@ interface PhaseGroup {
   number: number;
   goal: string;
   files: string[];
+  domain?: string;
   entries: Transition[];
 }
 
@@ -481,11 +484,12 @@ function groupByPhase(job: Job): PhaseGroup[] {
     number: i + 1,
     goal: p.goal,
     files: p.files ?? [],
+    domain: p.domain,
     entries: [],
   }));
   for (const t of job.history) {
     const note = t.note ?? "";
-    const m = /(?:developer phase|build gate (?:passed for|failed on) phase) (\d+)/.exec(note);
+    const m = /(?:\w+ phase|build gate (?:passed for|failed on) phase) (\d+)/.exec(note);
     if (m) {
       const n = Number(m[1]);
       groups[n - 1]?.entries.push(t);
@@ -509,6 +513,7 @@ function Phases({ job }: { job: Job }) {
               <strong>
                 Phase {g.number}: {g.goal}
               </strong>
+              <DomainBadge domain={g.domain} />
               {g.files.length > 0 && <div className="muted small mono">{g.files.join(", ")}</div>}
             </div>
             <span className="muted small">

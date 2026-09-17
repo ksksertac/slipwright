@@ -103,6 +103,7 @@ def base_context(
     instructions: str,
     feedback: str | None = None,
     jira: dict[str, Any] | None = None,
+    standards: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Context every role receives: the request, any rejection feedback, pending inbox,
     and (only for roles allowed to act in Jira) the Jira section."""
@@ -111,6 +112,8 @@ def base_context(
         ctx["feedback"] = feedback
     if jira:
         ctx["jira"] = jira
+    if standards:
+        ctx["standards"] = standards
     pending = [m.text for m in job.pending_messages]
     if pending:
         ctx["messages_from_human"] = pending
