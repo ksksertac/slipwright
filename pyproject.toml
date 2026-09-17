@@ -15,6 +15,9 @@ dependencies = [
     "cryptography>=42",
 ]
 
+[project.optional-dependencies]
+local-embeddings = ["sentence-transformers>=3.0"]
+
 [project.scripts]
 slipwright = "slipwright.cli:main"
 
@@ -51,3 +54,7 @@ python_version = "3.12"
 strict = true
 packages = ["slipwright"]
 plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["sentence_transformers", "sentence_transformers.*"]
+ignore_missing_imports = true

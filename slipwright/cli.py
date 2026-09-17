@@ -12,6 +12,8 @@ slipwright message <job-id> "<text>"  steer a running job
 slipwright user add <name>            create a login (the first one is admin)
 slipwright user list                  list logins
 slipwright token new <name>           issue a bearer token for the CLI (SLIPWRIGHT_TOKEN)
+slipwright standards reindex          rebuild the standards index (works on the state dir)
+slipwright standards search "<q>"     see which sections a task would retrieve
 
 Client commands authenticate with --token or the SLIPWRIGHT_TOKEN environment variable.
 """
@@ -129,6 +131,16 @@ def build_parser() -> argparse.ArgumentParser:
     tnew.add_argument("name", help="username")
     tnew.add_argument("--label", default="cli")
 
+    standards = sub.add_parser("standards", help="standards corpus and its search index")
+    ssub = standards.add_subparsers(dest="standards_command", required=True)
+    sre = ssub.add_parser("reindex", help="rebuild the index from the Markdown corpus")
+    sre.add_argument("--project", default=None, help="also index this project's overrides")
+    sse = ssub.add_parser("search", help="try a query")
+    sse.add_argument("query")
+    sse.add_argument("--domain", default=None)
+    sse.add_argument("--project", default=None)
+    sse.add_argument("-k", type=int, default=4)
+
     project = sub.add_parser("project", help="manage projects")
     psub = project.add_subparsers(dest="project_command", required=True)
     pnew = psub.add_parser("new", help="register a project")
@@ -178,6 +190,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _user(settings, args)
     if args.command == "token":
         return _token_cmd(settings, args)
+    if args.command == "standards":
+        return _standards(settings, args)
 
     try:
         if args.command == "project":
@@ -292,6 +306,41 @@ def _token_cmd(settings: Settings, args: argparse.Namespace) -> int:
             return 1
         _, secret = store.create_token(user.id, args.label)
         print(secret)
+    return 0
+
+
+def _standards(settings: Settings, args: argparse.Namespace) -> int:
+    from slipwright.config import build_engine
+    from slipwright.standards.index import StandardsIndexError
+
+    engine = build_engine(settings)
+    try:
+        if args.standards_command == "reindex":
+            result = engine.reindex_standards(None, force=True)
+            print(f"global: {result}")
+            projects = (
+                [engine.store.get_project(args.project)]
+                if args.project
+                else engine.store.list_projects()
+            )
+            for project in projects:
+                print(f"{project.name}: {engine.reindex_standards(project.id, force=True)}")
+        else:
+            hits = engine.search_standards(
+                args.query, args.domain, project_id=args.project, k=args.k
+            )
+            if not hits:
+                print("no matching sections")
+            for hit in hits:
+                print(
+                    f"{hit.score:.3f}  [{hit.chunk.domain}] {hit.chunk.title} — {hit.chunk.heading}"
+                )
+                print(f"        {hit.chunk.page} ({hit.chunk.scope})")
+    except StandardsIndexError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    finally:
+        engine.store.close()
     return 0
 
 

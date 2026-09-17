@@ -16,6 +16,7 @@ from slipwright.jira import JiraAccount, JiraError, JiraProject, JiraSettings
 from slipwright.providers import ProviderError
 from slipwright.providers.registry import PROVIDERS
 from slipwright.schemas.profile import Profile
+from slipwright.standards.index import StandardsIndexError
 
 router = APIRouter(tags=["settings"])
 
@@ -159,6 +160,109 @@ def provider_models(name: str, request: Request) -> ProviderModels:
     except ProviderError as exc:
         status = 400 if "no API key" in str(exc) else 502
         raise HTTPException(status_code=status, detail=str(exc)) from exc
+
+
+# -- standards (RAG) ---------------------------------------------------------------------------
+
+
+class StandardsSettings(BaseModel):
+    embedder: str
+    embedding_model: str
+    local_model: str
+    top_k: int
+    token_budget: int
+
+
+class StandardsSettingsIn(BaseModel):
+    embedder: str | None = Field(default=None, description="none | openai | local | hashing")
+    embedding_model: str | None = None
+    local_model: str | None = None
+    top_k: int | None = Field(default=None, ge=1, le=20)
+    token_budget: int | None = Field(default=None, ge=200, le=20000)
+
+
+class StandardsStatus(BaseModel):
+    settings: StandardsSettings
+    chunks: int
+    embedded: int
+    per_domain: dict[str, int]
+
+
+class StandardsHit(BaseModel):
+    id: str
+    domain: str
+    page: str
+    heading: str
+    text: str
+    scope: str
+    score: float
+    keyword: float
+    semantic: float
+
+
+@router.get("/settings/standards", response_model=StandardsStatus)
+def get_standards(request: Request) -> StandardsStatus:
+    eng = _engine(request)
+    eng.ensure_standards_indexed()
+    stats = eng.standards_index.stats()
+    return StandardsStatus(
+        settings=StandardsSettings(**eng.standards_settings()),
+        chunks=stats["chunks"],
+        embedded=stats["embedded"],
+        per_domain=stats["per_domain"],
+    )
+
+
+@router.put("/settings/standards", response_model=StandardsSettings)
+def put_standards(body: StandardsSettingsIn, request: Request) -> StandardsSettings:
+    require_admin(request)
+    if body.embedder is not None and body.embedder not in ("none", "openai", "local", "hashing"):
+        raise HTTPException(
+            status_code=400, detail="embedder must be none, openai, local or hashing"
+        )
+    return StandardsSettings(**_engine(request).update_standards_settings(**body.model_dump()))
+
+
+@router.post("/settings/standards/reindex", response_model=StandardsStatus)
+def reindex_standards(request: Request, project_id: str | None = None) -> StandardsStatus:
+    require_admin(request)
+    eng = _engine(request)
+    try:
+        eng.reindex_standards(None, force=True)
+        if project_id:
+            eng.reindex_standards(project_id, force=True)
+        else:
+            for project in eng.store.list_projects():
+                eng.reindex_standards(project.id, force=True)
+    except StandardsIndexError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return get_standards(request)
+
+
+@router.get("/settings/standards/search", response_model=list[StandardsHit])
+def search_standards(
+    request: Request, q: str, domain: str | None = None, project_id: str | None = None, k: int = 4
+) -> list[StandardsHit]:
+    """Try a query the way the agents do: ranked sections with their scores."""
+    eng = _engine(request)
+    try:
+        hits = eng.search_standards(q, domain, project_id=project_id, k=k)
+    except StandardsIndexError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return [
+        StandardsHit(
+            id=h.chunk.id,
+            domain=h.chunk.domain,
+            page=h.chunk.page,
+            heading=f"{h.chunk.title} — {h.chunk.heading}",
+            text=h.chunk.text,
+            scope=h.chunk.scope,
+            score=round(h.score, 3),
+            keyword=round(h.keyword, 3),
+            semantic=round(h.semantic, 3),
+        )
+        for h in hits
+    ]
 
 
 # -- Jira ------------------------------------------------------------------------------------

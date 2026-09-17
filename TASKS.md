@@ -36,7 +36,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 
 ## Progress
 
-> **Resume here:** Phases 0–8, T9.1 and T9.2 are complete. Next task is **T9.3 — Standards index (RAG)**.
+> **Resume here:** Phases 0–8 and T9.1–T9.3 are complete. Next: role model refactor (T9.0, PO / Architect / QA), then **T9.4**.
 > Design note for T1.3: `run_cmd` is executed as a subprocess in the worktree (Docker is used
 > only if the profile's `run_cmd` itself invokes it).
 > Design note for T2.2: `invoke_role` talks to a `ModelProvider` (`slipwright/providers/`);
@@ -84,6 +84,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 > Design note for T8.7: `slipwright/api/ui.py` and its T5.3 test are gone; the React app at `/` is the dashboard (`web/PARITY.md`). `tests/test_phase8_e2e.py` is the Phase 6–8 definition of done driven through the API exactly as the browser does it, with fake GitHub/Jira and the scripted provider.
 > Design note for T9.1: `roles/specialists.py` maps `PlanPhase.domain` → role (`specialist_for`), holds the specialist instructions and the role→standards-domain map; `developer.run(as_role=...)` serves all four implementer roles; history notes are `<role> phase N/M`. `supervisor` is already in `RoleName` for T9.8. `/agents` cards come from `GET /api/agents` (`activity.agent_summaries`).
 > Design note for T9.2: `slipwright/standards/__init__.py` loads pages (front-matter: domain/tags/applies_to), splits them into `##` chunks whose ids are content hashes, and lints them (`scripts/check_standards.py`, also run by tests). Project overrides live in `<repo>/.slipwright/standards/`; the Docker image copies `standards/`.
+> Design note for T9.3: `standards/index.py` keeps chunks in `<state>/standards.sqlite3` (FTS5 with the porter tokenizer, heading-weighted BM25) plus optional embeddings (`none` / `openai` / `local` / `hashing`); ranking is reciprocal rank fusion of the two lists with a small bonus for project-scope chunks. `Engine.reindex_standards` is incremental by chunk id and skipped when a corpus fingerprint (paths, sizes, mtimes) is unchanged; `ensure_standards_indexed` runs before every search and at API startup.
 
 | Phase | Task | Status |
 |-------|------|--------|
@@ -126,7 +127,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 | 8 | T8.9 UI redesign: dashboard, cards, edit/delete flows, theme | [x] |
 | 9 | T9.1 Specialist agents: backend, web UI, mobile UI | [x] |
 | 9 | T9.2 Standards corpus | [x] |
-| 9 | T9.3 Standards index (RAG) | [ ] |
+| 9 | T9.3 Standards index (RAG) | [x] |
 | 9 | T9.4 Retrieval into every role's prompt | [ ] |
 | 9 | T9.5 Standards review gate | [ ] |
 | 9 | T9.6 Standards in the UI | [ ] |
@@ -723,19 +724,19 @@ Design decisions, made up front so tasks do not re-litigate them:
 
 ### T9.3 — Standards index (RAG)
 **Done when**
-- [ ] `slipwright/standards/`: `chunker` (split by `##`, keep the file title and domain in
+- [x] `slipwright/standards/`: `chunker` (split by `##`, keep the file title and domain in
   every chunk), `Embedder` protocol with `openai`, `local` (optional extra
   `uv sync --extra local-embeddings`) and `none` implementations, `StandardsIndex` over
   SQLite (`standards_chunks` + FTS5 virtual table + embedding blob)
-- [ ] `search(query, domain, k=4)` returns ranked chunks with scores and source
+- [x] `search(query, domain, k=4)` returns ranked chunks with scores and source
   (file, heading); hybrid rank = FTS5 BM25 merged with cosine when embeddings exist;
   project chunks outrank global ones on equal score
-- [ ] `slipwright standards reindex [--project <id>]` and automatic reindex on server
+- [x] `slipwright standards reindex [--project <id>]` and automatic reindex on server
   start and when a project's `.slipwright/standards/` changes (mtime check); indexing is
   incremental by content hash so unchanged chunks are not re-embedded
-- [ ] Settings store the embedder choice (`standards.embedder`); OpenAI embeddings use the
+- [x] Settings store the embedder choice (`standards.embedder`); OpenAI embeddings use the
   key from Settings → Models
-- [ ] Tests use a deterministic fake embedder: "Kafka consumer yaz" retrieves the retry
+- [x] Tests use a deterministic fake embedder: "Kafka consumer yaz" retrieves the retry
   policy section; a `web` query never returns backend chunks; reindex after editing a file
   replaces only that file's chunks
 

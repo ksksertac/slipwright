@@ -58,6 +58,18 @@ from slipwright.schemas.job import APPROVAL_STATES, Job, JobState, utcnow
 from slipwright.schemas.profile import Permission, Profile, RoleName
 from slipwright.schemas.project import Project
 from slipwright.schemas.testrun import TestRun, TestRunSource, TestRunStatus
+from slipwright.standards import GLOBAL_DIR, PROJECT_SUBDIR, load_corpus
+from slipwright.standards.index import (
+    Embedder,
+    HashingEmbedder,
+    Hit,
+    LocalEmbedder,
+    NoEmbedder,
+    OpenAIEmbedder,
+    StandardsIndex,
+    StandardsIndexError,
+    corpus_fingerprint,
+)
 from slipwright.store import JobInProgress, JobStore, ProjectNotFound
 from slipwright.workspace import Workspace
 from slipwright.workspace import git as g
@@ -132,6 +144,9 @@ class Engine:
         # clones of remote repositories live next to the worktrees
         self.repos_root = repos_root or workspace.worktrees_root.parent / "repos"
         self.test_runs_root = workspace.worktrees_root.parent / "test-runs"
+        self.standards_db = workspace.worktrees_root.parent / "standards.sqlite3"
+        self.standards_dir = GLOBAL_DIR
+        self._standards_index: StandardsIndex | None = None
         self.orchestrator = Orchestrator(store)
         self.seed_profile = seed_profile
         self._provider = provider
@@ -442,6 +457,103 @@ class Engine:
             detail="\n".join(o.line() for o in outcomes),
         )
         job.history = self.store.get(job.id).history
+
+    # -- standards (RAG) -------------------------------------------------------------------
+
+    def standards_settings(self) -> dict[str, Any]:
+        data: dict[str, Any] = self.store.get_setting("standards", {}) or {}
+        return {
+            "embedder": data.get("embedder") or "none",
+            "embedding_model": data.get("embedding_model") or "text-embedding-3-small",
+            "local_model": data.get("local_model") or "BAAI/bge-m3",
+            "top_k": int(data.get("top_k") or 4),
+            "token_budget": int(data.get("token_budget") or 2000),
+        }
+
+    def update_standards_settings(self, **changes: Any) -> dict[str, Any]:
+        data: dict[str, Any] = self.store.get_setting("standards", {}) or {}
+        for key, value in changes.items():
+            if value is not None:
+                data[key] = value
+        self.store.set_setting("standards", data)
+        self._standards_index = None  # rebuilt with the new embedder on next use
+        return self.standards_settings()
+
+    def _build_embedder(self) -> Embedder:
+        settings = self.standards_settings()
+        name = settings["embedder"]
+        if name == "openai":
+            creds = self.provider_credentials("openai")
+            if creds is None:
+                raise StandardsIndexError(
+                    "openai embeddings need an OpenAI key (Settings → Models)"
+                )
+            return OpenAIEmbedder(
+                creds.api_key,
+                creds.base_url,
+                settings["embedding_model"],
+                transport=self.http_transport,
+            )
+        if name == "local":
+            return LocalEmbedder(settings["local_model"])
+        if name == "hashing":
+            return HashingEmbedder()
+        return NoEmbedder()
+
+    @property
+    def standards_index(self) -> StandardsIndex:
+        if self._standards_index is None:
+            self.standards_db.parent.mkdir(parents=True, exist_ok=True)
+            self._standards_index = StandardsIndex(self.standards_db, self._build_embedder())
+        return self._standards_index
+
+    def _standards_paths(self, project: Project | None) -> list[Path]:
+        if project is None:
+            return sorted(self.standards_dir.rglob("*.md")) if self.standards_dir.is_dir() else []
+        if project.repo_path is None:
+            return []
+        override = project.repo_path / PROJECT_SUBDIR
+        return sorted(override.rglob("*.md")) if override.is_dir() else []
+
+    def reindex_standards(
+        self, project_id: str | None = None, *, force: bool = False
+    ) -> dict[str, Any]:
+        """Index the global corpus, or one project's overrides. Skipped when the files did
+        not change since the last pass unless ``force``."""
+        index = self.standards_index
+        project = self.store.get_project(project_id) if project_id else None
+        paths = self._standards_paths(project)
+        stamp = corpus_fingerprint(paths) + ":" + index.embedder.name
+        if not force and index.fingerprint(project_id) == stamp:
+            return {"skipped": True, "chunks": 0}
+        if project is None:
+            pages = load_corpus(self.standards_dir)
+        else:
+            pages = [
+                p
+                for p in load_corpus(Path("/nonexistent"), project.repo_path)
+                if p.scope == "project"
+            ]
+        result = index.reindex(pages, project_id=project_id)
+        index.set_fingerprint(project_id, stamp)
+        return {"skipped": False, **result}
+
+    def ensure_standards_indexed(self, project_id: str | None = None) -> None:
+        """Cheap mtime check, then an incremental reindex if anything changed."""
+        try:
+            self.reindex_standards(None)
+            if project_id is not None:
+                self.reindex_standards(project_id)
+        except StandardsIndexError as exc:
+            log.warning("standards index unavailable: %s", exc)
+
+    def search_standards(
+        self, query: str, domain: str | None, *, project_id: str | None = None, k: int | None = None
+    ) -> list[Hit]:
+        self.ensure_standards_indexed(project_id)
+        return self.standards_index.search(
+            query, domain, k=k or self.standards_settings()["top_k"], project_id=project_id
+        )
 
     def _jira_sync_for(self, job: Job) -> JiraSync | None:
         if job.project_id is None:

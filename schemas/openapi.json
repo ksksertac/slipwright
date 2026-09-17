@@ -2050,6 +2050,188 @@
         "title": "RoleName",
         "type": "string"
       },
+      "StandardsHit": {
+        "properties": {
+          "domain": {
+            "title": "Domain",
+            "type": "string"
+          },
+          "heading": {
+            "title": "Heading",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "keyword": {
+            "title": "Keyword",
+            "type": "number"
+          },
+          "page": {
+            "title": "Page",
+            "type": "string"
+          },
+          "scope": {
+            "title": "Scope",
+            "type": "string"
+          },
+          "score": {
+            "title": "Score",
+            "type": "number"
+          },
+          "semantic": {
+            "title": "Semantic",
+            "type": "number"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "domain",
+          "heading",
+          "id",
+          "keyword",
+          "page",
+          "scope",
+          "score",
+          "semantic",
+          "text"
+        ],
+        "title": "StandardsHit",
+        "type": "object"
+      },
+      "StandardsSettings": {
+        "properties": {
+          "embedder": {
+            "title": "Embedder",
+            "type": "string"
+          },
+          "embedding_model": {
+            "title": "Embedding Model",
+            "type": "string"
+          },
+          "local_model": {
+            "title": "Local Model",
+            "type": "string"
+          },
+          "token_budget": {
+            "title": "Token Budget",
+            "type": "integer"
+          },
+          "top_k": {
+            "title": "Top K",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "embedder",
+          "embedding_model",
+          "local_model",
+          "token_budget",
+          "top_k"
+        ],
+        "title": "StandardsSettings",
+        "type": "object"
+      },
+      "StandardsSettingsIn": {
+        "properties": {
+          "embedder": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "none | openai | local | hashing",
+            "title": "Embedder"
+          },
+          "embedding_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Embedding Model"
+          },
+          "local_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Local Model"
+          },
+          "token_budget": {
+            "anyOf": [
+              {
+                "maximum": 20000.0,
+                "minimum": 200.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Token Budget"
+          },
+          "top_k": {
+            "anyOf": [
+              {
+                "maximum": 20.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top K"
+          }
+        },
+        "title": "StandardsSettingsIn",
+        "type": "object"
+      },
+      "StandardsStatus": {
+        "properties": {
+          "chunks": {
+            "title": "Chunks",
+            "type": "integer"
+          },
+          "embedded": {
+            "title": "Embedded",
+            "type": "integer"
+          },
+          "per_domain": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Per Domain",
+            "type": "object"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/StandardsSettings"
+          }
+        },
+        "required": [
+          "chunks",
+          "embedded",
+          "per_domain",
+          "settings"
+        ],
+        "title": "StandardsStatus",
+        "type": "object"
+      },
       "StoryView": {
         "additionalProperties": false,
         "properties": {
@@ -4079,6 +4261,204 @@
           }
         },
         "summary": "Test Provider",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/settings/standards": {
+      "get": {
+        "operationId": "get_standards_api_settings_standards_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardsStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Standards",
+        "tags": [
+          "settings"
+        ]
+      },
+      "put": {
+        "operationId": "put_standards_api_settings_standards_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StandardsSettingsIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardsSettings"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Standards",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/settings/standards/reindex": {
+      "post": {
+        "operationId": "reindex_standards_api_settings_standards_reindex_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Project Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardsStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reindex Standards",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/settings/standards/search": {
+      "get": {
+        "description": "Try a query the way the agents do: ranked sections with their scores.",
+        "operationId": "search_standards_api_settings_standards_search_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "title": "Q",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "domain",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Domain"
+            }
+          },
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Project Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "k",
+            "required": false,
+            "schema": {
+              "default": 4,
+              "title": "K",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/StandardsHit"
+                  },
+                  "title": "Response Search Standards Api Settings Standards Search Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Search Standards",
         "tags": [
           "settings"
         ]

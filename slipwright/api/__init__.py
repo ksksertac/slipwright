@@ -114,6 +114,8 @@ def create_app(
         app.state.engine = engine
         app.state.resume_thread = None
         if resume_on_startup:
+            threading.Thread(target=engine.ensure_standards_indexed, daemon=True).start()
+        if resume_on_startup:
             thread = threading.Thread(target=_resume_all, args=(engine,), daemon=True)
             thread.start()
             app.state.resume_thread = thread
