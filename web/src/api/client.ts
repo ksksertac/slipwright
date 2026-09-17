@@ -38,6 +38,13 @@ export type Overview = Schemas["Overview"];
 export type AgentSummary = Schemas["AgentSummary"];
 export type ProviderSettingsIn = Schemas["ProviderSettingsIn"];
 export type ProviderModels = Schemas["ProviderModels"];
+export type Pipeline = Schemas["Pipeline"];
+export type Lane = Schemas["Lane"];
+export type StepCard = Schemas["StepCard"];
+export type StepStatus = StepCard["status"];
+export type BatchResult = Schemas["BatchResult"];
+export type BatchOutcome = Schemas["BatchOutcome"];
+export type PlanEdit = Schemas["PlanEdit"];
 
 export type ApiPaths = keyof paths;
 

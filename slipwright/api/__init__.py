@@ -32,7 +32,8 @@ from slipwright.activity import (
     project_progress,
 )
 from slipwright.board import Board, project_board
-from slipwright.engine import Engine, NotAwaitingApproval, ProjectCloneError
+from slipwright.engine import Engine, InvalidEdit, NotAwaitingApproval, ProjectCloneError
+from slipwright.pipeline import Pipeline, pipeline
 from slipwright.schemas.job import Job, Transition
 from slipwright.schemas.profile import Profile, RoleName
 from slipwright.schemas.project import Project, ProjectPatch
@@ -86,6 +87,40 @@ class TestCases(BaseModel):
 
 class NewTestRun(BaseModel):
     job_id: str | None = Field(default=None, description="Run in this job's worktree.")
+
+
+class PlanEdit(BaseModel):
+    """An edited plan: phases in the order they will run, each naming its task; the
+    breakdown carries renamed tasks. Missing parts keep the current values."""
+
+    summary: str | None = None
+    decisions: list[str] | None = None
+    phases: list[dict[str, Any]]
+    breakdown: dict[str, Any] | None = None
+
+
+class BacklogEdit(BaseModel):
+    breakdown: dict[str, Any]
+
+
+class Batch(BaseModel):
+    job_ids: list[str] = Field(min_length=1)
+
+
+class BatchRejection(Batch):
+    feedback: str = Field(min_length=1)
+
+
+class BatchOutcome(BaseModel):
+    job_id: str
+    ok: bool
+    state: str | None = None
+    error: str | None = None
+
+
+class BatchResult(BaseModel):
+    results: list[BatchOutcome]
+    approved: int
 
 
 DEV_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
@@ -263,6 +298,14 @@ def create_app(
         _get_project(eng, project_id)
         return project_board(project_id, eng.store.list(project_id))
 
+    @api.get("/projects/{project_id}/pipeline", response_model=Pipeline)
+    def get_pipeline(project_id: str, request: Request) -> Pipeline:
+        """Every development as a lane of step cards, newest first."""
+        eng = _engine(request)
+        _get_project(eng, project_id)
+        jobs = sorted(eng.store.list(project_id), key=lambda j: j.created_at, reverse=True)
+        return pipeline(jobs, project_id=project_id)
+
     @api.get("/projects/{project_id}/progress", response_model=ProjectProgress)
     def get_progress(project_id: str, request: Request) -> ProjectProgress:
         eng = _engine(request)
@@ -358,6 +401,47 @@ def create_app(
             raise HTTPException(status_code=404, detail=f"no history entry {index}")
         return job.history[index]
 
+    @api.post("/jobs/approve", response_model=BatchResult)
+    def approve_many(body: Batch, request: Request, background: BackgroundTasks) -> BatchResult:
+        """Approve several gates at once. Each job is an ordinary approval recorded on
+        that job; one that is not at a gate is reported, never the whole batch."""
+        eng = _engine(request)
+        results: list[BatchOutcome] = []
+        for job_id in dict.fromkeys(body.job_ids):
+            try:
+                _get(eng, job_id)
+                job = eng.approve(job_id, run=False)
+            except HTTPException as exc:
+                results.append(BatchOutcome(job_id=job_id, ok=False, error=str(exc.detail)))
+                continue
+            except NotAwaitingApproval as exc:
+                results.append(BatchOutcome(job_id=job_id, ok=False, error=str(exc)))
+                continue
+            background.add_task(_resume, eng, job.id)
+            results.append(BatchOutcome(job_id=job_id, ok=True, state=job.state.value))
+        return BatchResult(results=results, approved=sum(1 for r in results if r.ok))
+
+    @api.post("/jobs/reject", response_model=BatchResult)
+    def reject_many(
+        body: BatchRejection, request: Request, background: BackgroundTasks
+    ) -> BatchResult:
+        """Reject several gates with one feedback text."""
+        eng = _engine(request)
+        results: list[BatchOutcome] = []
+        for job_id in dict.fromkeys(body.job_ids):
+            try:
+                _get(eng, job_id)
+                job = eng.reject(job_id, body.feedback, run=False)
+            except HTTPException as exc:
+                results.append(BatchOutcome(job_id=job_id, ok=False, error=str(exc.detail)))
+                continue
+            except NotAwaitingApproval as exc:
+                results.append(BatchOutcome(job_id=job_id, ok=False, error=str(exc)))
+                continue
+            background.add_task(_resume, eng, job.id)
+            results.append(BatchOutcome(job_id=job_id, ok=True, state=job.state.value))
+        return BatchResult(results=results, approved=sum(1 for r in results if r.ok))
+
     @api.post("/jobs/{job_id}/approve", response_model=Job)
     def approve(job_id: str, request: Request, background: BackgroundTasks) -> Job:
         eng = _engine(request)
@@ -389,6 +473,31 @@ def create_app(
             return eng.set_profile(job_id, body)
         except NotAwaitingApproval as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    @api.put("/jobs/{job_id}/backlog", response_model=Job)
+    def set_backlog(job_id: str, body: BacklogEdit, request: Request) -> Job:
+        """Edit the proposed backlog while the job awaits its approval."""
+        eng = _engine(request)
+        _get(eng, job_id)
+        try:
+            return eng.set_backlog(job_id, body.breakdown)
+        except NotAwaitingApproval as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except InvalidEdit as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    @api.put("/jobs/{job_id}/plan", response_model=Job)
+    def set_plan(job_id: str, body: PlanEdit, request: Request) -> Job:
+        """Edit the proposed plan while the job awaits the architecture approval; the
+        edit must pass the Architect's own checks (one phase per task)."""
+        eng = _engine(request)
+        _get(eng, job_id)
+        try:
+            return eng.set_plan(job_id, body.model_dump(exclude_none=True))
+        except NotAwaitingApproval as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except InvalidEdit as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     @api.put("/jobs/{job_id}/tests", response_model=Job)
     def set_tests(job_id: str, body: TestCases, request: Request) -> Job:

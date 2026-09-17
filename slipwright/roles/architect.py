@@ -8,12 +8,13 @@ comes from the seed profile; the Architect never chooses models (invariant 1).
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
 from slipwright.invoke import RoleResult, invoke_role
 from slipwright.providers import ModelProvider
 from slipwright.roles.common import base_context, require_worktree, scan_worktree
-from slipwright.roles.results import ArchitectResult
+from slipwright.roles.results import ArchitectResult, PlanPhase
 from slipwright.roles.specialists import Domain
 from slipwright.schemas.job import Job
 from slipwright.schemas.profile import Profile, RoleName
@@ -70,11 +71,11 @@ def accepted_profile(result: ArchitectResult, seed: Profile) -> Profile:
     return result.profile.model_copy(update={"roles": seed.roles})
 
 
-def phase_task_map(result: ArchitectResult, task_ids: list[str]) -> dict[str, int] | str:
+def phase_task_map(phases: Sequence[PlanPhase], task_ids: list[str]) -> dict[str, int] | str:
     """Map task id -> 1-based phase number, or a readable reason the plan is invalid."""
     mapping: dict[str, int] = {}
     known = set(task_ids)
-    for number, phase in enumerate(result.phases, start=1):
+    for number, phase in enumerate(phases, start=1):
         if phase.task_id not in known:
             return f"phase {number} names unknown task {phase.task_id!r}"
         if phase.task_id in mapping:

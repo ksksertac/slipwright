@@ -228,6 +228,123 @@
         "title": "ApiToken",
         "type": "object"
       },
+      "BacklogEdit": {
+        "properties": {
+          "breakdown": {
+            "additionalProperties": true,
+            "title": "Breakdown",
+            "type": "object"
+          }
+        },
+        "required": [
+          "breakdown"
+        ],
+        "title": "BacklogEdit",
+        "type": "object"
+      },
+      "Batch": {
+        "properties": {
+          "job_ids": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Job Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "job_ids"
+        ],
+        "title": "Batch",
+        "type": "object"
+      },
+      "BatchOutcome": {
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State"
+          }
+        },
+        "required": [
+          "error",
+          "job_id",
+          "ok",
+          "state"
+        ],
+        "title": "BatchOutcome",
+        "type": "object"
+      },
+      "BatchRejection": {
+        "properties": {
+          "feedback": {
+            "minLength": 1,
+            "title": "Feedback",
+            "type": "string"
+          },
+          "job_ids": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Job Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "job_ids",
+          "feedback"
+        ],
+        "title": "BatchRejection",
+        "type": "object"
+      },
+      "BatchResult": {
+        "properties": {
+          "approved": {
+            "title": "Approved",
+            "type": "integer"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/BatchOutcome"
+            },
+            "title": "Results",
+            "type": "array"
+          }
+        },
+        "required": [
+          "approved",
+          "results"
+        ],
+        "title": "BatchResult",
+        "type": "object"
+      },
       "Board": {
         "additionalProperties": false,
         "properties": {
@@ -1287,6 +1404,55 @@
         "title": "JobState",
         "type": "string"
       },
+      "Lane": {
+        "additionalProperties": false,
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "pending_approval": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pending Approval"
+          },
+          "request": {
+            "title": "Request",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/JobState"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/StepCard"
+            },
+            "title": "Steps",
+            "type": "array"
+          }
+        },
+        "required": [
+          "created_at",
+          "job_id",
+          "pending_approval",
+          "request",
+          "state",
+          "steps"
+        ],
+        "title": "Lane",
+        "type": "object"
+      },
       "Message": {
         "properties": {
           "text": {
@@ -1556,6 +1722,95 @@
         ],
         "title": "Permission",
         "type": "string"
+      },
+      "Pipeline": {
+        "additionalProperties": false,
+        "properties": {
+          "lanes": {
+            "items": {
+              "$ref": "#/components/schemas/Lane"
+            },
+            "title": "Lanes",
+            "type": "array"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "waiting": {
+            "title": "Waiting",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "lanes",
+          "project_id",
+          "waiting"
+        ],
+        "title": "Pipeline",
+        "type": "object"
+      },
+      "PlanEdit": {
+        "description": "An edited plan: phases in the order they will run, each naming its task; the\nbreakdown carries renamed tasks. Missing parts keep the current values.",
+        "properties": {
+          "breakdown": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Breakdown"
+          },
+          "decisions": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decisions"
+          },
+          "phases": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Phases",
+            "type": "array"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          }
+        },
+        "required": [
+          "phases"
+        ],
+        "title": "PlanEdit",
+        "type": "object"
       },
       "Profile": {
         "additionalProperties": false,
@@ -2259,6 +2514,158 @@
         ],
         "title": "StandardsStatus",
         "type": "object"
+      },
+      "StepCard": {
+        "additionalProperties": false,
+        "properties": {
+          "domain": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Domain"
+          },
+          "editable": {
+            "default": false,
+            "title": "Editable",
+            "type": "boolean"
+          },
+          "elapsed_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Elapsed S"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "gate": {
+            "default": false,
+            "title": "Gate",
+            "type": "boolean"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "outputs": {
+            "description": "History indexes.",
+            "items": {
+              "type": "integer"
+            },
+            "title": "Outputs",
+            "type": "array"
+          },
+          "pending": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pending"
+          },
+          "phase": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phase"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RoleName"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "$ref": "#/components/schemas/StepStatus"
+          },
+          "task_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Title"
+          }
+        },
+        "required": [
+          "domain",
+          "editable",
+          "elapsed_s",
+          "finished_at",
+          "gate",
+          "key",
+          "label",
+          "outputs",
+          "pending",
+          "phase",
+          "role",
+          "started_at",
+          "status",
+          "task_title"
+        ],
+        "title": "StepCard",
+        "type": "object"
+      },
+      "StepStatus": {
+        "enum": [
+          "pending",
+          "running",
+          "done",
+          "failed",
+          "waiting"
+        ],
+        "title": "StepStatus",
+        "type": "string"
       },
       "StoryView": {
         "additionalProperties": false,
@@ -3003,6 +3410,84 @@
         "summary": "Create Job"
       }
     },
+    "/api/jobs/approve": {
+      "post": {
+        "description": "Approve several gates at once. Each job is an ordinary approval recorded on\nthat job; one that is not at a gate is reported, never the whole batch.",
+        "operationId": "approve_many_api_jobs_approve_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Batch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Approve Many"
+      }
+    },
+    "/api/jobs/reject": {
+      "post": {
+        "description": "Reject several gates with one feedback text.",
+        "operationId": "reject_many_api_jobs_reject_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchRejection"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reject Many"
+      }
+    },
     "/api/jobs/{job_id}": {
       "delete": {
         "description": "Delete a finished job (worktree, branch, port and rows). Running jobs: 409.",
@@ -3112,6 +3597,56 @@
         "summary": "Approve"
       }
     },
+    "/api/jobs/{job_id}/backlog": {
+      "put": {
+        "description": "Edit the proposed backlog while the job awaits its approval.",
+        "operationId": "set_backlog_api_jobs__job_id__backlog_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BacklogEdit"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Backlog"
+      }
+    },
     "/api/jobs/{job_id}/history/{index}": {
       "get": {
         "description": "One history entry in full (its ``detail`` holds the diff, log or JSON).",
@@ -3208,6 +3743,56 @@
           }
         },
         "summary": "Message"
+      }
+    },
+    "/api/jobs/{job_id}/plan": {
+      "put": {
+        "description": "Edit the proposed plan while the job awaits the architecture approval; the\nedit must pass the Architect's own checks (one phase per task).",
+        "operationId": "set_plan_api_jobs__job_id__plan_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanEdit"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Plan"
       }
     },
     "/api/jobs/{job_id}/profile": {
@@ -3762,6 +4347,46 @@
           }
         },
         "summary": "Create Project Job"
+      }
+    },
+    "/api/projects/{project_id}/pipeline": {
+      "get": {
+        "description": "Every development as a lane of step cards, newest first.",
+        "operationId": "get_pipeline_api_projects__project_id__pipeline_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Pipeline"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Pipeline"
       }
     },
     "/api/projects/{project_id}/progress": {

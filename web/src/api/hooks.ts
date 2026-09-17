@@ -6,6 +6,7 @@ import {
   type ActivityItem,
   type AgentSummary,
   type ApiToken,
+  type BatchResult,
   type Board,
   type GitHubIdentity,
   type GitHubRepo,
@@ -19,6 +20,9 @@ import {
   type Job,
   type NewProject,
   type Overview,
+  type Profile,
+  type Pipeline,
+  type PlanEdit,
   type Project,
   type ProjectPatch,
   type ProjectProgress,
@@ -41,6 +45,7 @@ export const keys = {
   projectJobs: (id: string) => ["projects", id, "jobs"] as const,
   board: (id: string) => ["projects", id, "board"] as const,
   progress: (id: string) => ["projects", id, "progress"] as const,
+  pipeline: (id: string) => ["projects", id, "pipeline"] as const,
   activity: (id: string) => ["projects", id, "activity"] as const,
   testRuns: (id: string) => ["projects", id, "test-runs"] as const,
   job: (id: string) => ["jobs", id] as const,
@@ -111,6 +116,13 @@ export function useProgress(id: string) {
   return useQuery({
     queryKey: keys.progress(id),
     queryFn: () => api.get<ProjectProgress>(`/api/projects/${id}/progress`),
+  });
+}
+
+export function usePipeline(id: string) {
+  return useQuery({
+    queryKey: keys.pipeline(id),
+    queryFn: () => api.get<Pipeline>(`/api/projects/${id}/pipeline`),
   });
 }
 
@@ -211,6 +223,57 @@ export function useDeleteJob() {
   return useMutation({
     mutationFn: (id: string) => api.delete<void>(`/api/jobs/${id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.projects }),
+  });
+}
+
+export function useSetPlan(jobId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (plan: PlanEdit) => api.put<Job>(`/api/jobs/${jobId}/plan`, plan),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.job(jobId) }),
+  });
+}
+
+export function useSetBacklog(jobId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (breakdown: Record<string, unknown>) =>
+      api.put<Job>(`/api/jobs/${jobId}/backlog`, { breakdown }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.job(jobId) }),
+  });
+}
+
+export function useSetProfile(jobId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (profile: Profile) => api.put<Job>(`/api/jobs/${jobId}/profile`, profile),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.job(jobId) }),
+  });
+}
+
+/** Approve several gates at once; every job's queries are refreshed afterwards. */
+export function useBatchApprove() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (job_ids: string[]) => api.post<BatchResult>("/api/jobs/approve", { job_ids }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.projects });
+      void qc.invalidateQueries({ queryKey: ["jobs"] });
+      void qc.invalidateQueries({ queryKey: keys.overview });
+    },
+  });
+}
+
+export function useBatchReject() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { job_ids: string[]; feedback: string }) =>
+      api.post<BatchResult>("/api/jobs/reject", args),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.projects });
+      void qc.invalidateQueries({ queryKey: ["jobs"] });
+      void qc.invalidateQueries({ queryKey: keys.overview });
+    },
   });
 }
 

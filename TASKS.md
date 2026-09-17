@@ -36,7 +36,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 
 ## Progress
 
-> **Resume here:** Phases 0–8 and T9.0–T9.4 are complete. Next: **T9.9** (pipeline view and bulk approvals), then T9.5, T9.6, T9.8, T9.7.
+> **Resume here:** Phases 0–8, T9.0–T9.4 and T9.9 are complete. Next: **T9.5** (standards review gate), then T9.6, T9.8, T9.7.
 > Design note for T1.3: `run_cmd` is executed as a subprocess in the worktree (Docker is used
 > only if the profile's `run_cmd` itself invokes it).
 > Design note for T2.2: `invoke_role` talks to a `ModelProvider` (`slipwright/providers/`);
@@ -134,7 +134,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 | 9 | T9.6 Standards in the UI | [ ] |
 | 9 | T9.7 Orchestrator hardening: budgets, retries, supervisor decisions | [ ] |
 | 9 | T9.8 Supervisor at the gates: manual / assisted / auto | [ ] |
-| 9 | T9.9 Project pipeline view and bulk approvals | [ ] |
+| 9 | T9.9 Project pipeline view and bulk approvals | [x] |
 
 ---
 
@@ -900,37 +900,55 @@ The gates stay in the state machine (invariant 2); what changes is who calls *ap
   back to manual
 
 ### T9.9 — Project pipeline view and bulk approvals
-Inside a project, every development is a row of **step cards** (Analysis → Profile gate →
-Plan → Plan gate → Backend/Web/Mobile phases → Build gate → Tester → Test gate → DevOps →
+Inside a project, every development is a row of **step cards** (Backlog → Backlog gate →
+Architecture → Architecture gate → Backend/Web/Mobile phases → QA → Test gates → DevOps →
 Done), each card showing its state; what waits for the human is actionable in place and
 in bulk.
 
 **Done when**
-- [ ] Project page gets a **Pipeline** tab (and it becomes the default tab): one lane per
+- [x] Project page gets a **Pipeline** tab (and it becomes the default tab): one lane per
   development, step cards coloured by state (pending / running with a pulse / done /
   failed / waiting for you), the agent's name on each card, elapsed time, and the phase
   cards expanded per domain (a Backend card, a Web UI card, …) with the task title
-- [ ] Clicking a card opens a side panel with that step's output (profile, plan, diff,
+- [x] Clicking a card opens a side panel with that step's output (profile, plan, diff,
   gate log, test cases, PR) — the same material the job page shows, without leaving the
   lane
-- [ ] Cards waiting for approval carry a **checkbox**; a sticky action bar shows
+- [x] Cards waiting for approval carry a **checkbox**; a sticky action bar shows
   "N selected" with **Approve selected** and **Reject selected…** (one feedback text
   applied to all); selection can span several developments; each approval is an ordinary
   gate call recorded per job
-- [ ] Editable gates edit in place: the profile form, the plan/breakdown (reorder phases,
+- [x] Editable gates edit in place: the profile form, the plan/breakdown (reorder phases,
   rename tasks, change a task's domain), and the test-case list open in the side panel;
   **Save & approve** sends the edited version and continues, **Save** only stores it
 - [ ] Supervisor recommendations (T9.8, assisted mode) appear on the waiting cards as a
   chip (recommends approve · 0.92) so bulk approval can follow them with one click
   ("Select all recommended")
-- [ ] The dashboard's pending list gains the same checkboxes and bulk bar
-- [ ] Live: cards move as SSE events arrive; a bulk approval of three gates shows three
+- [x] The dashboard's pending list gains the same checkboxes and bulk bar
+- [x] Live: cards move as SSE events arrive; a bulk approval of three gates shows three
   lanes advancing without a refresh
-- [ ] `PUT /api/jobs/{id}/plan` (edit the proposed plan/breakdown while awaiting plan
-  approval, validated like the Planner's output) and `POST /api/jobs/approve` /
+- [x] `PUT /api/jobs/{id}/plan` (edit the proposed plan/breakdown while awaiting the
+  architecture approval, validated like the Architect's output) and `PUT /api/jobs/{id}/backlog` and `POST /api/jobs/approve` /
   `POST /api/jobs/reject` for batches (`job_ids[]`, per-job result) back the UI
-- [ ] Tests: batch endpoints approve the eligible jobs and report the rest (409 per job,
+- [x] Tests: batch endpoints approve the eligible jobs and report the rest (409 per job,
   not for the batch); plan edits are validated (orphan phases rejected); UI source checks
+
+> Design note for T9.9: `slipwright/pipeline.py` derives every lane from the job's state
+> and history alone (`lane_for`), so the view is exact after a restart. Working steps take
+> their latest visit to a state and the transition that left it as the output; gates take
+> the approval after their last visit; QA's two passes are split at the first approval of
+> the test gate (`_Reader.qa_spans`). Phase cards come from `plan.phases` (one per task,
+> specialist label + domain + task title) and collect the `<role> phase i/n` and build-gate
+> records. `GET /api/projects/{id}/pipeline` returns `Pipeline{lanes[], waiting}`; every
+> card lists the history indexes of its outputs, which the side panel fetches through the
+> existing `/history/{index}` endpoint. Edits: `Engine.set_backlog` / `set_plan` reuse the
+> PO / Architect validators (`Breakdown`, `PlanPhase`, `phase_task_map`) and raise
+> `InvalidEdit` → 422. Batches: `POST /api/jobs/approve|reject` iterate `Engine.approve` /
+> `reject` per job and report `{job_id, ok, state|error}` (a job not at a gate is an entry,
+> never a batch failure). Web: `pages/PipelineTab.tsx` (lanes, `StepCardView`, `StepPanel`
+> with `GateEditor` + `SaveRow`), `components/GateEditors.tsx` (backlog tree, phase
+> reorder/domain/rename, test cases), `components/BulkBar.tsx` (shared with the dashboard).
+> Selection is derived from the live lanes, so a job that moves on drops out by itself.
+> The supervisor chip waits for T9.8.
 
 ### Definition of done for Phase 9
 

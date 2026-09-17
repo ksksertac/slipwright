@@ -1,6 +1,8 @@
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import type { Job } from "../api/client";
 import { useOverview, useProjects, useJob } from "../api/hooks";
+import { BulkBar } from "../components/BulkBar";
 import { Crumbs } from "../components/Crumbs";
 import { GateActions } from "../components/GateActions";
 import {
@@ -21,7 +23,6 @@ import {
   PageHead,
   ProgressBar,
   StatTile,
-  StateBadge,
   timeAgo,
 } from "../components/ui";
 
@@ -29,6 +30,13 @@ export function DashboardPage() {
   const overview = useOverview();
   const projects = useProjects();
   const byId = new Map((projects.data ?? []).map((p) => [p.id, p]));
+  const [chosen, setSelected] = useState<string[]>([]);
+  const waitingIds = useMemo(
+    () => new Set((overview.data?.waiting ?? []).map((w) => w.job_id)),
+    [overview.data],
+  );
+  // a job that moved on drops out of the selection by itself
+  const selected = useMemo(() => chosen.filter((id) => waitingIds.has(id)), [chosen, waitingIds]);
 
   if (overview.isLoading) return <Loading rows={5} />;
   if (overview.error) return <ErrorBox error={overview.error} />;
@@ -107,7 +115,18 @@ export function DashboardPage() {
               <IconAlert style={{ width: 14, height: 14, verticalAlign: -2, marginRight: 6 }} />
               Pending approvals
             </h3>
-            <span className="badge wait plain">{o.waiting.length}</span>
+            <span className="row" style={{ gap: 8 }}>
+              {o.waiting.length > 1 && (
+                <button
+                  className="btn ghost small"
+                  disabled={selected.length === o.waiting.length}
+                  onClick={() => setSelected(o.waiting.map((w) => w.job_id))}
+                >
+                  Select all
+                </button>
+              )}
+              <span className="badge wait plain">{o.waiting.length}</span>
+            </span>
           </div>
           {o.waiting.length === 0 ? (
             <div className="empty" style={{ padding: 28 }}>
@@ -128,6 +147,12 @@ export function DashboardPage() {
                     projectId={w.project_id ?? undefined}
                     pending={w.pending_approval ?? ""}
                     at={w.last_activity}
+                    selected={selected.includes(w.job_id)}
+                    onSelect={(on) =>
+                      setSelected((ids) =>
+                        on ? [...new Set([...ids, w.job_id])] : ids.filter((i) => i !== w.job_id),
+                      )
+                    }
                   />
                 ))}
               </tbody>
@@ -169,6 +194,12 @@ export function DashboardPage() {
         </div>
       </div>
 
+      <BulkBar
+        selected={selected}
+        onClear={() => setSelected([])}
+        labelOf={(id) => o.waiting.find((w) => w.job_id === id)?.request ?? id}
+      />
+
       {projects.data && projects.data.length === 0 && (
         <div style={{ marginTop: 18 }}>
           <Empty
@@ -195,6 +226,8 @@ function WaitingRow({
   projectId,
   pending,
   at,
+  selected,
+  onSelect,
 }: {
   jobId: string;
   request: string;
@@ -202,22 +235,33 @@ function WaitingRow({
   projectId?: string;
   pending: string;
   at: string;
+  selected: boolean;
+  onSelect: (on: boolean) => void;
 }) {
   const job = useJob(jobId);
   const j: Job | undefined = job.data;
   return (
     <tr>
-      <td>
+      <td style={{ width: 28 }}>
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={(e) => onSelect(e.target.checked)}
+          aria-label={`select ${request}`}
+        />
+      </td>
+      <td style={{ width: "100%" }}>
         <Link to={`/projects/${projectId ?? j?.project_id ?? ""}/jobs/${jobId}`}>
           <strong>{request}</strong>
         </Link>
         <div className="faint tiny">
-          {projectName ? `${projectName} · ` : ""}
-          {pending} · {timeAgo(at)}
+          {projectName ? `${projectName} · ` : ""}needs <strong>{pending}</strong> approval ·{" "}
+          {timeAgo(at)}
         </div>
       </td>
-      <td>{j && <StateBadge state={j.state} />}</td>
-      <td className="actions">{j && <GateActions job={j} compact />}</td>
+      <td className="actions" style={{ whiteSpace: "nowrap" }}>
+        {j && <GateActions job={j} compact />}
+      </td>
     </tr>
   );
 }

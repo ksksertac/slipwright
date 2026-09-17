@@ -30,15 +30,16 @@ import {
   formatTime,
   timeAgo,
 } from "../components/ui";
+import { PipelineTab } from "./PipelineTab";
 import { TestsTab } from "./TestsTab";
 
-const TABS = ["overview", "board", "developments", "tests", "activity"] as const;
+const TABS = ["pipeline", "overview", "board", "developments", "tests", "activity"] as const;
 type Tab = (typeof TABS)[number];
 
 export function ProjectPage() {
-  const { projectId = "", tab = "overview" } = useParams();
+  const { projectId = "", tab = "pipeline" } = useParams();
   const project = useProject(projectId);
-  const current: Tab = (TABS as readonly string[]).includes(tab) ? (tab as Tab) : "overview";
+  const current: Tab = (TABS as readonly string[]).includes(tab) ? (tab as Tab) : "pipeline";
 
   if (project.isLoading) return <Loading />;
   if (project.error) return <ErrorBox error={project.error} />;
@@ -58,6 +59,7 @@ export function ProjectPage() {
         ))}
       </nav>
 
+      {current === "pipeline" && <PipelineTab projectId={p.id} />}
       {current === "overview" && <OverviewTab projectId={p.id} />}
       {current === "board" && <BoardTab projectId={p.id} />}
       {current === "developments" && <DevelopmentsTab projectId={p.id} />}

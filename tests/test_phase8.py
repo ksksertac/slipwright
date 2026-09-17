@@ -126,9 +126,9 @@ def test_login_and_projects_pages_use_the_api() -> None:
 # --- T8.3 project page --------------------------------------------------------------------
 
 
-def test_project_page_has_the_five_tabs_and_lives_on_events() -> None:
+def test_project_page_has_the_six_tabs_and_lives_on_events() -> None:
     page = _src("pages/ProjectPage.tsx")
-    assert '["overview", "board", "developments", "tests", "activity"]' in page
+    assert '["pipeline", "overview", "board", "developments", "tests", "activity"]' in page
     for expected in (
         "useBoard",
         "useProgress",

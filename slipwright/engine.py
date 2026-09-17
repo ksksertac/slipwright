@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+from pydantic import ValidationError
 
 from slipwright.events import EventBus
 from slipwright.gates import DEFAULT_TIMEOUT_S as GATE_TIMEOUT_S
@@ -50,6 +51,7 @@ from slipwright.roles.results import (
     Breakdown,
     DeveloperResult,
     DevOpsResult,
+    PlanPhase,
     POResult,
     QAResult,
 )
@@ -119,6 +121,10 @@ class NotAwaitingApproval(ValueError):
     def __init__(self, job: Job) -> None:
         super().__init__(f"job {job.id} is not awaiting approval (state: {job.state.value})")
         self.job = job
+
+
+class InvalidEdit(ValueError):
+    """A human edit at a gate does not pass the same checks as the agent's output."""
 
 
 class Engine:
@@ -747,6 +753,52 @@ class Engine:
         job.profile = profile
         return self.store.save(job)
 
+    def set_backlog(self, job_id: str, breakdown: dict[str, Any]) -> Job:
+        """Replace the proposed backlog while the job waits at the backlog gate."""
+        job = self.store.get(job_id)
+        if job.state is not JobState.AWAITING_BACKLOG_APPROVAL:
+            raise NotAwaitingApproval(job)
+        try:
+            tree = Breakdown.model_validate(breakdown)
+            POResult(summary="edited", breakdown=tree)  # the PO's own checks (unique ids)
+        except ValidationError as exc:
+            raise InvalidEdit(str(exc)) from exc
+        job.data.backlog = tree.model_dump(mode="json")
+        return self.store.save(job)
+
+    def set_plan(self, job_id: str, plan: dict[str, Any]) -> Job:
+        """Replace the proposed plan (phases and breakdown) while the job waits at the
+        architecture gate. Checked exactly like the Architect's output: every task has one
+        phase, every phase names a task."""
+        job = self.store.get(job_id)
+        if job.state is not JobState.AWAITING_ARCHITECTURE_APPROVAL:
+            raise NotAwaitingApproval(job)
+        current = job.data.plan or {}
+        try:
+            phases = [PlanPhase.model_validate(p) for p in plan.get("phases", [])]
+            breakdown = Breakdown.model_validate(
+                plan.get("breakdown") or current.get("breakdown") or job.data.backlog
+            )
+            POResult(summary="edited", breakdown=breakdown)
+        except ValidationError as exc:
+            raise InvalidEdit(str(exc)) from exc
+        if not phases:
+            raise InvalidEdit("a plan needs at least one phase")
+        mapping = architect.phase_task_map(phases, [t.id for t in breakdown.tasks()])
+        if isinstance(mapping, str):
+            raise InvalidEdit(f"plan does not match the backlog: {mapping}")
+        for task in breakdown.tasks():
+            task.phase = mapping[task.id]
+        decisions = plan.get("decisions", current.get("decisions", []))
+        job.data.plan = {
+            "summary": str(plan.get("summary", current.get("summary", ""))),
+            "decisions": [str(d) for d in decisions],
+            "phases": [p.model_dump(mode="json") for p in phases],
+            "breakdown": breakdown.model_dump(mode="json"),
+        }
+        job.data.phase_index = 0
+        return self.store.save(job)
+
     def set_test_cases(self, job_id: str, cases: list[dict[str, Any]]) -> Job:
         """Replace the proposed test list while the job waits for its approval."""
         job = self.store.get(job_id)
@@ -1022,7 +1074,7 @@ class Engine:
             return self._invocation_failed(job, result)
         assert isinstance(result.output, ArchitectResult)
         breakdown = Breakdown.model_validate(job.data.backlog)
-        mapping = architect.phase_task_map(result.output, [t.id for t in breakdown.tasks()])
+        mapping = architect.phase_task_map(result.output.phases, [t.id for t in breakdown.tasks()])
         if isinstance(mapping, str):
             return self._fail(job, f"architect: plan does not match the backlog: {mapping}")
         for task in breakdown.tasks():

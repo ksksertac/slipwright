@@ -215,10 +215,10 @@ def test_phase_task_map_requires_one_phase_per_task(seed: Profile) -> None:
             phases=[PlanPhase(goal=t, files=[], task_id=t) for t in task_ids],
         )
 
-    assert phase_task_map(result("t2", "t1"), ["t1", "t2"]) == {"t2": 1, "t1": 2}
-    missing = phase_task_map(result("t1"), ["t1", "t2"])
+    assert phase_task_map(result("t2", "t1").phases, ["t1", "t2"]) == {"t2": 1, "t1": 2}
+    missing = phase_task_map(result("t1").phases, ["t1", "t2"])
     assert isinstance(missing, str) and "t2" in missing
-    unknown = phase_task_map(result("t1", "t9"), ["t1"])
+    unknown = phase_task_map(result("t1", "t9").phases, ["t1"])
     assert isinstance(unknown, str) and "t9" in unknown
 
 
