@@ -48,6 +48,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-install-project
 COPY slipwright/ ./slipwright/
 COPY examples/ ./examples/
+COPY standards/ ./standards/
 COPY schemas/ ./schemas/
 COPY scripts/ ./scripts/
 RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen --no-dev

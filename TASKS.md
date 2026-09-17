@@ -36,7 +36,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 
 ## Progress
 
-> **Resume here:** Phases 0–8 and T9.1 are complete. Next task is **T9.2 — Standards corpus**.
+> **Resume here:** Phases 0–8, T9.1 and T9.2 are complete. Next task is **T9.3 — Standards index (RAG)**.
 > Design note for T1.3: `run_cmd` is executed as a subprocess in the worktree (Docker is used
 > only if the profile's `run_cmd` itself invokes it).
 > Design note for T2.2: `invoke_role` talks to a `ModelProvider` (`slipwright/providers/`);
@@ -83,6 +83,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 > Design note for T8.6: `GET /api/settings/profile` returns the engine's default seed so the Agents page can materialise a project's own profile (saved with `PATCH /api/projects/{id}`, validated server-side by pydantic). The generated client uses `defaultNonNullable: false` so defaulted input fields stay optional in TypeScript.
 > Design note for T8.7: `slipwright/api/ui.py` and its T5.3 test are gone; the React app at `/` is the dashboard (`web/PARITY.md`). `tests/test_phase8_e2e.py` is the Phase 6–8 definition of done driven through the API exactly as the browser does it, with fake GitHub/Jira and the scripted provider.
 > Design note for T9.1: `roles/specialists.py` maps `PlanPhase.domain` → role (`specialist_for`), holds the specialist instructions and the role→standards-domain map; `developer.run(as_role=...)` serves all four implementer roles; history notes are `<role> phase N/M`. `supervisor` is already in `RoleName` for T9.8. `/agents` cards come from `GET /api/agents` (`activity.agent_summaries`).
+> Design note for T9.2: `slipwright/standards/__init__.py` loads pages (front-matter: domain/tags/applies_to), splits them into `##` chunks whose ids are content hashes, and lints them (`scripts/check_standards.py`, also run by tests). Project overrides live in `<repo>/.slipwright/standards/`; the Docker image copies `standards/`.
 
 | Phase | Task | Status |
 |-------|------|--------|
@@ -124,7 +125,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 | 8 | T8.8 Docker image and compose | [x] |
 | 8 | T8.9 UI redesign: dashboard, cards, edit/delete flows, theme | [x] |
 | 9 | T9.1 Specialist agents: backend, web UI, mobile UI | [x] |
-| 9 | T9.2 Standards corpus | [ ] |
+| 9 | T9.2 Standards corpus | [x] |
 | 9 | T9.3 Standards index (RAG) | [ ] |
 | 9 | T9.4 Retrieval into every role's prompt | [ ] |
 | 9 | T9.5 Standards review gate | [ ] |
@@ -708,16 +709,16 @@ Design decisions, made up front so tasks do not re-litigate them:
 
 ### T9.2 — Standards corpus
 **Done when**
-- [ ] `standards/` in this repo: `core.md` (always-on rules) and one folder per domain —
+- [x] `standards/` in this repo: `core.md` (always-on rules) and one folder per domain —
   `analysis/`, `backend/`, `web/`, `mobile/`, `testing/`, `devops/` — each file with
   front-matter (`domain`, `tags`, `applies_to` languages/frameworks) and `##` sections that
   each cover one topic (the chunking unit)
-- [ ] Initial content written for every domain (coding conventions, error handling,
+- [x] Initial content written for every domain (coding conventions, error handling,
   logging, API design, state management, accessibility, test pyramid, CI/CD, secrets,
   observability) — concrete enough that a retrieved section answers "how do we do X here"
-- [ ] `<repo>/.slipwright/standards/` in a project overrides or extends the global corpus
+- [x] `<repo>/.slipwright/standards/` in a project overrides or extends the global corpus
   (same layout); project pages take precedence on ties
-- [ ] A linter (`scripts/check_standards.py`, run in tests) rejects files without
+- [x] A linter (`scripts/check_standards.py`, run in tests) rejects files without
   front-matter, sections over 400 words, or duplicate headings within a domain
 
 ### T9.3 — Standards index (RAG)
