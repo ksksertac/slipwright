@@ -741,6 +741,35 @@ class Engine:
             self.store.update_state(job.id, job.state, note=note, detail=detail)
         return self.store.get(job.id)
 
+    def jira_sweep(self) -> dict[str, Any]:
+        """The PO's round: every development of a Jira-linked project is reconciled —
+        missing epics, stories and sub-tasks are created, stories join the sprint (or a
+        sprint is started), statuses catch up. Runs at startup and on a timer; safe to
+        run any time because ``reconcile`` is idempotent. Never raises."""
+        summary: dict[str, Any] = {"jobs": 0, "updated": 0, "errors": 0, "at": utcnow().isoformat()}
+        if not self.jira_settings().configured:
+            return summary
+        for job in self.store.list():
+            project = self._project_of(job)
+            if project is None or not project.jira_project_key:
+                continue
+            if job.state is JobState.FAILED and not job.data.jira_keys:
+                continue  # never mirrored: nothing to complete
+            summary["jobs"] += 1
+            with self._locks[job.id]:  # never alongside the job's own handler
+                try:
+                    before = len(self.store.get(job.id).history)
+                    after_job = self._jira_reconcile(self.store.get(job.id))
+                    if len(after_job.history) > before:
+                        summary["updated"] += 1
+                    if after_job.data.jira_last_error:
+                        summary["errors"] += 1
+                except Exception as exc:  # noqa: BLE001 - one bad job must not stop the round
+                    log.warning("jira sweep: job %s: %s", job.id, exc)
+                    summary["errors"] += 1
+        self.store.set_setting("jira.last_sweep", summary)
+        return summary
+
     # -- public API ----------------------------------------------------------------------
 
     def create_project(self, project: Project) -> Project:

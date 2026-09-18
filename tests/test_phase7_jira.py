@@ -294,3 +294,57 @@ def test_jira_settings_endpoints(client: TestClient, engine: Engine) -> None:
     assert client.post("/api/settings/jira/test").status_code == 502
     resp = client.put("/api/settings/jira", json={"clear_token": True, "clear_agent_token": True})
     assert resp.json()["token_set"] is False and resp.json()["agent_token_set"] is False
+
+
+def test_the_po_round_completes_missing_issues_and_sprints(
+    store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
+) -> None:
+    """Jira was down when the backlog was approved: the sweep (startup + hourly) creates
+    what is missing, starts the sprint and puts the stories in it."""
+    jira = _fake()
+    engine = full_engine(store, worktrees_root, seed, full_provider(seed, phases=2))
+    _connect(engine, jira)
+    project = _project(engine, repo)
+    job = engine.start(engine.create_job("health", project_id=project.id).id)
+    jira.down = True
+    job = engine.approve(job.id)  # backlog approved while Jira is unreachable
+    assert job.state is JobState.AWAITING_ARCHITECTURE_APPROVAL
+    assert job.data.jira_keys == {} and job.data.jira_last_error
+    assert engine.jira_sweep()["errors"] == 1  # still down: counted, not raised
+
+    jira.down = False
+    summary = engine.jira_sweep()
+    assert summary == {**summary, "jobs": 1, "updated": 1, "errors": 0}
+    job = engine.store.get(job.id)
+    assert len(job.data.jira_keys) == 4 and job.data.jira_last_error is None  # epic+story+2
+    assert job.data.jira_sprint_id == 100 and jira.sprints[100]["issues"] == ["DEM-2"]
+    assert engine.jira_sweep()["updated"] == 0  # nothing left to do
+    assert engine.store.get_setting("jira.last_sweep")["jobs"] == 1
+
+    with TestClient(create_app(engine, resume_on_startup=False, require_auth=False)) as client:
+        assert client.get("/api/settings/jira/sweep").json()["jobs"] == 1
+        assert client.post("/api/settings/jira/sweep").json()["updated"] == 0
+
+
+def test_sweeper_runs_at_startup(
+    store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
+) -> None:
+    import time
+
+    jira = _fake()
+    engine = full_engine(store, worktrees_root, seed, full_provider(seed, phases=1))
+    _connect(engine, jira)
+    project = _project(engine, repo)
+    job = engine.start(engine.create_job("health", project_id=project.id).id)
+    jira.down = True
+    engine.approve(job.id)
+    jira.down = False
+    with TestClient(create_app(engine, jira_sweep_s=3600, require_auth=False)) as client:
+        client.app.state.resume_thread.join(timeout=60)
+        for _ in range(100):  # the sweeper waits a few seconds after startup
+            if engine.store.get_setting("jira.last_sweep"):
+                break
+            time.sleep(0.2)
+        # resuming the job already caught Jira up; the round still ran and found it clean
+        assert client.get("/api/settings/jira/sweep").json()["jobs"] == 1
+    assert len(engine.store.get(job.id).data.jira_keys) == 3

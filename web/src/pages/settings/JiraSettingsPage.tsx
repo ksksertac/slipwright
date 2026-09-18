@@ -1,6 +1,13 @@
 import { useState, type FormEvent } from "react";
 import { describeError, type JiraSettingsIn } from "../../api/client";
-import { useJiraSettings, useSaveJiraSettings, useTestJira } from "../../api/hooks";
+import {
+  useJiraSettings,
+  useJiraSweep,
+  useRunJiraSweep,
+  useSaveJiraSettings,
+  useTestJira,
+} from "../../api/hooks";
+import { timeAgo } from "../../components/ui";
 import { useAuth } from "../../auth/AuthProvider";
 import { ErrorBox, Loading, PageHead } from "../../components/ui";
 import { Crumbs } from "../../components/Crumbs";
@@ -155,6 +162,37 @@ export function JiraSettingsPage() {
         <JiraAgentAccount />
         <ProjectJiraSetup />
       </div>
+      <SweepCard admin={admin} />
+    </div>
+  );
+}
+
+/** The PO's round: what the hourly sweep did last, and a button to run it now. */
+function SweepCard({ admin }: { admin: boolean }) {
+  const last = useJiraSweep();
+  const run = useRunJiraSweep();
+  const s = last.data;
+  return (
+    <div className="card" style={{ marginTop: 16 }}>
+      <div className="row spread">
+        <h3>The Product Owner's round</h3>
+        {admin && (
+          <button className="btn small" disabled={run.isPending} onClick={() => run.mutate()}>
+            {run.isPending ? "Running…" : "Run now"}
+          </button>
+        )}
+      </div>
+      <p className="muted small">
+        At startup and every hour, every development of a Jira-linked project is checked: missing
+        epics, stories and sub-tasks are created, stories join the sprint (one is started when none
+        is running), statuses catch up.
+      </p>
+      <div className="small">
+        {s
+          ? `Last round ${timeAgo(s.at)}: ${s.jobs} development(s) checked, ${s.updated} updated, ${s.errors} with Jira errors.`
+          : "No round has run yet."}
+      </div>
+      {run.error && <div className="callout error">{describeError(run.error)}</div>}
     </div>
   );
 }

@@ -1063,6 +1063,11 @@ in bulk.
   files → exactly one file → one minimal file); per-provider **Max output tokens** override
   under Settings → Models (`Credentials.max_tokens`), vendor defaults in `ProviderSpec`.
 
+- [x] **The PO's round.** `Engine.jira_sweep()` reconciles every development of a
+  Jira-linked project (missing issues, sprint, statuses) under the job's lock; the API runs
+  it 5 s after startup and then every `jira_sweep_s` (3600); `GET/POST
+  /api/settings/jira/sweep` show and trigger it; the Jira page has the card.
+
 ## Phase 10 — Proposed (not started)
 
 ### T10.1 — Parallel phases per domain

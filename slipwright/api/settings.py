@@ -293,6 +293,26 @@ def put_jira(body: JiraSettingsIn, request: Request) -> JiraSettings:
     return _engine(request).update_jira_settings(**body.model_dump())
 
 
+class JiraSweep(BaseModel):
+    jobs: int
+    updated: int
+    errors: int
+    at: datetime
+
+
+@router.get("/settings/jira/sweep", response_model=JiraSweep | None)
+def last_jira_sweep(request: Request) -> JiraSweep | None:
+    data = _engine(request).store.get_setting("jira.last_sweep")
+    return JiraSweep(**data) if data else None
+
+
+@router.post("/settings/jira/sweep", response_model=JiraSweep)
+def run_jira_sweep(request: Request) -> JiraSweep:
+    """Run the PO's round now: complete missing issues and sprints for every job."""
+    require_admin(request)
+    return JiraSweep(**_engine(request).jira_sweep())
+
+
 @router.post("/settings/jira/test", response_model=JiraTestResult)
 def test_jira(request: Request) -> JiraTestResult:
     """Call Jira with the stored credentials (and the agent account when set)."""

@@ -28,6 +28,7 @@ export type GitHubRepo = Schemas["GitHubRepo"];
 export type JiraSettings = Schemas["JiraSettings"];
 export type JiraSettingsIn = Schemas["JiraSettingsIn"];
 export type JiraTestResult = Schemas["JiraTestResult"];
+export type JiraSweep = Schemas["JiraSweep"];
 export type JiraProject = Schemas["JiraProject"];
 export type Profile = Schemas["Profile"];
 export type RoleConfig = Schemas["RoleConfig"];

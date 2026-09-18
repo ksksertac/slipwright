@@ -154,6 +154,7 @@ def create_app(
     require_auth: bool = True,
     dev: bool = False,
     static_dir: Path | None = None,
+    jira_sweep_s: float = 3600.0,
 ) -> FastAPI:
     """Build the app. ``require_auth=False`` (tests, trusted local use) skips login;
     ``dev=True`` allows the Vite dev server's origin (``SLIPWRIGHT_DEV=1``); ``static_dir``
@@ -170,7 +171,14 @@ def create_app(
             thread = threading.Thread(target=_resume_all, args=(engine,), daemon=True)
             thread.start()
             app.state.resume_thread = thread
+        stop = threading.Event()
+        app.state.sweep_stop = stop
+        if resume_on_startup and jira_sweep_s > 0:
+            threading.Thread(
+                target=_jira_sweeper, args=(engine, jira_sweep_s, stop), daemon=True
+            ).start()
         yield
+        stop.set()
 
     from slipwright.api.auth import auth_dependency
     from slipwright.api.auth import router as auth_router
@@ -700,6 +708,17 @@ def _execute_test_run(engine: Engine, run_id: str) -> None:
         engine.execute_test_run(run_id)
     except Exception:  # noqa: BLE001 - a background thread has nobody to raise to
         log.exception("test run %s: background run failed", run_id)
+
+
+def _jira_sweeper(engine: Engine, every_s: float, stop: threading.Event) -> None:
+    """The PO's round: once after startup (after the jobs resumed), then every hour."""
+    stop.wait(5.0)  # let the resumed jobs take their locks first
+    while not stop.is_set():
+        try:
+            engine.jira_sweep()
+        except Exception:  # noqa: BLE001 - a sweep must never kill the timer
+            log.exception("jira sweep failed")
+        stop.wait(every_s)
 
 
 def _resume_all(engine: Engine) -> None:

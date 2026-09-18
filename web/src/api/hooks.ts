@@ -16,6 +16,7 @@ import {
   type JiraProject,
   type JiraSettings,
   type JiraSettingsIn,
+  type JiraSweep,
   type JiraTestResult,
   type LocalRepos,
   type Job,
@@ -412,6 +413,21 @@ export function useSaveJiraSettings() {
       void qc.invalidateQueries({ queryKey: keys.jira });
       void qc.invalidateQueries({ queryKey: keys.jiraProjects });
     },
+  });
+}
+
+export function useJiraSweep() {
+  return useQuery({
+    queryKey: ["settings", "jira", "sweep"],
+    queryFn: () => api.get<JiraSweep | null>("/api/settings/jira/sweep"),
+  });
+}
+
+export function useRunJiraSweep() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<JiraSweep>("/api/settings/jira/sweep"),
+    onSuccess: (data) => qc.setQueryData(["settings", "jira", "sweep"], data),
   });
 }
 

@@ -1026,6 +1026,35 @@
         "title": "JiraSettingsIn",
         "type": "object"
       },
+      "JiraSweep": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "errors": {
+            "title": "Errors",
+            "type": "integer"
+          },
+          "jobs": {
+            "title": "Jobs",
+            "type": "integer"
+          },
+          "updated": {
+            "title": "Updated",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "at",
+          "errors",
+          "jobs",
+          "updated"
+        ],
+        "title": "JiraSweep",
+        "type": "object"
+      },
       "JiraTestResult": {
         "properties": {
           "account": {
@@ -5591,6 +5620,55 @@
           }
         },
         "summary": "Jira Projects",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/settings/jira/sweep": {
+      "get": {
+        "operationId": "last_jira_sweep_api_settings_jira_sweep_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/JiraSweep"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Last Jira Sweep Api Settings Jira Sweep Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Last Jira Sweep",
+        "tags": [
+          "settings"
+        ]
+      },
+      "post": {
+        "description": "Run the PO's round now: complete missing issues and sprints for every job.",
+        "operationId": "run_jira_sweep_api_settings_jira_sweep_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JiraSweep"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Run Jira Sweep",
         "tags": [
           "settings"
         ]
