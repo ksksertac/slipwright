@@ -191,7 +191,10 @@ class FileChange(BaseModel):
 
 class DeveloperResult(RoleOutput):
     changes: list[FileChange] = Field(default_factory=list)
-    phase_complete: bool = Field(description="Whether the assigned plan phase is finished.")
+    phase_complete: bool = Field(
+        default=True,
+        description="Whether the assigned plan phase is finished; omitted means yes.",
+    )
 
 
 class TestCase(BaseModel):

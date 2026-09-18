@@ -576,3 +576,30 @@ def test_max_output_tokens_override_reaches_the_vendor(
     assert vendor.requests[-1]["max_tokens"] == 32_000
     engine.update_provider_settings("deepseek", max_tokens=0)  # back to the default
     assert engine.provider_settings()[2]["max_tokens"] is None
+
+
+def test_malformed_answer_is_retried_with_the_validation_error(
+    store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
+) -> None:
+    provider = full_provider(seed, phases=1)
+    prompts: list[str] = []
+
+    def sloppy(req: ModelRequest) -> Any:
+        prompts.append(req.prompt)
+        if "Your previous answer was rejected" not in req.prompt:
+            return {"summary": "forgot the shape", "changes": "not-a-list"}
+        return {"summary": "fixed", "changes": [{"path": "OK", "content": "yes\n"}]}
+
+    provider.replies[RoleName.BACKEND] = sloppy
+    engine = full_engine(store, worktrees_root, seed, provider)
+    job = engine.start(engine.create_job("x", repo).id)
+    job = engine.approve(engine.approve(job.id).id)
+    assert job.state is JobState.AWAITING_TEST_APPROVAL
+    assert len(prompts) == 2
+    assert "changes" in prompts[1].split("Your previous answer was rejected", 1)[1]
+    notes = [t.note or "" for t in job.history if "retrying" in (t.note or "")]
+    assert notes == [
+        "backend attempt 1 failed: malformed_output; retrying in 0s (1/2 retries used)"
+    ]
+    # phase_complete may be omitted: the phase counts as finished
+    assert job.data.phase_index == 1

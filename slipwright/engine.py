@@ -132,6 +132,24 @@ class ProjectCloneError(RuntimeError):
     pass
 
 
+class _Corrected:
+    """A provider wrapper for the retry after a malformed answer: the same request with
+    the validation problem appended, so the model fixes its output instead of repeating
+    it. Generic on purpose — every role goes through ``invoke_role`` the same way."""
+
+    def __init__(self, inner: ModelProvider, problem: str) -> None:
+        self._inner = inner
+        self._problem = problem
+
+    def complete(self, request: Any) -> Any:
+        hint = (
+            "\n\nYour previous answer was rejected and discarded: "
+            f"{self._problem}\nAnswer again as one JSON object matching the schema above, "
+            "with every required field present and nothing outside the JSON."
+        )
+        return self._inner.complete(request.model_copy(update={"prompt": request.prompt + hint}))
+
+
 # what a specialist is told after each truncated answer, each step smaller than the last
 TRUNCATION_STEPS: tuple[str, ...] = (
     "Return only a few files now (complete contents) and set phase_complete to false; "
@@ -1449,10 +1467,19 @@ class Engine:
         truncated answer is retried once with the role told to return a smaller part."""
         attempt = 0
         truncations = 0
+        provider: ModelProvider = self.provider
         while True:
             attempt += 1
-            result = run(job, provider=self.provider, timeout_s=self.timeout_s, **kw)
+            result = run(job, provider=provider, timeout_s=self.timeout_s, **kw)
             result.attempts = attempt
+            provider = self.provider
+            if (
+                result.error is not None
+                and result.error.kind is InvokeErrorKind.MALFORMED_OUTPUT
+                and attempt <= retries
+            ):
+                # the next attempt carries the validation error, not a blind repeat
+                provider = _Corrected(self.provider, result.error.message)
             if (
                 result.error is not None
                 and result.error.kind is InvokeErrorKind.TRUNCATED
