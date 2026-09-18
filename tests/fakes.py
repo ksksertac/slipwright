@@ -69,6 +69,8 @@ class FakeJira:
         self.down = down
         self.issues: dict[str, dict[str, Any]] = {}
         self.comments: dict[str, list[str]] = {}
+        self.boards = True  # the project has a scrum board
+        self.sprints: dict[int, dict[str, Any]] = {}
         self.worklogs: dict[str, list[dict[str, Any]]] = {}
         self.links: list[dict[str, Any]] = []
         self.calls: list[str] = []
@@ -115,6 +117,24 @@ class FakeJira:
                     "emailAddress": email,
                 },
             )
+        if path == "/rest/agile/1.0/board":
+            if not self.boards:
+                return httpx.Response(200, json={"values": []})
+            return httpx.Response(200, json={"values": [{"id": 1, "type": "scrum"}]})
+        if path == "/rest/agile/1.0/board/1/sprint":
+            active = [s for s in self.sprints.values() if s["state"] == "active"]
+            return httpx.Response(200, json={"values": active})
+        if path == "/rest/agile/1.0/sprint" and request.method == "POST":
+            sid = 100 + len(self.sprints)
+            self.sprints[sid] = {"id": sid, "name": body["name"], "state": "future", "issues": []}
+            return httpx.Response(201, json=self.sprints[sid])
+        if path.startswith("/rest/agile/1.0/sprint/") and request.method == "POST":
+            sid = int(path.split("/")[5])
+            if path.endswith("/issue"):
+                self.sprints[sid]["issues"].extend(body["issues"])
+                return httpx.Response(204)
+            self.sprints[sid].update({k: v for k, v in body.items() if k != "issues"})
+            return httpx.Response(200, json=self.sprints[sid])
         if path == "/rest/api/3/project/search":
             return httpx.Response(
                 200,

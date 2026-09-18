@@ -517,3 +517,62 @@ def test_jira_task_type_is_corrected_to_a_subtask(
     notes = "\n".join(t.detail or "" for t in job.history if (t.note or "").startswith("jira:"))
     assert "issue type for task: 'Task' cannot be used at that level in DEM" in notes
     assert "using 'Subtask'" in notes
+
+
+def test_truncation_retries_escalate_to_one_file(
+    store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
+) -> None:
+    from slipwright.providers import ProviderTruncatedError
+
+    provider = full_provider(seed, phases=1)
+    asks: list[str] = []
+
+    def stubborn(req: ModelRequest) -> Any:
+        ctx = _context(req)
+        asks.append(str(ctx.get("output_was_truncated", "")))
+        if "exactly ONE file" not in asks[-1]:
+            raise ProviderTruncatedError("response truncated at max_tokens=8192")
+        return {
+            "summary": "one file",
+            "phase_complete": True,
+            "changes": [{"path": "OK", "content": "yes\n"}],
+        }
+
+    provider.replies[RoleName.BACKEND] = stubborn
+    engine = full_engine(store, worktrees_root, seed, provider)
+    job = engine.start(engine.create_job("x", repo).id)
+    job = engine.approve(engine.approve(job.id).id)
+    assert job.state is JobState.AWAITING_TEST_APPROVAL
+    assert asks[0] == "" and "a few files" in asks[1] and "exactly ONE file" in asks[2]
+    notes = [t.note or "" for t in job.history if "smaller part" in (t.note or "")]
+    assert len(notes) == 2 and notes[1].endswith("(2/3)")
+
+
+def test_max_output_tokens_override_reaches_the_vendor(
+    store: JobStore, worktrees_root: Path, seed: Profile, repo: Path, monkeypatch: Any
+) -> None:
+    import httpx
+
+    from slipwright.providers.registry import PROVIDERS
+    from tests.test_providers import FakeVendor
+
+    for spec in PROVIDERS.values():
+        monkeypatch.delenv(spec.env_var, raising=False)
+    vendor = FakeVendor("sk-d", ["deep-model"])
+    from tests.pipeline import default_backlog
+
+    vendor.reply = {"summary": "s", "breakdown": default_backlog(1)}
+    engine = full_engine(
+        store, worktrees_root, seed, None, http_transport=httpx.MockTransport(vendor.handler)
+    )
+    engine.update_provider_settings(
+        "deepseek", api_key="sk-d", make_default=True, default_model="deep-model"
+    )
+    assert engine.provider_settings()[2]["default_max_tokens"] == 8_192
+    engine.start(engine.create_job("x", repo).id)
+    assert vendor.requests[-1]["max_tokens"] == 8_192  # the vendor default
+    engine.update_provider_settings("deepseek", max_tokens=32_000)
+    engine.start(engine.create_job("y", repo).id)
+    assert vendor.requests[-1]["max_tokens"] == 32_000
+    engine.update_provider_settings("deepseek", max_tokens=0)  # back to the default
+    assert engine.provider_settings()[2]["max_tokens"] is None

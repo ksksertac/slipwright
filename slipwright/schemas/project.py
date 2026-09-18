@@ -23,6 +23,7 @@ _JIRA_KEY = re.compile(r"^[A-Z][A-Z0-9_]*$")
 
 
 ReviewMode = Literal["off", "advisory", "blocking"]
+SprintMode = Literal["off", "active", "create"]
 GateMode = Literal["manual", "assisted", "auto"]
 
 
@@ -73,6 +74,12 @@ class Project(BaseModel):
         default_factory=dict,
         description="Task status -> Jira transition name (todo/in_progress/done/failed).",
     )
+    jira_sprint: SprintMode = Field(
+        default="create",
+        description="Where mirrored stories go: off (backlog), active (the running sprint, "
+        "else backlog) or create (the running sprint, else a new one named after the "
+        "development, started for two weeks).",
+    )
     profile: Profile | None = Field(default=None, description="Seed profile for new jobs.")
     review: ReviewMode = Field(
         default="advisory",
@@ -118,6 +125,7 @@ class ProjectPatch(BaseModel):
     github_repo: str | None = None
     jira_project_key: str | None = None
     jira_transitions: dict[str, str] | None = None
+    jira_sprint: SprintMode | None = None
     profile: Profile | None = None
     review: ReviewMode | None = None
     supervisor: SupervisorSettings | None = None
@@ -130,5 +138,6 @@ __all__ = [
     "Project",
     "ProjectPatch",
     "ReviewMode",
+    "SprintMode",
     "SupervisorSettings",
 ]

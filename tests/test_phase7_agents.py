@@ -219,7 +219,13 @@ def test_agents_act_in_jira_through_the_engine(
 
     assert all(
         c.startswith(
-            ("POST /rest/api/3/issue", "GET /rest/api/3/issue", "POST /rest/api/3/issueLink")
+            (
+                "POST /rest/api/3/issue",
+                "GET /rest/api/3/issue",
+                "POST /rest/api/3/issueLink",
+                "GET /rest/agile/",
+                "POST /rest/agile/",
+            )
         )
         for c in jira.calls
     )

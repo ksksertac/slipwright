@@ -1055,6 +1055,14 @@ in bulk.
   story) for the project's sub-task type, noting it in the history.
 - [x] Pipeline lanes wrap into a grid instead of scrolling sideways.
 
+- [x] **Sprints.** After the backlog is mirrored, stories join the project's active sprint,
+  or (`Project.jira_sprint = create`, the default) a two-week sprint named after the
+  development is created and started; sub-tasks follow their parents. `JiraClient`
+  gained the Agile calls (`board_id`, `active_sprint`, `create_sprint`, `add_to_sprint`).
+- [x] **Truncation escalates.** Up to three smaller-part retries (`TRUNCATION_STEPS`: a few
+  files → exactly one file → one minimal file); per-provider **Max output tokens** override
+  under Settings → Models (`Credentials.max_tokens`), vendor defaults in `ProviderSpec`.
+
 ## Phase 10 — Proposed (not started)
 
 ### T10.1 — Parallel phases per domain

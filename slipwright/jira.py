@@ -208,6 +208,56 @@ class JiraClient:
             },
         )
 
+    # -- sprints (Agile API) ---------------------------------------------------------------
+
+    def board_id(self, project_key: str) -> int | None:
+        """The project's first scrum board, or None (kanban / no board: no sprints)."""
+        data = self._request(
+            "GET",
+            "/rest/agile/1.0/board",
+            params={"projectKeyOrId": project_key, "type": "scrum"},
+        ).json()
+        boards = data.get("values") or []
+        return int(boards[0]["id"]) if boards else None
+
+    def active_sprint(self, board_id: int) -> dict[str, Any] | None:
+        data = self._request(
+            "GET", f"/rest/agile/1.0/board/{board_id}/sprint", params={"state": "active"}
+        ).json()
+        sprints = data.get("values") or []
+        return dict(sprints[0]) if sprints else None
+
+    def create_sprint(self, board_id: int, name: str, *, days: int = 14) -> dict[str, Any]:
+        """Create and start a sprint of ``days`` from now."""
+        from datetime import UTC, datetime, timedelta
+
+        start = datetime.now(UTC)
+        end = start + timedelta(days=days)
+        created = self._request(
+            "POST",
+            "/rest/agile/1.0/sprint",
+            json={"name": name[:255], "originBoardId": board_id},
+        ).json()
+        sprint_id = int(created["id"])
+        started = self._request(
+            "POST",
+            f"/rest/agile/1.0/sprint/{sprint_id}",
+            json={
+                "state": "active",
+                "startDate": start.isoformat(timespec="milliseconds"),
+                "endDate": end.isoformat(timespec="milliseconds"),
+            },
+        ).json()
+        return dict(started or created)
+
+    def add_to_sprint(self, sprint_id: int, keys: list[str]) -> None:
+        for i in range(0, len(keys), 50):  # the API takes 50 at a time
+            self._request(
+                "POST",
+                f"/rest/agile/1.0/sprint/{sprint_id}/issue",
+                json={"issues": keys[i : i + 50]},
+            )
+
     # -- plumbing --------------------------------------------------------------------------
 
     def _request(self, method: str, path: str, **kw: Any) -> httpx.Response:

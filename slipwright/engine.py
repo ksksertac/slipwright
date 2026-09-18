@@ -132,6 +132,17 @@ class ProjectCloneError(RuntimeError):
     pass
 
 
+# what a specialist is told after each truncated answer, each step smaller than the last
+TRUNCATION_STEPS: tuple[str, ...] = (
+    "Return only a few files now (complete contents) and set phase_complete to false; "
+    "you will be called again for the rest.",
+    "Return exactly ONE file now, the most important one, complete, and set "
+    "phase_complete to false; the rest comes in later calls.",
+    "Return exactly ONE file, the smallest useful one, with no comments or blank lines "
+    "beyond what the language needs, and set phase_complete to false.",
+)
+
+
 class NotAwaitingApproval(ValueError):
     def __init__(self, job: Job) -> None:
         super().__init__(f"job {job.id} is not awaiting approval (state: {job.state.value})")
@@ -260,7 +271,10 @@ class Engine:
         if not key:
             return None
         return Credentials(
-            name=name, api_key=str(key), base_url=data.get("base_url") or spec.default_base_url
+            name=name,
+            api_key=str(key),
+            base_url=data.get("base_url") or spec.default_base_url,
+            max_tokens=int(data["max_tokens"]) if data.get("max_tokens") else None,
         )
 
     def provider_settings(self) -> list[dict[str, Any]]:
@@ -284,6 +298,8 @@ class Engine:
                     "key_from_env": bool(env) and not stored,
                     "is_default": spec.name == default,
                     "default_model": data.get("default_model"),
+                    "max_tokens": data.get("max_tokens"),
+                    "default_max_tokens": spec.max_tokens,
                 }
             )
         return out
@@ -297,6 +313,7 @@ class Engine:
         clear_key: bool = False,
         make_default: bool = False,
         default_model: str | None = None,
+        max_tokens: int | None = None,
     ) -> None:
         if name not in PROVIDERS:
             raise KeyError(name)
@@ -305,6 +322,8 @@ class Engine:
             data["base_url"] = base_url.strip().rstrip("/") or None
         if default_model is not None:
             data["default_model"] = default_model.strip() or None
+        if max_tokens is not None:
+            data["max_tokens"] = max_tokens or None  # 0 clears: back to the vendor default
         self.store.set_setting(f"providers.{name}", data)
         if clear_key:
             self.store.delete_setting(f"providers.{name}.api_key")
@@ -1429,6 +1448,7 @@ class Engine:
         the role's ``retries``. Every failed attempt is recorded in the history. A
         truncated answer is retried once with the role told to return a smaller part."""
         attempt = 0
+        truncations = 0
         while True:
             attempt += 1
             result = run(job, provider=self.provider, timeout_s=self.timeout_s, **kw)
@@ -1437,16 +1457,19 @@ class Engine:
                 result.error is not None
                 and result.error.kind is InvokeErrorKind.TRUNCATED
                 and "truncated" in inspect.signature(run).parameters
-                and not kw.get("truncated")
+                and truncations < len(TRUNCATION_STEPS)
             ):
-                kw["truncated"] = result.error.message
+                ask = TRUNCATION_STEPS[truncations]
+                truncations += 1
+                kw["truncated"] = f"{result.error.message}. {ask}"
                 self.store.update_state(
                     job.id,
                     job.state,
                     note=(
                         f"{role.value} attempt {attempt}: {result.error.message}; "
-                        "asking for a smaller part"
+                        f"asking for a smaller part ({truncations}/{len(TRUNCATION_STEPS)})"
                     ),
+                    detail=ask,
                 )
                 job.history = self.store.get(job.id).history
                 continue

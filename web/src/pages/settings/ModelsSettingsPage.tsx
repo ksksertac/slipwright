@@ -40,6 +40,7 @@ function ProviderCard({ provider: p }: { provider: ProviderSettings }) {
   const [key, setKey] = useState("");
   const [baseUrl, setBaseUrl] = useState<string | null>(null);
   const [model, setModel] = useState<string | null>(null);
+  const [maxTokens, setMaxTokens] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const admin = !!user?.is_admin;
   const models = useProviderModels(p.key_set ? p.name : null);
@@ -54,6 +55,7 @@ function ProviderCard({ provider: p }: { provider: ProviderSettings }) {
         api_key: key.trim() || null,
         base_url: baseUrl ?? p.base_url ?? "",
         default_model: modelValue,
+        max_tokens: maxTokens === null ? undefined : Number(maxTokens) || 0,
       },
       {
         onSuccess: () => {
@@ -148,6 +150,23 @@ function ProviderCard({ provider: p }: { provider: ProviderSettings }) {
             {p.is_default
               ? "What every agent without a pinned provider runs on right now."
               : "Used by every agent without a pinned provider once this provider is the default."}
+          </div>
+        </div>
+        <div className="field">
+          <label htmlFor={`${p.name}-max`}>Max output tokens per call</label>
+          <input
+            id={`${p.name}-max`}
+            type="number"
+            min={0}
+            step={1024}
+            value={maxTokens ?? p.max_tokens ?? ""}
+            disabled={!admin}
+            onChange={(e) => setMaxTokens(e.target.value)}
+            placeholder={`${p.default_max_tokens} (vendor default)`}
+          />
+          <div className="muted small">
+            How long one answer may be. Raise it if the vendor's newer models allow more; an agent
+            that still hits the limit is asked for smaller parts automatically.
           </div>
         </div>
       </div>

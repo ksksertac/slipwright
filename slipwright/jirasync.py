@@ -56,6 +56,7 @@ class JiraSync:
             return report
         try:
             self._ensure_issues(job, epics, report)
+            self._ensure_sprint(job, epics, report)
             self._sync_statuses(job, epics, report)
             self._one_shot_comments(job, epics, report)
         except JiraError as exc:
@@ -138,6 +139,37 @@ class JiraSync:
                             parent_key=keys[story.id],
                         )
                         report.note(f"created {keys[task.id]} (task) {task.title}")
+
+    # -- sprint ------------------------------------------------------------------------------
+
+    def _ensure_sprint(self, job: Job, epics: list[EpicView], report: SyncReport) -> None:
+        """Put the development's stories into a sprint (sub-tasks follow their parents):
+        the active one when there is one, else a new one named after the request when
+        the project allows it. Done once per job; a project without a scrum board is
+        left alone."""
+        mode = self.project.jira_sprint
+        if mode == "off" or job.data.jira_sprint_id is not None:
+            return
+        keys = job.data.jira_keys
+        stories = [keys[s.id] for e in epics for s in e.stories if s.id in keys]
+        if not stories:
+            return
+        board = self.client.board_id(self.key)
+        if board is None:
+            job.data.jira_sprint_id = 0  # remember: nothing to do for this project
+            report.note("no scrum board: stories stay in the backlog")
+            return
+        sprint = self.client.active_sprint(board)
+        if sprint is None and mode == "create":
+            sprint = self.client.create_sprint(board, f"Slipwright: {job.request[:60]}")
+            report.note(f"started sprint {sprint.get('name')} (#{sprint['id']})")
+        if sprint is None:
+            job.data.jira_sprint_id = 0
+            report.note("no active sprint: stories stay in the backlog")
+            return
+        self.client.add_to_sprint(int(sprint["id"]), stories)
+        job.data.jira_sprint_id = int(sprint["id"])
+        report.note(f"{len(stories)} story(ies) added to sprint {sprint.get('name')}")
 
     # -- statuses ----------------------------------------------------------------------------
 

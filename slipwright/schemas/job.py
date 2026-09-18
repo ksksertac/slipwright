@@ -148,6 +148,9 @@ class JobData(BaseModel):
     jira_marks: list[str] = Field(
         default_factory=list, description="One-shot Jira comments already posted."
     )
+    jira_sprint_id: int | None = Field(
+        default=None, description="The sprint the mirrored stories were put into."
+    )
     jira_last_error: str | None = Field(
         default=None, description="Why the last Jira sync failed; cleared when it succeeds."
     )

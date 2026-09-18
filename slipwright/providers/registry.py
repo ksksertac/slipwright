@@ -79,6 +79,7 @@ class Credentials(BaseModel):
     name: str
     api_key: str
     base_url: str
+    max_tokens: int | None = None  # overrides the vendor's default output limit
 
 
 def provider_names() -> list[str]:
@@ -95,7 +96,10 @@ def build_client(
         from slipwright.providers.anthropic import AnthropicProvider
 
         return AnthropicProvider.from_credentials(
-            creds.api_key, base_url=creds.base_url, transport=transport, max_tokens=spec.max_tokens
+            creds.api_key,
+            base_url=creds.base_url,
+            transport=transport,
+            max_tokens=creds.max_tokens or spec.max_tokens,
         )
     from slipwright.providers.openai_compat import OpenAICompatProvider
 
@@ -104,7 +108,7 @@ def build_client(
         creds.base_url,
         supports_effort=spec.supports_effort,
         max_tokens_param=spec.max_tokens_param,
-        max_tokens=spec.max_tokens,
+        max_tokens=creds.max_tokens or spec.max_tokens,
         transport=transport,
     )
 

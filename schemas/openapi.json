@@ -1287,6 +1287,18 @@
             "title": "Jira Queue",
             "type": "array"
           },
+          "jira_sprint_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The sprint the mirrored stories were put into.",
+            "title": "Jira Sprint Id"
+          },
           "jira_status": {
             "additionalProperties": {
               "type": "string"
@@ -1451,6 +1463,7 @@
           "jira_last_error",
           "jira_marks",
           "jira_queue",
+          "jira_sprint_id",
           "jira_status",
           "last_build_output",
           "output_hashes",
@@ -2284,6 +2297,17 @@
             ],
             "title": "Jira Project Key"
           },
+          "jira_sprint": {
+            "default": "create",
+            "description": "Where mirrored stories go: off (backlog), active (the running sprint, else backlog) or create (the running sprint, else a new one named after the development, started for two weeks).",
+            "enum": [
+              "off",
+              "active",
+              "create"
+            ],
+            "title": "Jira Sprint",
+            "type": "string"
+          },
           "jira_transitions": {
             "additionalProperties": {
               "type": "string"
@@ -2344,6 +2368,7 @@
           "github_repo",
           "id",
           "jira_project_key",
+          "jira_sprint",
           "jira_transitions",
           "name",
           "profile",
@@ -2400,6 +2425,22 @@
               }
             ],
             "title": "Jira Project Key"
+          },
+          "jira_sprint": {
+            "anyOf": [
+              {
+                "enum": [
+                  "off",
+                  "active",
+                  "create"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Jira Sprint"
           },
           "jira_transitions": {
             "anyOf": [
@@ -2588,6 +2629,11 @@
             "title": "Default Base Url",
             "type": "string"
           },
+          "default_max_tokens": {
+            "description": "The vendor's default output limit.",
+            "title": "Default Max Tokens",
+            "type": "integer"
+          },
           "default_model": {
             "anyOf": [
               {
@@ -2635,6 +2681,18 @@
             "title": "Label",
             "type": "string"
           },
+          "max_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Output limit override.",
+            "title": "Max Tokens"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -2643,6 +2701,7 @@
         "required": [
           "base_url",
           "default_base_url",
+          "default_max_tokens",
           "default_model",
           "docs_url",
           "env_var",
@@ -2651,6 +2710,7 @@
           "key_hint",
           "key_set",
           "label",
+          "max_tokens",
           "name"
         ],
         "title": "ProviderSettings",
@@ -2703,6 +2763,20 @@
             "default": false,
             "title": "Make Default",
             "type": "boolean"
+          },
+          "max_tokens": {
+            "anyOf": [
+              {
+                "maximum": 200000.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Largest answer per call; 0 = vendor default.",
+            "title": "Max Tokens"
           }
         },
         "title": "ProviderSettingsIn",

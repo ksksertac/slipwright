@@ -215,7 +215,11 @@ def test_jira_sync_unit_reconcile_is_idempotent(
     )
     sync = JiraSync(client, project, {"epic": "Epic", "story": "Story", "task": "Subtask"})
     first = sync.reconcile(job)
-    assert first.changed and first.error is None and len(first.notes) == 6
+    assert first.changed and first.error is None and len(first.notes) == 8
+    assert "started sprint Slipwright: x (#100)" in first.notes  # no active sprint: a new one
+    assert "1 story(ies) added to sprint Slipwright: x" in first.notes
+    assert jira.sprints[100]["state"] == "active" and jira.sprints[100]["issues"] == ["DEM-2"]
+    assert job.data.jira_sprint_id == 100
     second = sync.reconcile(job)
     assert not second.changed and second.notes == []
 

@@ -64,6 +64,8 @@ class ProviderSettings(BaseModel):
     default_model: str | None = Field(
         default=None, description="What roles without a provider of their own run on here."
     )
+    max_tokens: int | None = Field(default=None, description="Output limit override.")
+    default_max_tokens: int = Field(description="The vendor's default output limit.")
 
 
 class ProviderSettingsIn(BaseModel):
@@ -72,6 +74,9 @@ class ProviderSettingsIn(BaseModel):
     clear_key: bool = False
     make_default: bool = False
     default_model: str | None = Field(default=None, description="Empty string clears it.")
+    max_tokens: int | None = Field(
+        default=None, ge=0, le=200_000, description="Largest answer per call; 0 = vendor default."
+    )
 
 
 class ProviderModels(BaseModel):

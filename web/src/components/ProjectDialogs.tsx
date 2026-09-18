@@ -16,6 +16,7 @@ export function EditProjectModal({ project, onClose }: { project: Project; onClo
   const [review, setReview] = useState<Project["review"]>(project.review);
   const [supervisor, setSupervisor] = useState<Project["supervisor"]>(project.supervisor);
   const [budget, setBudget] = useState<Project["budget"]>(project.budget);
+  const [sprint, setSprint] = useState<Project["jira_sprint"]>(project.jira_sprint);
 
   const save = () => {
     patch.mutate(
@@ -27,6 +28,7 @@ export function EditProjectModal({ project, onClose }: { project: Project; onClo
         review,
         supervisor,
         budget,
+        jira_sprint: sprint,
       },
       {
         onSuccess: () => {
@@ -85,6 +87,18 @@ export function EditProjectModal({ project, onClose }: { project: Project; onClo
             onChange={(e) => setJiraKey(e.target.value.toUpperCase())}
           />
         </div>
+      </div>
+      <div className="field">
+        <label htmlFor="ep-sprint">Jira sprint for mirrored stories</label>
+        <select
+          id="ep-sprint"
+          value={sprint}
+          onChange={(e) => setSprint(e.target.value as Project["jira_sprint"])}
+        >
+          <option value="create">running sprint, else start a new one for the development</option>
+          <option value="active">running sprint only, else leave them in the backlog</option>
+          <option value="off">never — stories stay in the backlog</option>
+        </select>
       </div>
       <div className="field">
         <label htmlFor="ep-review">Standards review after each phase</label>
