@@ -148,8 +148,8 @@ class JiraSync:
         the project allows it. Done once per job; a project without a scrum board is
         left alone."""
         mode = self.project.jira_sprint
-        if mode == "off" or job.data.jira_sprint_id is not None:
-            return
+        if mode == "off" or job.data.jira_sprint_id:
+            return  # already in a sprint; 0 ("nothing found last time") is tried again
         keys = job.data.jira_keys
         stories = [keys[s.id] for e in epics for s in e.stories if s.id in keys]
         if not stories:

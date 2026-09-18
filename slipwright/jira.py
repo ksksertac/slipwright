@@ -211,14 +211,23 @@ class JiraClient:
     # -- sprints (Agile API) ---------------------------------------------------------------
 
     def board_id(self, project_key: str) -> int | None:
-        """The project's first scrum board, or None (kanban / no board: no sprints)."""
+        """The project's board that runs sprints, or None (kanban / no board). Company-
+        managed projects call it ``scrum``; team-managed ones report ``simple``, so every
+        board is considered and the first one that can hold sprints wins."""
         data = self._request(
-            "GET",
-            "/rest/agile/1.0/board",
-            params={"projectKeyOrId": project_key, "type": "scrum"},
+            "GET", "/rest/agile/1.0/board", params={"projectKeyOrId": project_key}
         ).json()
         boards = data.get("values") or []
-        return int(boards[0]["id"]) if boards else None
+        for board in boards:
+            if board.get("type") == "kanban":
+                continue
+            board_id = int(board["id"])
+            try:
+                self._request("GET", f"/rest/agile/1.0/board/{board_id}/sprint").json()
+            except JiraError:
+                continue  # a board without sprints answers 400
+            return board_id
+        return None
 
     def active_sprint(self, board_id: int) -> dict[str, Any] | None:
         data = self._request(

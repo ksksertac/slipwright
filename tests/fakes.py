@@ -120,7 +120,7 @@ class FakeJira:
         if path == "/rest/agile/1.0/board":
             if not self.boards:
                 return httpx.Response(200, json={"values": []})
-            return httpx.Response(200, json={"values": [{"id": 1, "type": "scrum"}]})
+            return httpx.Response(200, json={"values": [{"id": 1, "type": "simple"}]})
         if path == "/rest/agile/1.0/board/1/sprint":
             active = [s for s in self.sprints.values() if s["state"] == "active"]
             return httpx.Response(200, json={"values": active})
