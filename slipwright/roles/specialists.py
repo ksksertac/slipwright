@@ -98,6 +98,13 @@ front-end tests. Do not add or change server endpoints. If the phase needs an en
 does not exist, build against the contract described in the plan, keep the call isolated
 in one client module, and say in `summary` exactly which endpoint is missing so the Architect
 can add a backend phase.""",
+    RoleName.DEVOPS: _SHARED
+    + """
+You are the DEVOPS specialist for this phase: Dockerfiles, compose files, CI workflows,
+deployment and environment configuration, README setup steps. Do not change application
+code beyond what packaging needs (an entrypoint, a health endpoint wiring); never commit
+secrets — use environment variables and an example env file. Say in `summary` what a
+person must do by hand (create a secret, open a port).""",
     RoleName.MOBILE_UI: _SHARED
     + """
 You are the MOBILE UI specialist: screens, navigation, platform APIs, offline and sync

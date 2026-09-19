@@ -182,7 +182,7 @@ decision, never a model's. Engine code never names a model — a test greps for 
   "web_ui":    { "model": "claude-opus-5",   "thinking_depth": "high",   "permissions": ["read_files", "write_files", "run_commands"] },
   "mobile_ui": { "model": "claude-opus-5",   "thinking_depth": "high",   "permissions": ["read_files", "write_files", "run_commands"] },
   "qa":        { "model": "claude-sonnet-5", "thinking_depth": "medium", "permissions": ["read_files", "write_files", "run_commands"] },
-  "devops":    { "model": "claude-haiku-4-5", "thinking_depth": "low",   "permissions": ["read_files", "run_commands", "network", "git_push"] }
+  "devops":    { "model": "claude-haiku-4-5", "thinking_depth": "low",   "permissions": ["read_files", "write_files", "run_commands", "network", "git_push"] }
 }
 ```
 

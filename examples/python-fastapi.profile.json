@@ -68,6 +68,7 @@
       "thinking_depth": "off",
       "permissions": [
         "read_files",
+        "write_files",
         "run_commands",
         "network",
         "git_push",

@@ -180,3 +180,36 @@ def test_agents_ui_has_cards_and_detail_tabs() -> None:
         assert expected in detail, expected
     job_page = (web / "pages" / "JobPage.tsx").read_text(encoding="utf-8")
     assert "DomainBadge" in job_page
+
+
+def test_devops_implements_infra_phases_with_file_changes(
+    store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
+) -> None:
+    """An infra phase is written by DevOps as a specialist (files), not as the PR author
+    it becomes at the end; the same role, a different output schema."""
+    provider = full_provider(seed, phases=1, domains=["infra"])
+    provider.replies[RoleName.DEVOPS] = lambda req: (
+        {
+            "summary": "compose file",
+            "phase_complete": True,
+            "changes": [{"path": "compose.yaml", "content": "services: {}\n"}],
+        }
+        if '"current_phase"' in req.prompt
+        else {"summary": "pr", "pr_title": "Slipwright change", "pr_body": "Automated."}
+    )
+    engine = full_engine(store, worktrees_root, seed, provider)
+    job = engine.start(engine.create_job("package it", repo).id)
+    job = engine.approve(engine.approve(job.id).id)
+    assert job.state is JobState.AWAITING_TEST_APPROVAL, job.history[-1]
+    phase_calls = [r for r in provider.requests if r.role is RoleName.DEVOPS]
+    assert len(phase_calls) == 1
+    assert "DEVOPS specialist" in phase_calls[0].prompt
+    assert phase_calls[0].output_schema["title"] == "DeveloperResult"
+    assert (job.worktree_path / "compose.yaml").is_file()  # type: ignore[operator]
+    assert any((t.note or "").startswith("devops phase 1/1") for t in job.history)
+    job = engine.approve(engine.approve(job.id).id)  # tests, then the PR: the usual schema
+    assert job.state is JobState.DONE
+    assert [r.output_schema["title"] for r in provider.requests if r.role is RoleName.DEVOPS] == [
+        "DeveloperResult",
+        "DevOpsResult",
+    ]

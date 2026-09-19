@@ -125,10 +125,13 @@ def invoke_role(
     *,
     provider: ModelProvider | None = None,
     timeout_s: float = DEFAULT_TIMEOUT_S,
+    output_schema_cls: Any = None,
 ) -> RoleResult:
+    """``output_schema_cls`` overrides the role's usual output: DevOps writing an infra
+    phase answers like a specialist (file changes), not like the PR author it is later."""
     role = _coerce_role(role)
     role_cfg = profile.roles[role]
-    schema_cls = result_schema_for(role)
+    schema_cls: type[RoleOutput] = output_schema_cls or result_schema_for(role)
     output_schema = schema_cls.model_json_schema()
 
     request = ModelRequest(

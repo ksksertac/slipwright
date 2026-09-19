@@ -20,6 +20,7 @@ from slipwright.roles.common import (
     read_files,
     require_worktree,
 )
+from slipwright.roles.results import DeveloperResult
 from slipwright.schemas.job import Job
 from slipwright.schemas.profile import Profile, RoleName
 
@@ -110,7 +111,14 @@ def run(
     context["files"] = read_files(worktree, wanted)
 
     kwargs = {} if timeout_s is None else {"timeout_s": timeout_s}
-    return invoke_role(as_role, profile, context, provider=provider, **kwargs)
+    return invoke_role(
+        as_role,
+        profile,
+        context,
+        provider=provider,
+        output_schema_cls=DeveloperResult,  # whoever implements a phase answers with changes
+        **kwargs,
+    )
 
 
 __all__ = ["FIX_INSTRUCTIONS", "INSTRUCTIONS", "run"]
