@@ -216,7 +216,7 @@ def test_developer_without_write_permission_fails_job(
     job = engine.approve(job.id)
 
     assert job.state is JobState.FAILED
-    assert "PermissionError" in (job.history[-1].note or "")
+    assert "lacks the write_files permission" in (job.history[-1].note or "")
 
 
 # --- T3.3 build gate ----------------------------------------------------------------------
