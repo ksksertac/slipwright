@@ -603,3 +603,27 @@ def test_malformed_answer_is_retried_with_the_validation_error(
     ]
     # phase_complete may be omitted: the phase counts as finished
     assert job.data.phase_index == 1
+
+
+def test_retry_picks_up_a_permission_granted_in_the_seed(
+    store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
+) -> None:
+    data = seed.model_dump(mode="json")
+    data["roles"]["backend"]["permissions"] = ["read_files"]  # forgot write_files
+    stingy = Profile.model_validate(data)
+    engine = full_engine(store, worktrees_root, stingy, full_provider(stingy, phases=1))
+    project = engine.create_project(Project(name="demo", repo_path=repo))
+    job = engine.start(engine.create_job("x", project_id=project.id).id)
+    job = engine.approve(engine.approve(job.id).id)
+    assert job.state is JobState.FAILED
+    assert job.history[-1].note == (
+        "role backend lacks the write_files permission; grant it under "
+        "Agents → backend → Setup and retry"
+    )
+    # the human grants it on the project's profile, then retries
+    engine.store.update_project(project.model_copy(update={"profile": seed}))
+    job = engine.retry(job.id)
+    assert job.state is JobState.AWAITING_TEST_APPROVAL
+    assert job.profile is not None and "write_files" in [
+        p.value for p in job.profile.roles[RoleName.BACKEND].permissions
+    ]

@@ -1168,6 +1168,10 @@ class Engine:
         job.data.ci_attempts = 0
         job.data.output_hashes = {}
         job.data.last_build_output = None
+        if job.profile is not None:
+            # roles are a human decision made in the seed profile: a permission or model
+            # changed there after the failure is what the retry runs with
+            job.profile = job.profile.model_copy(update={"roles": self.seed_for(job).roles})
         if feedback:
             from slipwright.schemas.job import InboxMessage
 
@@ -1695,7 +1699,13 @@ class Engine:
             if not result.ok:
                 return self._invocation_failed(job, result)
             assert isinstance(result.output, DeveloperResult)
-            touched = apply_changes(job, profile, role, result.output.changes)
+            try:
+                touched = apply_changes(job, profile, role, result.output.changes)
+            except PermissionError as exc:
+                return self._fail(
+                    job,
+                    f"{exc}; grant it under Agents → {role.value} → Setup and retry",
+                )
             touched_all.extend(t for t in touched if t not in touched_all)
             summaries.append(result.output.summary)
             if result.output.phase_complete or part == self.max_phase_parts:
