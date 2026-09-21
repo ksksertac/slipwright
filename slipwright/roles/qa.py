@@ -28,7 +28,9 @@ You are QA. Stage 1 of 2. Review `branch_diff` (what the specialists changed for
 would prove it works: name each case and describe precisely what it checks. Cover the
 levels the change needs — unit cases for logic, integration cases for each real boundary
 (database, HTTP, queue) and end-to-end cases that walk the user journey through the real
-UI or API the way a user would. Do not write test code yet; return only `test_cases`.
+UI or API the way a user would. Keep the list tight: at most 15 cases, each with a short
+name and a description of one or two sentences — the list is for a person to approve, not
+a test plan document. Do not write test code yet; return only `test_cases`.
 If `feedback` is present, a human rejected your previous list; address every point in it.
 If a `standards` section is present its sections are binding unless they contradict
 the core rules; say in `summary` when one could not be followed and why."""
@@ -56,14 +58,28 @@ def run(
     timeout_s: float | None = None,
     jira: dict[str, Any] | None = None,
     standards: dict[str, Any] | None = None,
+    truncated: str | None = None,
 ) -> RoleResult:
     stage = job.data.qa_stage
     worktree = require_worktree(job)
     instructions = STAGE_ONE if stage == 1 else STAGE_TWO
+    if truncated:
+        instructions += (
+            "\nYour previous answer was cut off at the output limit and discarded "
+            "(`output_was_truncated`). "
+            + (
+                "Return at most 8 cases with one-sentence descriptions."
+                if stage == 1
+                else "Return only the one or two most important test files now, complete; "
+                "keep each file short and skip the rest of the cases in this answer."
+            )
+        )
     context = base_context(
         job, instructions=instructions, feedback=job.data.feedback, jira=jira, standards=standards
     )
     context["stage"] = stage
+    if truncated:
+        context["output_was_truncated"] = truncated
     context["project"] = project_facts(profile)
     context["plan"] = plan_outline(job.data.plan)
     context["branch_diff"] = branch_diff
