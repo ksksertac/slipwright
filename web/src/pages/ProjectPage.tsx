@@ -32,11 +32,13 @@ import {
 } from "../components/ui";
 import { PipelineTab } from "./PipelineTab";
 import { TestsTab } from "./TestsTab";
+import { useT } from "../i18n";
 
 const TABS = ["pipeline", "overview", "board", "developments", "tests", "activity"] as const;
 type Tab = (typeof TABS)[number];
 
 export function ProjectPage() {
+  const tx = useT();
   const { projectId = "", tab = "pipeline" } = useParams();
   const project = useProject(projectId);
   const current: Tab = (TABS as readonly string[]).includes(tab) ? (tab as Tab) : "pipeline";
@@ -54,7 +56,7 @@ export function ProjectPage() {
       <nav className="tabs">
         {TABS.map((t) => (
           <NavLink key={t} to={`/projects/${p.id}/${t}`} className={t === current ? "active" : ""}>
-            {t[0]!.toUpperCase() + t.slice(1)}
+            {tx(t[0]!.toUpperCase() + t.slice(1))}
           </NavLink>
         ))}
       </nav>
@@ -70,6 +72,7 @@ export function ProjectPage() {
 }
 
 function ProjectHeader({ project: p }: { project: Project }) {
+  const tx = useT();
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   return (
@@ -85,14 +88,14 @@ function ProjectHeader({ project: p }: { project: Project }) {
       </div>
       <div className="row" style={{ flexWrap: "nowrap" }}>
         <Link className="btn primary" to={`/projects/${p.id}/developments`}>
-          <IconPlus /> New development
+          <IconPlus /> {tx("New development")}
         </Link>
         <Menu>
           <button onClick={() => setEditing(true)}>
-            <IconEdit /> Edit project
+            <IconEdit /> {tx("Edit project")}
           </button>
           <button className="danger" onClick={() => setDeleting(true)}>
-            <IconTrash /> Delete project
+            <IconTrash /> {tx("Delete project")}
           </button>
         </Menu>
       </div>
@@ -107,6 +110,7 @@ function ProjectHeader({ project: p }: { project: Project }) {
 // -- overview ------------------------------------------------------------------------------
 
 function OverviewTab({ projectId }: { projectId: string }) {
+  const tx = useT();
   const progress = useProgress(projectId);
   const jobs = useProjectJobs(projectId);
   if (progress.isLoading || jobs.isLoading) return <Loading />;
@@ -122,7 +126,7 @@ function OverviewTab({ projectId }: { projectId: string }) {
   return (
     <div className="stack">
       <div className="card">
-        <h3 style={{ marginBottom: 10 }}>Progress</h3>
+        <h3 style={{ marginBottom: 10 }}>{tx("Progress")}</h3>
         <ProgressBar done={p.tasks_done} total={p.tasks_total} />
         <div className="muted small" style={{ marginTop: 8 }}>
           {p.jobs_running} running · {p.pending_approvals} waiting for approval · {p.jobs_done} done
@@ -144,8 +148,8 @@ function OverviewTab({ projectId }: { projectId: string }) {
       </div>
 
       <div className="card">
-        <h3 style={{ marginBottom: 10 }}>Pending approvals</h3>
-        {waiting.length === 0 && <div className="muted small">Nothing waits for you.</div>}
+        <h3 style={{ marginBottom: 10 }}>{tx("Pending approvals")}</h3>
+        {waiting.length === 0 && <div className="muted small">{tx("Nothing waits for you.")}</div>}
         {waiting.map((row) => {
           const job = byId.get(row.job_id);
           return (
@@ -165,8 +169,10 @@ function OverviewTab({ projectId }: { projectId: string }) {
       </div>
 
       <div className="card">
-        <h3 style={{ marginBottom: 10 }}>Running</h3>
-        {running.length === 0 && <div className="muted small">No development is running.</div>}
+        <h3 style={{ marginBottom: 10 }}>{tx("Running")}</h3>
+        {running.length === 0 && (
+          <div className="muted small">{tx("No development is running.")}</div>
+        )}
         {running.length > 0 && (
           <table>
             <tbody>
@@ -195,6 +201,7 @@ function OverviewTab({ projectId }: { projectId: string }) {
 // -- board ---------------------------------------------------------------------------------
 
 function BoardTab({ projectId }: { projectId: string }) {
+  const tx = useT();
   const board = useBoard(projectId);
   if (board.isLoading) return <Loading />;
   if (board.error) return <ErrorBox error={board.error} />;
@@ -202,15 +209,16 @@ function BoardTab({ projectId }: { projectId: string }) {
   if (board.data.epics.length === 0) {
     return (
       <Empty>
-        The board fills in once a development's plan is approved: each epic, story and task appears
-        here and moves as the work is done.
+        {tx(
+          "The board fills in once a development's plan is approved: each epic, story and task appears here and moves as the work is done.",
+        )}
       </Empty>
     );
   }
   return (
     <div className="card flush">
       <div className="card-head">
-        <h3>Epics → stories → tasks</h3>
+        <h3>{tx("Epics → stories → tasks")}</h3>
         <div style={{ width: 200 }}>
           <ProgressBar done={board.data.tasks_done} total={board.data.tasks_total} />
         </div>
@@ -259,7 +267,7 @@ function BoardTab({ projectId }: { projectId: string }) {
                           {task.violations > 0 && (
                             <span
                               className={`badge plain ${task.blocking ? "bad" : "work"}`}
-                              title="standards review findings"
+                              title={tx("standards review findings")}
                             >
                               {task.blocking
                                 ? `${task.blocking} blocking`
@@ -285,6 +293,7 @@ function BoardTab({ projectId }: { projectId: string }) {
 // -- developments --------------------------------------------------------------------------
 
 function DevelopmentsTab({ projectId }: { projectId: string }) {
+  const tx = useT();
   const jobs = useProjectJobs(projectId);
   const start = useStartJob(projectId);
   const navigate = useNavigate();
@@ -303,27 +312,28 @@ function DevelopmentsTab({ projectId }: { projectId: string }) {
   return (
     <div className="stack">
       <form className="card" onSubmit={submit}>
-        <h3 style={{ marginBottom: 6 }}>New development</h3>
+        <h3 style={{ marginBottom: 6 }}>{tx("New development")}</h3>
         <p className="muted small">
-          Describe what you want. The Product Owner turns it into epics, stories and tasks, the
-          Architect designs how to build and test it, and you approve each step.
+          {tx(
+            "Describe what you want. The Product Owner turns it into epics, stories and tasks, the Architect designs how to build and test it, and you approve each step.",
+          )}
         </p>
         <textarea
           value={request}
           onChange={(e) => setRequest(e.target.value)}
-          placeholder="e.g. Add a /health endpoint that reports the database status"
+          placeholder={tx("e.g. Add a /health endpoint that reports the database status")}
         />
         {start.error && <div className="error">{describeError(start.error)}</div>}
         <div className="row" style={{ marginTop: 8 }}>
           <button className="btn primary" disabled={!request.trim() || start.isPending}>
-            <IconPlus /> {start.isPending ? "Starting…" : "Start development"}
+            <IconPlus /> {start.isPending ? tx("Starting…") : tx("Start development")}
           </button>
         </div>
       </form>
 
       <div className="card flush">
         <div className="card-head">
-          <h3>Developments</h3>
+          <h3>{tx("Developments")}</h3>
           <span className="faint small">{jobs.data?.length ?? 0}</span>
         </div>
         {jobs.isLoading && (
@@ -333,17 +343,17 @@ function DevelopmentsTab({ projectId }: { projectId: string }) {
         )}
         {jobs.data && jobs.data.length === 0 && (
           <div className="empty" style={{ padding: 28 }}>
-            <div className="small">No developments yet. Describe one above to start.</div>
+            <div className="small">{tx("No developments yet. Describe one above to start.")}</div>
           </div>
         )}
         {jobs.data && jobs.data.length > 0 && (
           <table>
             <thead>
               <tr>
-                <th>Request</th>
-                <th>State</th>
-                <th>Started</th>
-                <th>Last activity</th>
+                <th>{tx("Request")}</th>
+                <th>{tx("State")}</th>
+                <th>{tx("Started")}</th>
+                <th>{tx("Last activity")}</th>
                 <th>PR</th>
                 <th />
               </tr>
@@ -361,6 +371,7 @@ function DevelopmentsTab({ projectId }: { projectId: string }) {
 }
 
 function JobRow({ job, projectId }: { job: Job; projectId: string }) {
+  const tx = useT();
   const remove = useDeleteJob();
   const toast = useToast();
   const navigate = useNavigate();
@@ -382,7 +393,7 @@ function JobRow({ job, projectId }: { job: Job; projectId: string }) {
       <td>
         {job.data.pr_url ? (
           <a href={job.data.pr_url} target="_blank" rel="noreferrer">
-            open ↗
+            {tx("open ↗")}
           </a>
         ) : (
           <span className="faint">—</span>
@@ -391,7 +402,7 @@ function JobRow({ job, projectId }: { job: Job; projectId: string }) {
       <td className="actions">
         <Menu>
           <button onClick={() => navigate(`/projects/${projectId}/jobs/${job.id}`)}>
-            <IconExternal /> Open
+            <IconExternal /> {tx("Open")}
           </button>
           <button className="danger" disabled={!terminal} onClick={() => setConfirm(true)}>
             <IconTrash /> Delete{terminal ? "" : " (still running)"}
@@ -399,11 +410,13 @@ function JobRow({ job, projectId }: { job: Job; projectId: string }) {
         </Menu>
         {confirm && (
           <ConfirmModal
-            title="Delete development"
+            title={tx("Delete development")}
             body={
               <>
-                Delete <strong>{job.request}</strong>? Its worktree, branch, history and test runs
-                are removed. A pull request already opened stays on GitHub.
+                {tx("Delete")} <strong>{job.request}</strong>
+                {tx(
+                  "? Its worktree, branch, history and test runs are removed. A pull request already opened stays on GitHub.",
+                )}
               </>
             }
             busy={remove.isPending}
@@ -427,11 +440,12 @@ function JobRow({ job, projectId }: { job: Job; projectId: string }) {
 // -- activity ------------------------------------------------------------------------------
 
 function ActivityTab({ projectId }: { projectId: string }) {
+  const tx = useT();
   const activity = useActivity(projectId);
   if (activity.isLoading) return <Loading />;
   if (activity.error) return <ErrorBox error={activity.error} />;
   if (!activity.data || activity.data.length === 0) {
-    return <Empty>Nothing has happened yet.</Empty>;
+    return <Empty>{tx("Nothing has happened yet.")}</Empty>;
   }
   return (
     <div className="card">

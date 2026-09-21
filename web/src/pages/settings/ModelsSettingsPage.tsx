@@ -4,25 +4,31 @@ import { useProviderModels, useProviders, useSaveProvider, useTestProvider } fro
 import { useAuth } from "../../auth/AuthProvider";
 import { ErrorBox, Loading, PageHead } from "../../components/ui";
 import { Crumbs } from "../../components/Crumbs";
+import { useT } from "../../i18n";
 
 /**
  * API keys for the model providers (Anthropic, OpenAI, DeepSeek). Which provider a role
  * uses is chosen per project under Agents; the default applies to roles that name none.
  */
 export function ModelsSettingsPage() {
+  const tx = useT();
   const providers = useProviders();
   if (providers.isLoading) return <Loading />;
   if (providers.error) return <ErrorBox error={providers.error} />;
   return (
     <div>
       <Crumbs items={[{ label: "Settings" }, { label: "Models" }]} />
-      <PageHead title="Models" subtitle="API keys for Anthropic, OpenAI and DeepSeek." />
+      <PageHead
+        title={tx("Models")}
+        subtitle={tx("API keys for Anthropic, OpenAI and DeepSeek.")}
+      />
       <p className="muted">
         Enter an API key for each provider you want to use. Keys are stored encrypted and never
         shown again; a key from the server's environment is used when none is stored. Every agent
         runs on the provider marked <strong>default</strong> below, on that provider's{" "}
-        <strong>default model</strong> — unless a role is pinned to a provider and model of its own
-        under <strong>Agents</strong>.
+        <strong>{tx("default model")}</strong>{" "}
+        {tx("— unless a role is pinned to a provider and model of its own under")}{" "}
+        <strong>{tx("Agents")}</strong>.
       </p>
       <div className="stack">
         {providers.data!.map((p) => (
@@ -34,6 +40,7 @@ export function ModelsSettingsPage() {
 }
 
 function ProviderCard({ provider: p }: { provider: ProviderSettings }) {
+  const tx = useT();
   const { user } = useAuth();
   const save = useSaveProvider();
   const test = useTestProvider();
@@ -79,13 +86,13 @@ function ProviderCard({ provider: p }: { provider: ProviderSettings }) {
               key set {p.key_hint} {p.key_from_env ? `(from ${p.env_var})` : ""}
             </span>
           ) : (
-            <span className="badge idle">no key</span>
+            <span className="badge idle">{tx("no key")}</span>
           )}
         </span>
       </div>
       <div className="grid-2" style={{ marginTop: 10 }}>
         <div className="field">
-          <label htmlFor={`${p.name}-key`}>API key</label>
+          <label htmlFor={`${p.name}-key`}>{tx("API key")}</label>
           <input
             id={`${p.name}-key`}
             type="password"
@@ -100,7 +107,7 @@ function ProviderCard({ provider: p }: { provider: ProviderSettings }) {
             <a href={p.docs_url} target="_blank" rel="noreferrer">
               {p.docs_url.replace(/^https?:\/\//, "")}
             </a>
-            ; or set <code>{p.env_var}</code> on the server.
+            ; or set <code>{p.env_var}</code> {tx("on the server.")}
           </div>
         </div>
         <div className="field">
@@ -117,7 +124,7 @@ function ProviderCard({ provider: p }: { provider: ProviderSettings }) {
           <div className="muted small">Leave empty for {p.default_base_url}; set for proxies.</div>
         </div>
         <div className="field">
-          <label htmlFor={`${p.name}-model`}>Default model</label>
+          <label htmlFor={`${p.name}-model`}>{tx("Default model")}</label>
           {models.data && models.data.models.length > 0 ? (
             <select
               id={`${p.name}-model`}
@@ -125,7 +132,7 @@ function ProviderCard({ provider: p }: { provider: ProviderSettings }) {
               disabled={!admin}
               onChange={(e) => setModel(e.target.value)}
             >
-              <option value="">— not set: roles use the model in their profile —</option>
+              <option value="">{tx("— not set: roles use the model in their profile —")}</option>
               {!models.data.models.includes(modelValue) && modelValue && (
                 <option value={modelValue}>{modelValue}</option>
               )}
@@ -153,7 +160,7 @@ function ProviderCard({ provider: p }: { provider: ProviderSettings }) {
           </div>
         </div>
         <div className="field">
-          <label htmlFor={`${p.name}-max`}>Max output tokens per call</label>
+          <label htmlFor={`${p.name}-max`}>{tx("Max output tokens per call")}</label>
           <input
             id={`${p.name}-max`}
             type="number"
@@ -171,11 +178,11 @@ function ProviderCard({ provider: p }: { provider: ProviderSettings }) {
         </div>
       </div>
       {save.error && <div className="callout error">{describeError(save.error)}</div>}
-      {saved && <div className="callout notice">Saved.</div>}
+      {saved && <div className="callout notice">{tx("Saved.")}</div>}
       {admin && (
         <div className="row">
           <button className="btn primary small" disabled={save.isPending}>
-            Save
+            {tx("Save")}
           </button>
           <button
             type="button"
@@ -183,7 +190,7 @@ function ProviderCard({ provider: p }: { provider: ProviderSettings }) {
             disabled={!p.key_set || test.isPending}
             onClick={() => test.mutate(p.name)}
           >
-            {test.isPending ? "Testing…" : "Test connection"}
+            {test.isPending ? tx("Testing…") : tx("Test connection")}
           </button>
           {!p.is_default && (
             <button
@@ -191,7 +198,7 @@ function ProviderCard({ provider: p }: { provider: ProviderSettings }) {
               className="btn small"
               onClick={() => save.mutate({ name: p.name, make_default: true })}
             >
-              Use as default
+              {tx("Use as default")}
             </button>
           )}
           {p.key_set && !p.key_from_env && (
@@ -200,7 +207,7 @@ function ProviderCard({ provider: p }: { provider: ProviderSettings }) {
               className="btn bad small"
               onClick={() => save.mutate({ name: p.name, clear_key: true })}
             >
-              Remove key
+              {tx("Remove key")}
             </button>
           )}
         </div>

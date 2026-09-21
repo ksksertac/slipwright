@@ -59,7 +59,7 @@ from slipwright.roles.results import (
     SupervisorResult,
 )
 from slipwright.roles.specialists import specialist_for
-from slipwright.schemas.job import APPROVAL_STATES, Job, JobState, utcnow
+from slipwright.schemas.job import APPROVAL_STATES, Job, JobData, JobState, utcnow
 from slipwright.schemas.profile import Permission, Profile, RoleConfig, RoleName
 from slipwright.schemas.project import BudgetSettings, Project, SupervisorSettings
 from slipwright.schemas.testrun import TestRun, TestRunSource, TestRunStatus
@@ -871,7 +871,12 @@ class Engine:
         if project.repo_path is None:
             raise RuntimeError(f"project {project.id} has no checkout")
         return self.store.create(
-            Job(project_id=project.id, request=request, repo_path=project.repo_path)
+            Job(
+                project_id=project.id,
+                request=request,
+                repo_path=project.repo_path,
+                data=JobData(language=project.language),
+            )
         )
 
     def delete_job(self, job_id: str) -> None:

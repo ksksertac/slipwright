@@ -20,10 +20,12 @@ import { IconPlus, IconSearch, IconTrash } from "../components/icons";
 import { ConfirmModal, Modal } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { ErrorBox, Loading, timeAgo } from "../components/ui";
+import { useT } from "../i18n";
 
 const DOMAINS = ["product", "architecture", "backend", "web", "mobile", "testing", "devops"];
 
 export function AgentStandardsTab({ role, domain }: { role: string; domain: string }) {
+  const tx = useT();
   const projects = useProjects();
   const { user } = useAuth();
   const admin = !!user?.is_admin;
@@ -50,7 +52,7 @@ export function AgentStandardsTab({ role, domain }: { role: string; domain: stri
         <div className="row spread" style={{ flexWrap: "wrap" }}>
           <div className="row" style={{ gap: 10 }}>
             <label className="small muted" htmlFor="std-scope">
-              Scope
+              {tx("Scope")}
             </label>
             <select
               id="std-scope"
@@ -82,14 +84,14 @@ export function AgentStandardsTab({ role, domain }: { role: string; domain: stri
           <div className="row">
             <input
               type="search"
-              placeholder="filter pages"
+              placeholder={tx("filter pages")}
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               style={{ width: 200 }}
             />
             {admin && (
               <button className="btn primary small" onClick={() => setCreating(true)}>
-                <IconPlus /> New page
+                <IconPlus /> {tx("New page")}
               </button>
             )}
           </div>
@@ -108,7 +110,7 @@ export function AgentStandardsTab({ role, domain }: { role: string; domain: stri
         <div className="card flush">
           <div className="card-head">
             <h3>
-              Pages <span className="badge plain">{visible.length}</span>
+              {tx("Pages")} <span className="badge plain">{visible.length}</span>
             </h3>
           </div>
           {visible.length === 0 ? (
@@ -123,11 +125,11 @@ export function AgentStandardsTab({ role, domain }: { role: string; domain: stri
             <table>
               <thead>
                 <tr>
-                  <th>Title</th>
-                  <th>Path</th>
-                  <th>Sections</th>
-                  <th>Words</th>
-                  <th>Last edit</th>
+                  <th>{tx("Title")}</th>
+                  <th>{tx("Path")}</th>
+                  <th>{tx("Sections")}</th>
+                  <th>{tx("Words")}</th>
+                  <th>{tx("Last edit")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -188,16 +190,17 @@ function CoreBlock({
   admin: boolean;
   onEdit: () => void;
 }) {
+  const tx = useT();
   const core = useStandardsPage(null, "core.md"); // core is global
   return (
     <div className="card">
       <div className="row spread">
         <h3>
-          core.md <span className="badge plain">applies to all</span>
+          {tx("core.md")} <span className="badge plain">{tx("applies to all")}</span>
         </h3>
         {admin && !projectId && (
           <button className="btn small" onClick={onEdit}>
-            Edit core rules
+            {tx("Edit core rules")}
           </button>
         )}
       </div>
@@ -208,7 +211,7 @@ function CoreBlock({
       </p>
       {core.data ? (
         <details>
-          <summary className="small">show the rules</summary>
+          <summary className="small">{tx("show the rules")}</summary>
           <Markdown text={core.data.text} />
         </details>
       ) : (
@@ -231,6 +234,7 @@ function PageEditor({
   admin: boolean;
   onClose: () => void;
 }) {
+  const tx = useT();
   const scope = path === "core.md" ? null : projectId;
   const page = useStandardsPage(scope, path);
   const save = useSaveStandardsPage(scope);
@@ -251,12 +255,12 @@ function PageEditor({
         <>
           {admin && path !== "core.md" && (
             <button className="btn danger" onClick={() => setDeleting(true)}>
-              <IconTrash /> Delete
+              <IconTrash /> {tx("Delete")}
             </button>
           )}
           <span style={{ flex: 1 }} />
           <button className="btn" onClick={onClose}>
-            Close
+            {tx("Close")}
           </button>
           {admin && (
             <button
@@ -274,7 +278,7 @@ function PageEditor({
                 )
               }
             >
-              {save.isPending ? "Saving…" : "Save"}
+              {save.isPending ? tx("Saving…") : tx("Save")}
             </button>
           )}
         </>
@@ -286,10 +290,10 @@ function PageEditor({
         <>
           <nav className="tabs small" style={{ marginBottom: 10 }}>
             <a className={mode === "edit" ? "active" : ""} onClick={() => setMode("edit")}>
-              Markdown
+              {tx("Markdown")}
             </a>
             <a className={mode === "preview" ? "active" : ""} onClick={() => setMode("preview")}>
-              Preview
+              {tx("Preview")}
             </a>
           </nav>
           {mode === "edit" ? (
@@ -308,20 +312,23 @@ function PageEditor({
           )}
           <div className="muted small" style={{ marginTop: 6 }}>
             Front-matter (<code>domain</code>, <code>tags</code>, <code>applies_to</code>), one{" "}
-            <code># Title</code>, and <code>## sections</code> under 400 words: each section is one
-            retrievable chunk, so the heading should say what the rule is about. Saves are linted,
-            reindexed at once and committed on the <code>slipwright/standards</code> branch.
+            <code>{tx("# Title")}</code>
+            {tx(", and")} <code>{tx("## sections")}</code>{" "}
+            {tx(
+              "under 400 words: each section is one retrievable chunk, so the heading should say what the rule is about. Saves are linted, reindexed at once and committed on the",
+            )}{" "}
+            <code>{tx("slipwright/standards")}</code> {tx("branch.")}
           </div>
           {save.error && <div className="callout error">{describeError(save.error)}</div>}
         </>
       )}
       {deleting && (
         <ConfirmModal
-          title="Delete page"
+          title={tx("Delete page")}
           body={
             <>
-              Delete <strong>{path}</strong>? Its sections stop being retrieved as soon as the index
-              refreshes.
+              {tx("Delete")} <strong>{path}</strong>
+              {tx("? Its sections stop being retrieved as soon as the index refreshes.")}
             </>
           }
           busy={remove.isPending}
@@ -352,6 +359,7 @@ function NewPageModal({
   onClose: () => void;
   onCreated: (path: string) => void;
 }) {
+  const tx = useT();
   const create = useCreateStandardsPage(projectId);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState(
@@ -364,7 +372,7 @@ function NewPageModal({
       footer={
         <>
           <button className="btn" onClick={onClose}>
-            Cancel
+            {tx("Cancel")}
           </button>
           <button
             className="btn primary"
@@ -376,20 +384,20 @@ function NewPageModal({
               )
             }
           >
-            {create.isPending ? "Creating…" : "Create"}
+            {create.isPending ? tx("Creating…") : tx("Create")}
           </button>
         </>
       }
     >
       <div className="field">
-        <label htmlFor="np-title">Title</label>
+        <label htmlFor="np-title">{tx("Title")}</label>
         <input
           id="np-title"
           type="text"
           value={title}
           autoFocus
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="e.g. Queues and dead letters"
+          placeholder={tx("e.g. Queues and dead letters")}
         />
       </div>
       <div className="field">
@@ -427,13 +435,14 @@ function slugify(title: string): string {
 // -- try a search --------------------------------------------------------------------------
 
 function TrySearch({ projectId, domain }: { projectId: string | null; domain: string }) {
+  const tx = useT();
   const [text, setText] = useState("");
   const [q, setQ] = useState("");
   const [d, setD] = useState(domain);
   const hits = useStandardsSearch(projectId, d, q);
   return (
     <div className="card">
-      <h3>Try a search</h3>
+      <h3>{tx("Try a search")}</h3>
       <p className="muted small">
         Type a task the way a phase goal reads and see which sections the agent would be given,
         ranked; the tool for tuning headings and chunking.
@@ -448,7 +457,7 @@ function TrySearch({ projectId, domain }: { projectId: string | null; domain: st
         <input
           type="text"
           style={{ flex: "1 1 240px", width: "auto" }}
-          placeholder="e.g. add a Kafka consumer that retries failed messages"
+          placeholder={tx("e.g. add a Kafka consumer that retries failed messages")}
           value={text}
           onChange={(e) => setText(e.target.value)}
         />
@@ -458,10 +467,10 @@ function TrySearch({ projectId, domain }: { projectId: string | null; domain: st
               {x}
             </option>
           ))}
-          <option value="*">all domains</option>
+          <option value="*">{tx("all domains")}</option>
         </select>
         <button className="btn small" disabled={!text.trim()}>
-          <IconSearch /> Search
+          <IconSearch /> {tx("Search")}
         </button>
       </form>
       {hits.isFetching && <Loading rows={2} />}
@@ -496,6 +505,7 @@ function TrySearch({ projectId, domain }: { projectId: string | null; domain: st
 // -- index settings --------------------------------------------------------------------------
 
 function IndexSettings({ admin, projectId }: { admin: boolean; projectId: string | null }) {
+  const tx = useT();
   const status = useStandardsStatus();
   const save = useSaveStandardsSettings();
   const reindex = useReindexStandards();
@@ -519,7 +529,7 @@ function IndexSettings({ admin, projectId }: { admin: boolean; projectId: string
   return (
     <div className="card">
       <div className="row spread">
-        <h3>Index</h3>
+        <h3>{tx("Index")}</h3>
         {admin && (
           <button
             className="btn small"
@@ -531,7 +541,7 @@ function IndexSettings({ admin, projectId }: { admin: boolean; projectId: string
               })
             }
           >
-            {reindex.isPending ? "Reindexing…" : "Reindex now"}
+            {reindex.isPending ? tx("Reindexing…") : tx("Reindex now")}
           </button>
         )}
       </div>
@@ -545,20 +555,20 @@ function IndexSettings({ admin, projectId }: { admin: boolean; projectId: string
         ) · {per}
       </div>
       <div className="grid-2" style={{ marginTop: 10 }}>
-        <Field label="Embedder">
+        <Field label={tx("Embedder")}>
           <select
             value={form.embedder}
             disabled={!admin}
             onChange={(e) => setDraft({ ...form, embedder: e.target.value })}
           >
-            <option value="none">none — keyword search only</option>
+            <option value="none">{tx("none — keyword search only")}</option>
             <option value="openai">openai — text embeddings (needs an OpenAI key)</option>
-            <option value="local">local — sentence-transformers on this machine</option>
-            <option value="hashing">hashing — offline stand-in</option>
+            <option value="local">{tx("local — sentence-transformers on this machine")}</option>
+            <option value="hashing">{tx("hashing — offline stand-in")}</option>
           </select>
         </Field>
         {form.embedder === "openai" && (
-          <Field label="Embedding model">
+          <Field label={tx("Embedding model")}>
             <input
               type="text"
               className="mono"
@@ -569,7 +579,7 @@ function IndexSettings({ admin, projectId }: { admin: boolean; projectId: string
           </Field>
         )}
         {form.embedder === "local" && (
-          <Field label="Local model">
+          <Field label={tx("Local model")}>
             <input
               type="text"
               className="mono"
@@ -579,7 +589,7 @@ function IndexSettings({ admin, projectId }: { admin: boolean; projectId: string
             />
           </Field>
         )}
-        <Field label="Sections per role (top k)">
+        <Field label={tx("Sections per role (top k)")}>
           <input
             type="number"
             min={1}
@@ -589,7 +599,7 @@ function IndexSettings({ admin, projectId }: { admin: boolean; projectId: string
             onChange={(e) => setDraft({ ...form, top_k: Number(e.target.value) })}
           />
         </Field>
-        <Field label="Token budget per prompt">
+        <Field label={tx("Token budget per prompt")}>
           <input
             type="number"
             min={200}
@@ -615,7 +625,7 @@ function IndexSettings({ admin, projectId }: { admin: boolean; projectId: string
               })
             }
           >
-            {save.isPending ? "Saving…" : "Save settings"}
+            {save.isPending ? tx("Saving…") : tx("Save settings")}
           </button>
           {save.error && <span className="error small">{describeError(save.error)}</span>}
         </div>

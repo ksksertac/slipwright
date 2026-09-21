@@ -3,6 +3,7 @@
 // the caller decides when to save. The shapes mirror the engine's dicts.
 import { DOMAIN_LABEL } from "./agents";
 import { IconPlus, IconTrash } from "./icons";
+import { useT } from "../i18n";
 
 export interface TaskShape {
   id: string;
@@ -58,6 +59,7 @@ export function BacklogEditor({
   onChange: (next: BreakdownShape) => void;
   disabled?: boolean;
 }) {
+  const tx = useT();
   const update = (fn: (draft: BreakdownShape) => void) => {
     const draft: BreakdownShape = JSON.parse(JSON.stringify(value)) as BreakdownShape;
     fn(draft);
@@ -91,7 +93,7 @@ export function BacklogEditor({
                   />
                   <button
                     className="btn ghost icon small"
-                    title="Add task"
+                    title={tx("Add task")}
                     disabled={disabled}
                     onClick={() =>
                       update((d) =>
@@ -110,7 +112,7 @@ export function BacklogEditor({
                         <input
                           className="title"
                           value={task.title}
-                          placeholder="task title"
+                          placeholder={tx("task title")}
                           disabled={disabled}
                           onChange={(e) =>
                             update(
@@ -120,7 +122,7 @@ export function BacklogEditor({
                         />
                         <button
                           className="btn ghost icon small"
-                          title="Remove task"
+                          title={tx("Remove task")}
                           disabled={disabled || story.tasks.length === 1}
                           onClick={() =>
                             update((d) => d.epics[ei]!.stories[si]!.tasks.splice(ti, 1))
@@ -156,6 +158,7 @@ export function PlanEditor({
   onChange: (next: PlanShape) => void;
   disabled?: boolean;
 }) {
+  const tx = useT();
   const update = (fn: (draft: PlanShape) => void) => {
     const draft: PlanShape = JSON.parse(JSON.stringify(value)) as PlanShape;
     fn(draft);
@@ -192,7 +195,7 @@ export function PlanEditor({
               <span className="dot">{i + 1}</span>
               <button
                 className="btn ghost icon small"
-                title="Move up"
+                title={tx("Move up")}
                 disabled={disabled || i === 0}
                 onClick={() => move(i, i - 1)}
               >
@@ -200,7 +203,7 @@ export function PlanEditor({
               </button>
               <button
                 className="btn ghost icon small"
-                title="Move down"
+                title={tx("Move down")}
                 disabled={disabled || i === value.phases.length - 1}
                 onClick={() => move(i, i + 1)}
               >
@@ -222,7 +225,7 @@ export function PlanEditor({
                 </select>
                 <input
                   value={phase.goal}
-                  placeholder="what this phase builds"
+                  placeholder={tx("what this phase builds")}
                   disabled={disabled}
                   style={{ flex: 1 }}
                   onChange={(e) => update((d) => (d.phases[i]!.goal = e.target.value))}
@@ -242,7 +245,7 @@ export function PlanEditor({
               <input
                 className="mono small"
                 value={(phase.files ?? []).join(", ")}
-                placeholder="files, comma separated"
+                placeholder={tx("files, comma separated")}
                 disabled={disabled}
                 onChange={(e) =>
                   update(
@@ -271,6 +274,7 @@ export function TestCasesEditor({
   onChange: (next: TestCaseShape[]) => void;
   disabled?: boolean;
 }) {
+  const tx = useT();
   const set = (i: number, patch: Partial<TestCaseShape>) =>
     onChange(value.map((c, j) => (j === i ? { ...c, ...patch } : c)));
   return (
@@ -287,13 +291,13 @@ export function TestCasesEditor({
           <input
             style={{ flex: 1 }}
             value={c.description}
-            placeholder="what it checks"
+            placeholder={tx("what it checks")}
             disabled={disabled}
             onChange={(e) => set(i, { description: e.target.value })}
           />
           <button
             className="btn ghost icon small"
-            title="Remove"
+            title={tx("Remove")}
             disabled={disabled}
             onClick={() => onChange(value.filter((_, j) => j !== i))}
           >
@@ -307,7 +311,7 @@ export function TestCasesEditor({
           disabled={disabled}
           onClick={() => onChange([...value, { name: "", description: "" }])}
         >
-          <IconPlus /> Add case
+          <IconPlus /> {tx("Add case")}
         </button>
       </div>
     </div>

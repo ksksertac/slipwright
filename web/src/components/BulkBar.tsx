@@ -6,6 +6,7 @@ import { describeError, type BatchResult } from "../api/client";
 import { useBatchApprove, useBatchReject } from "../api/hooks";
 import { IconCheck, IconX } from "./icons";
 import { useToast } from "./Toast";
+import { useT } from "../i18n";
 
 export function BulkBar({
   selected,
@@ -16,6 +17,7 @@ export function BulkBar({
   onClear: () => void;
   labelOf?: (jobId: string) => string;
 }) {
+  const tx = useT();
   const approve = useBatchApprove();
   const reject = useBatchReject();
   const toast = useToast();
@@ -36,7 +38,7 @@ export function BulkBar({
   };
 
   return (
-    <div className="bulk-bar" role="region" aria-label="Bulk approvals">
+    <div className="bulk-bar" role="region" aria-label={tx("Bulk approvals")}>
       <strong>{selected.length} selected</strong>
       {!rejecting ? (
         <>
@@ -50,10 +52,10 @@ export function BulkBar({
               })
             }
           >
-            <IconCheck /> Approve selected
+            <IconCheck /> {tx("Approve selected")}
           </button>
           <button className="btn bad small" disabled={busy} onClick={() => setRejecting(true)}>
-            <IconX /> Reject selected…
+            <IconX /> {tx("Reject selected…")}
           </button>
         </>
       ) : (
@@ -61,7 +63,7 @@ export function BulkBar({
           <input
             type="text"
             style={{ width: 320 }}
-            placeholder="feedback for every selected gate"
+            placeholder={tx("feedback for every selected gate")}
             value={feedback}
             autoFocus
             onChange={(e) => setFeedback(e.target.value)}
@@ -79,15 +81,15 @@ export function BulkBar({
               )
             }
           >
-            Send rejection
+            {tx("Send rejection")}
           </button>
           <button className="btn small" onClick={() => setRejecting(false)}>
-            Cancel
+            {tx("Cancel")}
           </button>
         </>
       )}
       <button className="btn ghost small" onClick={onClear} disabled={busy}>
-        Clear
+        {tx("Clear")}
       </button>
     </div>
   );

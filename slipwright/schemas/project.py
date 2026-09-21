@@ -23,6 +23,8 @@ _JIRA_KEY = re.compile(r"^[A-Z][A-Z0-9_]*$")
 
 
 ReviewMode = Literal["off", "advisory", "blocking"]
+Language = Literal["tr", "en"]
+LANGUAGE_NAMES: dict[str, str] = {"tr": "Turkish", "en": "English"}
 SprintMode = Literal["off", "active", "create"]
 GateMode = Literal["manual", "assisted", "auto"]
 
@@ -70,6 +72,11 @@ class Project(BaseModel):
         description="Where to clone from when repo_path is absent; derived from github_repo.",
     )
     jira_project_key: str | None = None
+    language: Language = Field(
+        default="tr",
+        description="The language the agents write for people in: backlog titles and "
+        "descriptions (and so Jira), plan summaries, test-case names, summaries.",
+    )
     jira_transitions: dict[str, str] = Field(
         default_factory=dict,
         description="Task status -> Jira transition name (todo/in_progress/done/failed).",
@@ -124,6 +131,7 @@ class ProjectPatch(BaseModel):
     description: str | None = None
     github_repo: str | None = None
     jira_project_key: str | None = None
+    language: Language | None = None
     jira_transitions: dict[str, str] | None = None
     jira_sprint: SprintMode | None = None
     profile: Profile | None = None
@@ -133,8 +141,10 @@ class ProjectPatch(BaseModel):
 
 
 __all__ = [
+    "LANGUAGE_NAMES",
     "BudgetSettings",
     "GateMode",
+    "Language",
     "Project",
     "ProjectPatch",
     "ReviewMode",

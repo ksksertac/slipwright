@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import type { JobState, TaskStatus } from "../api/client";
 import { IconFolder } from "./icons";
+import { currentLang } from "../i18n";
+import { useT } from "../i18n";
 
 const STATE_CLASS: Record<JobState, string> = {
   created: "idle",
@@ -39,7 +41,8 @@ export const STATE_LABEL: Record<JobState, string> = {
 };
 
 export function StateBadge({ state }: { state: JobState }) {
-  return <span className={`badge ${STATE_CLASS[state]}`}>{STATE_LABEL[state]}</span>;
+  const tx = useT();
+  return <span className={`badge ${STATE_CLASS[state]}`}>{tx(STATE_LABEL[state])}</span>;
 }
 
 const STATUS_CLASS: Record<TaskStatus, string> = {
@@ -50,7 +53,8 @@ const STATUS_CLASS: Record<TaskStatus, string> = {
 };
 
 export function StatusBadge({ status }: { status: TaskStatus }) {
-  return <span className={`badge ${STATUS_CLASS[status]}`}>{status.replace("_", " ")}</span>;
+  const tx = useT();
+  return <span className={`badge ${STATUS_CLASS[status]}`}>{tx(status.replace("_", " "))}</span>;
 }
 
 export function StatusDot({ status }: { status: TaskStatus }) {
@@ -89,10 +93,11 @@ export function ProgressBar({
 export function timeAgo(iso: string | null | undefined): string {
   if (!iso) return "—";
   const delta = (Date.now() - new Date(iso).getTime()) / 1000;
-  if (delta < 45) return "just now";
-  if (delta < 3600) return `${Math.round(delta / 60)} min ago`;
-  if (delta < 86400) return `${Math.round(delta / 3600)} h ago`;
-  return `${Math.round(delta / 86400)} d ago`;
+  const tr = currentLang() === "tr";
+  if (delta < 45) return tr ? "az önce" : "just now";
+  if (delta < 3600) return `${Math.round(delta / 60)} ${tr ? "dk önce" : "min ago"}`;
+  if (delta < 86400) return `${Math.round(delta / 3600)} ${tr ? "sa önce" : "h ago"}`;
+  return `${Math.round(delta / 86400)} ${tr ? "gün önce" : "d ago"}`;
 }
 
 export function formatTime(iso: string | null | undefined): string {

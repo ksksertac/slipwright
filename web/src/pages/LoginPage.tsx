@@ -2,8 +2,10 @@ import { useState, type FormEvent } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { describeError } from "../api/client";
 import { useAuth } from "../auth/AuthProvider";
+import { useT } from "../i18n";
 
 export function LoginPage() {
+  const tx = useT();
   const { user, login, noUsers } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -33,10 +35,10 @@ export function LoginPage() {
     <div className="login-wrap">
       <div className="login card">
         <div className="brand">
-          <span className="brand-mark">⛵</span> Slipwright
+          <span className="brand-mark">⛵</span> {tx("Slipwright")}
         </div>
         <p className="muted small" style={{ textAlign: "center", marginBottom: 18 }}>
-          Multi-agent delivery, with you at every gate.
+          {tx("Multi-agent delivery, with you at every gate.")}
         </p>
         {noUsers ? (
           <div className="callout hint" style={{ display: "block" }}>
@@ -46,7 +48,7 @@ export function LoginPage() {
         ) : (
           <form onSubmit={submit}>
             <div className="field">
-              <label htmlFor="username">Username</label>
+              <label htmlFor="username">{tx("Username")}</label>
               <input
                 id="username"
                 type="text"
@@ -57,7 +59,7 @@ export function LoginPage() {
               />
             </div>
             <div className="field">
-              <label htmlFor="password">Password</label>
+              <label htmlFor="password">{tx("Password")}</label>
               <input
                 id="password"
                 type="password"
@@ -73,7 +75,7 @@ export function LoginPage() {
               style={{ width: "100%" }}
               disabled={busy || !username || !password}
             >
-              {busy ? "Signing in…" : "Sign in"}
+              {busy ? tx("Signing in…") : tx("Sign in")}
             </button>
           </form>
         )}

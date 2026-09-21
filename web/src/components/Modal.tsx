@@ -1,5 +1,6 @@
 import { useEffect, type ReactNode } from "react";
 import { IconX } from "./icons";
+import { useT } from "../i18n";
 
 export function Modal({
   title,
@@ -14,6 +15,7 @@ export function Modal({
   footer?: ReactNode;
   wide?: boolean;
 }) {
+  const tx = useT();
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -26,7 +28,7 @@ export function Modal({
       <div className={`modal ${wide ? "wide" : ""}`} role="dialog" aria-modal="true">
         <div className="modal-head">
           <h3>{title}</h3>
-          <button className="btn ghost icon" onClick={onClose} aria-label="Close">
+          <button className="btn ghost icon" onClick={onClose} aria-label={tx("Close")}>
             <IconX />
           </button>
         </div>
@@ -55,6 +57,7 @@ export function ConfirmModal({
   onConfirm: () => void;
   onClose: () => void;
 }) {
+  const tx = useT();
   return (
     <Modal
       title={title}
@@ -62,7 +65,7 @@ export function ConfirmModal({
       footer={
         <>
           <button className="btn" onClick={onClose} disabled={busy}>
-            Cancel
+            {tx("Cancel")}
           </button>
           <button className="btn danger solid" onClick={onConfirm} disabled={busy}>
             {busy ? "Working…" : confirmLabel}

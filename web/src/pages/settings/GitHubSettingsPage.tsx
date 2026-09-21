@@ -4,8 +4,10 @@ import { useGitHubSettings, useSaveGitHubSettings, useTestGitHub } from "../../a
 import { useAuth } from "../../auth/AuthProvider";
 import { ErrorBox, Loading, PageHead } from "../../components/ui";
 import { Crumbs } from "../../components/Crumbs";
+import { useT } from "../../i18n";
 
 export function GitHubSettingsPage() {
+  const tx = useT();
   const { user } = useAuth();
   const settings = useGitHubSettings();
   const save = useSaveGitHubSettings();
@@ -41,14 +43,15 @@ export function GitHubSettingsPage() {
   return (
     <div>
       <Crumbs items={[{ label: "Settings" }, { label: "GitHub" }]} />
-      <PageHead title="GitHub" subtitle="Clone, push and open pull requests." />
+      <PageHead title={tx("GitHub")} subtitle={tx("Clone, push and open pull requests.")} />
       <p className="muted">
-        The token is used to clone private repositories, push job branches and open pull requests.
-        It is stored encrypted and never shown again.
+        {tx(
+          "The token is used to clone private repositories, push job branches and open pull requests. It is stored encrypted and never shown again.",
+        )}
       </p>
       <form className="form card" onSubmit={submit}>
         <div className="field">
-          <label htmlFor="gh-token">Personal access token</label>
+          <label htmlFor="gh-token">{tx("Personal access token")}</label>
           <input
             id="gh-token"
             type="password"
@@ -65,7 +68,7 @@ export function GitHubSettingsPage() {
         </div>
         <div className="grid-2">
           <div className="field">
-            <label htmlFor="gh-owner">Default owner / organisation</label>
+            <label htmlFor="gh-owner">{tx("Default owner / organisation")}</label>
             <input
               id="gh-owner"
               type="text"
@@ -75,7 +78,7 @@ export function GitHubSettingsPage() {
             />
           </div>
           <div className="field">
-            <label htmlFor="gh-branch">Base branch</label>
+            <label htmlFor="gh-branch">{tx("Base branch")}</label>
             <input
               id="gh-branch"
               type="text"
@@ -86,11 +89,11 @@ export function GitHubSettingsPage() {
           </div>
         </div>
         {save.error && <div className="callout error">{describeError(save.error)}</div>}
-        {saved && <div className="callout notice">Saved.</div>}
+        {saved && <div className="callout notice">{tx("Saved.")}</div>}
         {admin ? (
           <div className="row">
             <button className="btn primary" disabled={save.isPending}>
-              Save
+              {tx("Save")}
             </button>
             <button
               type="button"
@@ -98,7 +101,7 @@ export function GitHubSettingsPage() {
               disabled={!s.token_set || test.isPending}
               onClick={() => test.mutate()}
             >
-              {test.isPending ? "Testing…" : "Test connection"}
+              {test.isPending ? tx("Testing…") : tx("Test connection")}
             </button>
             {s.token_set && (
               <button
@@ -106,16 +109,16 @@ export function GitHubSettingsPage() {
                 className="btn bad"
                 onClick={() => save.mutate({ clear_token: true })}
               >
-                Remove token
+                {tx("Remove token")}
               </button>
             )}
           </div>
         ) : (
-          <div className="muted small">Only admins can change these settings.</div>
+          <div className="muted small">{tx("Only admins can change these settings.")}</div>
         )}
         {test.data && (
           <div className="callout notice">
-            Connected as <strong>{test.data.login}</strong>
+            {tx("Connected as")} <strong>{test.data.login}</strong>
             {test.data.name ? ` (${test.data.name})` : ""}
             {test.data.rate_limit_remaining !== null &&
               ` · ${test.data.rate_limit_remaining}/${test.data.rate_limit_limit} API calls left`}

@@ -18,6 +18,7 @@ import {
   IconUsers,
 } from "./icons";
 import { useTheme, type Theme } from "./theme";
+import { useLang, useT } from "../i18n";
 
 const THEMES: { value: Theme; icon: React.ReactNode; title: string }[] = [
   { value: "light", icon: <IconSun />, title: "Light" },
@@ -26,9 +27,11 @@ const THEMES: { value: Theme; icon: React.ReactNode; title: string }[] = [
 ];
 
 export function Layout() {
+  const tx = useT();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [theme, setTheme] = useTheme();
+  const { lang, setLang } = useLang();
   const toast = useToast();
   useLiveEvents(undefined, toast.ok);
   const overview = useQuery({
@@ -42,32 +45,32 @@ export function Layout() {
     <div className="shell">
       <aside className="sidebar">
         <div className="brand">
-          <span className="brand-mark">⛵</span> Slipwright
+          <span className="brand-mark">⛵</span> {tx("Slipwright")}
         </div>
         <nav className="nav">
           <NavLink to="/" end>
-            <IconHome /> Dashboard
+            <IconHome /> {tx("Dashboard")}
             {pending > 0 && <span className="count">{pending}</span>}
           </NavLink>
           <NavLink to="/projects">
-            <IconFolder /> Projects
+            <IconFolder /> {tx("Projects")}
           </NavLink>
           <NavLink to="/agents">
-            <IconBot /> Agents
+            <IconBot /> {tx("Agents")}
           </NavLink>
-          <div className="nav-label">Settings</div>
+          <div className="nav-label">{tx("Settings")}</div>
           <NavLink to="/settings/models">
-            <IconCpu /> Models
+            <IconCpu /> {tx("Models")}
           </NavLink>
           <NavLink to="/settings/github">
-            <IconGit /> GitHub
+            <IconGit /> {tx("GitHub")}
           </NavLink>
           <NavLink to="/settings/jira">
-            <IconTicket /> Jira
+            <IconTicket /> {tx("Jira")}
           </NavLink>
           {user?.is_admin && (
             <NavLink to="/settings/users">
-              <IconUsers /> Users
+              <IconUsers /> {tx("Users")}
             </NavLink>
           )}
         </nav>
@@ -77,11 +80,11 @@ export function Layout() {
             <div className="truncate" style={{ fontWeight: 500 }}>
               {user?.username}
             </div>
-            <div className="faint tiny">{user?.is_admin ? "admin" : "member"}</div>
+            <div className="faint tiny">{user?.is_admin ? tx("admin") : tx("member")}</div>
           </div>
           <button
             className="btn ghost icon"
-            title="Log out"
+            title={tx("Log out")}
             onClick={() => {
               void logout().then(() => navigate("/login"));
             }}
@@ -93,12 +96,24 @@ export function Layout() {
       <div className="main">
         <header className="topbar">
           <div id="crumbs" className="crumbs" />
-          <div className="segmented" role="group" aria-label="Theme">
+          <div className="segmented" role="group" aria-label={tx("Language")}>
+            {(["tr", "en"] as const).map((l) => (
+              <button
+                key={l}
+                className={lang === l ? "on" : ""}
+                title={l === "tr" ? "Türkçe" : "English"}
+                onClick={() => setLang(l)}
+              >
+                {l.toUpperCase()}
+              </button>
+            ))}
+          </div>
+          <div className="segmented" role="group" aria-label={tx("Theme")}>
             {THEMES.map((t) => (
               <button
                 key={t.value}
                 className={theme === t.value ? "on" : ""}
-                title={t.title}
+                title={tx(t.title)}
                 onClick={() => setTheme(t.value)}
               >
                 {t.icon}

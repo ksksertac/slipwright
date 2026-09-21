@@ -11,10 +11,12 @@ import {
   useJiraSettings,
   useLocalRepos,
 } from "../api/hooks";
+import { useT } from "../i18n";
 
 type Source = "local" | "github";
 
 export function NewProjectPage() {
+  const tx = useT();
   const navigate = useNavigate();
   const create = useCreateProject();
   const github = useGitHubSettings();
@@ -33,6 +35,7 @@ export function NewProjectPage() {
   const folders = local.data?.repos ?? [];
   const [githubRepo, setGithubRepo] = useState("");
   const [jiraKey, setJiraKey] = useState("");
+  const [language, setLanguage] = useState<NewProject["language"]>("tr");
   const [firstRequest, setFirstRequest] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -43,6 +46,7 @@ export function NewProjectPage() {
       name: name.trim(),
       description: description.trim(),
       jira_project_key: jiraKey.trim() || null,
+      language,
     };
     if (source === "local") body.repo_path = repoPath.trim();
     else body.github_repo = githubRepo.trim();
@@ -64,38 +68,41 @@ export function NewProjectPage() {
   return (
     <div>
       <Crumbs items={[{ label: "Projects", to: "/projects" }, { label: "New project" }]} />
-      <PageHead title="New project" subtitle="A repository for the agents to work on." />
+      <PageHead
+        title={tx("New project")}
+        subtitle={tx("A repository for the agents to work on.")}
+      />
       <form className="form card" onSubmit={submit}>
         <div className="field">
-          <label htmlFor="name">Name</label>
+          <label htmlFor="name">{tx("Name")}</label>
           <input id="name" type="text" value={name} onChange={(e) => setName(e.target.value)} />
         </div>
         <div className="field">
-          <label htmlFor="description">Description</label>
+          <label htmlFor="description">{tx("Description")}</label>
           <textarea
             id="description"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="What this project is, for the people who will read the board"
+            placeholder={tx("What this project is, for the people who will read the board")}
           />
         </div>
 
         <div className="field">
-          <label>Source</label>
+          <label>{tx("Source")}</label>
           <div className="segmented">
             <button
               type="button"
               className={source === "github" ? "on" : ""}
               onClick={() => setSource("github")}
             >
-              GitHub repository
+              {tx("GitHub repository")}
             </button>
             <button
               type="button"
               className={source === "local" ? "on" : ""}
               onClick={() => setSource("local")}
             >
-              Local checkout
+              {tx("Local checkout")}
             </button>
           </div>
         </div>
@@ -130,7 +137,7 @@ export function NewProjectPage() {
             <div className="help">
               {folders.length > 0 && !typing ? (
                 <>
-                  These are the folders under <code>{local.data?.root}</code> (your{" "}
+                  {tx("These are the folders under")} <code>{local.data?.root}</code> (your{" "}
                   <code>SLIPWRIGHT_REPOS</code> folder). A folder that is not a git repository yet
                   becomes one on create, with everything in it committed.{" "}
                   <a
@@ -140,14 +147,17 @@ export function NewProjectPage() {
                     }}
                     href="#"
                   >
-                    Type a path instead
+                    {tx("Type a path instead")}
                   </a>
                 </>
               ) : (
                 <>
-                  The path as the <em>server</em> sees it. In Docker only the mounted folder is
-                  visible: put the checkout under <code>SLIPWRIGHT_REPOS</code> (default{" "}
-                  <code>./repos</code>) and enter <code>/repos/&lt;name&gt;</code>.
+                  {tx("The path as the")} <em>server</em>{" "}
+                  {tx(
+                    "sees it. In Docker only the mounted folder is visible: put the checkout under",
+                  )}{" "}
+                  <code>SLIPWRIGHT_REPOS</code> (default <code>{tx("./repos")}</code>) and enter{" "}
+                  <code>/repos/&lt;name&gt;</code>.
                   {folders.length > 0 && (
                     <>
                       {" "}
@@ -158,7 +168,7 @@ export function NewProjectPage() {
                         }}
                         href="#"
                       >
-                        Pick from the list
+                        {tx("Pick from the list")}
                       </a>
                     </>
                   )}
@@ -175,7 +185,7 @@ export function NewProjectPage() {
                 value={githubRepo}
                 onChange={(e) => setGithubRepo(e.target.value)}
               >
-                <option value="">Pick a repository…</option>
+                <option value="">{tx("Pick a repository…")}</option>
                 {repos.data.map((r) => (
                   <option key={r.full_name} value={r.full_name}>
                     {r.full_name}
@@ -190,13 +200,14 @@ export function NewProjectPage() {
                 className="mono"
                 value={githubRepo}
                 onChange={(e) => setGithubRepo(e.target.value)}
-                placeholder="owner/name"
+                placeholder={tx("owner/name")}
               />
             )}
             {!githubReady && (
               <div className="callout hint">
                 No GitHub token is configured, so private repositories cannot be cloned.{" "}
-                <Link to="/settings/github">Connect GitHub</Link> to pick from your repositories.
+                <Link to="/settings/github">{tx("Connect GitHub")}</Link>{" "}
+                {tx("to pick from your repositories.")}
               </div>
             )}
             {repos.error && <div className="callout error">{describeError(repos.error)}</div>}
@@ -204,10 +215,22 @@ export function NewProjectPage() {
         )}
 
         <div className="field">
-          <label htmlFor="jira_key">Jira project (optional)</label>
+          <label htmlFor="language">{tx("Language the agents write in")}</label>
+          <select
+            id="language"
+            value={language ?? "tr"}
+            onChange={(e) => setLanguage(e.target.value as NewProject["language"])}
+          >
+            <option value="tr">{tx("Turkish")}</option>
+            <option value="en">{tx("English")}</option>
+          </select>
+        </div>
+
+        <div className="field">
+          <label htmlFor="jira_key">{tx("Jira project (optional)")}</label>
           {jiraReady && jiraProjects.data && jiraProjects.data.length > 0 ? (
             <select id="jira_key" value={jiraKey} onChange={(e) => setJiraKey(e.target.value)}>
-              <option value="">Not linked</option>
+              <option value="">{tx("Not linked")}</option>
               {jiraProjects.data.map((p) => (
                 <option key={p.key} value={p.key}>
                   {p.key} — {p.name}
@@ -221,12 +244,13 @@ export function NewProjectPage() {
               className="mono"
               value={jiraKey}
               onChange={(e) => setJiraKey(e.target.value.toUpperCase())}
-              placeholder="e.g. DEM"
+              placeholder={tx("e.g. DEM")}
             />
           )}
           {!jiraReady && (
             <div className="muted small">
-              <Link to="/settings/jira">Connect Jira</Link> to mirror epics, stories and tasks.
+              <Link to="/settings/jira">{tx("Connect Jira")}</Link>{" "}
+              {tx("to mirror epics, stories and tasks.")}
             </div>
           )}
         </div>
@@ -237,23 +261,31 @@ export function NewProjectPage() {
             id="first_request"
             value={firstRequest}
             onChange={(e) => setFirstRequest(e.target.value)}
-            placeholder="e.g. Add a /health endpoint that reports the database status, with tests"
+            placeholder={tx(
+              "e.g. Add a /health endpoint that reports the database status, with tests",
+            )}
             style={{ minHeight: 90 }}
           />
           <div className="help">
-            Every request becomes a <em>development</em>: the Product Owner turns it into epics,
-            stories and tasks for you to approve, the Architect plans it, the specialists build it.
-            You can add more later from the project's <strong>Developments</strong> tab.
+            {tx("Every request becomes a")} <em>development</em>
+            {tx(
+              ": the Product Owner turns it into epics, stories and tasks for you to approve, the Architect plans it, the specialists build it. You can add more later from the project's",
+            )}{" "}
+            <strong>{tx("Developments")}</strong> {tx("tab.")}
           </div>
         </div>
 
         {error && <div className="callout error">{error}</div>}
         <div className="row">
           <button className="btn primary" type="submit" disabled={!canSubmit || create.isPending}>
-            {create.isPending ? (source === "github" ? "Cloning…" : "Creating…") : "Create project"}
+            {create.isPending
+              ? source === "github"
+                ? tx("Cloning…")
+                : tx("Creating…")
+              : tx("Create project")}
           </button>
           <Link className="btn" to="/projects">
-            Cancel
+            {tx("Cancel")}
           </Link>
         </div>
       </form>

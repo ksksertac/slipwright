@@ -671,3 +671,29 @@ def test_qa_that_hides_the_cases_in_prose_is_asked_for_the_array(
     job2 = engine2.approve(engine2.approve(job2.id).id)
     assert job2.state is JobState.FAILED
     assert (job2.history[-1].note or "").startswith("qa returned no test cases twice")
+
+
+def test_roles_write_for_people_in_the_projects_language(
+    store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
+) -> None:
+    provider = full_provider(seed, phases=1)
+    engine = full_engine(store, worktrees_root, seed, provider)
+    project = engine.create_project(Project(name="demo", repo_path=repo))  # tr by default
+    assert project.language == "tr"
+    job = engine.start(engine.create_job("x", project_id=project.id).id)
+    assert job.data.language == "tr"
+    po = _context(next(r for r in provider.requests if r.role is RoleName.PO))
+    assert po["writing"].startswith("Write every text a person will read in Turkish")
+    assert "`summary` is for the person who approves" in po["writing"]
+
+    english = engine.create_project(Project(name="en", repo_path=repo, language="en"))
+    job2 = engine.start(engine.create_job("y", project_id=english.id).id)
+    assert job2.data.language == "en"
+    po2 = _context([r for r in provider.requests if r.role is RoleName.PO][-1])
+    assert "in English" in po2["writing"]
+    with TestClient(create_app(engine, resume_on_startup=False, require_auth=False)) as client:
+        resp = client.patch(f"/api/projects/{project.id}", json={"language": "en"})
+        assert resp.status_code == 200 and resp.json()["language"] == "en"
+        assert (
+            client.patch(f"/api/projects/{project.id}", json={"language": "de"}).status_code == 422
+        )

@@ -12,8 +12,10 @@ import {
 import { useAuth } from "../../auth/AuthProvider";
 import { ErrorBox, Loading, PageHead, formatTime } from "../../components/ui";
 import { Crumbs } from "../../components/Crumbs";
+import { useT } from "../../i18n";
 
 export function UsersSettingsPage() {
+  const tx = useT();
   const { user: me } = useAuth();
   const users = useUsers();
   const create = useCreateUser();
@@ -23,7 +25,7 @@ export function UsersSettingsPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
 
-  if (!me?.is_admin) return <div className="callout error">Admins only.</div>;
+  if (!me?.is_admin) return <div className="callout error">{tx("Admins only.")}</div>;
   if (users.isLoading) return <Loading />;
   if (users.error) return <ErrorBox error={users.error} />;
 
@@ -44,14 +46,14 @@ export function UsersSettingsPage() {
   return (
     <div>
       <Crumbs items={[{ label: "Settings" }, { label: "Users" }]} />
-      <PageHead title="Users" subtitle="Logins and API tokens." />
+      <PageHead title={tx("Users")} subtitle={tx("Logins and API tokens.")} />
       <div className="card" style={{ padding: 0 }}>
         <table>
           <thead>
             <tr>
-              <th>Username</th>
-              <th>Role</th>
-              <th>Created</th>
+              <th>{tx("Username")}</th>
+              <th>{tx("Role")}</th>
+              <th>{tx("Created")}</th>
               <th />
             </tr>
           </thead>
@@ -72,10 +74,10 @@ export function UsersSettingsPage() {
       </div>
 
       <form className="form card" onSubmit={submit} style={{ marginTop: 16 }}>
-        <h3>Add user</h3>
+        <h3>{tx("Add user")}</h3>
         <div className="grid-2">
           <div className="field">
-            <label htmlFor="new-username">Username</label>
+            <label htmlFor="new-username">{tx("Username")}</label>
             <input
               id="new-username"
               type="text"
@@ -85,7 +87,7 @@ export function UsersSettingsPage() {
             />
           </div>
           <div className="field">
-            <label htmlFor="new-password">Password</label>
+            <label htmlFor="new-password">{tx("Password")}</label>
             <input
               id="new-password"
               type="password"
@@ -104,7 +106,7 @@ export function UsersSettingsPage() {
           className="btn primary"
           disabled={!username.trim() || !password || create.isPending}
         >
-          Add user
+          {tx("Add user")}
         </button>
       </form>
     </div>
@@ -151,6 +153,7 @@ function UserRow({
 }
 
 function UserDetails({ user, me, onDelete }: { user: User; me: User; onDelete: () => void }) {
+  const tx = useT();
   const setPassword = useSetPassword();
   const tokens = useTokens(user.id);
   const issue = useIssueToken(user.id);
@@ -162,13 +165,15 @@ function UserDetails({ user, me, onDelete }: { user: User; me: User; onDelete: (
   return (
     <div className="grid-2">
       <div>
-        <h3>Reset password</h3>
-        <p className="muted small">Ends every session and revokes every token of the user.</p>
+        <h3>{tx("Reset password")}</h3>
+        <p className="muted small">
+          {tx("Ends every session and revokes every token of the user.")}
+        </p>
         <div className="row">
           <input
             type="password"
             autoComplete="new-password"
-            placeholder="new password"
+            placeholder={tx("new password")}
             value={password}
             onChange={(e) => setPasswordValue(e.target.value)}
           />
@@ -182,10 +187,10 @@ function UserDetails({ user, me, onDelete }: { user: User; me: User; onDelete: (
               )
             }
           >
-            Set
+            {tx("Set")}
           </button>
         </div>
-        {setPassword.isSuccess && <div className="callout notice">Password changed.</div>}
+        {setPassword.isSuccess && <div className="callout notice">{tx("Password changed.")}</div>}
         {setPassword.error && (
           <div className="callout error">{describeError(setPassword.error)}</div>
         )}
@@ -197,15 +202,16 @@ function UserDetails({ user, me, onDelete }: { user: User; me: User; onDelete: (
                 if (window.confirm(`Delete user ${user.username}?`)) onDelete();
               }}
             >
-              Delete user
+              {tx("Delete user")}
             </button>
           </div>
         )}
       </div>
       <div>
-        <h3>API tokens</h3>
+        <h3>{tx("API tokens")}</h3>
         <p className="muted small">
-          For the CLI: <code>slipwright --token … status</code> or <code>SLIPWRIGHT_TOKEN</code>.
+          {tx("For the CLI:")} <code>{tx("slipwright --token … status")}</code> or{" "}
+          <code>SLIPWRIGHT_TOKEN</code>.
         </p>
         {tokens.data && tokens.data.length > 0 && (
           <table>
@@ -217,8 +223,8 @@ function UserDetails({ user, me, onDelete }: { user: User; me: User; onDelete: (
                     {t.revoked_at
                       ? `revoked ${formatTime(t.revoked_at)}`
                       : t.last_used_at
-                        ? `used ${formatTime(t.last_used_at)}`
-                        : "never used"}
+                        ? tx("used {ago}", { ago: formatTime(t.last_used_at) })
+                        : tx("never used")}
                   </td>
                   <td style={{ textAlign: "right" }}>
                     {!t.revoked_at && (
@@ -247,7 +253,7 @@ function UserDetails({ user, me, onDelete }: { user: User; me: User; onDelete: (
               issue.mutate(label.trim() || "cli", { onSuccess: (r) => setSecret(r.secret) })
             }
           >
-            Issue token
+            {tx("Issue token")}
           </button>
         </div>
         {secret && (

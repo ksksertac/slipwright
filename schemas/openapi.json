@@ -1336,6 +1336,12 @@
             "title": "Jira Status",
             "type": "object"
           },
+          "language": {
+            "default": "en",
+            "description": "The project's language for people-facing text.",
+            "title": "Language",
+            "type": "string"
+          },
           "last_build_output": {
             "anyOf": [
               {
@@ -1494,6 +1500,7 @@
           "jira_queue",
           "jira_sprint_id",
           "jira_status",
+          "language",
           "last_build_output",
           "output_hashes",
           "phase_base_commit",
@@ -1843,6 +1850,15 @@
               }
             ],
             "title": "Jira Project Key"
+          },
+          "language": {
+            "default": "tr",
+            "enum": [
+              "tr",
+              "en"
+            ],
+            "title": "Language",
+            "type": "string"
           },
           "name": {
             "minLength": 1,
@@ -2345,6 +2361,16 @@
             "title": "Jira Transitions",
             "type": "object"
           },
+          "language": {
+            "default": "tr",
+            "description": "The language the agents write for people in: backlog titles and descriptions (and so Jira), plan summaries, test-case names, summaries.",
+            "enum": [
+              "tr",
+              "en"
+            ],
+            "title": "Language",
+            "type": "string"
+          },
           "name": {
             "minLength": 1,
             "title": "Name",
@@ -2399,6 +2425,7 @@
           "jira_project_key",
           "jira_sprint",
           "jira_transitions",
+          "language",
           "name",
           "profile",
           "repo_path",
@@ -2484,6 +2511,21 @@
               }
             ],
             "title": "Jira Transitions"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "enum": [
+                  "tr",
+                  "en"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
           },
           "name": {
             "anyOf": [

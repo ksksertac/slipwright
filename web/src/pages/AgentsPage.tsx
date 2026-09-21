@@ -4,15 +4,19 @@ import { useAgents } from "../api/hooks";
 import { Crumbs } from "../components/Crumbs";
 import { AgentIcon } from "../components/agents";
 import { ErrorBox, Loading, PageHead, timeAgo } from "../components/ui";
+import { useT } from "../i18n";
 
 export function AgentsPage() {
+  const tx = useT();
   const agents = useAgents();
   return (
     <div>
       <Crumbs items={[{ label: "Agents" }]} />
       <PageHead
-        title="Agents"
-        subtitle="Each card shows the provider and model the agent runs on right now; open one for its setup, standards and activity."
+        title={tx("Agents")}
+        subtitle={tx(
+          "Each card shows the provider and model the agent runs on right now; open one for its setup, standards and activity.",
+        )}
       />
       <ErrorBox error={agents.error} />
       {agents.isLoading && <Loading />}
@@ -28,6 +32,7 @@ export function AgentsPage() {
 }
 
 function AgentCard({ agent: a }: { agent: AgentSummary }) {
+  const tx = useT();
   return (
     <Link to={`/agents/${a.role}`} className="card pcard" style={{ color: "inherit" }}>
       <div className="row spread" style={{ flexWrap: "nowrap" }}>
@@ -36,7 +41,7 @@ function AgentCard({ agent: a }: { agent: AgentSummary }) {
             <AgentIcon role={a.role} />
           </span>
           <div>
-            <div style={{ fontWeight: 600, fontSize: 15 }}>{a.label}</div>
+            <div style={{ fontWeight: 600, fontSize: 15 }}>{tx(a.label)}</div>
             <div className="faint tiny mono">{a.role}</div>
           </div>
         </div>
@@ -46,7 +51,7 @@ function AgentCard({ agent: a }: { agent: AgentSummary }) {
         {a.scope}
       </div>
       <dl className="kv" style={{ gridTemplateColumns: "90px 1fr" }}>
-        <dt>Model</dt>
+        <dt>{tx("Model")}</dt>
         <dd
           className="mono truncate"
           title={a.provider ? "pinned in the profile" : "follows Settings → Models"}
@@ -58,9 +63,9 @@ function AgentCard({ agent: a }: { agent: AgentSummary }) {
             {a.provider ? "" : " (default)"}
           </span>
         </dd>
-        <dt>Thinking</dt>
+        <dt>{tx("Thinking")}</dt>
         <dd>{a.thinking_depth}</dd>
-        <dt>Standards</dt>
+        <dt>{tx("Standards")}</dt>
         <dd>{a.standards_domain === "*" ? "all domains" : a.standards_domain}</dd>
       </dl>
       <div className="row" style={{ gap: 4 }}>
@@ -71,10 +76,10 @@ function AgentCard({ agent: a }: { agent: AgentSummary }) {
         ))}
       </div>
       <div className="row spread faint tiny">
+        <span>{tx("{n} invocation(s)", { n: a.invocations })}</span>
         <span>
-          {a.invocations} invocation{a.invocations === 1 ? "" : "s"}
+          {a.last_used ? tx("used {ago}", { ago: timeAgo(a.last_used) }) : tx("never used")}
         </span>
-        <span>{a.last_used ? `used ${timeAgo(a.last_used)}` : "never used"}</span>
       </div>
     </Link>
   );

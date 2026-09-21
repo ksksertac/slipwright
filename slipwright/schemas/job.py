@@ -99,6 +99,9 @@ class JobData(BaseModel):
         description="The Architect's plan: summary, decisions, phases and the breakdown "
         "with phase numbers filled in.",
     )
+    language: str = Field(
+        default="en", description="The project's language for people-facing text."
+    )
     phase_index: int = Field(default=0, ge=0, description="Next plan phase to execute.")
     build_attempts: int = Field(default=0, ge=0)
     last_build_output: str | None = None

@@ -1,4 +1,5 @@
 // The standards review (T9.5) as people read it: a findings table, and the review
+import { useT } from "../i18n";
 // record a history entry carries as JSON rendered through it.
 export interface ReviewRecord {
   phase: number;
@@ -19,15 +20,16 @@ export interface ReviewRecord {
 }
 
 export function ViolationsTable({ violations }: { violations: ReviewRecord["violations"] }) {
-  if (violations.length === 0) return <div className="muted small">No findings.</div>;
+  const tx = useT();
+  if (violations.length === 0) return <div className="muted small">{tx("No findings.")}</div>;
   return (
     <table className="violations">
       <thead>
         <tr>
-          <th>Severity</th>
-          <th>Section</th>
-          <th>Where</th>
-          <th>Finding</th>
+          <th>{tx("Severity")}</th>
+          <th>{tx("Section")}</th>
+          <th>{tx("Where")}</th>
+          <th>{tx("Finding")}</th>
         </tr>
       </thead>
       <tbody>

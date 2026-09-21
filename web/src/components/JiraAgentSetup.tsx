@@ -13,6 +13,7 @@ import {
 import { useAuth } from "../auth/AuthProvider";
 import { useToast } from "./Toast";
 import { ErrorBox, Loading } from "./ui";
+import { useT } from "../i18n";
 
 const STATUSES = ["todo", "in_progress", "done", "failed"] as const;
 const DEFAULT_TRANSITION: Record<string, string> = {
@@ -24,6 +25,7 @@ const DEFAULT_TRANSITION: Record<string, string> = {
 
 /** The separate Jira account the agents act as. */
 export function JiraAgentAccount() {
+  const tx = useT();
   const { user } = useAuth();
   const jira = useJiraSettings();
   const save = useSaveJiraSettings();
@@ -51,14 +53,16 @@ export function JiraAgentAccount() {
 
   return (
     <form className="card" onSubmit={submit}>
-      <h3 style={{ marginBottom: 6 }}>Jira account for the agents</h3>
+      <h3 style={{ marginBottom: 6 }}>{tx("Jira account for the agents")}</h3>
       <p className="muted small">
-        Comments, transitions and bug issues the agents create appear under this account, so Jira
-        history shows the bot and not the person who configured the connection.
+        {tx(
+          "Comments, transitions and bug issues the agents create appear under this account, so Jira history shows the bot and not the person who configured the connection.",
+        )}
       </p>
       {!s.token_set && (
         <div className="callout hint">
-          Jira is not connected yet: <Link to="/settings/jira">set up the connection</Link> first.
+          {tx("Jira is not connected yet:")}{" "}
+          <Link to="/settings/jira">{tx("set up the connection")}</Link> {tx("first.")}
         </div>
       )}
       {s.token_set && !s.agent_token_set && (
@@ -68,18 +72,18 @@ export function JiraAgentAccount() {
       )}
       <div className="grid-2">
         <div className="field">
-          <label htmlFor="agent-email">Agent e-mail</label>
+          <label htmlFor="agent-email">{tx("Agent e-mail")}</label>
           <input
             id="agent-email"
             type="email"
             value={email ?? s.agent_email ?? ""}
             disabled={!admin}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="slipwright-bot@example.com"
+            placeholder={tx("slipwright-bot@example.com")}
           />
         </div>
         <div className="field">
-          <label htmlFor="agent-token">Agent API token</label>
+          <label htmlFor="agent-token">{tx("Agent API token")}</label>
           <input
             id="agent-token"
             type="password"
@@ -95,7 +99,7 @@ export function JiraAgentAccount() {
       {admin && (
         <div className="row">
           <button className="btn primary small" disabled={save.isPending}>
-            Save
+            {tx("Save")}
           </button>
           <button
             type="button"
@@ -103,7 +107,7 @@ export function JiraAgentAccount() {
             disabled={!s.agent_token_set || test.isPending}
             onClick={() => test.mutate()}
           >
-            {test.isPending ? "Testing…" : "Test connection"}
+            {test.isPending ? tx("Testing…") : tx("Test connection")}
           </button>
           {s.agent_token_set && (
             <button
@@ -111,19 +115,21 @@ export function JiraAgentAccount() {
               className="btn bad small"
               onClick={() => save.mutate({ clear_agent_token: true })}
             >
-              Remove agent token
+              {tx("Remove agent token")}
             </button>
           )}
         </div>
       )}
       {test.data?.agent_account && (
         <div className="callout notice">
-          Agents act as <strong>{test.data.agent_account.display_name}</strong> (
+          {tx("Agents act as")} <strong>{test.data.agent_account.display_name}</strong> (
           {test.data.agent_account.email})
         </div>
       )}
       {test.data && !test.data.agent_account && (
-        <div className="callout hint">The connection works but no agent account is configured.</div>
+        <div className="callout hint">
+          {tx("The connection works but no agent account is configured.")}
+        </div>
       )}
       {test.error && <div className="callout error">{describeError(test.error)}</div>}
     </form>
@@ -132,24 +138,25 @@ export function JiraAgentAccount() {
 
 /** Which Jira project a Slipwright project mirrors into, and its transition names. */
 export function ProjectJiraSetup() {
+  const tx = useT();
   const projects = useProjects();
   const [selected, setSelected] = useState("");
   const projectId = selected || projects.data?.[0]?.id || "";
   return (
     <div className="card">
-      <h3 style={{ marginBottom: 6 }}>Project → Jira project</h3>
+      <h3 style={{ marginBottom: 6 }}>{tx("Project → Jira project")}</h3>
       <p className="muted small">
         Approved plans are mirrored as epics, stories and sub-tasks here; task statuses map to the
         transition names below.
       </p>
       {projects.data && projects.data.length === 0 && (
         <div className="muted small">
-          No projects yet. <Link to="/projects/new">Create one</Link> first.
+          {tx("No projects yet.")} <Link to="/projects/new">{tx("Create one")}</Link> {tx("first.")}
         </div>
       )}
       {projects.data && projects.data.length > 0 && (
         <div className="field">
-          <label htmlFor="jira-project">Project</label>
+          <label htmlFor="jira-project">{tx("Project")}</label>
           <select id="jira-project" value={projectId} onChange={(e) => setSelected(e.target.value)}>
             {projects.data.map((p) => (
               <option key={p.id} value={p.id}>
@@ -172,6 +179,7 @@ function ProjectJiraForm({ projectId }: { projectId: string }) {
 }
 
 function ProjectJiraFields({ project }: { project: Project }) {
+  const tx = useT();
   const { user } = useAuth();
   const patch = usePatchProject(project.id);
   const toast = useToast();
@@ -203,7 +211,7 @@ function ProjectJiraFields({ project }: { project: Project }) {
   return (
     <div>
       <div className="field">
-        <label htmlFor="jira-key">Jira project key</label>
+        <label htmlFor="jira-key">{tx("Jira project key")}</label>
         {jiraProjects.data && jiraProjects.data.length > 0 ? (
           <select
             id="jira-key"
@@ -214,7 +222,7 @@ function ProjectJiraFields({ project }: { project: Project }) {
               setDirty(true);
             }}
           >
-            <option value="">Not linked</option>
+            <option value="">{tx("Not linked")}</option>
             {jiraProjects.data.map((p) => (
               <option key={p.key} value={p.key}>
                 {p.key} — {p.name}
@@ -232,11 +240,11 @@ function ProjectJiraFields({ project }: { project: Project }) {
               setJiraKey(e.target.value.toUpperCase());
               setDirty(true);
             }}
-            placeholder="e.g. DEM"
+            placeholder={tx("e.g. DEM")}
           />
         )}
       </div>
-      <label>Task status → Jira transition</label>
+      <label>{tx("Task status → Jira transition")}</label>
       <div className="stack" style={{ gap: 6 }}>
         {STATUSES.map((st) => (
           <div className="row" key={st} style={{ flexWrap: "nowrap" }}>
@@ -260,7 +268,7 @@ function ProjectJiraFields({ project }: { project: Project }) {
       {admin && (
         <div className="row" style={{ marginTop: 12 }}>
           <button className="btn primary small" disabled={!dirty || patch.isPending} onClick={save}>
-            {patch.isPending ? "Saving…" : "Save"}
+            {patch.isPending ? tx("Saving…") : tx("Save")}
           </button>
         </div>
       )}

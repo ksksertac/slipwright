@@ -1,4 +1,5 @@
 import { Diff, looksLikeDiff } from "./Diff";
+import { useT } from "../i18n";
 
 function prettyJson(text: string): string | null {
   const trimmed = text.trim();
@@ -12,7 +13,8 @@ function prettyJson(text: string): string | null {
 
 /** Renders a history entry's long-form detail: a diff, pretty JSON, or plain text. */
 export function Detail({ text }: { text: string | null | undefined }) {
-  if (!text) return <span className="muted">no detail</span>;
+  const tx = useT();
+  if (!text) return <span className="muted">{tx("no detail")}</span>;
   if (looksLikeDiff(text)) return <Diff text={text} />;
   const json = prettyJson(text);
   return <pre>{json ?? text}</pre>;

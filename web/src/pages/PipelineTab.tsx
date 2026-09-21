@@ -32,8 +32,10 @@ import { IconCheck, IconX } from "../components/icons";
 import { ProfileForm } from "../components/ProfileForm";
 import { useToast } from "../components/Toast";
 import { Empty, ErrorBox, Loading, StateBadge, timeAgo } from "../components/ui";
+import { useT, type T } from "../i18n";
 
 export function PipelineTab({ projectId }: { projectId: string }) {
+  const tx = useT();
   const pipeline = usePipeline(projectId);
   const [chosen, setSelected] = useState<string[]>([]);
   const [open, setOpen] = useState<{ jobId: string; key: string } | null>(null);
@@ -60,15 +62,16 @@ export function PipelineTab({ projectId }: { projectId: string }) {
   if (lanes.length === 0) {
     return (
       <Empty
-        title="No development yet"
+        title={tx("No development yet")}
         action={
           <Link className="btn primary" to={`/projects/${projectId}/developments`}>
-            Start one
+            {tx("Start one")}
           </Link>
         }
       >
-        Every development shows up here as a lane of steps: what the agents did, what runs now, and
-        what waits for you.
+        {tx(
+          "Every development shows up here as a lane of steps: what the agents did, what runs now, and what waits for you.",
+        )}
       </Empty>
     );
   }
@@ -82,16 +85,16 @@ export function PipelineTab({ projectId }: { projectId: string }) {
         <div className="muted small">
           {waiting.size === 0
             ? "Nothing waits for you."
-            : `${waiting.size} development${waiting.size === 1 ? "" : "s"} waiting for your approval`}
+            : tx("{n} development(s) waiting for your approval", { n: waiting.size })}
         </div>
         <div className="row">
           {recommended.length > 0 && (
             <button
               className="btn small"
               onClick={() => setSelected(recommended)}
-              title="the gates the supervisor recommends approving"
+              title={tx("the gates the supervisor recommends approving")}
             >
-              Select all recommended ({recommended.length})
+              {tx("Select all recommended ({n})", { n: recommended.length })}
             </button>
           )}
           {waiting.size > 0 && (
@@ -100,7 +103,7 @@ export function PipelineTab({ projectId }: { projectId: string }) {
               onClick={() => setSelected([...waiting])}
               disabled={selected.length === waiting.size}
             >
-              Select all waiting
+              {tx("Select all waiting")}
             </button>
           )}
         </div>
@@ -148,6 +151,7 @@ function LaneRow({
   onOpen: (key: string) => void;
   openKey: string | null;
 }) {
+  const tx = useT();
   return (
     <div className={`lane ${lane.pending_approval ? "waiting" : ""}`}>
       <div className="lane-head">
@@ -165,7 +169,7 @@ function LaneRow({
           {lane.request}
         </Link>
         <StateBadge state={lane.state} />
-        <span className="faint tiny">started {timeAgo(lane.created_at)}</span>
+        <span className="faint tiny">{tx("started {ago}", { ago: timeAgo(lane.created_at) })}</span>
         {lane.state === "failed" && <LaneRetry jobId={lane.job_id} />}
       </div>
       <div className="lane-steps">
@@ -187,6 +191,16 @@ function LaneRetry({ jobId }: { jobId: string }) {
   return job.data ? <RetryActions job={job.data} compact /> : null;
 }
 
+/** Card labels come from the server in English; the fixed ones translate, a phase
+ * label ("Backend: <goal>") keeps its goal and translates the agent. */
+function stepLabel(tx: T, step: StepCard): string {
+  const m = /^([^:]+): (.*)$/.exec(step.label);
+  if (step.phase && m) return `${tx(m[1]!)}: ${m[2]!}`;
+  const gate = /^Review approval: phase (\d+)$/.exec(step.label);
+  if (gate) return tx("Review approval: phase {n}", { n: gate[1]! });
+  return tx(step.label);
+}
+
 function elapsed(s: number | null | undefined): string {
   if (s === null || s === undefined) return "";
   if (s < 60) return `${Math.round(s)}s`;
@@ -203,7 +217,8 @@ function StepCardView({
   active: boolean;
   onOpen: () => void;
 }) {
-  const who = step.role ? (ROLE_LABEL[step.role] ?? step.role) : step.gate ? "you" : "";
+  const tx = useT();
+  const who = step.role ? tx(ROLE_LABEL[step.role] ?? step.role) : step.gate ? tx("you") : "";
   return (
     <button
       type="button"
@@ -216,21 +231,23 @@ function StepCardView({
         <span>{who}</span>
         {step.status === "running" && <span className="pulse-dot" aria-label="running" />}
       </div>
-      <div className="label">{step.label}</div>
+      <div className="label">{stepLabel(tx, step)}</div>
       {step.task_title && <div className="task truncate">{step.task_title}</div>}
       {step.recommendation && (
         <div
           className={`chip ${step.recommendation === "approve" ? (step.risk === "low" ? "ok" : "work") : "bad"}`}
           title={`the supervisor recommends ${step.recommendation}`}
         >
-          {step.recommendation === "approve" ? "recommends approve" : "recommends reject"} ·{" "}
+          {step.recommendation === "approve" ? tx("recommends approve") : tx("recommends reject")} ·{" "}
           {(step.confidence ?? 0).toFixed(2)}
         </div>
       )}
-      {step.auto_approved && <div className="chip idle">approved by supervisor</div>}
+      {step.auto_approved && <div className="chip idle">{tx("approved by supervisor")}</div>}
       <div className="meta">
         <span className={`badge ${STATUS_CLASS[step.status]} plain`}>
-          {step.status === "waiting" ? `needs ${step.pending}` : step.status}
+          {step.status === "waiting"
+            ? tx("needs {pending}", { pending: tx(step.pending ?? "") })
+            : tx(step.status)}
         </span>
         <DomainBadge domain={step.domain ?? undefined} />
         {step.elapsed_s !== null && step.elapsed_s !== undefined && (
@@ -262,6 +279,7 @@ function StepPanel({
   projectId: string;
   onClose: () => void;
 }) {
+  const tx = useT();
   const pipeline = usePipeline(projectId);
   const job = useJob(jobId);
   useEffect(() => {
@@ -276,9 +294,9 @@ function StepPanel({
       <div className="drawer-head">
         <div style={{ minWidth: 0 }}>
           <div className="faint tiny truncate">{lane?.request}</div>
-          <h3 className="truncate">{step?.label ?? "…"}</h3>
+          <h3 className="truncate">{step ? stepLabel(tx, step) : "…"}</h3>
         </div>
-        <button className="btn ghost icon" onClick={onClose} aria-label="Close">
+        <button className="btn ghost icon" onClick={onClose} aria-label={tx("Close")}>
           <IconX />
         </button>
       </div>
@@ -291,14 +309,14 @@ function StepPanel({
               <span className={`badge ${STATUS_CLASS[step.status]}`}>{step.status}</span>
               {step.role && (
                 <span className="muted small">
-                  {ROLE_LABEL[step.role] ?? step.role}
+                  {tx(ROLE_LABEL[step.role] ?? step.role)}
                   {step.elapsed_s !== null && step.elapsed_s !== undefined
                     ? ` · ${elapsed(step.elapsed_s)}`
                     : ""}
                 </span>
               )}
               <Link className="small" to={`/projects/${projectId}/jobs/${jobId}`}>
-                open development →
+                {tx("open development →")}
               </Link>
             </div>
             {step.status === "waiting" && <GateEditor job={job.data} step={step} />}
@@ -306,7 +324,7 @@ function StepPanel({
               <Output key={index} jobId={jobId} index={index} />
             ))}
             {step.outputs.length === 0 && step.status !== "waiting" && (
-              <div className="muted small">Nothing recorded for this step yet.</div>
+              <div className="muted small">{tx("Nothing recorded for this step yet.")}</div>
             )}
           </>
         )}
@@ -334,6 +352,7 @@ function Output({ jobId, index }: { jobId: string; index: number }) {
 
 /** What the human can change before approving, with Save / Save & approve. */
 function GateEditor({ job, step }: { job: Job; step: StepCard }) {
+  const tx = useT();
   const approve = useApprove(job.id);
   const reject = useReject(job.id);
   const toast = useToast();
@@ -344,7 +363,7 @@ function GateEditor({ job, step }: { job: Job; step: StepCard }) {
   return (
     <div className="gate" style={{ marginBottom: 14 }}>
       <div style={{ marginBottom: 8 }}>
-        Waiting for your approval of the <strong>{step.pending}</strong>.
+        {tx("Waiting for your approval of the")} <strong>{tx(step.pending ?? "")}</strong>
       </div>
       {step.key === "backlog_gate" && <BacklogGateEditor job={job} />}
       {step.key === "architecture_gate" && <ArchitectureGateEditor job={job} />}
@@ -356,17 +375,17 @@ function GateEditor({ job, step }: { job: Job; step: StepCard }) {
             disabled={approve.isPending}
             onClick={() => approve.mutate(undefined, { onSuccess: () => toast.ok("Approved") })}
           >
-            <IconCheck /> Approve
+            <IconCheck /> {tx("Approve")}
           </button>
           {!rejecting ? (
             <button className="btn bad small" onClick={() => setRejecting(true)}>
-              Reject…
+              {tx("Reject…")}
             </button>
           ) : (
             <>
               <input
                 type="text"
-                placeholder="what should change?"
+                placeholder={tx("what should change?")}
                 value={feedback}
                 autoFocus
                 onChange={(e) => setFeedback(e.target.value)}
@@ -378,7 +397,7 @@ function GateEditor({ job, step }: { job: Job; step: StepCard }) {
                   reject.mutate(feedback.trim(), { onSuccess: () => setRejecting(false) })
                 }
               >
-                Send rejection
+                {tx("Send rejection")}
               </button>
             </>
           )}
@@ -403,6 +422,7 @@ function SaveRow({
   onSave: () => Promise<boolean>;
   error: string | null;
 }) {
+  const tx = useT();
   const approve = useApprove(jobId);
   const reject = useReject(jobId);
   const toast = useToast();
@@ -418,20 +438,20 @@ function SaveRow({
     <div style={{ marginTop: 10 }}>
       <div className="row">
         <button className="btn small" disabled={!dirty || busy} onClick={() => void onSave()}>
-          {saving ? "Saving…" : "Save"}
+          {saving ? tx("Saving…") : tx("Save")}
         </button>
         <button className="btn ok small" disabled={busy} onClick={() => void saveAndApprove()}>
           <IconCheck /> {dirty ? "Save & approve" : "Approve"}
         </button>
         {!rejecting ? (
           <button className="btn bad small" disabled={busy} onClick={() => setRejecting(true)}>
-            Reject…
+            {tx("Reject…")}
           </button>
         ) : (
           <>
             <input
               type="text"
-              placeholder="what should change?"
+              placeholder={tx("what should change?")}
               value={feedback}
               autoFocus
               onChange={(e) => setFeedback(e.target.value)}
@@ -443,7 +463,7 @@ function SaveRow({
                 reject.mutate(feedback.trim(), { onSuccess: () => setRejecting(false) })
               }
             >
-              Send rejection
+              {tx("Send rejection")}
             </button>
           </>
         )}

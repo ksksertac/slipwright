@@ -1068,6 +1068,15 @@ in bulk.
   it 5 s after startup and then every `jira_sweep_s` (3600); `GET/POST
   /api/settings/jira/sweep` show and trigger it; the Jira page has the card.
 
+- [x] **Language.** The UI is Turkish by default with a TR/EN toggle in the header
+  (`web/src/i18n.tsx`: keys are the English source strings, `web/src/i18n/tr.ts` is the
+  dictionary, the choice lives in localStorage and never reaches the server). Which
+  language the *agents* write in is a per-project setting (`Project.language`, default
+  `tr`, copied into `JobData.language` when a development starts): `writing_rules()` in
+  `roles/common.py` puts it in every prompt, and asks that `summary` be two to four plain
+  sentences for the person approving the next step — code, paths and JSON keys stay
+  English.
+
 ## Phase 10 — Proposed (not started)
 
 ### T10.1 — Parallel phases per domain

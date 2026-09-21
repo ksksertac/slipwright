@@ -10,6 +10,7 @@ import {
 } from "../api/hooks";
 import { IconFlask, IconPlay } from "../components/icons";
 import { Empty, ErrorBox, Loading, formatTime } from "../components/ui";
+import { useT } from "../i18n";
 
 const STATUS_CLASS: Record<TestRun["status"], string> = {
   running: "work",
@@ -25,6 +26,7 @@ function duration(run: TestRun): string {
 }
 
 export function TestsTab({ projectId }: { projectId: string }) {
+  const tx = useT();
   const runs = useTestRuns(projectId);
   const jobs = useProjectJobs(projectId);
   const start = useStartTestRun(projectId);
@@ -44,9 +46,9 @@ export function TestsTab({ projectId }: { projectId: string }) {
       <div className="card">
         <div className="row spread">
           <div className="row">
-            <strong>Run tests</strong>
+            <strong>{tx("Run tests")}</strong>
             <select value={target} onChange={(e) => setTarget(e.target.value)}>
-              <option value="">on the main checkout</option>
+              <option value="">{tx("on the main checkout")}</option>
               {withWorktree.map((j) => (
                 <option key={j.id} value={j.id}>
                   in job {j.id} — {j.request.slice(0, 50)}
@@ -60,19 +62,19 @@ export function TestsTab({ projectId }: { projectId: string }) {
                 start.mutate(target || null, { onSuccess: (run) => setSelected(run.id) })
               }
             >
-              <IconPlay /> {start.isPending ? "Starting…" : "Run tests"}
+              <IconPlay /> {start.isPending ? tx("Starting…") : tx("Run tests")}
             </button>
           </div>
           <div className="row">
             <select value={status} onChange={(e) => setStatus(e.target.value)}>
-              <option value="">any status</option>
+              <option value="">{tx("any status")}</option>
               <option value="running">running</option>
               <option value="passed">passed</option>
               <option value="failed">failed</option>
               <option value="error">error</option>
             </select>
             <select value={jobFilter} onChange={(e) => setJobFilter(e.target.value)}>
-              <option value="">any job</option>
+              <option value="">{tx("any job")}</option>
               {(jobs.data ?? []).map((j) => (
                 <option key={j.id} value={j.id}>
                   {j.id}
@@ -87,9 +89,10 @@ export function TestsTab({ projectId }: { projectId: string }) {
       <ErrorBox error={runs.error} />
       {runs.isLoading && <Loading />}
       {runs.data && runs.data.length === 0 && (
-        <Empty title="No test runs yet" icon={<IconFlask />}>
-          Every build gate the engine runs is recorded here, and you can run the project's test
-          command yourself at any time.
+        <Empty title={tx("No test runs yet")} icon={<IconFlask />}>
+          {tx(
+            "Every build gate the engine runs is recorded here, and you can run the project's test command yourself at any time.",
+          )}
         </Empty>
       )}
       {visible.length > 0 && (
@@ -97,12 +100,12 @@ export function TestsTab({ projectId }: { projectId: string }) {
           <table>
             <thead>
               <tr>
-                <th>Status</th>
-                <th>Started</th>
-                <th>Duration</th>
-                <th>Source</th>
-                <th>Job</th>
-                <th>Command</th>
+                <th>{tx("Status")}</th>
+                <th>{tx("Started")}</th>
+                <th>{tx("Duration")}</th>
+                <th>{tx("Source")}</th>
+                <th>{tx("Job")}</th>
+                <th>{tx("Command")}</th>
               </tr>
             </thead>
             <tbody>
@@ -133,7 +136,7 @@ export function TestsTab({ projectId }: { projectId: string }) {
                         {jobById.get(run.job_id)?.request.slice(0, 40) ?? run.job_id}
                       </Link>
                     ) : (
-                      <span className="muted">main checkout</span>
+                      <span className="muted">{tx("main checkout")}</span>
                     )}
                   </td>
                   <td className="mono small">{run.command}</td>
@@ -149,6 +152,7 @@ export function TestsTab({ projectId }: { projectId: string }) {
 }
 
 function RunOutput({ runId }: { runId: string }) {
+  const tx = useT();
   const run = useTestRun(runId);
   const running = run.data?.status === "running";
   const output = useTestRunOutput(runId, running);
@@ -192,7 +196,7 @@ function RunOutput({ runId }: { runId: string }) {
               <span key={i}>{line + "\n"}</span>
             ),
           )}
-          {running && <span className="muted">… still running</span>}
+          {running && <span className="muted">{tx("… still running")}</span>}
         </pre>
       )}
     </div>

@@ -26,8 +26,10 @@ import {
   StatTile,
   timeAgo,
 } from "../components/ui";
+import { useT } from "../i18n";
 
 export function DashboardPage() {
+  const tx = useT();
   const overview = useOverview();
   const projects = useProjects();
   const byId = new Map((projects.data ?? []).map((p) => [p.id, p]));
@@ -47,36 +49,36 @@ export function DashboardPage() {
     <div>
       <Crumbs items={[{ label: "Dashboard" }]} />
       <PageHead
-        title="Dashboard"
-        subtitle="What the agents are doing right now, and what waits for you."
+        title={tx("Dashboard")}
+        subtitle={tx("What the agents are doing right now, and what waits for you.")}
         actions={
           <Link className="btn primary" to="/projects/new">
-            <IconPlus /> New project
+            <IconPlus /> {tx("New project")}
           </Link>
         }
       />
 
       <div className="grid-tiles">
         <StatTile
-          label="Projects"
+          label={tx("Projects")}
           icon={<IconFolder />}
           value={o.projects}
-          sub={`${o.jobs_total} development${o.jobs_total === 1 ? "" : "s"} in total`}
+          sub={tx("{n} development(s) in total", { n: o.jobs_total })}
         />
         <StatTile
-          label="Running"
+          label={tx("Running")}
           icon={<IconPlay />}
           value={o.jobs_running}
-          sub="agents working now"
+          sub={tx("agents working now")}
         />
         <StatTile
-          label="Waiting for you"
+          label={tx("Waiting for you")}
           icon={<IconInbox />}
           value={o.pending_approvals}
-          sub={o.pending_approvals ? "approvals pending" : "nothing pending"}
+          sub={o.pending_approvals ? tx("approvals pending") : tx("nothing pending")}
         />
         <StatTile
-          label="Tasks done"
+          label={tx("Tasks done")}
           icon={<IconLayers />}
           value={
             <span>
@@ -90,19 +92,19 @@ export function DashboardPage() {
           sub={<ProgressBar done={o.tasks_done} total={o.tasks_total} showText={false} />}
         />
         <StatTile
-          label="Outcomes"
+          label={tx("Outcomes")}
           icon={<IconCheck />}
           value={
             <span>
               <span style={{ color: "var(--good-text)" }}>{o.jobs_done}</span>
               <span className="faint" style={{ fontSize: 15 }}>
                 {" "}
-                done
+                {tx("done")}
               </span>{" "}
               <span style={{ color: "var(--bad-text)" }}>{o.jobs_failed}</span>
               <span className="faint" style={{ fontSize: 15 }}>
                 {" "}
-                failed
+                {tx("failed")}
               </span>
             </span>
           }
@@ -114,7 +116,7 @@ export function DashboardPage() {
           <div className="card-head">
             <h3>
               <IconAlert style={{ width: 14, height: 14, verticalAlign: -2, marginRight: 6 }} />
-              Pending approvals
+              {tx("Pending approvals")}
             </h3>
             <span className="row" style={{ gap: 8 }}>
               {o.waiting.length > 1 && (
@@ -123,7 +125,7 @@ export function DashboardPage() {
                   disabled={selected.length === o.waiting.length}
                   onClick={() => setSelected(o.waiting.map((w) => w.job_id))}
                 >
-                  Select all
+                  {tx("Select all")}
                 </button>
               )}
               <span className="badge wait plain">{o.waiting.length}</span>
@@ -134,7 +136,7 @@ export function DashboardPage() {
               <div className="glyph">
                 <IconCheck />
               </div>
-              <div className="small">Nothing waits for you.</div>
+              <div className="small">{tx("Nothing waits for you.")}</div>
             </div>
           ) : (
             <table>
@@ -165,7 +167,7 @@ export function DashboardPage() {
           <div className="card-head">
             <h3>
               <IconActivity style={{ width: 14, height: 14, verticalAlign: -2, marginRight: 6 }} />
-              Recent activity
+              {tx("Recent activity")}
             </h3>
           </div>
           {o.recent.length === 0 ? (
@@ -173,9 +175,9 @@ export function DashboardPage() {
               <div className="small">
                 No activity yet.{" "}
                 {o.projects === 0 ? (
-                  <Link to="/projects/new">Add a project</Link>
+                  <Link to="/projects/new">{tx("Add a project")}</Link>
                 ) : (
-                  <Link to="/projects">Start a development</Link>
+                  <Link to="/projects">{tx("Start a development")}</Link>
                 )}
                 .
               </div>
@@ -204,7 +206,7 @@ export function DashboardPage() {
       {o.auto_approved.length > 0 && (
         <div className="card flush" style={{ marginTop: 18 }}>
           <div className="card-head">
-            <h3>Approved by the supervisor</h3>
+            <h3>{tx("Approved by the supervisor")}</h3>
             <span className="badge plain idle">{o.auto_approved.length}</span>
           </div>
           <table>
@@ -227,15 +229,16 @@ export function DashboardPage() {
       {projects.data && projects.data.length === 0 && (
         <div style={{ marginTop: 18 }}>
           <Empty
-            title="Add your first project"
+            title={tx("Add your first project")}
             action={
               <Link className="btn primary" to="/projects/new">
-                <IconPlus /> New project
+                <IconPlus /> {tx("New project")}
               </Link>
             }
           >
-            A project is a repository the agents work on. Connect GitHub under Settings, or point at
-            a local checkout.
+            {tx(
+              "A project is a repository the agents work on. Connect GitHub under Settings, or point at a local checkout.",
+            )}
           </Empty>
         </div>
       )}
@@ -257,6 +260,7 @@ function AutoApprovedRow({
   projectName?: string;
   phase: string;
 }) {
+  const tx = useT();
   const undo = useUndoAutoApproval(jobId);
   const toast = useToast();
   const [open, setOpen] = useState(false);
@@ -275,14 +279,14 @@ function AutoApprovedRow({
       <td className="actions" style={{ whiteSpace: "nowrap" }}>
         {!open ? (
           <button className="btn bad small" onClick={() => setOpen(true)}>
-            Undo…
+            {tx("Undo…")}
           </button>
         ) : (
           <div className="row">
             <input
               type="text"
               style={{ width: 240 }}
-              placeholder="what the supervisor missed"
+              placeholder={tx("what the supervisor missed")}
               value={feedback}
               autoFocus
               onChange={(e) => setFeedback(e.target.value)}
@@ -300,10 +304,10 @@ function AutoApprovedRow({
                 })
               }
             >
-              Send
+              {tx("Send")}
             </button>
             <button className="btn small" onClick={() => setOpen(false)}>
-              Cancel
+              {tx("Cancel")}
             </button>
           </div>
         )}

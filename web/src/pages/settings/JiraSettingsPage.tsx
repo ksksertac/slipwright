@@ -12,10 +12,12 @@ import { useAuth } from "../../auth/AuthProvider";
 import { ErrorBox, Loading, PageHead } from "../../components/ui";
 import { Crumbs } from "../../components/Crumbs";
 import { JiraAgentAccount, ProjectJiraSetup } from "../../components/JiraAgentSetup";
+import { useT } from "../../i18n";
 
 const TYPE_KEYS = ["epic", "story", "task", "bug"] as const;
 
 export function JiraSettingsPage() {
+  const tx = useT();
   const { user } = useAuth();
   const settings = useJiraSettings();
   const save = useSaveJiraSettings();
@@ -46,7 +48,10 @@ export function JiraSettingsPage() {
   return (
     <div>
       <Crumbs items={[{ label: "Settings" }, { label: "Jira" }]} />
-      <PageHead title="Jira" subtitle="Mirror epics, stories and tasks into your tracker." />
+      <PageHead
+        title={tx("Jira")}
+        subtitle={tx("Mirror epics, stories and tasks into your tracker.")}
+      />
       <p className="muted">
         With Jira connected, every approved plan is mirrored as epics, stories and sub-tasks in the
         project's Jira project, issues move as tasks complete, and PR links and failures are
@@ -55,19 +60,19 @@ export function JiraSettingsPage() {
       </p>
       <form className="form card" onSubmit={submit}>
         <div className="field">
-          <label htmlFor="jira-site">Site URL</label>
+          <label htmlFor="jira-site">{tx("Site URL")}</label>
           <input
             id="jira-site"
             type="url"
             value={draft.site_url ?? s.site_url ?? ""}
             disabled={!admin}
             onChange={(e) => setDraft({ ...draft, site_url: e.target.value })}
-            placeholder="https://your-team.atlassian.net"
+            placeholder={tx("https://your-team.atlassian.net")}
           />
         </div>
         <div className="grid-2">
           <div className="field">
-            <label htmlFor="jira-email">Account e-mail</label>
+            <label htmlFor="jira-email">{tx("Account e-mail")}</label>
             <input
               id="jira-email"
               type="email"
@@ -77,7 +82,7 @@ export function JiraSettingsPage() {
             />
           </div>
           <div className="field">
-            <label htmlFor="jira-token">API token</label>
+            <label htmlFor="jira-token">{tx("API token")}</label>
             <input
               id="jira-token"
               type="password"
@@ -90,10 +95,11 @@ export function JiraSettingsPage() {
           </div>
         </div>
 
-        <h3>Issue type names</h3>
+        <h3>{tx("Issue type names")}</h3>
         <p className="muted small">
-          As they are called in your Jira site. Tasks default to <code>Subtask</code> so they nest
-          under stories; use <code>Sub-task</code> on older sites.
+          {tx("As they are called in your Jira site. Tasks default to")}{" "}
+          <code>{tx("Subtask")}</code> so they nest under stories; use <code>{tx("Sub-task")}</code>{" "}
+          {tx("on older sites.")}
         </p>
         <div className="grid-2">
           {TYPE_KEYS.map((k) => (
@@ -113,11 +119,11 @@ export function JiraSettingsPage() {
         </div>
 
         {save.error && <div className="callout error">{describeError(save.error)}</div>}
-        {saved && <div className="callout notice">Saved.</div>}
+        {saved && <div className="callout notice">{tx("Saved.")}</div>}
         {admin ? (
           <div className="row">
             <button className="btn primary" disabled={save.isPending}>
-              Save
+              {tx("Save")}
             </button>
             <button
               type="button"
@@ -125,7 +131,7 @@ export function JiraSettingsPage() {
               disabled={!s.token_set || test.isPending}
               onClick={() => test.mutate()}
             >
-              {test.isPending ? "Testing…" : "Test connection"}
+              {test.isPending ? tx("Testing…") : tx("Test connection")}
             </button>
             {s.token_set && (
               <button
@@ -133,16 +139,16 @@ export function JiraSettingsPage() {
                 className="btn bad"
                 onClick={() => save.mutate({ clear_token: true })}
               >
-                Remove token
+                {tx("Remove token")}
               </button>
             )}
           </div>
         ) : (
-          <div className="muted small">Only admins can change these settings.</div>
+          <div className="muted small">{tx("Only admins can change these settings.")}</div>
         )}
         {test.data && (
           <div className="callout notice">
-            Connected as <strong>{test.data.account.display_name}</strong>
+            {tx("Connected as")} <strong>{test.data.account.display_name}</strong>
             {test.data.agent_account && (
               <>
                 {" "}
@@ -157,7 +163,7 @@ export function JiraSettingsPage() {
         {test.error && <div className="callout error">{describeError(test.error)}</div>}
       </form>
 
-      <h2 style={{ marginTop: 28, marginBottom: 12 }}>Agents in Jira</h2>
+      <h2 style={{ marginTop: 28, marginBottom: 12 }}>{tx("Agents in Jira")}</h2>
       <div className="grid-2" style={{ alignItems: "start" }}>
         <JiraAgentAccount />
         <ProjectJiraSetup />
@@ -169,16 +175,17 @@ export function JiraSettingsPage() {
 
 /** The PO's round: what the hourly sweep did last, and a button to run it now. */
 function SweepCard({ admin }: { admin: boolean }) {
+  const tx = useT();
   const last = useJiraSweep();
   const run = useRunJiraSweep();
   const s = last.data;
   return (
     <div className="card" style={{ marginTop: 16 }}>
       <div className="row spread">
-        <h3>The Product Owner's round</h3>
+        <h3>{tx("The Product Owner's round")}</h3>
         {admin && (
           <button className="btn small" disabled={run.isPending} onClick={() => run.mutate()}>
-            {run.isPending ? "Running…" : "Run now"}
+            {run.isPending ? tx("Running…") : tx("Run now")}
           </button>
         )}
       </div>

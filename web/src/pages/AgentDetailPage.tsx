@@ -11,6 +11,7 @@ import { Empty, ErrorBox, Loading } from "../components/ui";
 import { useAuth } from "../auth/AuthProvider";
 import { useProviderModels, useProviders } from "../api/hooks";
 import { AgentStandardsTab } from "./AgentStandardsTab";
+import { useT } from "../i18n";
 
 const TABS = ["setup", "standards", "activity"] as const;
 type Tab = (typeof TABS)[number];
@@ -25,6 +26,7 @@ const PERMISSIONS: Permission[] = [
 ];
 
 export function AgentDetailPage() {
+  const tx = useT();
   const { role = "", tab = "setup" } = useParams();
   const agents = useAgents();
   const current: Tab = (TABS as readonly string[]).includes(tab) ? (tab as Tab) : "setup";
@@ -50,7 +52,7 @@ export function AgentDetailPage() {
       <nav className="tabs">
         {TABS.map((t) => (
           <NavLink key={t} to={`/agents/${role}/${t}`} className={t === current ? "active" : ""}>
-            {t[0]!.toUpperCase() + t.slice(1)}
+            {tx(t[0]!.toUpperCase() + t.slice(1))}
           </NavLink>
         ))}
       </nav>
@@ -64,6 +66,7 @@ export function AgentDetailPage() {
 // -- setup: this role's row of a project's seed profile ------------------------------------
 
 function SetupTab({ role }: { role: string }) {
+  const tx = useT();
   const projects = useProjects();
   const [selected, setSelected] = useState("");
   const projectId = selected || projects.data?.[0]?.id || "";
@@ -76,12 +79,12 @@ function SetupTab({ role }: { role: string }) {
       </p>
       {projects.data && projects.data.length === 0 && (
         <Empty>
-          No projects yet. <Link to="/projects/new">Create one</Link> first.
+          {tx("No projects yet.")} <Link to="/projects/new">{tx("Create one")}</Link> {tx("first.")}
         </Empty>
       )}
       {projects.data && projects.data.length > 0 && (
         <div className="field" style={{ maxWidth: 420 }}>
-          <label htmlFor="agent-project">Project</label>
+          <label htmlFor="agent-project">{tx("Project")}</label>
           <select
             id="agent-project"
             value={projectId}
@@ -125,6 +128,7 @@ function RoleForm({
   profile: Profile;
   hasOwn: boolean;
 }) {
+  const tx = useT();
   const { user } = useAuth();
   const patch = usePatchProject(projectId);
   const toast = useToast();
@@ -158,14 +162,14 @@ function RoleForm({
   return (
     <div className="card form">
       <div className="row spread">
-        <h3>Routing</h3>
+        <h3>{tx("Routing")}</h3>
         <span className="faint small">
           {hasOwn ? "project profile" : "engine default (saved into the project on save)"}
         </span>
       </div>
       <div className="grid-2" style={{ marginTop: 10 }}>
         <div className="field">
-          <label>Provider</label>
+          <label>{tx("Provider")}</label>
           <select
             value={cfg.provider ?? ""}
             disabled={!admin}
@@ -181,7 +185,7 @@ function RoleForm({
           </select>
         </div>
         <div className="field">
-          <label>Model</label>
+          <label>{tx("Model")}</label>
           <input
             type="text"
             className="mono"
@@ -197,7 +201,7 @@ function RoleForm({
           </datalist>
         </div>
         <div className="field">
-          <label>Thinking depth</label>
+          <label>{tx("Thinking depth")}</label>
           <select
             value={cfg.thinking_depth}
             disabled={!admin}
@@ -213,7 +217,7 @@ function RoleForm({
           </select>
         </div>
         <div className="field">
-          <label>Permissions</label>
+          <label>{tx("Permissions")}</label>
           <div className="row" style={{ gap: 8 }}>
             {PERMISSIONS.map((perm) => {
               const on = (cfg.permissions ?? []).includes(perm);
@@ -243,9 +247,9 @@ function RoleForm({
       {admin && (
         <div className="row">
           <button className="btn primary" disabled={!dirty || patch.isPending} onClick={save}>
-            {patch.isPending ? "Saving…" : "Save"}
+            {patch.isPending ? tx("Saving…") : tx("Save")}
           </button>
-          {dirty && <span className="muted small">unsaved changes</span>}
+          {dirty && <span className="muted small">{tx("unsaved changes")}</span>}
         </div>
       )}
     </div>
@@ -255,13 +259,14 @@ function RoleForm({
 // -- activity -------------------------------------------------------------------------------
 
 function ActivityTab({ role }: { role: string }) {
+  const tx = useT();
   const activity = useActivity_all(role);
   const projects = useProjects();
   const byId = new Map((projects.data ?? []).map((p) => [p.id, p]));
   if (activity.isLoading) return <Loading />;
   if (activity.error) return <ErrorBox error={activity.error} />;
   if (!activity.data || activity.data.length === 0) {
-    return <Empty>This agent has not run yet.</Empty>;
+    return <Empty>{tx("This agent has not run yet.")}</Empty>;
   }
   return (
     <div className="card">

@@ -97,6 +97,22 @@ def scan_worktree(root: Path) -> dict[str, Any]:
     return {"tree": list_tree(root), "files": read_files(root, MANIFEST_FILES)}
 
 
+def writing_rules(language: str) -> str:
+    """How every role writes for people: in the project's language, briefly. Code stays
+    in English — identifiers, paths, commit messages and JSON keys are not prose."""
+    from slipwright.schemas.project import LANGUAGE_NAMES
+
+    name = LANGUAGE_NAMES.get(language, language)
+    return (
+        f"Write every text a person will read in {name}: titles, descriptions, summaries, "
+        "reasons, feedback, test-case names and descriptions, decisions. Keep code, "
+        "identifiers, file paths, commands, commit messages and JSON keys in English. "
+        "`summary` is for the person who approves the next step: two to four plain "
+        "sentences saying what was done and what they should look at — no file lists, "
+        "no internal jargon, no restating the rules you followed."
+    )
+
+
 def base_context(
     job: Job,
     *,
@@ -108,6 +124,7 @@ def base_context(
     """Context every role receives: the request, any rejection feedback, pending inbox,
     and (only for roles allowed to act in Jira) the Jira section."""
     ctx: dict[str, Any] = {"instructions": instructions, "request": job.request}
+    ctx["writing"] = writing_rules(job.data.language)
     if feedback:
         ctx["feedback"] = feedback
     if jira:

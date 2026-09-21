@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import type { ActivityItem } from "../api/client";
 import { useTransition } from "../api/hooks";
 import { Detail } from "./Detail";
+import { ROLE_LABEL } from "./agents";
 import {
   IconActivity,
   IconAlert,
@@ -16,6 +17,7 @@ import {
   IconUsers,
 } from "./icons";
 import { Loading, formatTime } from "./ui";
+import { useT } from "../i18n";
 
 const KIND: Record<ActivityItem["kind"], { label: string; cls: string; icon: React.ReactNode }> = {
   started: { label: "started", cls: "", icon: <IconPlay /> },
@@ -42,10 +44,11 @@ export function ActivityRow({
   projectName?: string;
   showJob?: boolean;
 }) {
+  const tx = useT();
   const [open, setOpen] = useState(false);
   const detail = useTransition(item.job_id, open ? item.index : null);
   const kind = KIND[item.kind];
-  const who = item.role ?? kind.label;
+  const who = item.role ? tx(ROLE_LABEL[item.role] ?? item.role) : tx(kind.label);
   // notes are written "<role>: ..."; the badge already names the role
   const title =
     item.role && item.title.startsWith(`${item.role}:`)

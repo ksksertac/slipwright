@@ -1,5 +1,6 @@
 import type { Permission, Profile, RoleConfig } from "../api/client";
 import { useProviderModels, useProviders } from "../api/hooks";
+import { useT } from "../i18n";
 
 const ROLES = [
   "po",
@@ -34,6 +35,7 @@ export function ProfileForm({
   onChange: (next: Profile) => void;
   disabled?: boolean;
 }) {
+  const tx = useT();
   const set = (patch: Partial<Profile>) => onChange({ ...value, ...patch });
   const roleOf = (role: (typeof ROLES)[number]): RoleConfig =>
     value.roles[role] ?? { model: "", thinking_depth: "medium", permissions: [] };
@@ -45,7 +47,7 @@ export function ProfileForm({
   return (
     <div className="stack">
       <div className="grid-2">
-        <Field label="Language">
+        <Field label={tx("Language")}>
           <input
             type="text"
             value={value.language}
@@ -53,7 +55,7 @@ export function ProfileForm({
             onChange={(e) => set({ language: e.target.value })}
           />
         </Field>
-        <Field label="Package manager">
+        <Field label={tx("Package manager")}>
           <input
             type="text"
             value={value.package_manager}
@@ -62,7 +64,7 @@ export function ProfileForm({
           />
         </Field>
       </div>
-      <Field label="Build command">
+      <Field label={tx("Build command")}>
         <input
           type="text"
           className="mono"
@@ -71,7 +73,7 @@ export function ProfileForm({
           onChange={(e) => set({ build_cmd: e.target.value })}
         />
       </Field>
-      <Field label="Test command">
+      <Field label={tx("Test command")}>
         <input
           type="text"
           className="mono"
@@ -90,7 +92,7 @@ export function ProfileForm({
             onChange={(e) => set({ run_cmd: e.target.value })}
           />
         </Field>
-        <Field label="Default port">
+        <Field label={tx("Default port")}>
           <input
             type="number"
             value={value.port}
@@ -100,15 +102,15 @@ export function ProfileForm({
         </Field>
       </div>
 
-      <h3 style={{ marginTop: 8 }}>Roles</h3>
+      <h3 style={{ marginTop: 8 }}>{tx("Roles")}</h3>
       <table>
         <thead>
           <tr>
-            <th>Role</th>
-            <th>Provider</th>
-            <th>Model</th>
-            <th>Thinking</th>
-            <th>Permissions</th>
+            <th>{tx("Role")}</th>
+            <th>{tx("Provider")}</th>
+            <th>{tx("Model")}</th>
+            <th>{tx("Thinking")}</th>
+            <th>{tx("Permissions")}</th>
           </tr>
         </thead>
         <tbody>
@@ -206,6 +208,7 @@ function ModelInput({
   disabled: boolean;
   onChange: (model: string) => void;
 }) {
+  const tx = useT();
   const models = useProviderModels(provider);
   const listId = `models-${provider}`;
   return (
@@ -217,7 +220,7 @@ function ModelInput({
         value={value}
         disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="model id"
+        placeholder={tx("model id")}
       />
       <datalist id={listId}>
         {(models.data?.models ?? []).map((m) => (

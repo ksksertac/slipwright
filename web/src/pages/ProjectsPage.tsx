@@ -14,8 +14,10 @@ import {
 import { Menu } from "../components/Menu";
 import { DeleteProjectModal, EditProjectModal } from "../components/ProjectDialogs";
 import { Empty, ErrorBox, Loading, PageHead, ProgressBar, timeAgo } from "../components/ui";
+import { useT } from "../i18n";
 
 export function ProjectsPage() {
+  const tx = useT();
   const projects = useProjects();
   const [query, setQuery] = useState("");
   const [editing, setEditing] = useState<Project | null>(null);
@@ -28,8 +30,8 @@ export function ProjectsPage() {
     <div>
       <Crumbs items={[{ label: "Projects" }]} />
       <PageHead
-        title="Projects"
-        subtitle="Repositories the agents work on."
+        title={tx("Projects")}
+        subtitle={tx("Repositories the agents work on.")}
         actions={
           <>
             <div style={{ position: "relative" }}>
@@ -45,14 +47,14 @@ export function ProjectsPage() {
               />
               <input
                 type="text"
-                placeholder="Search…"
+                placeholder={tx("Search…")}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 style={{ paddingLeft: 30, width: 220 }}
               />
             </div>
             <Link className="btn primary" to="/projects/new">
-              <IconPlus /> New project
+              <IconPlus /> {tx("New project")}
             </Link>
           </>
         }
@@ -61,15 +63,16 @@ export function ProjectsPage() {
       {projects.isLoading && <Loading />}
       {projects.data && projects.data.length === 0 && (
         <Empty
-          title="No projects yet"
+          title={tx("No projects yet")}
           action={
             <Link className="btn primary" to="/projects/new">
-              <IconPlus /> Add the first project
+              <IconPlus /> {tx("Add the first project")}
             </Link>
           }
         >
-          A project is a repository Slipwright works on: add one from a local checkout or a GitHub
-          repository, then start a development by describing what you want.
+          {tx(
+            "A project is a repository Slipwright works on: add one from a local checkout or a GitHub repository, then start a development by describing what you want.",
+          )}
         </Empty>
       )}
       {visible.length > 0 && (
@@ -102,6 +105,7 @@ function ProjectCard({
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const tx = useT();
   const progress = useProgress(project.id);
   const p = progress.data;
   return (
@@ -117,10 +121,10 @@ function ProjectCard({
           {p && p.jobs_running > 0 && <span className="badge work">{p.jobs_running} running</span>}
           <Menu>
             <button onClick={onEdit}>
-              <IconEdit /> Edit
+              <IconEdit /> {tx("Edit")}
             </button>
             <button className="danger" onClick={onDelete}>
-              <IconTrash /> Delete
+              <IconTrash /> {tx("Delete")}
             </button>
           </Menu>
         </div>
@@ -131,7 +135,7 @@ function ProjectCard({
         </div>
       ) : (
         <div className="faint small" style={{ minHeight: 20 }}>
-          No description
+          {tx("No description")}
         </div>
       )}
       <div className="meta">

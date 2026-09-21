@@ -37,6 +37,7 @@ import { ConfirmModal } from "../components/Modal";
 import { ProfileForm } from "../components/ProfileForm";
 import { useToast } from "../components/Toast";
 import { ErrorBox, Loading, StateBadge, formatTime } from "../components/ui";
+import { useT } from "../i18n";
 
 const STEPS: { state: JobState; label: string; gate?: boolean }[] = [
   { state: "backlog", label: "backlog" },
@@ -54,6 +55,7 @@ const STEPS: { state: JobState; label: string; gate?: boolean }[] = [
 ];
 
 export function JobPage() {
+  const tx = useT();
   const { projectId = "", jobId = "" } = useParams();
   const job = useJob(jobId);
   const project = useProject(projectId);
@@ -84,7 +86,7 @@ export function JobPage() {
         <div className="row" style={{ flexWrap: "nowrap" }}>
           {j.data.pr_url && (
             <a className="btn" href={j.data.pr_url} target="_blank" rel="noreferrer">
-              <IconExternal /> Pull request
+              <IconExternal /> {tx("Pull request")}
             </a>
           )}
           <DeleteJobButton job={j} projectId={projectId} />
@@ -105,6 +107,7 @@ export function JobPage() {
 // -- stepper ---------------------------------------------------------------------------
 
 function Stepper({ job }: { job: Job }) {
+  const tx = useT();
   const reached = new Set(job.history.map((t) => t.to_state));
   reached.add(job.state);
   const currentIndex = STEPS.findIndex((s) => s.state === job.state);
@@ -123,7 +126,7 @@ function Stepper({ job }: { job: Job }) {
             {i > 0 && <span className={`step-line ${done || current ? "done" : ""}`} />}
             <span className={cls}>
               <span className="dot">{done ? <IconCheck style={{ width: 12 }} /> : i + 1}</span>
-              {step.label}
+              {tx(step.label)}
             </span>
           </span>
         );
@@ -144,6 +147,7 @@ function Stepper({ job }: { job: Job }) {
 }
 
 function DeleteJobButton({ job, projectId }: { job: Job; projectId: string }) {
+  const tx = useT();
   const remove = useDeleteJob();
   const toast = useToast();
   const navigate = useNavigate();
@@ -152,15 +156,17 @@ function DeleteJobButton({ job, projectId }: { job: Job; projectId: string }) {
   return (
     <>
       <button className="btn danger" onClick={() => setOpen(true)}>
-        <IconTrash /> Delete
+        <IconTrash /> {tx("Delete")}
       </button>
       {open && (
         <ConfirmModal
-          title="Delete development"
+          title={tx("Delete development")}
           body={
             <>
-              Delete <strong>{job.request}</strong>? Its worktree, branch, history and test runs are
-              removed. A pull request already opened stays on GitHub.
+              {tx("Delete")} <strong>{job.request}</strong>
+              {tx(
+                "? Its worktree, branch, history and test runs are removed. A pull request already opened stays on GitHub.",
+              )}
             </>
           }
           busy={remove.isPending}
@@ -183,6 +189,7 @@ function DeleteJobButton({ job, projectId }: { job: Job; projectId: string }) {
 // -- gates -----------------------------------------------------------------------------
 
 function GatePanel({ job }: { job: Job }) {
+  const tx = useT();
   const pending = pendingApproval(job);
   if (!pending) {
     if (job.state === "failed") {
@@ -191,7 +198,7 @@ function GatePanel({ job }: { job: Job }) {
         <div className="callout error" style={{ display: "block" }}>
           <div className="row spread">
             <span>
-              <strong>Failed:</strong> {last?.note}
+              <strong>{tx("Failed:")}</strong> {last?.note}
             </span>
             <RetryActions job={job} compact />
           </div>
@@ -213,7 +220,9 @@ function GatePanel({ job }: { job: Job }) {
   return (
     <div className="gate">
       <div className="row spread">
-        <strong>Waiting for your approval of the {pending}</strong>
+        <strong>
+          {tx("Waiting for your approval of the {pending}", { pending: tx(pending) })}
+        </strong>
         <GateActions job={job} compact />
       </div>
       <Recommendation job={job} detailed />
@@ -232,6 +241,7 @@ function GatePanel({ job }: { job: Job }) {
 }
 
 function ProfileGate({ job, profile }: { job: Job; profile: Profile }) {
+  const tx = useT();
   const qc = useQueryClient();
   const [draft, setDraft] = useState<Profile>(profile);
   const [dirty, setDirty] = useState(false);
@@ -274,9 +284,11 @@ function ProfileGate({ job, profile }: { job: Job; profile: Profile }) {
       {error && <div className="error small">{error}</div>}
       <div className="row" style={{ marginTop: 8 }}>
         <button className="btn primary small" disabled={!dirty || saving} onClick={save}>
-          {saving ? "Saving…" : "Save changes"}
+          {saving ? tx("Saving…") : tx("Save changes")}
         </button>
-        {dirty && <span className="muted small">unsaved changes — save before approving</span>}
+        {dirty && (
+          <span className="muted small">{tx("unsaved changes — save before approving")}</span>
+        )}
       </div>
     </div>
   );
@@ -284,13 +296,15 @@ function ProfileGate({ job, profile }: { job: Job; profile: Profile }) {
 
 /** The Product Owner's backlog: the epic / story / task tree, before any design. */
 function BacklogGate({ job }: { job: Job }) {
+  const tx = useT();
   const backlog = job.data.backlog as BreakdownShape | null;
   if (!backlog) return null;
   return (
     <div style={{ marginTop: 12 }}>
       <p className="muted small">
-        The Product Owner turned the request into epics, stories and tasks. Once approved they are
-        mirrored to Jira and the Architect designs one phase per task.
+        {tx(
+          "The Product Owner turned the request into epics, stories and tasks. Once approved they are mirrored to Jira and the Architect designs one phase per task.",
+        )}
       </p>
       <BreakdownTree plan={{ phases: [], breakdown: backlog }} />
     </div>
@@ -299,6 +313,7 @@ function BacklogGate({ job }: { job: Job }) {
 
 /** The Architect's proposal: profile, decisions and the phases mapped onto the backlog. */
 function ArchitectureGate({ job }: { job: Job }) {
+  const tx = useT();
   const plan = job.data.plan as PlanShape | null;
   if (!plan) return null;
   return (
@@ -306,7 +321,7 @@ function ArchitectureGate({ job }: { job: Job }) {
       {plan.summary && <p>{plan.summary}</p>}
       {plan.decisions && plan.decisions.length > 0 && (
         <>
-          <h3>Decisions</h3>
+          <h3>{tx("Decisions")}</h3>
           <ul>
             {plan.decisions.map((d, i) => (
               <li key={i}>{d}</li>
@@ -314,11 +329,11 @@ function ArchitectureGate({ job }: { job: Job }) {
           </ul>
         </>
       )}
-      <h3>Phases</h3>
+      <h3>{tx("Phases")}</h3>
       <BreakdownTree plan={plan} />
       {job.profile && (
         <>
-          <h3>Profile</h3>
+          <h3>{tx("Profile")}</h3>
           <ProfileGate job={job} profile={job.profile} />
         </>
       )}
@@ -329,6 +344,7 @@ function ArchitectureGate({ job }: { job: Job }) {
 /** The job stopped mid-step (a loop, or the supervisor asked): continue, or send
  * feedback that reaches the role that continues. */
 function DecisionGate({ job }: { job: Job }) {
+  const tx = useT();
   const stop = [...job.history].reverse().find((t) => t.to_state === "awaiting_decision");
   const resume = job.data.resume_state ?? "the interrupted step";
   return (
@@ -337,12 +353,13 @@ function DecisionGate({ job }: { job: Job }) {
         <strong>{stop?.note}</strong>
       </p>
       <p className="muted small">
-        Approving continues with <code>{resume}</code> as it was; rejecting continues too, with your
-        feedback delivered to the agent that runs next. Nothing more is spent until you decide.
+        {tx("Approving continues with")} <code>{resume}</code> as it was; rejecting continues too,
+        with your feedback delivered to the agent that runs next. Nothing more is spent until you
+        decide.
       </p>
       {stop?.detail && (
         <details>
-          <summary className="small">what happened</summary>
+          <summary className="small">{tx("what happened")}</summary>
           <Detail text={stop.detail} />
         </details>
       )}
@@ -462,6 +479,7 @@ function BreakdownTree({ plan }: { plan: PlanShape }) {
 }
 
 function TestCasesGate({ job }: { job: Job }) {
+  const tx = useT();
   const save = useSetTestCases(job.id);
   const initial = useMemo(
     () => (job.data.test_cases as { name: string; description: string }[]).map((c) => ({ ...c })),
@@ -489,8 +507,8 @@ function TestCasesGate({ job }: { job: Job }) {
       <table>
         <thead>
           <tr>
-            <th style={{ width: 220 }}>Name</th>
-            <th>What it checks</th>
+            <th style={{ width: 220 }}>{tx("Name")}</th>
+            <th>{tx("What it checks")}</th>
             <th />
           </tr>
         </thead>
@@ -535,7 +553,7 @@ function TestCasesGate({ job }: { job: Job }) {
             setDirty(true);
           }}
         >
-          Add case
+          {tx("Add case")}
         </button>
         <button
           className="btn primary small"
@@ -547,23 +565,27 @@ function TestCasesGate({ job }: { job: Job }) {
             )
           }
         >
-          {save.isPending ? "Saving…" : "Save list"}
+          {save.isPending ? tx("Saving…") : tx("Save list")}
         </button>
-        {dirty && <span className="muted small">unsaved changes — save before approving</span>}
+        {dirty && (
+          <span className="muted small">{tx("unsaved changes — save before approving")}</span>
+        )}
       </div>
     </div>
   );
 }
 
 function WrittenTestsGate({ job }: { job: Job }) {
+  const tx = useT();
   const entry = [...job.history]
     .reverse()
     .find((t) => t.to_state === "awaiting_test_approval" && (t.note ?? "").startsWith("qa: tests"));
   return (
     <div style={{ marginTop: 12 }}>
       <p className="muted small">
-        QA wrote tests for the approved cases and they passed the build gate. Approving hands the
-        branch to DevOps.
+        {tx(
+          "QA wrote tests for the approved cases and they passed the build gate. Approving hands the branch to DevOps.",
+        )}
       </p>
       {entry?.detail && <Detail text={entry.detail} />}
     </div>
@@ -602,6 +624,7 @@ function groupByPhase(job: Job): PhaseGroup[] {
 }
 
 function Phases({ job }: { job: Job }) {
+  const tx = useT();
   const groups = useMemo(() => groupByPhase(job), [job]);
   const active =
     job.state !== "awaiting_architecture_approval" &&
@@ -610,29 +633,27 @@ function Phases({ job }: { job: Job }) {
   if (!active) return null;
   return (
     <section>
-      <h2>Phases</h2>
+      <h2>{tx("Phases")}</h2>
       {groups.map((g) => (
         <div key={g.number} className="card" id={`phase-${g.number}`}>
           <div className="row spread">
             <div>
-              <strong>
-                Phase {g.number}: {g.goal}
-              </strong>
+              <strong>{tx("Phase {n}: {goal}", { n: g.number, goal: g.goal })}</strong>
               <DomainBadge domain={g.domain} />
               {g.files.length > 0 && <div className="muted small mono">{g.files.join(", ")}</div>}
             </div>
             <span className="muted small">
               {(job.state === "review" || job.state === "awaiting_review_approval") &&
               job.data.phase_index === g.number
-                ? "in review"
+                ? tx("in review")
                 : job.data.phase_index > g.number - 1
-                  ? "done"
+                  ? tx("done")
                   : job.data.phase_index === g.number - 1 &&
                       (job.state === "developing" || job.state === "build_gate")
-                    ? "in progress"
+                    ? tx("in progress")
                     : job.state === "failed" && job.data.phase_index === g.number - 1
-                      ? "failed"
-                      : "pending"}
+                      ? tx("failed")
+                      : tx("pending")}
             </span>
           </div>
           {g.entries.map((t, i) => {
@@ -730,27 +751,31 @@ interface InvocationEntry {
 
 /** Every model call: who, when, how big the prompt was, what it cost (T9.7). */
 function Invocations({ job }: { job: Job }) {
+  const tx = useT();
   const log = job.data.invocation_log as unknown as InvocationEntry[];
   if (log.length === 0) return null;
   const tokens = log.reduce((n, e) => n + (e.input_tokens ?? 0) + (e.output_tokens ?? 0), 0);
   return (
     <section>
-      <h2>Model calls</h2>
+      <h2>{tx("Model calls")}</h2>
       <details className="card">
         <summary>
-          {log.length} call{log.length === 1 ? "" : "s"} · {job.data.invocations} attempt
-          {job.data.invocations === 1 ? "" : "s"} · {tokens.toLocaleString()} tokens
+          {tx("{calls} call(s) · {attempts} attempt(s) · {tokens} tokens", {
+            calls: log.length,
+            attempts: job.data.invocations,
+            tokens: tokens.toLocaleString(),
+          })}
         </summary>
         <table style={{ marginTop: 8 }}>
           <thead>
             <tr>
-              <th>When</th>
-              <th>Role</th>
-              <th>Step</th>
-              <th>Prompt</th>
-              <th>Tokens in / out</th>
-              <th>Attempts</th>
-              <th>Result</th>
+              <th>{tx("When")}</th>
+              <th>{tx("Role")}</th>
+              <th>{tx("Step")}</th>
+              <th>{tx("Prompt")}</th>
+              <th>{tx("Tokens in / out")}</th>
+              <th>{tx("Attempts")}</th>
+              <th>{tx("Result")}</th>
             </tr>
           </thead>
           <tbody>
@@ -784,11 +809,12 @@ function Invocations({ job }: { job: Job }) {
 }
 
 function QaSection({ job }: { job: Job }) {
+  const tx = useT();
   const cases = job.data.test_cases as { name: string; description: string }[];
   if (cases.length === 0 || job.state === "awaiting_test_approval") return null;
   return (
     <section>
-      <h2>Test cases</h2>
+      <h2>{tx("Test cases")}</h2>
       <div className="card">
         <ul>
           {cases.map((c, i) => (
@@ -805,15 +831,16 @@ function QaSection({ job }: { job: Job }) {
 // -- steering ----------------------------------------------------------------------------
 
 function Steering({ job }: { job: Job }) {
+  const tx = useT();
   const send = useSendMessage(job.id);
   const [text, setText] = useState("");
   const inbox = job.data.inbox;
   return (
     <section>
-      <h2>Steering</h2>
+      <h2>{tx("Steering")}</h2>
       <div className="card">
         <p className="muted small">
-          Messages reach the next role that runs; each is delivered exactly once.
+          {tx("Messages reach the next role that runs; each is delivered exactly once.")}
         </p>
         {inbox.length > 0 && (
           <table>
@@ -824,7 +851,7 @@ function Steering({ job }: { job: Job }) {
                   <td className="muted small" style={{ whiteSpace: "nowrap" }}>
                     {m.consumed_by ? (
                       <>
-                        read by <strong>{m.consumed_by}</strong> {formatTime(m.consumed_at)}
+                        {tx("read by")} <strong>{m.consumed_by}</strong> {formatTime(m.consumed_at)}
                       </>
                     ) : (
                       <span className="badge wait">pending</span>
@@ -847,12 +874,12 @@ function Steering({ job }: { job: Job }) {
             <input
               type="text"
               style={{ flex: 1 }}
-              placeholder="message for the next role"
+              placeholder={tx("message for the next role")}
               value={text}
               onChange={(e) => setText(e.target.value)}
             />
             <button className="btn small" disabled={!text.trim() || send.isPending}>
-              Send
+              {tx("Send")}
             </button>
           </form>
         )}
@@ -865,6 +892,7 @@ function Steering({ job }: { job: Job }) {
 // -- history ---------------------------------------------------------------------------
 
 function History({ job, projectId }: { job: Job; projectId: string }) {
+  const tx = useT();
   const items = useMemo(
     () =>
       job.history
@@ -886,7 +914,7 @@ function History({ job, projectId }: { job: Job; projectId: string }) {
   );
   return (
     <section>
-      <h2>History</h2>
+      <h2>{tx("History")}</h2>
       <div className="card">
         <ul className="feed">
           {items.map((item) => (
@@ -896,7 +924,7 @@ function History({ job, projectId }: { job: Job; projectId: string }) {
       </div>
       {job.profile && job.state !== "awaiting_architecture_approval" && (
         <details className="card" style={{ marginTop: 12 }}>
-          <summary>Approved profile</summary>
+          <summary>{tx("Approved profile")}</summary>
           <pre>{JSON.stringify(job.profile, null, 2)}</pre>
         </details>
       )}
