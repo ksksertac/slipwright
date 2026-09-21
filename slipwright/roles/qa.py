@@ -59,6 +59,7 @@ def run(
     jira: dict[str, Any] | None = None,
     standards: dict[str, Any] | None = None,
     truncated: str | None = None,
+    problem: str | None = None,
 ) -> RoleResult:
     stage = job.data.qa_stage
     worktree = require_worktree(job)
@@ -80,6 +81,12 @@ def run(
     context["stage"] = stage
     if truncated:
         context["output_was_truncated"] = truncated
+    if problem:
+        context["previous_answer_problem"] = problem
+        instructions += (
+            "\nYour previous answer was rejected (`previous_answer_problem`); answer again "
+            "and fix exactly that."
+        )
     context["project"] = project_facts(profile)
     context["plan"] = plan_outline(job.data.plan)
     context["branch_diff"] = branch_diff

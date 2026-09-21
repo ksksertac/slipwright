@@ -32,7 +32,13 @@ from slipwright.activity import (
     project_progress,
 )
 from slipwright.board import Board, project_board
-from slipwright.engine import Engine, InvalidEdit, NotAwaitingApproval, ProjectCloneError
+from slipwright.engine import (
+    EmptyApproval,
+    Engine,
+    InvalidEdit,
+    NotAwaitingApproval,
+    ProjectCloneError,
+)
 from slipwright.pipeline import Pipeline, pipeline
 from slipwright.schemas.job import Job, Transition
 from slipwright.schemas.profile import Profile, RoleName
@@ -448,7 +454,7 @@ def create_app(
             except HTTPException as exc:
                 results.append(BatchOutcome(job_id=job_id, ok=False, error=str(exc.detail)))
                 continue
-            except NotAwaitingApproval as exc:
+            except (NotAwaitingApproval, EmptyApproval) as exc:
                 results.append(BatchOutcome(job_id=job_id, ok=False, error=str(exc)))
                 continue
             background.add_task(_resume, eng, job.id)
@@ -484,6 +490,8 @@ def create_app(
             job = eng.approve(job_id, run=False)
         except NotAwaitingApproval as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except EmptyApproval as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
         background.add_task(_resume, eng, job.id)
         return job
 

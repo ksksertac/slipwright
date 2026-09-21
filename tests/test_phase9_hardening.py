@@ -627,3 +627,47 @@ def test_retry_picks_up_a_permission_granted_in_the_seed(
     assert job.profile is not None and "write_files" in [
         p.value for p in job.profile.roles[RoleName.BACKEND].permissions
     ]
+
+
+def test_qa_that_hides_the_cases_in_prose_is_asked_for_the_array(
+    store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
+) -> None:
+    provider = full_provider(seed, phases=1)
+    seen: list[dict[str, Any]] = []
+
+    def qa(req: ModelRequest) -> Any:
+        ctx = _context(req)
+        if "phase_diff" in ctx:
+            return {"summary": "clean"}
+        if ctx.get("stage") == 2:
+            return {"summary": "tests", "changes": [{"path": "tests/t.txt", "content": "ok\n"}]}
+        seen.append(ctx)
+        if "previous_answer_problem" not in ctx:
+            return {"summary": "Case 1: smoke. Case 2: errors.", "test_cases": []}
+        return {"summary": "as a list", "test_cases": [{"name": "smoke", "description": "OK"}]}
+
+    provider.replies[RoleName.QA] = qa
+    engine = full_engine(store, worktrees_root, seed, provider)
+    job = engine.start(engine.create_job("x", repo).id)
+    job = engine.approve(engine.approve(job.id).id)
+    assert job.state is JobState.AWAITING_TEST_APPROVAL
+    assert len(seen) == 2 and "test_cases` was empty" in seen[1]["previous_answer_problem"]
+    assert job.data.test_cases == [{"name": "smoke", "description": "OK"}]
+    assert any((t.note or "").startswith("qa: no test cases in the answer") for t in job.history)
+
+    # twice empty (different prose, so the loop check stays out of it): a readable
+    # failure, not a gate with nothing to approve
+    n: list[int] = []
+
+    def prose_only(req: ModelRequest) -> Any:
+        if '"phase_diff"' in req.prompt:
+            return {"summary": "clean"}
+        n.append(1)
+        return {"summary": f"prose only {len(n)}"}
+
+    provider.replies[RoleName.QA] = prose_only
+    engine2 = full_engine(store, worktrees_root, seed, provider)
+    job2 = engine2.start(engine2.create_job("y", repo).id)
+    job2 = engine2.approve(engine2.approve(job2.id).id)
+    assert job2.state is JobState.FAILED
+    assert (job2.history[-1].note or "").startswith("qa returned no test cases twice")

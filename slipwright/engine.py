@@ -167,6 +167,10 @@ class NotAwaitingApproval(ValueError):
         self.job = job
 
 
+class EmptyApproval(ValueError):
+    """A gate whose material is empty cannot be approved (nothing would happen next)."""
+
+
 class InvalidEdit(ValueError):
     """A human edit at a gate does not pass the same checks as the agent's output."""
 
@@ -904,6 +908,8 @@ class Engine:
             raise NotAwaitingApproval(job)
         note = "approved"
         if job.state is JobState.AWAITING_TEST_APPROVAL and job.data.qa_stage == 1:
+            if not job.data.test_cases:
+                raise EmptyApproval("there are no test cases to approve; add some or reject")
             job.data.qa_stage = 2
             job.data.build_attempts = 0
             job.data.last_build_output = None
@@ -1965,19 +1971,50 @@ class Engine:
 
     def _qa_propose(self, job: Job) -> Job:
         profile = self._profile(job)
-        result = self._invoke(
-            RoleName.QA, qa.run, job, profile=profile, branch_diff=self._branch_diff(job)
-        )
+        diff = self._branch_diff(job)
+        result = self._invoke(RoleName.QA, qa.run, job, profile=profile, branch_diff=diff)
         if not result.ok:
             return self._invocation_failed(job, result)
         assert isinstance(result.output, QAResult)
-        job.data.test_cases = [c.model_dump() for c in result.output.test_cases]
+        if not result.output.test_cases:
+            # the cases ended up in the prose: ask once more for the array, then give up
+            # readably rather than park a gate with nothing to approve
+            self.store.update_state(
+                job.id,
+                job.state,
+                note="qa: no test cases in the answer; asking again for the list",
+                detail=result.output.summary,
+            )
+            job.history = self.store.get(job.id).history
+            result = self._invoke(
+                RoleName.QA,
+                qa.run,
+                job,
+                profile=profile,
+                branch_diff=diff,
+                problem=(
+                    "`test_cases` was empty; the cases you described in `summary` must be "
+                    "returned as entries of the `test_cases` array (name + description)"
+                ),
+            )
+            if not result.ok:
+                return self._invocation_failed(job, result)
+            assert isinstance(result.output, QAResult)
+            if not result.output.test_cases:
+                return self._fail(
+                    job,
+                    "qa returned no test cases twice; retry, or switch QA to a stronger model",
+                    detail=result.output.summary,
+                )
+        output = result.output
+        assert isinstance(output, QAResult)
+        job.data.test_cases = [c.model_dump() for c in output.test_cases]
         job.data.feedback = None
         self.store.save(job)
         return self.orchestrator.transition(
             job,
             JobState.AWAITING_TEST_APPROVAL,
-            note=f"qa: {len(job.data.test_cases)} test cases proposed — {result.output.summary}",
+            note=f"qa: {len(job.data.test_cases)} test cases proposed — {output.summary}",
             detail=json.dumps(job.data.test_cases, indent=2),
         )
 

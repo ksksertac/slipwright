@@ -394,3 +394,22 @@ def test_devops_without_push_permission_fails(
     job = _to_devops(engine, repo)
     assert job.state is JobState.FAILED
     assert host.pushes == []
+
+
+def test_an_empty_test_list_cannot_be_approved(
+    store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
+) -> None:
+    from slipwright.engine import EmptyApproval
+
+    provider = _provider(seed)
+    engine = _engine(store, worktrees_root, seed, provider)
+    job = _to_test_gate(engine, repo)
+    engine.set_test_cases(job.id, [])  # the human removed every case
+    with pytest.raises(EmptyApproval):
+        engine.approve(job.id)
+    with TestClient(create_app(engine, resume_on_startup=False, require_auth=False)) as client:
+        assert client.post(f"/api/jobs/{job.id}/approve").status_code == 422
+        batch = client.post("/api/jobs/approve", json={"job_ids": [job.id]}).json()
+        assert batch["approved"] == 0 and "no test cases" in batch["results"][0]["error"]
+    engine.set_test_cases(job.id, [{"name": "smoke", "description": "it runs"}])
+    assert engine.approve(job.id).state is JobState.AWAITING_TEST_APPROVAL
