@@ -1,5 +1,7 @@
 // Turkish. Keys are the English source strings; anything missing shows the English.
 export const TR: Record<string, string> = {
+  "Runs by itself at startup and every hour: missing epics, stories and sub-tasks are created, stories join the sprint (one is started when none is running), statuses catch up. Nothing to set — this is how a half-mirrored plan repairs itself.":
+    "Açılışta ve her saat kendiliğinden çalışır: eksik epic, story ve alt görevler açılır, story'ler sprint'e girer (açık sprint yoksa yenisi başlatılır), durumlar güncellenir. Ayarlanacak bir şey yok — yarım kalmış bir aynalama böyle kendini toparlar.",
   "Once this is set up an approved plan appears in Jira by itself: the Product Owner creates the epics, stories and sub-tasks, the specialists move them as they work, and pull request links and failures are commented. Five steps, top to bottom.":
     "Bu kurulum bittiğinde onayladığın plan Jira'ya kendiliğinden düşer: Ürün Sahibi epic, story ve alt görevleri açar, uzmanlar çalıştıkça onları ilerletir, pull request bağlantıları ve hatalar yorum olarak eklenir. Beş adım, yukarıdan aşağıya.",
   "The connection": "Bağlantı",

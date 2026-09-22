@@ -1817,10 +1817,11 @@ details.card[open] > summary::before {
 .settings-flow {
   max-width: 900px;
 }
-.settings-flow .step {
+.settings-flow .setup-step {
+  display: block;
   margin-bottom: 16px;
 }
-.settings-flow .step h3 {
+.settings-flow .setup-step h3 {
   display: flex;
   align-items: center;
   gap: 10px;

@@ -37,7 +37,7 @@ function Step({
 }) {
   const badge = state === "done" ? "ok" : state === "todo" ? "wait" : "idle";
   return (
-    <section className="card step">
+    <section className="card setup-step">
       <div className="row spread" style={{ alignItems: "baseline" }}>
         <h3 style={{ margin: 0 }}>
           <span className="step-n">{n}</span> {title}
