@@ -1812,3 +1812,29 @@ details.card[open] > summary::before {
 .bad-text {
   color: var(--bad-text);
 }
+
+/* a settings page read as a sequence of steps */
+.settings-flow {
+  max-width: 900px;
+}
+.settings-flow .step {
+  margin-bottom: 16px;
+}
+.settings-flow .step h3 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+}
+.step-n {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--surface-3);
+  color: var(--text-2);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}

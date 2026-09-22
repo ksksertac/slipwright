@@ -1,5 +1,44 @@
 // Turkish. Keys are the English source strings; anything missing shows the English.
 export const TR: Record<string, string> = {
+  "Once this is set up an approved plan appears in Jira by itself: the Product Owner creates the epics, stories and sub-tasks, the specialists move them as they work, and pull request links and failures are commented. Five steps, top to bottom.":
+    "Bu kurulum bittiğinde onayladığın plan Jira'ya kendiliğinden düşer: Ürün Sahibi epic, story ve alt görevleri açar, uzmanlar çalıştıkça onları ilerletir, pull request bağlantıları ve hatalar yorum olarak eklenir. Beş adım, yukarıdan aşağıya.",
+  "The connection": "Bağlantı",
+  "The Jira site and the account Slipwright signs in with. Nothing works without it.":
+    "Jira siteniz ve Slipwright'ın giriş yapacağı hesap. Bu olmadan hiçbiri çalışmaz.",
+  connected: "bağlı",
+  "not connected yet": "henüz bağlı değil",
+  "Who the agents write as": "Ajanlar kimin adına yazsın",
+  "Optional: a second Jira account for the bot, so comments and transitions carry its name instead of yours.":
+    "İsteğe bağlı: bot için ayrı bir Jira hesabı — yorumlar ve durum değişiklikleri senin adınla değil onun adıyla görünür.",
+  "its own account": "kendi hesabı",
+  "your account": "senin hesabın",
+  "What your Jira site calls an epic, a story, a task and a bug. The defaults fit most sites.":
+    "Jira sitende epic, story, task ve bug'ın hangi adla geçtiği. Varsayılanlar çoğu siteye uyar.",
+  defaults: "varsayılan",
+  "Which project goes where": "Hangi proje nereye gidiyor",
+  "Each Slipwright project mirrors into one Jira project, and each task status becomes a transition there.":
+    "Her Slipwright projesi bir Jira projesine aynalanır; her task durumu orada bir geçişe karşılık gelir.",
+  "per project": "proje bazında",
+  "Create one in Atlassian under Account settings → Security → API tokens.":
+    "Atlassian'da Hesap ayarları → Güvenlik → API token'ları altından oluştur.",
+  "agents act as": "ajanlar şu hesapla davranıyor:",
+  "Projects this account can see:": "Bu hesabın gördüğü projeler:",
+  none: "yok",
+  "Tasks default to": "Tasklar varsayılan olarak",
+  "Finish step 1 first: Jira is not connected yet.": "Önce 1. adımı bitir: Jira henüz bağlı değil.",
+  "No agent account is set: agents would act through the human connection ({email}).":
+    "Ajan hesabı ayarlı değil: ajanlar senin bağlantınla ({email}) davranır.",
+  "The name of the transition in your workflow, not the status: leave one empty to skip it.":
+    "İş akışındaki geçişin adı (durumun adı değil); boş bırakırsan o geçiş atlanır.",
+  "Agent account saved": "Ajan hesabı kaydedildi",
+  "Jira mapping saved": "Jira eşleştirmesi kaydedildi",
+  "last run {when}": "son tur {when}",
+  "not run yet": "henüz çalışmadı",
+  in_progress: "devam ediyor",
+  epic: "epic",
+  story: "story",
+  task: "task",
+  bug: "bug",
   "{n} waiting": "{n} bekliyor",
   "{n} running": "{n} çalışıyor",
   "local checkout": "yerel çalışma kopyası",

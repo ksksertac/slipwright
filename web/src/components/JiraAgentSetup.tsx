@@ -45,29 +45,22 @@ export function JiraAgentAccount() {
       {
         onSuccess: () => {
           setToken("");
-          toast.ok("Agent account saved");
+          toast.ok(tx("Agent account saved"));
         },
       },
     );
   };
 
   return (
-    <form className="card" onSubmit={submit}>
-      <h3 style={{ marginBottom: 6 }}>{tx("Jira account for the agents")}</h3>
-      <p className="muted small">
-        {tx(
-          "Comments, transitions and bug issues the agents create appear under this account, so Jira history shows the bot and not the person who configured the connection.",
-        )}
-      </p>
+    <form className="form" onSubmit={submit}>
       {!s.token_set && (
-        <div className="callout hint">
-          {tx("Jira is not connected yet:")}{" "}
-          <Link to="/settings/jira">{tx("set up the connection")}</Link> {tx("first.")}
-        </div>
+        <div className="callout hint">{tx("Finish step 1 first: Jira is not connected yet.")}</div>
       )}
       {s.token_set && !s.agent_token_set && (
         <div className="callout hint">
-          No agent account is set: agents would act through the human connection ({s.email}).
+          {tx("No agent account is set: agents would act through the human connection ({email}).", {
+            email: s.email ?? "",
+          })}
         </div>
       )}
       <div className="grid-2">
@@ -147,13 +140,7 @@ export function ProjectJiraSetup() {
   const [selected, setSelected] = useState("");
   const projectId = selected || projects.data?.[0]?.id || "";
   return (
-    <div className="card">
-      <h3 style={{ marginBottom: 6 }}>{tx("Project → Jira project")}</h3>
-      <p className="muted small">
-        {tx(
-          "Approved plans are mirrored as epics, stories and sub-tasks here; task statuses map to the transition names below.",
-        )}
-      </p>
+    <div>
       {projects.data && projects.data.length === 0 && (
         <div className="muted small">
           {tx("No projects yet.")} <Link to="/projects/new">{tx("Create one")}</Link> {tx("first.")}
@@ -208,7 +195,7 @@ function ProjectJiraFields({ project }: { project: Project }) {
       {
         onSuccess: () => {
           setDirty(false);
-          toast.ok("Jira mapping saved");
+          toast.ok(tx("Jira mapping saved"));
         },
       },
     );
@@ -250,11 +237,16 @@ function ProjectJiraFields({ project }: { project: Project }) {
         )}
       </div>
       <label>{tx("Task status → Jira transition")}</label>
+      <p className="muted small" style={{ margin: "2px 0 8px" }}>
+        {tx(
+          "The name of the transition in your workflow, not the status: leave one empty to skip it.",
+        )}
+      </p>
       <div className="stack" style={{ gap: 6 }}>
         {STATUSES.map((st) => (
           <div className="row" key={st} style={{ flexWrap: "nowrap" }}>
-            <span className="mono small" style={{ width: 96 }}>
-              {st}
+            <span className="small" style={{ width: 110 }}>
+              {tx(st)}
             </span>
             <input
               type="text"
