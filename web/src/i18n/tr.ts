@@ -217,6 +217,13 @@ export const TR: Record<string, string> = {
   "Type a path instead": "Bunun yerine yol yaz",
   "Pick from the list": "Listeden seç",
   "Pick a repository…": "Bir depo seç…",
+  "GitHub repository (optional)": "GitHub deposu (isteğe bağlı)",
+  "Where finished work is pushed: each development pushes its branch and opens a pull request there. Leave it empty and the branch stays in the checkout for you to merge by hand.":
+    "Biten iş buraya push'lanır: her geliştirme kendi dalını push'lar ve orada bir pull request açar. Boş bırakırsan dal klasörde kalır, merge'ü elle yaparsın.",
+  "No GitHub token is configured, so nothing can be pushed.":
+    "GitHub token'ı tanımlı değil, bu yüzden hiçbir şey push'lanamaz.",
+  "No GitHub token is configured, so private repositories cannot be cloned.":
+    "GitHub token'ı tanımlı değil, bu yüzden özel depolar klonlanamaz.",
   "Jira project (optional)": "Jira projesi (isteğe bağlı)",
   "Not linked": "Bağlı değil",
   "Connect Jira": "Jira'yı bağla",

@@ -828,7 +828,29 @@ class Engine:
             raise ValueError(f"repo_path is not a directory: {project.repo_path}")
         else:
             self._ensure_git_repository(project.repo_path)
+        self._wire_remote(project)
         return self.store.create_project(project)
+
+    def update_project(self, project: Project) -> Project:
+        """Save a changed project; a local checkout that has just been given a GitHub
+        repository gets its ``origin`` wired, so the next development pushes its branch
+        and opens a pull request instead of finishing in the checkout."""
+        self._wire_remote(project)
+        return self.store.update_project(project)
+
+    def _wire_remote(self, project: Project) -> None:
+        """Give a local checkout an ``origin`` pointing at the project's GitHub
+        repository. A checkout that already has one keeps it: the remote the user set up
+        themselves is the one to push to, whatever the project names."""
+        if project.repo_path is None:
+            return
+        url = project.effective_clone_url
+        if url is None or g.has_remote(project.repo_path):
+            return
+        try:
+            g.set_remote(project.repo_path, "origin", url)
+        except g.GitError as exc:
+            raise ValueError(f"could not point {project.repo_path} at {url}: {exc.stderr}") from exc
 
     @staticmethod
     def _ensure_git_repository(path: Path) -> None:
@@ -2177,8 +2199,10 @@ class Engine:
             job,
             JobState.DONE,
             note=(
-                f"branch {job.branch} is ready in the checkout {checkout} (no remote to push "
-                f"to); merge it there with `git merge {job.branch}`"
+                f"nothing was pushed: the checkout {checkout} has no remote. Branch "
+                f"{job.branch} is ready there — merge it with `git merge {job.branch}`, or "
+                f"set the project's GitHub repository so the next development pushes and "
+                f"opens a pull request"
             ),
             detail=f"{result.pr_title}\n\n{result.pr_body}".strip(),
         )

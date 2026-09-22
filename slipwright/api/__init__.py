@@ -333,9 +333,10 @@ def create_app(
         try:
             # merge as plain data so nested models (profile, supervisor) validate cleanly
             updated = Project.model_validate({**project.model_dump(), **changes})
+            # through the engine: naming a GitHub repository here wires the checkout's remote
+            return eng.update_project(updated)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-        return eng.store.update_project(updated)
 
     @api.delete("/projects/{project_id}", status_code=204)
     def delete_project(project_id: str, request: Request) -> None:

@@ -48,6 +48,11 @@ def has_remote(repo: Path, name: str = "origin") -> bool:
     return proc.returncode == 0
 
 
+def set_remote(repo: Path, name: str, url: str) -> None:
+    """Point ``name`` at ``url``, adding the remote when the repo has none by that name."""
+    run(repo, "remote", "set-url" if has_remote(repo, name) else "add", name, url)
+
+
 def branch_exists(repo: Path, branch: str) -> bool:
     proc = run(repo, "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}", check=False)
     return proc.returncode == 0

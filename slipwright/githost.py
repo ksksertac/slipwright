@@ -81,12 +81,33 @@ class GhHost:
             env["GITHUB_TOKEN"] = token
         return env
 
+    def _credentials(self) -> list[str]:
+        """Answer GitHub's HTTPS prompt from ``GH_TOKEN`` for this one call. The helper
+        lives in the command line, so a checkout the user also works in never has the
+        token written into its remote URL or its config."""
+        if not self.token():
+            return []
+        return [
+            "-c",
+            "credential.helper=",  # ignore whatever the machine has configured
+            "-c",
+            "credential.helper=!f() { echo username=x-access-token; "
+            'echo "password=$GH_TOKEN"; }; f',
+        ]
+
     def push(self, worktree: Path, branch: str) -> None:
         if not g.has_remote(worktree, self.remote):
             raise NoRemote(f"the checkout has no remote named {self.remote!r}")
         try:
             g.run(
-                worktree, "push", "--force-with-lease", "-u", self.remote, branch, env=self._env()
+                worktree,
+                *self._credentials(),
+                "push",
+                "--force-with-lease",
+                "-u",
+                self.remote,
+                branch,
+                env=self._env(),
             )
         except g.GitError as exc:
             raise GitHostError(f"push failed: {exc.stderr}") from exc
@@ -172,4 +193,4 @@ def _check_state(check: dict[str, Any]) -> CiState:
     return CiState.FAILURE
 
 
-__all__ = ["CiState", "CiStatus", "GhHost", "GitHost", "GitHostError"]
+__all__ = ["CiState", "CiStatus", "GhHost", "GitHost", "GitHostError", "NoRemote"]

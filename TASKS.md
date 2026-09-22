@@ -1087,7 +1087,13 @@ in bulk.
 - [x] **Local checkouts finish on their branch.** `GhHost.push` raises `NoRemote` when the
   checkout has no remote; the engine then marks the development done with the branch and
   the `git merge` command in the note (the DevOps write-up is the detail) instead of
-  failing on push. **Jira bugs link, never nest:** a create_issue naming a story as the
+  failing on push. The note opens with *nothing was pushed*, so a green board is never
+  read as work that reached GitHub. **A local checkout can name a GitHub repository**
+  (optional on the New project page, editable afterwards): `Engine._wire_remote` points
+  its `origin` there on create and on update, so the next development pushes and opens a
+  pull request; a checkout that already has a remote keeps it. `GhHost.push` answers the
+  HTTPS prompt from `GH_TOKEN` through a credential helper passed on the command line, so
+  the token is never written into a checkout the user also works in. **Jira bugs link, never nest:** a create_issue naming a story as the
   parent of a non-sub-task type is created beside it and linked with Relates; unknown type
   names fall back to Task; lone surrogates are scrubbed; a queued action is given up after
   `MAX_QUEUE_ATTEMPTS` (5) rounds with the reason in the history. **Copy button** on

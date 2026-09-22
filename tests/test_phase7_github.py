@@ -12,8 +12,10 @@ from slipwright.engine import Engine
 from slipwright.githost import GhHost
 from slipwright.github import GitHubClient, GitHubError
 from slipwright.schemas.profile import Profile
+from slipwright.schemas.project import Project
 from slipwright.secrets import KEY_ENV, SecretBox, generate_key, load_or_create_key
 from slipwright.store import JobStore
+from slipwright.workspace import git as g
 from tests.fakes import FakeGitHub
 from tests.pipeline import full_engine, full_provider
 
@@ -157,3 +159,48 @@ def test_clone_url_embeds_the_token_only_for_github(engine: Engine) -> None:
         "https://x-access-token:ghp_live@github.com/acme/demo.git"
     )
     assert engine._authenticated("/local/bare.git") == "/local/bare.git"
+
+
+def test_a_local_checkout_named_with_a_github_repo_can_be_pushed(
+    engine: Engine, tmp_path: Path
+) -> None:
+    """Without this the DevOps role hits ``NoRemote`` and finishes on the branch, and the
+    work never reaches GitHub however well GitHub itself is connected."""
+    checkout = tmp_path / "myapp"
+    checkout.mkdir()
+    (checkout / "README.md").write_text("hello", encoding="utf-8")
+
+    plain = engine.create_project(Project(name="plain", repo_path=checkout))
+    assert not g.has_remote(checkout)  # nothing named it, so nothing to push to
+
+    linked = engine.update_project(plain.model_copy(update={"github_repo": "acme/myapp"}))
+    assert linked.github_repo == "acme/myapp"
+    assert g.run(checkout, "remote", "get-url", "origin").stdout.strip() == (
+        "https://github.com/acme/myapp.git"
+    )
+
+    # the remote is the user's to own: naming a different repository leaves it alone
+    engine.update_project(linked.model_copy(update={"github_repo": "acme/elsewhere"}))
+    assert g.run(checkout, "remote", "get-url", "origin").stdout.strip() == (
+        "https://github.com/acme/myapp.git"
+    )
+
+
+def test_a_new_project_can_name_its_checkout_and_its_github_repo_at_once(
+    engine: Engine, tmp_path: Path
+) -> None:
+    checkout = tmp_path / "fresh"
+    checkout.mkdir()
+    engine.create_project(Project(name="fresh", repo_path=checkout, github_repo="acme/fresh"))
+    assert g.run(checkout, "remote", "get-url", "origin").stdout.strip() == (
+        "https://github.com/acme/fresh.git"
+    )
+
+
+def test_push_authenticates_without_writing_the_token_into_the_checkout() -> None:
+    host = GhHost(token=None)
+    assert host._credentials() == []  # nothing to offer; git falls back to the machine
+    host = GhHost(token="ghp_live")
+    args = host._credentials()
+    assert args[:3] == ["-c", "credential.helper=", "-c"]
+    assert "$GH_TOKEN" in args[3] and "ghp_live" not in args[3]

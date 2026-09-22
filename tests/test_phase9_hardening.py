@@ -716,6 +716,8 @@ def test_a_checkout_without_a_remote_finishes_on_its_branch(
     assert job.state is JobState.DONE, [t.note for t in job.history]
     assert job.data.pr_url is None
     last = job.history[-1]
-    assert f"branch {job.branch} is ready in the checkout {repo}" in (last.note or "")
+    assert "nothing was pushed" in (last.note or "")  # never read as "it reached GitHub"
+    assert f"the checkout {repo} has no remote" in (last.note or "")
     assert f"git merge {job.branch}" in (last.note or "")
+    assert "set the project's GitHub repository" in (last.note or "")  # the way out
     assert last.detail  # the DevOps write-up, for whoever merges

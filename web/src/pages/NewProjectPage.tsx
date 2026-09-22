@@ -48,8 +48,11 @@ export function NewProjectPage() {
       jira_project_key: jiraKey.trim() || null,
       language,
     };
-    if (source === "local") body.repo_path = repoPath.trim();
-    else body.github_repo = githubRepo.trim();
+    if (source === "local") {
+      body.repo_path = repoPath.trim();
+      // optional here: with it the branch is pushed and a pull request opened
+      if (githubRepo.trim()) body.github_repo = githubRepo.trim();
+    } else body.github_repo = githubRepo.trim();
     try {
       const project = await create.mutateAsync(body);
       if (firstRequest.trim()) {
@@ -180,43 +183,60 @@ export function NewProjectPage() {
               )}
             </div>
           </div>
-        ) : (
-          <div className="field">
-            <label htmlFor="github_repo">{tx("Repository (owner/name)")}</label>
-            {githubReady && repos.data && repos.data.length > 0 ? (
-              <select
-                id="github_repo"
-                value={githubRepo}
-                onChange={(e) => setGithubRepo(e.target.value)}
-              >
-                <option value="">{tx("Pick a repository…")}</option>
-                {repos.data.map((r) => (
-                  <option key={r.full_name} value={r.full_name}>
-                    {r.full_name}
-                    {r.private ? " (private)" : ""}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <input
-                id="github_repo"
-                type="text"
-                className="mono"
-                value={githubRepo}
-                onChange={(e) => setGithubRepo(e.target.value)}
-                placeholder={tx("owner/name")}
-              />
-            )}
-            {!githubReady && (
-              <div className="callout hint">
-                No GitHub token is configured, so private repositories cannot be cloned.{" "}
-                <Link to="/settings/github">{tx("Connect GitHub")}</Link>{" "}
-                {tx("to pick from your repositories.")}
-              </div>
-            )}
-            {repos.error && <div className="callout error">{describeError(repos.error)}</div>}
-          </div>
-        )}
+        ) : null}
+
+        <div className="field">
+          <label htmlFor="github_repo">
+            {source === "local"
+              ? tx("GitHub repository (optional)")
+              : tx("Repository (owner/name)")}
+          </label>
+          {githubReady && repos.data && repos.data.length > 0 ? (
+            <select
+              id="github_repo"
+              value={githubRepo}
+              onChange={(e) => setGithubRepo(e.target.value)}
+            >
+              <option value="">
+                {source === "local" ? tx("Not linked") : tx("Pick a repository…")}
+              </option>
+              {repos.data.map((r) => (
+                <option key={r.full_name} value={r.full_name}>
+                  {r.full_name}
+                  {r.private ? " (private)" : ""}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              id="github_repo"
+              type="text"
+              className="mono"
+              value={githubRepo}
+              onChange={(e) => setGithubRepo(e.target.value)}
+              placeholder={tx("owner/name")}
+            />
+          )}
+          {source === "local" && (
+            <div className="help">
+              {tx(
+                "Where finished work is pushed: each development pushes its branch and opens a pull request there. Leave it empty and the branch stays in the checkout for you to merge by hand.",
+              )}
+            </div>
+          )}
+          {!githubReady && (
+            <div className="callout hint">
+              {source === "local"
+                ? tx("No GitHub token is configured, so nothing can be pushed.")
+                : tx(
+                    "No GitHub token is configured, so private repositories cannot be cloned.",
+                  )}{" "}
+              <Link to="/settings/github">{tx("Connect GitHub")}</Link>{" "}
+              {tx("to pick from your repositories.")}
+            </div>
+          )}
+          {repos.error && <div className="callout error">{describeError(repos.error)}</div>}
+        </div>
 
         <div className="field">
           <label htmlFor="language">{tx("Language the agents write in")}</label>
