@@ -89,7 +89,11 @@ export function JiraSettingsPage() {
               value={draft.token ?? ""}
               disabled={!admin}
               onChange={(e) => setDraft({ ...draft, token: e.target.value })}
-              placeholder={s.token_set ? `set, ends with ${s.token_hint}` : "not set"}
+              placeholder={
+                s.token_set
+                  ? tx("set, ends with {hint}", { hint: s.token_hint ?? "" })
+                  : tx("not set")
+              }
             />
           </div>
         </div>
@@ -97,8 +101,8 @@ export function JiraSettingsPage() {
         <h3>{tx("Issue type names")}</h3>
         <p className="muted small">
           {tx("As they are called in your Jira site. Tasks default to")}{" "}
-          <code>{tx("Subtask")}</code> {tx("so they nest under stories; use")}{" "}
-          <code>{tx("Sub-task")}</code> {tx("on older sites.")}
+          <code>{tx("Subtask")}</code> {tx("so they nest under stories;")}{" "}
+          <code>{tx("Sub-task")}</code> {tx("is for older sites.")}
         </p>
         <div className="grid-2">
           {TYPE_KEYS.map((k) => (

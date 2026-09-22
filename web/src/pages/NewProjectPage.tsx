@@ -139,9 +139,11 @@ export function NewProjectPage() {
             <div className="help">
               {folders.length > 0 && !typing ? (
                 <>
-                  {tx("These are the folders under")} <code>{local.data?.root}</code> (your{" "}
-                  <code>SLIPWRIGHT_REPOS</code> folder). A folder that is not a git repository yet
-                  becomes one on create, with everything in it committed.{" "}
+                  {tx("These are the folders under")} <code>{local.data?.root}</code> ( {tx("your")}{" "}
+                  <code>SLIPWRIGHT_REPOS</code> {tx("folder")}).{" "}
+                  {tx(
+                    "A folder that is not a git repository yet becomes one on create, with everything in it committed.",
+                  )}{" "}
                   <a
                     onClick={(e) => {
                       e.preventDefault();
@@ -154,12 +156,12 @@ export function NewProjectPage() {
                 </>
               ) : (
                 <>
-                  {tx("The path as the")} <em>server</em>{" "}
+                  {tx("The path as the")} <em>{tx("server")}</em>{" "}
                   {tx(
                     "sees it. In Docker only the mounted folder is visible: put the checkout under",
                   )}{" "}
-                  <code>SLIPWRIGHT_REPOS</code> (default <code>{tx("./repos")}</code>) and enter{" "}
-                  <code>/repos/&lt;name&gt;</code>.
+                  <code>SLIPWRIGHT_REPOS</code> ({tx("default")} <code>{tx("./repos")}</code>){" "}
+                  {tx("and enter")} <code>/repos/&lt;name&gt;</code>.
                   {folders.length > 0 && (
                     <>
                       {" "}

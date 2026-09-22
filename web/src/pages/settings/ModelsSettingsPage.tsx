@@ -179,7 +179,7 @@ function ProviderCard({ provider: p }: { provider: ProviderSettings }) {
             value={maxTokens ?? p.max_tokens ?? ""}
             disabled={!admin}
             onChange={(e) => setMaxTokens(e.target.value)}
-            placeholder={`${p.default_max_tokens} (vendor default)`}
+            placeholder={tx("{n} (vendor default)", { n: p.default_max_tokens })}
           />
           <div className="muted small">
             {tx(

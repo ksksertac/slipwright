@@ -91,7 +91,11 @@ export function JiraAgentAccount() {
             value={token}
             disabled={!admin}
             onChange={(e) => setToken(e.target.value)}
-            placeholder={s.agent_token_set ? `set, ends with ${s.agent_token_hint}` : "not set"}
+            placeholder={
+              s.agent_token_set
+                ? tx("set, ends with {hint}", { hint: s.agent_token_hint ?? "" })
+                : tx("not set")
+            }
           />
         </div>
       </div>

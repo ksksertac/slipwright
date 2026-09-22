@@ -1,5 +1,15 @@
 // Turkish. Keys are the English source strings; anything missing shows the English.
 export const TR: Record<string, string> = {
+  "{n} (vendor default)": "{n} (sağlayıcı varsayılanı)",
+  "not set": "ayarlı değil",
+  "so they nest under stories;": "olur, böylece story altına yerleşir;",
+  "is for older sites.": "ise eski siteler içindir.",
+  your: "senin",
+  folder: "klasörün",
+  "A folder that is not a git repository yet becomes one on create, with everything in it committed.":
+    "Henüz git deposu olmayan bir klasör, oluştururken depoya dönüştürülür ve içindeki her şey commit'lenir.",
+  server: "sunucunun",
+  "and enter": "yaz, sonra şunu gir:",
   "Loading…": "Yükleniyor…",
   "Not found.": "Bulunamadı.",
   passed: "geçti",
@@ -504,7 +514,6 @@ export const TR: Record<string, string> = {
   "Default model": "Varsayılan model",
   "— not set: roles use the model in their profile —":
     "— ayarlı değil: roller profillerindeki modeli kullanır —",
-  "model id": "model kimliği",
   "add a key to list the models": "modelleri listelemek için anahtar ekle",
   "What every agent without a pinned provider runs on right now.":
     "Sağlayıcısı sabitlenmemiş her ajanın şu an çalıştığı model.",
