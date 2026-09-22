@@ -382,8 +382,11 @@ p {
 }
 .content {
   padding: 24px 28px 48px;
-  max-width: 1280px;
+  /* wide enough for the pipeline lanes, centred so a page's actions sit at the right
+     edge of the reading column instead of floating in the middle of a wide screen */
+  max-width: 1600px;
   width: 100%;
+  margin: 0 auto;
 }
 .page-head {
   display: flex;

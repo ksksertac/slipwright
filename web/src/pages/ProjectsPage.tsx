@@ -88,7 +88,7 @@ export function ProjectsPage() {
         </div>
       )}
       {projects.data && projects.data.length > 0 && visible.length === 0 && (
-        <Empty>No project matches “{query}”.</Empty>
+        <Empty>{tx("No project matches “{query}”.", { query })}</Empty>
       )}
       {editing && <EditProjectModal project={editing} onClose={() => setEditing(null)} />}
       {deleting && <DeleteProjectModal project={deleting} onClose={() => setDeleting(null)} />}
@@ -116,9 +116,11 @@ function ProjectCard({
         </div>
         <div className="row" style={{ gap: 4, flexWrap: "nowrap" }}>
           {p && p.pending_approvals > 0 && (
-            <span className="badge wait">{p.pending_approvals} waiting</span>
+            <span className="badge wait">{tx("{n} waiting", { n: p.pending_approvals })}</span>
           )}
-          {p && p.jobs_running > 0 && <span className="badge work">{p.jobs_running} running</span>}
+          {p && p.jobs_running > 0 && (
+            <span className="badge work">{tx("{n} running", { n: p.jobs_running })}</span>
+          )}
           <Menu>
             <button onClick={onEdit}>
               <IconEdit /> {tx("Edit")}
@@ -140,7 +142,7 @@ function ProjectCard({
       )}
       <div className="meta">
         <span title={project.repo_path ?? ""}>
-          <IconGit /> {project.github_repo ?? project.clone_url ?? "local checkout"}
+          <IconGit /> {project.github_repo ?? project.clone_url ?? tx("local checkout")}
         </span>
         {project.jira_project_key && (
           <span>
@@ -157,10 +159,10 @@ function ProjectCard({
       </div>
       <div className="row spread faint tiny">
         <span>
-          {p ? `${p.jobs.length} development${p.jobs.length === 1 ? "" : "s"}` : "…"}
-          {p && p.jobs_failed > 0 ? ` · ${p.jobs_failed} failed` : ""}
+          {p ? tx("{n} development(s)", { n: p.jobs.length }) : "…"}
+          {p && p.jobs_failed > 0 ? ` · ${tx("{n} failed", { n: p.jobs_failed })}` : ""}
         </span>
-        <span>{p ? `active ${timeAgo(p.last_activity)}` : ""}</span>
+        <span>{p ? tx("active {when}", { when: timeAgo(p.last_activity) }) : ""}</span>
       </div>
     </div>
   );

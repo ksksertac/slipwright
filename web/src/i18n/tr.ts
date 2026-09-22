@@ -1,5 +1,12 @@
 // Turkish. Keys are the English source strings; anything missing shows the English.
 export const TR: Record<string, string> = {
+  "{n} waiting": "{n} bekliyor",
+  "{n} running": "{n} çalışıyor",
+  "local checkout": "yerel çalışma kopyası",
+  "{n} development(s)": "{n} gelişim",
+  "{n} failed": "{n} başarısız",
+  "active {when}": "son hareket {when}",
+  "No project matches “{query}”.": "“{query}” ile eşleşen proje yok.",
   "{n} (vendor default)": "{n} (sağlayıcı varsayılanı)",
   "not set": "ayarlı değil",
   "so they nest under stories;": "olur, böylece story altına yerleşir;",
