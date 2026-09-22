@@ -721,3 +721,42 @@ def test_a_checkout_without_a_remote_finishes_on_its_branch(
     assert f"git merge {job.branch}" in (last.note or "")
     assert "set the project's GitHub repository" in (last.note or "")  # the way out
     assert last.detail  # the DevOps write-up, for whoever merges
+
+
+def test_a_finished_development_reports_what_it_produced(
+    store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
+) -> None:
+    """The result of a development is readable from git: its branch, the commits and
+    files on it, whether the base branch already has them, and how to merge."""
+    from slipwright.githost import GhHost
+
+    engine = full_engine(
+        store, worktrees_root, seed, full_provider(seed, phases=1), git_host=GhHost(gh="gh-missing")
+    )
+    project = engine.create_project(Project(name="demo", repo_path=repo))
+    job = engine.start(engine.create_job("x", project_id=project.id).id)
+    job = engine.approve(engine.approve(job.id).id)
+    job = engine.approve(engine.approve(job.id).id)
+    assert job.state is JobState.DONE
+
+    result = engine.job_result(job.id)
+    assert result.branch == job.branch and result.checkout == str(repo)
+    assert result.base_branch == "main" and result.merged is False
+    assert result.commits and all(c.sha and c.subject for c in result.commits)
+    assert [f.path for f in result.files]
+    assert result.added > 0 and result.problem is None
+    assert result.merge_command == f"git -C {repo} merge {job.branch}"
+    assert result.summary  # the DevOps write-up
+
+    with TestClient(create_app(engine, resume_on_startup=False, require_auth=False)) as client:
+        body = client.get(f"/api/jobs/{job.id}/result").json()
+        assert body["branch"] == job.branch and body["files"]
+        assert client.get("/api/jobs/nope/result").status_code == 404
+
+    import subprocess
+
+    subprocess.run(
+        ["git", "merge", "--no-edit", job.branch], cwd=repo, check=True, capture_output=True
+    )
+    merged = engine.job_result(job.id)
+    assert merged.merged is True and merged.merge_command is None

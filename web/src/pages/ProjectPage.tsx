@@ -33,6 +33,7 @@ import {
 import { PipelineTab } from "./PipelineTab";
 import { TestsTab } from "./TestsTab";
 import { useT } from "../i18n";
+import { ResultCard } from "../components/ResultCard";
 
 const TABS = ["pipeline", "overview", "board", "developments", "tests", "activity"] as const;
 type Tab = (typeof TABS)[number];
@@ -119,6 +120,8 @@ function OverviewTab({ projectId }: { projectId: string }) {
   if (!p || !jobs.data) return null;
   const byId = new Map(jobs.data.map((j) => [j.id, j]));
   const waiting = p.jobs.filter((j) => j.pending_approval);
+  // the newest finished development: what the project has to show for itself
+  const lastDone = [...jobs.data].reverse().find((j) => j.state === "done" || j.state === "failed");
   const running = p.jobs.filter(
     (j) => !j.pending_approval && j.state !== "done" && j.state !== "failed",
   );
@@ -129,23 +132,33 @@ function OverviewTab({ projectId }: { projectId: string }) {
         <h3 style={{ marginBottom: 10 }}>{tx("Progress")}</h3>
         <ProgressBar done={p.tasks_done} total={p.tasks_total} />
         <div className="muted small" style={{ marginTop: 8 }}>
-          {p.jobs_running} running · {p.pending_approvals} waiting for approval · {p.jobs_done} done
-          · {p.jobs_failed} failed · last activity {timeAgo(p.last_activity)}
+          {tx(
+            "{running} running · {waiting} waiting for approval · {done} done · {failed} failed · last activity {when}",
+            {
+              running: p.jobs_running,
+              waiting: p.pending_approvals,
+              done: p.jobs_done,
+              failed: p.jobs_failed,
+              when: timeAgo(p.last_activity),
+            },
+          )}
         </div>
         <div className="muted small" style={{ marginTop: 4 }}>
-          Standards review: {p.reviews} review{p.reviews === 1 ? "" : "s"}
+          {tx("Standards review: {n} review(s)", { n: p.reviews })}
           {p.reviews > 0 && (
             <>
               {" "}
               ·{" "}
               <span className={p.review_blocking ? "error" : ""}>
-                {p.review_blocking} blocking
+                {tx("{n} blocking", { n: p.review_blocking })}
               </span>{" "}
-              · {p.review_advisory} advisory finding{p.review_advisory === 1 ? "" : "s"}
+              · {tx("{n} advisory finding(s)", { n: p.review_advisory })}
             </>
           )}
         </div>
       </div>
+
+      {lastDone && <ResultCard job={lastDone} compact />}
 
       <div className="card">
         <h3 style={{ marginBottom: 10 }}>{tx("Pending approvals")}</h3>

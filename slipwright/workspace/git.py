@@ -43,6 +43,38 @@ def clone(url: str, target: Path) -> None:
         raise GitError(["clone", url, str(target)], proc.returncode, proc.stderr)
 
 
+def numstat(repo: Path, base: str, head: str = "HEAD") -> list[tuple[str, int, int]]:
+    """(path, added, removed) per file between two commits; a binary file counts as 0/0."""
+    out = run(repo, "diff", "--numstat", "--no-color", base, head).stdout
+    rows: list[tuple[str, int, int]] = []
+    for line in out.splitlines():
+        parts = line.split("\t")
+        if len(parts) != 3:
+            continue
+        added, removed, path = parts
+        rows.append(
+            (path, int(added) if added.isdigit() else 0, int(removed) if removed.isdigit() else 0)
+        )
+    return rows
+
+
+def commits(repo: Path, base: str, head: str = "HEAD") -> list[tuple[str, str]]:
+    """(short sha, subject) of the commits head has and base does not, oldest last."""
+    out = run(repo, "log", "--format=%h%x09%s", f"{base}..{head}").stdout
+    rows: list[tuple[str, str]] = []
+    for line in out.splitlines():
+        sha, _, subject = line.partition("\t")
+        if sha:
+            rows.append((sha, subject))
+    return rows
+
+
+def contains(repo: Path, commit: str, branch: str) -> bool:
+    """Whether ``branch`` already contains ``commit`` (the work is merged)."""
+    proc = run(repo, "merge-base", "--is-ancestor", commit, branch, check=False)
+    return proc.returncode == 0
+
+
 def has_remote(repo: Path, name: str = "origin") -> bool:
     proc = run(repo, "remote", "get-url", name, check=False)
     return proc.returncode == 0

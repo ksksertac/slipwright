@@ -59,7 +59,16 @@ from slipwright.roles.results import (
     SupervisorResult,
 )
 from slipwright.roles.specialists import specialist_for
-from slipwright.schemas.job import APPROVAL_STATES, Job, JobData, JobState, utcnow
+from slipwright.schemas.job import (
+    APPROVAL_STATES,
+    ChangedFile,
+    Commit,
+    Job,
+    JobData,
+    JobResult,
+    JobState,
+    utcnow,
+)
 from slipwright.schemas.profile import Permission, Profile, RoleConfig, RoleName
 from slipwright.schemas.project import BudgetSettings, Project, SupervisorSettings
 from slipwright.schemas.testrun import TestRun, TestRunSource, TestRunStatus
@@ -1427,6 +1436,66 @@ class Engine:
         self.workspace.create(job)
         job.data.base_commit = g.head_commit(require_worktree(job))
         return self.store.save(job)
+
+    def job_result(self, job_id: str) -> JobResult:
+        """What the development produced: its branch, the commits and files on it, and
+        how to get them. Reads git, so it stays true even after a restart; when the
+        worktree is gone the branch in the checkout is read instead."""
+        job = self.store.get(job_id)
+        project = self._project_of(job)
+        checkout = project.repo_path if project and project.repo_path else job.repo_path
+        base_branch = self.github_settings().base_branch
+        result = JobResult(
+            job_id=job.id,
+            state=job.state,
+            branch=job.branch,
+            checkout=str(checkout),
+            base_branch=base_branch,
+            merged=False,
+            pr_url=job.data.pr_url,
+            summary=self._result_summary(job),
+        )
+        repo = job.worktree_path if job.worktree_path and job.worktree_path.is_dir() else checkout
+        base = job.data.base_commit
+        if base is None or not (repo / ".git").exists():
+            result.problem = "the branch is no longer in the checkout"
+            return result
+        head = job.branch if repo == checkout else "HEAD"
+        try:
+            if repo == checkout and not g.branch_exists(checkout, job.branch):
+                result.problem = "the branch is no longer in the checkout"
+                return result
+            result.commits = [
+                Commit(sha=sha, subject=subject) for sha, subject in g.commits(repo, base, head)
+            ]
+            result.files = [
+                ChangedFile(path=path, added=added, removed=removed)
+                for path, added, removed in g.numstat(repo, base, head)
+            ]
+            tip = g.run(repo, "rev-parse", head).stdout.strip()
+            result.merged = g.branch_exists(checkout, base_branch) and g.contains(
+                checkout, tip, base_branch
+            )
+        except g.GitError as exc:
+            result.problem = exc.stderr.strip() or "git could not read the branch"
+            return result
+        result.added = sum(f.added for f in result.files)
+        result.removed = sum(f.removed for f in result.files)
+        if not result.merged and result.commits:
+            result.merge_command = f"git -C {checkout} merge {job.branch}"
+        return result
+
+    @staticmethod
+    def _result_summary(job: Job) -> str:
+        """The DevOps write-up when there is one, else the last thing that happened."""
+        for transition in reversed(job.history):
+            note = transition.note or ""
+            if transition.to_state is JobState.DONE and transition.detail:
+                return transition.detail
+            if note.startswith("devops:") and transition.detail:
+                return transition.detail
+        last = job.history[-1] if job.history else None
+        return (last.note or "") if last else ""
 
     def _branch_diff(self, job: Job) -> str:
         worktree = require_worktree(job)

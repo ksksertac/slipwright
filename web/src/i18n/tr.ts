@@ -1,9 +1,26 @@
 // Turkish. Keys are the English source strings; anything missing shows the English.
 export const TR: Record<string, string> = {
+  "{running} running · {waiting} waiting for approval · {done} done · {failed} failed · last activity {when}":
+    "{running} çalışıyor · {waiting} onay bekliyor · {done} tamam · {failed} başarısız · son hareket {when}",
+  "What came out of it": "Ne çıktı ortaya",
+  "on its branch": "kendi dalında",
+  "merged into {branch}": "{branch} dalına alındı",
+  "{files} file(s), +{added} −{removed}, in {commits} commit(s) on":
+    "{files} dosya, +{added} −{removed}, {commits} commit —",
+  in: "·",
+  "and {n} more": "ve {n} dosya daha",
+  "Take it into your working copy:": "Kendi çalışma kopyana almak için:",
+  "Open the development": "Gelişimi aç",
+  "What DevOps wrote about it": "DevOps'un yazdıkları",
+  "the branch is no longer in the checkout": "dal artık çalışma kopyasında değil",
   "Runs by itself at startup and every hour: missing epics, stories and sub-tasks are created, stories join the sprint (one is started when none is running), statuses catch up. Nothing to set — this is how a half-mirrored plan repairs itself.":
     "Açılışta ve her saat kendiliğinden çalışır: eksik epic, story ve alt görevler açılır, story'ler sprint'e girer (açık sprint yoksa yenisi başlatılır), durumlar güncellenir. Ayarlanacak bir şey yok — yarım kalmış bir aynalama böyle kendini toparlar.",
-  "Once this is set up an approved plan appears in Jira by itself: the Product Owner creates the epics, stories and sub-tasks, the specialists move them as they work, and pull request links and failures are commented. Five steps, top to bottom.":
-    "Bu kurulum bittiğinde onayladığın plan Jira'ya kendiliğinden düşer: Ürün Sahibi epic, story ve alt görevleri açar, uzmanlar çalıştıkça onları ilerletir, pull request bağlantıları ve hatalar yorum olarak eklenir. Beş adım, yukarıdan aşağıya.",
+  "Once this is set up an approved plan appears in Jira by itself: the Product Owner creates the epics, stories and sub-tasks, the specialists move them as they work, and pull request links and failures are commented. Five tabs, left to right.":
+    "Bu kurulum bittiğinde onayladığın plan Jira'ya kendiliğinden düşer: Ürün Sahibi epic, story ve alt görevleri açar, uzmanlar çalıştıkça onları ilerletir, pull request bağlantıları ve hatalar yorum olarak eklenir. Beş sekme, soldan sağa.",
+  Connection: "Bağlantı",
+  "Agent account": "Ajan hesabı",
+  "Issue types": "Konu tipleri",
+  "The round": "Tur",
   "The connection": "Bağlantı",
   "The Jira site and the account Slipwright signs in with. Nothing works without it.":
     "Jira siteniz ve Slipwright'ın giriş yapacağı hesap. Bu olmadan hiçbiri çalışmaz.",

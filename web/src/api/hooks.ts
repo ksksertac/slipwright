@@ -21,6 +21,7 @@ import {
   type JiraTestResult,
   type LocalRepos,
   type Job,
+  type JobResult,
   type NewProject,
   type Overview,
   type Profile,
@@ -57,6 +58,7 @@ export const keys = {
   testRuns: (id: string) => ["projects", id, "test-runs"] as const,
   job: (id: string) => ["jobs", id] as const,
   transition: (id: string, index: number) => ["jobs", id, "history", index] as const,
+  jobResult: (id: string) => ["jobs", id, "result"] as const,
   testRun: (id: string) => ["test-runs", id] as const,
   testRunOutput: (id: string) => ["test-runs", id, "output"] as const,
   github: ["settings", "github"] as const,
@@ -209,6 +211,14 @@ export function useJob(id: string, refetchInterval?: number) {
     queryKey: keys.job(id),
     queryFn: () => api.get<Job>(`/api/jobs/${id}`),
     refetchInterval,
+  });
+}
+
+export function useJobResult(id: string, enabled = true) {
+  return useQuery({
+    queryKey: keys.jobResult(id),
+    queryFn: () => api.get<JobResult>(`/api/jobs/${id}/result`),
+    enabled,
   });
 }
 

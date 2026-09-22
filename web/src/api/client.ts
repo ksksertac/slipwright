@@ -9,6 +9,7 @@ export type NewProject = Schemas["NewProject"];
 export type Job = Schemas["Job"];
 export type JobState = Job["state"];
 export type Transition = Schemas["Transition"];
+export type JobResult = Schemas["JobResult"];
 export type Board = Schemas["Board"];
 export type EpicView = Schemas["EpicView"];
 export type StoryView = Schemas["StoryView"];

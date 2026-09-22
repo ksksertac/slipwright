@@ -39,6 +39,7 @@ import { useToast } from "../components/Toast";
 import { ErrorBox, Loading, StateBadge, formatTime } from "../components/ui";
 import { useT } from "../i18n";
 import { Copyable } from "../components/Copyable";
+import { ResultCard } from "../components/ResultCard";
 
 const STEPS: { state: JobState; label: string; gate?: boolean }[] = [
   { state: "backlog", label: "backlog" },
@@ -95,6 +96,7 @@ export function JobPage() {
       </div>
 
       <Stepper job={j} />
+      <ResultCard job={j} />
       <GatePanel job={j} />
       <Phases job={j} />
       <QaSection job={j} />

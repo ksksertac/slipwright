@@ -484,6 +484,50 @@
         "title": "BudgetSettings",
         "type": "object"
       },
+      "ChangedFile": {
+        "additionalProperties": false,
+        "description": "One file of the branch's diff against the commit it started from.",
+        "properties": {
+          "added": {
+            "title": "Added",
+            "type": "integer"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "removed": {
+            "title": "Removed",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "added",
+          "path",
+          "removed"
+        ],
+        "title": "ChangedFile",
+        "type": "object"
+      },
+      "Commit": {
+        "additionalProperties": false,
+        "properties": {
+          "sha": {
+            "title": "Sha",
+            "type": "string"
+          },
+          "subject": {
+            "title": "Subject",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sha",
+          "subject"
+        ],
+        "title": "Commit",
+        "type": "object"
+      },
       "Credentials": {
         "properties": {
           "password": {
@@ -1693,6 +1737,115 @@
           "tasks_total"
         ],
         "title": "JobProgress",
+        "type": "object"
+      },
+      "JobResult": {
+        "additionalProperties": false,
+        "description": "What a development produced, for the person who has to use it.",
+        "properties": {
+          "added": {
+            "default": 0,
+            "title": "Added",
+            "type": "integer"
+          },
+          "base_branch": {
+            "title": "Base Branch",
+            "type": "string"
+          },
+          "branch": {
+            "title": "Branch",
+            "type": "string"
+          },
+          "checkout": {
+            "title": "Checkout",
+            "type": "string"
+          },
+          "commits": {
+            "items": {
+              "$ref": "#/components/schemas/Commit"
+            },
+            "title": "Commits",
+            "type": "array"
+          },
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/ChangedFile"
+            },
+            "title": "Files",
+            "type": "array"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "merge_command": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Merge Command"
+          },
+          "merged": {
+            "title": "Merged",
+            "type": "boolean"
+          },
+          "pr_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pr Url"
+          },
+          "problem": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Problem"
+          },
+          "removed": {
+            "default": 0,
+            "title": "Removed",
+            "type": "integer"
+          },
+          "state": {
+            "$ref": "#/components/schemas/JobState"
+          },
+          "summary": {
+            "default": "",
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "added",
+          "base_branch",
+          "branch",
+          "checkout",
+          "commits",
+          "files",
+          "job_id",
+          "merge_command",
+          "merged",
+          "pr_url",
+          "problem",
+          "removed",
+          "state",
+          "summary"
+        ],
+        "title": "JobResult",
         "type": "object"
       },
       "JobState": {
@@ -4924,6 +5077,46 @@
           }
         },
         "summary": "Reject"
+      }
+    },
+    "/api/jobs/{job_id}/result": {
+      "get": {
+        "description": "What the development produced: branch, commits, files and how to get them.",
+        "operationId": "get_job_result_api_jobs__job_id__result_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Job Result"
       }
     },
     "/api/jobs/{job_id}/retry": {

@@ -41,7 +41,7 @@ from slipwright.engine import (
 )
 from slipwright.pipeline import Pipeline, pipeline
 from slipwright.providers import ProviderUnavailableError
-from slipwright.schemas.job import Job, Transition
+from slipwright.schemas.job import Job, JobResult, Transition
 from slipwright.schemas.profile import Profile, RoleName
 from slipwright.schemas.project import Language, Project, ProjectPatch, ReviewMode
 from slipwright.schemas.testrun import TestRun
@@ -580,6 +580,14 @@ def create_app(
             return eng.set_test_cases(job_id, [c.model_dump() for c in body.test_cases])
         except NotAwaitingApproval as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    @api.get("/jobs/{job_id}/result", response_model=JobResult)
+    def get_job_result(job_id: str, request: Request) -> JobResult:
+        """What the development produced: branch, commits, files and how to get them."""
+        eng = _engine(request)
+        _get(eng, job_id)  # 404 for an unknown job
+        result: JobResult = eng.job_result(job_id)
+        return result
 
     @api.post("/jobs/{job_id}/retry", response_model=Job)
     def retry(

@@ -165,6 +165,44 @@ class JobData(BaseModel):
     )
 
 
+class ChangedFile(BaseModel):
+    """One file of the branch's diff against the commit it started from."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    path: str
+    added: int
+    removed: int
+
+
+class Commit(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    sha: str
+    subject: str
+
+
+class JobResult(BaseModel):
+    """What a development produced, for the person who has to use it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    job_id: str
+    state: JobState
+    branch: str
+    checkout: str  # the repository the branch lives in
+    base_branch: str
+    merged: bool  # the base branch already contains the branch's tip
+    pr_url: str | None = None
+    commits: list[Commit] = Field(default_factory=list)
+    files: list[ChangedFile] = Field(default_factory=list)
+    added: int = 0
+    removed: int = 0
+    summary: str = ""  # the DevOps write-up, or the last step's summary
+    merge_command: str | None = None
+    problem: str | None = None  # why the result could not be read
+
+
 class Job(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
