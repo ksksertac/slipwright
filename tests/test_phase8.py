@@ -351,3 +351,17 @@ def test_the_shell_is_never_served_from_a_stale_cache(tmp_path: Path) -> None:
             resp = client.get(path)
             assert resp.status_code == 200 and resp.headers["cache-control"] == "no-cache"
         assert client.get("/assets/index-abc.js").status_code == 200
+
+
+def test_the_server_names_the_build_it_serves(engine: Engine, tmp_path: Path) -> None:
+    """A browser keeps hashed bundles; the page compares this with its own build id and
+    offers a reload instead of quietly running the previous deploy."""
+    static = tmp_path / "static"
+    static.mkdir()
+    (static / "index.html").write_text("<html>one</html>", encoding="utf-8")
+    app = create_app(engine, resume_on_startup=False, require_auth=False, static_dir=static)
+    with TestClient(app) as client:
+        first = client.get("/api/version").json()["build"]
+        assert len(first) == 12
+        (static / "index.html").write_text("<html>two</html>", encoding="utf-8")
+        assert client.get("/api/version").json()["build"] != first

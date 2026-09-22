@@ -19,6 +19,7 @@ import {
 } from "./icons";
 import { useTheme, type Theme } from "./theme";
 import { useLang, useT } from "../i18n";
+import { BuildWatch } from "./BuildWatch";
 
 const THEMES: { value: Theme; icon: React.ReactNode; title: string }[] = [
   { value: "light", icon: <IconSun />, title: "Light" },
@@ -74,6 +75,7 @@ export function Layout() {
             </NavLink>
           )}
         </nav>
+        <BuildWatch />
         <div className="sidebar-foot">
           <div className="avatar">{user?.username.slice(0, 2)}</div>
           <div style={{ minWidth: 0, flex: 1 }}>

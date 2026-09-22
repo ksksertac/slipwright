@@ -7,6 +7,7 @@ was mid-phase when the previous process died.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import queue
 import threading
@@ -93,6 +94,12 @@ class AgentRouting(BaseModel):
 
     provider: str | None = None
     model: str | None = None
+
+
+class Version(BaseModel):
+    """The build the server serves, derived from the shell it hands out."""
+
+    build: str
 
 
 class Rejection(BaseModel):
@@ -225,6 +232,12 @@ def create_app(
     @app.get("/healthz", include_in_schema=False)
     def healthz() -> dict[str, str]:
         return {"status": "ok"}
+
+    @api.get("/version", response_model=Version)
+    def get_version() -> Version:
+        """Which build this server serves. The page compares it with its own and says
+        when a browser is still running an older one — a hashed bundle it cached."""
+        return Version(build=_build_id(static_dir))
 
     def _engine(request: Request) -> Engine:
         eng: Engine = request.app.state.engine
@@ -644,6 +657,17 @@ def create_app(
     app.include_router(api, prefix="/api")
     _mount_spa(app, static_dir)
     return app
+
+
+def _build_id(static_dir: Path) -> str:
+    """A short digest of the built shell: it names the hashed bundles, so it changes on
+    every deploy and not otherwise. "dev" when there is no build."""
+    index = static_dir / "index.html"
+    try:
+        digest: str = hashlib.sha256(index.read_bytes()).hexdigest()
+        return digest[:12]
+    except OSError:
+        return "dev"
 
 
 def _mount_spa(app: FastAPI, static_dir: Path) -> None:

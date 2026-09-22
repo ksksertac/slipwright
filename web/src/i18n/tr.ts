@@ -1,5 +1,7 @@
 // Turkish. Keys are the English source strings; anything missing shows the English.
 export const TR: Record<string, string> = {
+  "build {id}": "sürüm {id}",
+  "New version — reload": "Yeni sürüm var — yenile",
   "{running} running · {waiting} waiting for approval · {done} done · {failed} failed · last activity {when}":
     "{running} çalışıyor · {waiting} onay bekliyor · {done} tamam · {failed} başarısız · son hareket {when}",
   "What came out of it": "Ne çıktı ortaya",

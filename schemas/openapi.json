@@ -4241,6 +4241,20 @@
         ],
         "title": "ValidationError",
         "type": "object"
+      },
+      "Version": {
+        "description": "The build the server serves, derived from the shell it hands out.",
+        "properties": {
+          "build": {
+            "title": "Build",
+            "type": "string"
+          }
+        },
+        "required": [
+          "build"
+        ],
+        "title": "Version",
+        "type": "object"
       }
     }
   },
@@ -7426,6 +7440,25 @@
         "tags": [
           "auth"
         ]
+      }
+    },
+    "/api/version": {
+      "get": {
+        "description": "Which build this server serves. The page compares it with its own and says\nwhen a browser is still running an older one \u2014 a hashed bundle it cached.",
+        "operationId": "get_version_api_version_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Version"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Version"
       }
     }
   }

@@ -1877,3 +1877,15 @@ details.card[open] > summary::before {
   color: var(--diff-del-fg);
   font-variant-numeric: tabular-nums;
 }
+
+/* which build the page is running, and the offer to reload when it is no longer the one
+   the server serves */
+.build-stamp {
+  padding: 4px 14px 0;
+  letter-spacing: 0.02em;
+}
+.build-stale {
+  margin: 8px 12px 0;
+  width: calc(100% - 24px);
+  justify-content: center;
+}
