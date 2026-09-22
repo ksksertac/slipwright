@@ -753,7 +753,7 @@ make QA own end-to-end tests.
   "Agents" entry and Settings → Agents becomes this page
 - [x] Clicking a card opens the agent's detail page `/agents/<role>` with tabs
   **Setup** (per project: provider, model, thinking depth, permissions — the roles table
-  reduced to one row), **Standards** (T9.6: the domain's pages, editable) and
+  reduced to one row), **Standards** (T9.6: the domain's rules, one flat list) and
   **Activity** (recent invocations across projects with prompt size and standards used)
 - [x] Tests: a scripted plan with phases in three domains asserts the requests went to the
   three specialists with exactly the profile's model for each (extends T5.2's routing test)
@@ -858,16 +858,17 @@ The standards are reached **through the agent**: each agent card's *Standards* t
 editor for that agent's domain, so "what does the Backend agent follow?" is one click.
 
 **Done when**
-- [x] Agent detail → Standards tab: the domain's pages as a list with search, page count
-  and last edit; **New page** (title + Markdown), edit in a Markdown editor with preview,
-  delete with confirmation; a *Scope* switch chooses the global corpus or a project's
-  override; save writes the file and triggers an incremental reindex
-- [x] `core.md` is shown on every agent's Standards tab as a read-only "applies to all"
-  block with a link to edit it (admin only)
+- [x] Agent detail → Standards tab: one flat list of the domain's **rules** (one rule =
+  one `##` section, title + text, any language); **Add rule**, edit in place, delete
+  with confirmation; a *Scope* switch chooses every project or one project's override;
+  a save writes the Markdown, lints it and triggers an incremental reindex. The pages
+  themselves never appear in the UI.
+- [x] The shared rules (`core.md`) are the same rows in a collapsed "every agent" group on
+  every agent's tab, editable under the every-project scope (admin only)
 - [x] "Try a search" box: enter a task sentence, pick a domain, see the ranked chunks with
-  scores — the tool for tuning headings and chunking
+  scores — the tool for tuning headings and chunking (under *Advanced*)
 - [x] Embedder settings (none / openai / local) with a status line (chunks indexed, last
-  reindex, model) and a *Reindex now* button
+  reindex, model) and a *Reindex now* button (under *Advanced*)
 - [x] Job page: per phase, the standards sections that were given to the agent and any
   review violations; project page Overview shows review health (advisory/blocking counts)
 - [x] Git: files edited in the UI are committed on a `slipwright/standards` branch of this
@@ -883,11 +884,17 @@ editor for that agent's domain, so "what does the Backend agent follow?" is one 
 > `slipwright/standards`; the edited file is copied there and committed, so the running
 > checkout never changes branch; no git → no branch, logged. API: `/api/standards/pages`
 > (list/create), `/api/standards/pages/{path}` (get/put/delete, admin for writes),
-> `project_id` selects a project's overrides. Web: `pages/AgentStandardsTab.tsx` (scope
-> switch, page table, `PageEditor` modal with Markdown/preview tabs, `NewPageModal`,
-> `CoreBlock`, `TrySearch` over `/api/settings/standards/search`, `IndexSettings` with
-> reindex); a small `Markdown` renderer avoids a dependency. `ProjectProgress` gained
-> `reviews` / `review_blocking` / `review_advisory` for the Overview tab.
+> `project_id` selects a project's overrides. Rules: `StandardsEditor.list_rules` /
+> `add_rule` / `update_rule` / `delete_rule` work one `##` block at a time on the page
+> source (`split_source` keeps every other byte of the page as it was); a rule's id is
+> `<path>:<n>`; rules added from the UI go to `<domain>/rules.md` (created on demand,
+> `core.md` for core) and a page whose last rule is removed is deleted with it. API:
+> `/api/standards/rules` (list by domain / create), `/api/standards/rules/{id}`
+> (put/delete). Web: `pages/AgentStandardsTab.tsx` (scope switch, `RuleList` with an
+> inline `RuleEditor` for add and edit, the core group, and `TrySearch` +
+> `IndexSettings` under a collapsed *Advanced* card); a small `Markdown` renderer avoids
+> a dependency. `ProjectProgress` gained `reviews` / `review_blocking` /
+> `review_advisory` for the Overview tab.
 
 ### T9.7 — Orchestrator hardening: budgets, retries, supervisor decisions
 **Done when**
@@ -1076,6 +1083,15 @@ in bulk.
   `roles/common.py` puts it in every prompt, and asks that `summary` be two to four plain
   sentences for the person approving the next step — code, paths and JSON keys stay
   English.
+
+- [x] **Local checkouts finish on their branch.** `GhHost.push` raises `NoRemote` when the
+  checkout has no remote; the engine then marks the development done with the branch and
+  the `git merge` command in the note (the DevOps write-up is the detail) instead of
+  failing on push. **Jira bugs link, never nest:** a create_issue naming a story as the
+  parent of a non-sub-task type is created beside it and linked with Relates; unknown type
+  names fall back to Task; lone surrogates are scrubbed; a queued action is given up after
+  `MAX_QUEUE_ATTEMPTS` (5) rounds with the reason in the history. **Copy button** on
+  every log, diff and JSON block (`Copyable`).
 
 ## Phase 10 — Proposed (not started)
 
