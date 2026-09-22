@@ -54,13 +54,19 @@ function AgentCard({ agent: a }: { agent: AgentSummary }) {
         <dt>{tx("Model")}</dt>
         <dd
           className="mono truncate"
-          title={a.provider ? "pinned in the profile" : "follows Settings → Models"}
+          title={
+            a.assigned_provider
+              ? tx("assigned — every project")
+              : a.provider
+                ? "pinned in the profile"
+                : "follows Settings → Models"
+          }
         >
           {a.effective_model}
           <span className="faint">
             {" "}
             · {a.effective_provider}
-            {a.provider ? "" : " (default)"}
+            {a.assigned_provider ? ` (${tx("assigned")})` : a.provider ? "" : " (default)"}
           </span>
         </dd>
         <dt>{tx("Thinking")}</dt>

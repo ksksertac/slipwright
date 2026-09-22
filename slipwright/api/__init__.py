@@ -40,6 +40,7 @@ from slipwright.engine import (
     ProjectCloneError,
 )
 from slipwright.pipeline import Pipeline, pipeline
+from slipwright.providers import ProviderUnavailableError
 from slipwright.schemas.job import Job, Transition
 from slipwright.schemas.profile import Profile, RoleName
 from slipwright.schemas.project import Language, Project, ProjectPatch, ReviewMode
@@ -85,6 +86,13 @@ class LocalRepo(BaseModel):
 class LocalRepos(BaseModel):
     root: str | None
     repos: list[LocalRepo]
+
+
+class AgentRouting(BaseModel):
+    """Pin an agent to a provider and model for every project; both empty clears the pin."""
+
+    provider: str | None = None
+    model: str | None = None
 
 
 class Rejection(BaseModel):
@@ -187,7 +195,7 @@ def create_app(
         yield
         stop.set()
 
-    from slipwright.api.auth import auth_dependency
+    from slipwright.api.auth import auth_dependency, require_admin
     from slipwright.api.auth import router as auth_router
     from slipwright.api.settings import router as settings_router
 
@@ -221,6 +229,14 @@ def create_app(
     def _engine(request: Request) -> Engine:
         eng: Engine = request.app.state.engine
         return eng
+
+    def _agents(eng: Engine) -> list[AgentSummary]:
+        return agent_summaries(
+            eng.store.list(),
+            eng.seed_profile,
+            route=eng.effective_routing,
+            assigned=eng.agent_routing,
+        )
 
     def _get(eng: Engine, job_id: str) -> Job:
         try:
@@ -257,7 +273,19 @@ def create_app(
     def get_agents(request: Request) -> list[AgentSummary]:
         """The agent cards: scope, default model routing and how much each has worked."""
         eng = _engine(request)
-        return agent_summaries(eng.store.list(), eng.seed_profile, route=eng.effective_routing)
+        return _agents(eng)
+
+    @api.put("/agents/{role}/routing", response_model=AgentSummary)
+    def put_agent_routing(role: RoleName, body: AgentRouting, request: Request) -> AgentSummary:
+        """Pin an agent to a provider and model. 400 when the provider is unknown, has no
+        key, or no model was named -- the job would only fail at its first call."""
+        require_admin(request)
+        eng = _engine(request)
+        try:
+            eng.assign_agent(role, body.provider, body.model)
+        except (ValueError, ProviderUnavailableError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return next(a for a in _agents(eng) if a.role is role)
 
     # -- projects ------------------------------------------------------------------------
 

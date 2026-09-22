@@ -1,25 +1,27 @@
-// An agent's Standards tab (T9.6): the pages of its domain, editable in place with a
-// preview; the core rules every agent reads; a search box that ranks sections the way
-// the agents' retrieval does; and the index settings (embedder, budget, reindex).
-import { useMemo, useState, type ReactNode } from "react";
-import { describeError, type StandardsPage } from "../api/client";
+// An agent's Standards tab (T9.6): one flat list of rules — what this agent does and
+// watches out for — each added, edited or removed on its own, in any language. A rule is
+// one "##" section of the domain's Markdown; the pages, the linter, the index and the
+// review branch stay behind the API. The shared (core) rules every agent reads are the
+// same rows in a collapsed group; the retrieval tools (search test, index settings) sit
+// under "Advanced" at the bottom.
+import { useState, type ReactNode } from "react";
+import { describeError, type StandardsRule } from "../api/client";
 import {
-  useCreateStandardsPage,
-  useDeleteStandardsPage,
+  useCreateStandardsRule,
+  useDeleteStandardsRule,
   useProjects,
   useReindexStandards,
-  useSaveStandardsPage,
+  useSaveStandardsRule,
   useSaveStandardsSettings,
-  useStandardsPage,
-  useStandardsPages,
+  useStandardsRules,
   useStandardsSearch,
   useStandardsStatus,
 } from "../api/hooks";
 import { useAuth } from "../auth/AuthProvider";
-import { IconPlus, IconSearch, IconTrash } from "../components/icons";
-import { ConfirmModal, Modal } from "../components/Modal";
+import { IconEdit, IconPlus, IconSearch, IconTrash } from "../components/icons";
+import { ConfirmModal } from "../components/Modal";
 import { useToast } from "../components/Toast";
-import { ErrorBox, Loading, timeAgo } from "../components/ui";
+import { ErrorBox, Loading } from "../components/ui";
 import { useT } from "../i18n";
 
 const DOMAINS = ["product", "architecture", "backend", "web", "mobile", "testing", "devops"];
@@ -27,24 +29,14 @@ const DOMAINS = ["product", "architecture", "backend", "web", "mobile", "testing
 export function AgentStandardsTab({ role, domain }: { role: string; domain: string }) {
   const tx = useT();
   const projects = useProjects();
+  const status = useStandardsStatus();
   const { user } = useAuth();
   const admin = !!user?.is_admin;
-  const [projectId, setProjectId] = useState<string | null>(null); // null = global corpus
-  const [open, setOpen] = useState<string | null>(null);
-  const [creating, setCreating] = useState(false);
-  const [filter, setFilter] = useState("");
-  const [searchDomain, setSearchDomain] = useState(domain === "*" ? "backend" : domain);
-  const listDomain = domain === "*" ? searchDomain : domain;
-  const pages = useStandardsPages(projectId, listDomain);
-
-  const visible = useMemo(() => {
-    const all = pages.data ?? [];
-    const q = filter.trim().toLowerCase();
-    return all
-      .filter((p) => p.domain !== "core")
-      .filter((p) => !q || p.title.toLowerCase().includes(q) || p.path.includes(q));
-  }, [pages.data, filter]);
-  const core = (pages.data ?? []).find((p) => p.path === "core.md");
+  const [projectId, setProjectId] = useState<string | null>(null); // null = every project
+  const [pick, setPick] = useState(domain === "*" ? "backend" : domain);
+  const listDomain = domain === "*" ? pick : domain;
+  const [adding, setAdding] = useState(false);
+  const topK = status.data?.settings.top_k;
 
   return (
     <div className="stack">
@@ -59,20 +51,20 @@ export function AgentStandardsTab({ role, domain }: { role: string; domain: stri
               value={projectId ?? ""}
               onChange={(e) => {
                 setProjectId(e.target.value || null);
-                setOpen(null);
+                setAdding(false);
               }}
             >
-              <option value="">global corpus (every project)</option>
+              <option value="">{tx("every project")}</option>
               {(projects.data ?? [])
                 .filter((p) => p.repo_path)
                 .map((p) => (
                   <option key={p.id} value={p.id}>
-                    override for {p.name}
+                    {tx("only {name}", { name: p.name })}
                   </option>
                 ))}
             </select>
             {domain === "*" && (
-              <select value={searchDomain} onChange={(e) => setSearchDomain(e.target.value)}>
+              <select value={pick} onChange={(e) => setPick(e.target.value)}>
                 {DOMAINS.map((d) => (
                   <option key={d} value={d}>
                     {d}
@@ -81,354 +73,316 @@ export function AgentStandardsTab({ role, domain }: { role: string; domain: stri
               </select>
             )}
           </div>
-          <div className="row">
-            <input
-              type="search"
-              placeholder={tx("filter pages")}
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-              style={{ width: 200 }}
-            />
-            {admin && (
-              <button className="btn primary small" onClick={() => setCreating(true)}>
-                <IconPlus /> {tx("New page")}
-              </button>
-            )}
-          </div>
+          {admin && (
+            <button className="btn primary small" onClick={() => setAdding(true)}>
+              <IconPlus /> {tx("Add rule")}
+            </button>
+          )}
         </div>
         <p className="muted small" style={{ marginTop: 8 }}>
-          The {role} agent reads the <code>{listDomain}</code> standards
-          {projectId ? " — this project's overrides take precedence over the global pages" : ""}.
-          Retrieval picks the sections that match each phase; the core rules below are always in the
-          prompt.
+          {topK
+            ? tx(
+                "At each step the {role} agent reads the rules below that best match its task (up to {k}), plus the shared rules. Write them in any language — the model reads it.",
+                { role, k: topK },
+              )
+            : tx(
+                "At each step the {role} agent reads the rules below that best match its task, plus the shared rules. Write them in any language — the model reads it.",
+                { role },
+              )}
+          {projectId
+            ? ` ${tx("Rules in this scope apply to that project only and win over the shared list.")}`
+            : ""}
         </p>
       </div>
 
-      {pages.isLoading && <Loading />}
-      {pages.error && <ErrorBox error={pages.error} />}
-      {pages.data && (
-        <div className="card flush">
-          <div className="card-head">
-            <h3>
-              {tx("Pages")} <span className="badge plain">{visible.length}</span>
-            </h3>
-          </div>
-          {visible.length === 0 ? (
-            <div className="empty" style={{ padding: 24 }}>
-              <div className="small">
-                {projectId
-                  ? "No overrides for this project yet — a new page here applies to it only."
-                  : "No pages in this domain yet."}
-              </div>
-            </div>
-          ) : (
-            <table>
-              <thead>
-                <tr>
-                  <th>{tx("Title")}</th>
-                  <th>{tx("Path")}</th>
-                  <th>{tx("Sections")}</th>
-                  <th>{tx("Words")}</th>
-                  <th>{tx("Last edit")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visible.map((p) => (
-                  <tr key={p.path} className="clickable" onClick={() => setOpen(p.path)}>
-                    <td>
-                      <strong>{p.title}</strong>
-                    </td>
-                    <td className="mono small">{p.path}</td>
-                    <td>{p.sections}</td>
-                    <td>{p.words}</td>
-                    <td className="muted small">{timeAgo(p.modified_at)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      )}
-
-      <CoreBlock
+      <RuleList
         projectId={projectId}
-        page={core}
+        domain={listDomain}
         admin={admin}
-        onEdit={() => setOpen("core.md")}
+        adding={adding}
+        onAddDone={() => setAdding(false)}
+        title={tx("Rules")}
+        empty={
+          projectId
+            ? tx("No project-specific rules yet — a rule added here applies to that project only.")
+            : tx("No rules yet. Add the first one.")
+        }
       />
-      <TrySearch projectId={projectId} domain={listDomain} />
-      <IndexSettings admin={admin} projectId={projectId} />
 
-      {open && (
-        <PageEditor projectId={projectId} path={open} admin={admin} onClose={() => setOpen(null)} />
-      )}
-      {creating && (
-        <NewPageModal
-          projectId={projectId}
-          domain={listDomain}
-          onClose={() => setCreating(false)}
-          onCreated={(path) => {
-            setCreating(false);
-            setOpen(path);
-          }}
-        />
-      )}
+      <details className="card">
+        <summary>
+          <strong>{tx("Shared rules — every agent")}</strong>{" "}
+          <span className="muted small">
+            {tx("Read in full by every agent on every project; a rule above never overrides them.")}
+          </span>
+        </summary>
+        <div style={{ marginTop: 12 }}>
+          {projectId ? (
+            <p className="muted small">
+              {tx("Shared rules are edited under the every-project scope.")}
+            </p>
+          ) : null}
+          <RuleList
+            projectId={null}
+            domain="core"
+            admin={admin && !projectId}
+            adding={false}
+            onAddDone={() => undefined}
+            empty={tx("No shared rules.")}
+            flush
+          />
+        </div>
+      </details>
+
+      <details className="card">
+        <summary>
+          <strong>{tx("Advanced — search test and index")}</strong>
+        </summary>
+        <div className="stack" style={{ marginTop: 12 }}>
+          <TrySearch projectId={projectId} domain={listDomain} />
+          <IndexSettings admin={admin} projectId={projectId} />
+        </div>
+      </details>
     </div>
   );
 }
 
-// -- core.md ---------------------------------------------------------------------------------
+// -- the list ---------------------------------------------------------------------------------
 
-function CoreBlock({
-  projectId,
-  page,
-  admin,
-  onEdit,
-}: {
-  projectId: string | null;
-  page: StandardsPage | undefined;
-  admin: boolean;
-  onEdit: () => void;
-}) {
-  const tx = useT();
-  const core = useStandardsPage(null, "core.md"); // core is global
-  return (
-    <div className="card">
-      <div className="row spread">
-        <h3>
-          {tx("core.md")} <span className="badge plain">{tx("applies to all")}</span>
-        </h3>
-        {admin && !projectId && (
-          <button className="btn small" onClick={onEdit}>
-            {tx("Edit core rules")}
-          </button>
-        )}
-      </div>
-      <p className="muted small">
-        Read by every agent on every project, in full, before any retrieved section; a retrieved
-        standard never overrides it.
-        {page ? ` ${page.sections} sections, ${page.words} words.` : ""}
-      </p>
-      {core.data ? (
-        <details>
-          <summary className="small">{tx("show the rules")}</summary>
-          <Markdown text={core.data.text} />
-        </details>
-      ) : (
-        <Loading rows={1} />
-      )}
-    </div>
-  );
-}
-
-// -- page editor -----------------------------------------------------------------------------
-
-function PageEditor({
-  projectId,
-  path,
-  admin,
-  onClose,
-}: {
-  projectId: string | null;
-  path: string;
-  admin: boolean;
-  onClose: () => void;
-}) {
-  const tx = useT();
-  const scope = path === "core.md" ? null : projectId;
-  const page = useStandardsPage(scope, path);
-  const save = useSaveStandardsPage(scope);
-  const remove = useDeleteStandardsPage(scope);
-  const toast = useToast();
-  const [draft, setDraft] = useState<string | null>(null);
-  const [mode, setMode] = useState<"edit" | "preview">("edit");
-  const [deleting, setDeleting] = useState(false);
-  const text = draft ?? page.data?.text ?? "";
-  const dirty = draft !== null && draft !== page.data?.text;
-
-  return (
-    <Modal
-      title={page.data ? `${page.data.title} — ${path}` : path}
-      onClose={onClose}
-      wide
-      footer={
-        <>
-          {admin && path !== "core.md" && (
-            <button className="btn danger" onClick={() => setDeleting(true)}>
-              <IconTrash /> {tx("Delete")}
-            </button>
-          )}
-          <span style={{ flex: 1 }} />
-          <button className="btn" onClick={onClose}>
-            {tx("Close")}
-          </button>
-          {admin && (
-            <button
-              className="btn primary"
-              disabled={!dirty || save.isPending}
-              onClick={() =>
-                save.mutate(
-                  { path, text },
-                  {
-                    onSuccess: () => {
-                      toast.ok("Page saved and reindexed");
-                      setDraft(null);
-                    },
-                  },
-                )
-              }
-            >
-              {save.isPending ? tx("Saving…") : tx("Save")}
-            </button>
-          )}
-        </>
-      }
-    >
-      {page.isLoading && <Loading />}
-      {page.error && <ErrorBox error={page.error} />}
-      {page.data && (
-        <>
-          <nav className="tabs small" style={{ marginBottom: 10 }}>
-            <a className={mode === "edit" ? "active" : ""} onClick={() => setMode("edit")}>
-              {tx("Markdown")}
-            </a>
-            <a className={mode === "preview" ? "active" : ""} onClick={() => setMode("preview")}>
-              {tx("Preview")}
-            </a>
-          </nav>
-          {mode === "edit" ? (
-            <textarea
-              className="mono editor"
-              value={text}
-              readOnly={!admin}
-              spellCheck={false}
-              onChange={(e) => setDraft(e.target.value)}
-              style={{ minHeight: 420 }}
-            />
-          ) : (
-            <div className="preview">
-              <Markdown text={text} />
-            </div>
-          )}
-          <div className="muted small" style={{ marginTop: 6 }}>
-            Front-matter (<code>domain</code>, <code>tags</code>, <code>applies_to</code>), one{" "}
-            <code>{tx("# Title")}</code>
-            {tx(", and")} <code>{tx("## sections")}</code>{" "}
-            {tx(
-              "under 400 words: each section is one retrievable chunk, so the heading should say what the rule is about. Saves are linted, reindexed at once and committed on the",
-            )}{" "}
-            <code>{tx("slipwright/standards")}</code> {tx("branch.")}
-          </div>
-          {save.error && <div className="callout error">{describeError(save.error)}</div>}
-        </>
-      )}
-      {deleting && (
-        <ConfirmModal
-          title={tx("Delete page")}
-          body={
-            <>
-              {tx("Delete")} <strong>{path}</strong>
-              {tx("? Its sections stop being retrieved as soon as the index refreshes.")}
-            </>
-          }
-          busy={remove.isPending}
-          error={remove.error ? describeError(remove.error) : null}
-          onClose={() => setDeleting(false)}
-          onConfirm={() =>
-            remove.mutate(path, {
-              onSuccess: () => {
-                toast.ok("Page deleted");
-                onClose();
-              },
-            })
-          }
-        />
-      )}
-    </Modal>
-  );
-}
-
-function NewPageModal({
+function RuleList({
   projectId,
   domain,
-  onClose,
-  onCreated,
+  admin,
+  adding,
+  onAddDone,
+  title,
+  empty,
+  flush = false,
 }: {
   projectId: string | null;
   domain: string;
-  onClose: () => void;
-  onCreated: (path: string) => void;
+  admin: boolean;
+  adding: boolean;
+  onAddDone: () => void;
+  title?: string;
+  empty: string;
+  flush?: boolean;
 }) {
   const tx = useT();
-  const create = useCreateStandardsPage(projectId);
-  const [title, setTitle] = useState("");
-  const [body, setBody] = useState(
-    "## Rule\n\nState the rule, why it exists and how to apply it.\n",
-  );
-  return (
-    <Modal
-      title={`New ${domain} page`}
-      onClose={onClose}
-      footer={
-        <>
-          <button className="btn" onClick={onClose}>
-            {tx("Cancel")}
-          </button>
-          <button
-            className="btn primary"
-            disabled={!title.trim() || create.isPending}
-            onClick={() =>
-              create.mutate(
-                { domain, title: title.trim(), text: body },
-                { onSuccess: (page) => onCreated(page.path) },
-              )
-            }
-          >
-            {create.isPending ? tx("Creating…") : tx("Create")}
-          </button>
-        </>
-      }
-    >
-      <div className="field">
-        <label htmlFor="np-title">{tx("Title")}</label>
-        <input
-          id="np-title"
-          type="text"
-          value={title}
-          autoFocus
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder={tx("e.g. Queues and dead letters")}
+  const rules = useStandardsRules(projectId, domain);
+  const create = useCreateStandardsRule(projectId);
+  const toast = useToast();
+  const [editing, setEditing] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<StandardsRule | null>(null);
+
+  if (rules.isLoading) return <Loading />;
+  if (rules.error) return <ErrorBox error={rules.error} />;
+  const items = rules.data ?? [];
+  const inner = (
+    <>
+      {adding && (
+        <RuleEditor
+          heading=""
+          text=""
+          busy={create.isPending}
+          error={create.error ? describeError(create.error) : null}
+          onCancel={onAddDone}
+          onSave={(heading, text) =>
+            create.mutate(
+              { domain, heading, text },
+              {
+                onSuccess: () => {
+                  toast.ok(tx("Rule added"));
+                  onAddDone();
+                },
+              },
+            )
+          }
         />
-      </div>
-      <div className="field">
-        <label htmlFor="np-body">Sections (Markdown)</label>
-        <textarea
-          id="np-body"
-          className="mono"
-          value={body}
-          spellCheck={false}
-          onChange={(e) => setBody(e.target.value)}
-          style={{ minHeight: 200 }}
-        />
-        <div className="help faint small">
-          Front-matter and the title are added for you; the file goes to{" "}
-          <code>
-            {domain}/{title.trim() ? slugify(title) : "…"}.md
-          </code>
-          {projectId ? " under this project's .slipwright/standards" : " in the global corpus"}.
+      )}
+      {items.length === 0 && !adding ? (
+        <div className="empty" style={{ padding: 24 }}>
+          <div className="small">{empty}</div>
         </div>
+      ) : (
+        <ul className="rules">
+          {items.map((r) =>
+            editing === r.id ? (
+              <li key={r.id} className="rule">
+                <EditRow projectId={projectId} rule={r} onDone={() => setEditing(null)} />
+              </li>
+            ) : (
+              <li key={r.id} className="rule">
+                <div className="rule-body">
+                  <strong>{r.heading}</strong>
+                  <Markdown text={r.text} />
+                </div>
+                {admin && (
+                  <div className="rule-actions">
+                    <button
+                      className="btn ghost icon"
+                      title={tx("Edit")}
+                      aria-label={tx("Edit")}
+                      onClick={() => setEditing(r.id)}
+                    >
+                      <IconEdit />
+                    </button>
+                    <button
+                      className="btn ghost icon"
+                      title={tx("Delete")}
+                      aria-label={tx("Delete")}
+                      onClick={() => setDeleting(r)}
+                    >
+                      <IconTrash />
+                    </button>
+                  </div>
+                )}
+              </li>
+            ),
+          )}
+        </ul>
+      )}
+      {deleting && (
+        <DeleteRule projectId={projectId} rule={deleting} onClose={() => setDeleting(null)} />
+      )}
+    </>
+  );
+  if (flush) return inner;
+  return (
+    <div className="card flush">
+      <div className="card-head">
+        <h3>
+          {title} <span className="badge plain">{items.length}</span>
+        </h3>
       </div>
-      {create.error && <div className="callout error">{describeError(create.error)}</div>}
-    </Modal>
+      <div className="card-body">{inner}</div>
+    </div>
   );
 }
 
-function slugify(title: string): string {
+function EditRow({
+  projectId,
+  rule,
+  onDone,
+}: {
+  projectId: string | null;
+  rule: StandardsRule;
+  onDone: () => void;
+}) {
+  const tx = useT();
+  const save = useSaveStandardsRule(projectId);
+  const toast = useToast();
   return (
-    title
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "") || "page"
+    <RuleEditor
+      heading={rule.heading}
+      text={rule.text}
+      busy={save.isPending}
+      error={save.error ? describeError(save.error) : null}
+      onCancel={onDone}
+      onSave={(heading, text) =>
+        save.mutate(
+          { id: rule.id, heading, text },
+          {
+            onSuccess: () => {
+              toast.ok(tx("Rule saved"));
+              onDone();
+            },
+          },
+        )
+      }
+    />
+  );
+}
+
+function DeleteRule({
+  projectId,
+  rule,
+  onClose,
+}: {
+  projectId: string | null;
+  rule: StandardsRule;
+  onClose: () => void;
+}) {
+  const tx = useT();
+  const remove = useDeleteStandardsRule(projectId);
+  const toast = useToast();
+  return (
+    <ConfirmModal
+      title={tx("Delete rule")}
+      body={tx("Delete “{heading}”? It stops reaching the agent as soon as the index refreshes.", {
+        heading: rule.heading,
+      })}
+      confirmLabel={tx("Delete")}
+      busy={remove.isPending}
+      error={remove.error ? describeError(remove.error) : null}
+      onClose={onClose}
+      onConfirm={() =>
+        remove.mutate(rule.id, {
+          onSuccess: () => {
+            toast.ok(tx("Rule deleted"));
+            onClose();
+          },
+        })
+      }
+    />
+  );
+}
+
+// -- one rule's form (add and edit share it) ------------------------------------------------
+
+function RuleEditor({
+  heading: initialHeading,
+  text: initialText,
+  busy,
+  error,
+  onSave,
+  onCancel,
+}: {
+  heading: string;
+  text: string;
+  busy: boolean;
+  error: string | null;
+  onSave: (heading: string, text: string) => void;
+  onCancel: () => void;
+}) {
+  const tx = useT();
+  const [heading, setHeading] = useState(initialHeading);
+  const [text, setText] = useState(initialText);
+  const ready = heading.trim().length > 0 && text.trim().length > 0;
+  return (
+    <form
+      className="rule-editor"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (ready && !busy) onSave(heading.trim(), text.trim());
+      }}
+    >
+      <input
+        type="text"
+        value={heading}
+        autoFocus
+        placeholder={tx("Rule title — e.g. Every story has an acceptance criterion")}
+        onChange={(e) => setHeading(e.target.value)}
+      />
+      <textarea
+        value={text}
+        spellCheck={false}
+        placeholder={tx(
+          "What the agent must do or watch out for, and why. Markdown is fine; keep it under 400 words.",
+        )}
+        onChange={(e) => setText(e.target.value)}
+        style={{ minHeight: 120 }}
+      />
+      {error && <div className="callout error">{error}</div>}
+      <div className="row">
+        <button className="btn primary small" type="submit" disabled={!ready || busy}>
+          {busy ? tx("Saving…") : tx("Save")}
+        </button>
+        <button className="btn small" type="button" onClick={onCancel} disabled={busy}>
+          {tx("Cancel")}
+        </button>
+      </div>
+    </form>
   );
 }
 
@@ -441,11 +395,12 @@ function TrySearch({ projectId, domain }: { projectId: string | null; domain: st
   const [d, setD] = useState(domain);
   const hits = useStandardsSearch(projectId, d, q);
   return (
-    <div className="card">
+    <div>
       <h3>{tx("Try a search")}</h3>
       <p className="muted small">
-        Type a task the way a phase goal reads and see which sections the agent would be given,
-        ranked; the tool for tuning headings and chunking.
+        {tx(
+          "Type a task the way a phase goal reads and see which rules the agent would be given, ranked.",
+        )}
       </p>
       <form
         className="row"
@@ -477,7 +432,7 @@ function TrySearch({ projectId, domain }: { projectId: string | null; domain: st
       {hits.error && <ErrorBox error={hits.error} />}
       {hits.data && hits.data.length === 0 && (
         <div className="muted small" style={{ marginTop: 8 }}>
-          Nothing matched; the agent would get the domain's opening sections instead.
+          {tx("Nothing matched; the agent would get the domain's opening rules instead.")}
         </div>
       )}
       {hits.data && hits.data.length > 0 && (
@@ -527,7 +482,7 @@ function IndexSettings({ admin, projectId }: { admin: boolean; projectId: string
     .map(([k, v]) => `${k} ${v}`)
     .join(" · ");
   return (
-    <div className="card">
+    <div>
       <div className="row spread">
         <h3>{tx("Index")}</h3>
         {admin && (

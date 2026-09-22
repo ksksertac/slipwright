@@ -428,8 +428,27 @@ export const TR: Record<string, string> = {
   Standards: "Standartlar",
   Setup: "Kurulum",
   "This agent has not run yet.": "Bu ajan henüz çalışmadı.",
-  "Model, thinking depth and permissions are read from the project's seed profile — never from engine code. Pick a project; projects without their own profile start from the engine default and get one when you save.":
-    "Model, düşünme derinliği ve izinler projenin çekirdek profilinden okunur — asla motor kodundan değil. Bir proje seç; kendi profili olmayan projeler motor varsayılanından başlar ve kaydedince kendi profilini alır.",
+  "Thinking depth and permissions are read from the project's seed profile — never from engine code. Pick a project; projects without their own profile start from the engine default and get one when you save.":
+    "Düşünme derinliği ve izinler projenin çekirdek profilinden okunur — asla motor kodundan değil. Bir proje seç; kendi profili olmayan projeler motor varsayılanından başlar ve kaydedince kendi profilini alır.",
+  "Project profile": "Proje profili",
+  "assigned — every project": "atanmış — her projede",
+  "follows the default provider (Settings → Models)":
+    "varsayılan sağlayıcıyı izler (Ayarlar → Modeller)",
+  "Pick the provider and model this agent works with. It runs there on every project, whatever the project profile says; if the provider cannot be reached the job fails with the reason.":
+    "Bu ajanın çalışacağı sağlayıcıyı ve modeli seç. Proje profili ne derse desin her projede orada çalışır; sağlayıcıya ulaşılamazsa iş nedeniyle birlikte başarısız olur.",
+  "pick a model…": "bir model seç…",
+  "the provider's default model": "sağlayıcının varsayılan modeli",
+  "add a key under Settings → Models first": "önce Ayarlar → Modeller altında bir anahtar ekle",
+  "model id": "model kimliği",
+  "no API key for {provider}": "{provider} için API anahtarı yok",
+  "Connected to {provider}: {n} model(s).": "{provider} bağlantısı kuruldu: {n} model.",
+  "{model} is available.": "{model} kullanılabilir.",
+  "{model} is not in the vendor's list — it may still fail at run time.":
+    "{model} sağlayıcının listesinde yok — çalışma anında yine de başarısız olabilir.",
+  "Clear assignment": "Atamayı kaldır",
+  "{agent} now runs on {model}": "{agent} artık {model} ile çalışıyor",
+  "{agent} follows the default provider again": "{agent} yeniden varsayılan sağlayıcıyı izliyor",
+  assigned: "atanmış",
   "Create one": "Bir tane oluştur",
   "first.": "önce.",
   Project: "Proje",
@@ -449,35 +468,44 @@ export const TR: Record<string, string> = {
 
   // -- standards tab --------------------------------------------------------------------------------------
   Scope: "Kapsam",
-  "global corpus (every project)": "genel külliyat (her proje)",
-  "override for {name}": "{name} için özel",
-  "filter pages": "sayfaları süz",
-  "New page": "Yeni sayfa",
-  Pages: "Sayfalar",
+  "every project": "her proje",
+  "only {name}": "yalnızca {name}",
+  "Add rule": "Kural ekle",
+  Rules: "Kurallar",
   Title: "Başlık",
-  Path: "Yol",
-  Sections: "Bölümler",
-  Words: "Kelime",
-  "Last edit": "Son düzenleme",
-  "No pages in this domain yet.": "Bu alanda henüz sayfa yok.",
-  "No overrides for this project yet — a new page here applies to it only.":
-    "Bu proje için henüz özel sayfa yok — buraya eklenen sayfa yalnızca bu projeye uygulanır.",
-  "applies to all": "herkese uygulanır",
-  "Edit core rules": "Temel kuralları düzenle",
-  "Read by every agent on every project, in full, before any retrieved section; a retrieved standard never overrides it.":
-    "Her projede her ajan, getirilen bölümlerden önce bunu tamamen okur; getirilen bir standart bunu asla geçersiz kılamaz.",
-  "show the rules": "kuralları göster",
-  Preview: "Önizleme",
-  "Delete page": "Sayfayı sil",
-  "? Its sections stop being retrieved as soon as the index refreshes.":
-    " silinsin mi? Dizin yenilenir yenilenmez bölümleri getirilmez olur.",
+  "At each step the {role} agent reads the rules below that best match its task (up to {k}), plus the shared rules. Write them in any language — the model reads it.":
+    "{role} ajanı her adımda aşağıdaki listeden görevine en çok uyan kuralları (en fazla {k}) ve ortak kuralları okur. İstediğin dilde yaz — modeli anlar.",
+  "At each step the {role} agent reads the rules below that best match its task, plus the shared rules. Write them in any language — the model reads it.":
+    "{role} ajanı her adımda aşağıdaki listeden görevine en çok uyan kuralları ve ortak kuralları okur. İstediğin dilde yaz — modeli anlar.",
+  "Rules in this scope apply to that project only and win over the shared list.":
+    "Bu kapsamdaki kurallar yalnızca o projeye uygulanır ve genel listeye göre önceliklidir.",
+  "No rules yet. Add the first one.": "Henüz kural yok. İlkini ekle.",
+  "No project-specific rules yet — a rule added here applies to that project only.":
+    "Bu projeye özel kural henüz yok — buraya eklenen kural yalnızca o projeye uygulanır.",
+  "Shared rules — every agent": "Ortak kurallar — her ajan",
+  "Read in full by every agent on every project; a rule above never overrides them.":
+    "Her projede her ajan tamamını okur; yukarıdaki bir kural bunları asla geçersiz kılamaz.",
+  "Shared rules are edited under the every-project scope.":
+    "Ortak kurallar “her proje” kapsamında düzenlenir.",
+  "No shared rules.": "Ortak kural yok.",
+  "Advanced — search test and index": "Gelişmiş — arama denemesi ve dizin",
+  "Rule title — e.g. Every story has an acceptance criterion":
+    "Kural başlığı — örn. Her story'nin bir kabul kriteri olur",
+  "What the agent must do or watch out for, and why. Markdown is fine; keep it under 400 words.":
+    "Ajanın ne yapması ya da nelere dikkat etmesi gerektiği ve nedeni. Markdown kullanabilirsin; 400 kelimeyi geçme.",
+  "Rule added": "Kural eklendi",
+  "Rule saved": "Kural kaydedildi",
+  "Rule deleted": "Kural silindi",
+  "Delete rule": "Kuralı sil",
+  "Delete “{heading}”? It stops reaching the agent as soon as the index refreshes.":
+    "“{heading}” silinsin mi? Dizin yenilenir yenilenmez ajana ulaşmaz olur.",
   "Try a search": "Arama dene",
-  "Type a task the way a phase goal reads and see which sections the agent would be given, ranked; the tool for tuning headings and chunking.":
-    "Bir faz hedefi gibi bir görev yaz ve ajana hangi bölümlerin verileceğini sıralı gör; başlıkları ve bölümlemeyi ayarlamak için.",
+  "Type a task the way a phase goal reads and see which rules the agent would be given, ranked.":
+    "Bir faz hedefi gibi bir görev yaz ve ajana hangi kuralların verileceğini sıralı gör.",
   "e.g. add a Kafka consumer that retries failed messages":
     "örn. başarısız mesajları yeniden deneyen bir Kafka consumer ekle",
-  "Nothing matched; the agent would get the domain's opening sections instead.":
-    "Eşleşen yok; ajan bunun yerine alanın açılış bölümlerini alır.",
+  "Nothing matched; the agent would get the domain's opening rules instead.":
+    "Eşleşen yok; ajan bunun yerine alanın ilk kurallarını alır.",
   Index: "Dizin",
   "Reindex now": "Şimdi yeniden dizinle",
   "Reindexing…": "Yeniden dizinleniyor…",
@@ -530,10 +558,20 @@ export const TR: Record<string, string> = {
 
   // -- settings: github / jira / users -------------------------------------------------------------------------
   "Clone, push and open pull requests.": "Klonla, push'la ve pull request aç.",
-  "The token is used to clone private repositories, push job branches and open pull requests. It is stored encrypted and never shown again.":
-    "Token özel depoları klonlamak, iş dallarını push'lamak ve pull request açmak için kullanılır. Şifreli saklanır ve bir daha gösterilmez.",
+  "Used to clone private repositories, push job branches and open pull requests. Stored encrypted and never shown again.":
+    "Özel depoları klonlamak, iş dallarını push'lamak ve pull request açmak için kullanılır. Şifreli saklanır, bir daha gösterilmez.",
   "Personal access token": "Kişisel erişim token'ı",
-  "Default owner / organisation": "Varsayılan sahip / kuruluş",
+  "Not connected": "Bağlı değil",
+  "Checking…": "Kontrol ediliyor…",
+  "Token rejected": "Token reddedildi",
+  Connected: "Bağlı",
+  Connect: "Bağlan",
+  "Change token": "Token'ı değiştir",
+  Disconnect: "Bağlantıyı kes",
+  Token: "Token",
+  "{n} API calls left": "{n} API çağrısı kaldı",
+  "Defaults for new projects": "Yeni projeler için varsayılanlar",
+  "Owner / organisation": "Sahip / kuruluş",
   "Base branch": "Temel dal",
   "Connected as": "Bağlı hesap:",
   "Only admins can change these settings.": "Bu ayarları yalnızca yöneticiler değiştirebilir.",
@@ -596,10 +634,6 @@ export const TR: Record<string, string> = {
   "not approved automatically: ": "otomatik onaylanmadı: ",
   "standards review findings": "standart incelemesi bulguları",
   "{n} advisory": "{n} öneri",
-  ", and": ", ve",
-  "under 400 words: each section is one retrievable chunk, so the heading should say what the rule is about. Saves are linted, reindexed at once and committed on the":
-    "400 kelimenin altında: her bölüm getirilebilir bir parçadır, bu yüzden başlık kuralın neyle ilgili olduğunu söylemeli. Kayıtlar denetlenir, hemen yeniden dizinlenir ve şu dala commit'lenir:",
-  "branch.": "dalı.",
   // -- stepper -----------------------------------------------------------------------------------------------
   "backlog approval": "backlog onayı",
   "architecture approval": "mimari onayı",

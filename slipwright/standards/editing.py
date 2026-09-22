@@ -6,6 +6,12 @@ the agents read it, checks it with the corpus linter, and — when the directory
 a git repository — also commits it on a ``slipwright/standards`` branch through a
 separate worktree, so what people change in the UI is reviewable like any other change
 without touching the checkout the app runs from.
+
+The UI works one level down from pages: a *rule* is one ``##`` section (the unit the
+retrieval hands to an agent), listed flat per domain and added, edited or removed on its
+own. Rules added that way go to ``<domain>/rules.md`` (``core.md`` for the core rules);
+the pages the corpus ships with keep their own files. A rule's id is ``<path>:<n>`` —
+the n-th ``##`` block of the page's source — so it stays put while the rule is edited.
 """
 
 from __future__ import annotations
@@ -34,6 +40,8 @@ log = logging.getLogger(__name__)
 BRANCH = "slipwright/standards"
 _PATH = re.compile(r"^(?:core\.md|(?:[a-z][a-z0-9-]*)/[a-z0-9][a-z0-9._-]*\.md)$")
 _SLUG = re.compile(r"[^a-z0-9]+")
+_SECTION = re.compile(r"^(?=## )", re.MULTILINE)  # keeps the "## " with its section
+RULES_PAGE = "rules.md"  # where the UI puts a domain's added rules
 
 
 class PageError(ValueError):
@@ -47,6 +55,18 @@ class PageInfo:
     title: str
     scope: str
     sections: int
+    words: int
+    modified_at: datetime
+
+
+@dataclass(frozen=True)
+class Rule:
+    id: str  # "<path>:<n>": the n-th "##" block of the page source
+    path: str
+    domain: str
+    scope: str
+    heading: str
+    text: str
     words: int
     modified_at: datetime
 
@@ -69,6 +89,35 @@ def new_page_text(domain: str, title: str, body: str = "") -> str:
     """Front-matter plus a title; ``body`` may already carry ``##`` sections."""
     text = body.strip() or "## Rule\n\nState the rule, why it exists and how to apply it."
     return f"---\ndomain: {domain}\ntags: []\napplies_to: [{domain}]\n---\n\n# {title}\n\n{text}\n"
+
+
+def split_source(text: str) -> tuple[str, list[str]]:
+    """A page's source as ``(head, blocks)``: everything before the first ``## `` (the
+    front-matter and title) and one string per ``##`` section, so that
+    ``head + "".join(blocks)`` is the text again. Indices into ``blocks`` are rule ids."""
+    parts = _SECTION.split(text)
+    return parts[0], parts[1:]
+
+
+def parse_block(block: str) -> tuple[str, str]:
+    """``(heading, text)`` of one ``## `` block; the text is stripped."""
+    first, _, rest = block.partition("\n")
+    return first[3:].strip(), rest.strip()
+
+
+def render_block(heading: str, text: str) -> str:
+    return f"## {heading.strip()}\n\n{text.strip()}\n\n"
+
+
+def rule_id(path: str, n: int) -> str:
+    return f"{path}:{n}"
+
+
+def parse_rule_id(rule: str) -> tuple[str, int]:
+    path, sep, n = rule.rpartition(":")
+    if not sep or not n.isdigit():
+        raise PageError(f"not a rule id: {rule!r} (expected <path>:<n>)")
+    return check_path(path), int(n)
 
 
 class StandardsEditor:
@@ -120,6 +169,37 @@ class StandardsEditor:
             raise FileNotFoundError(path)
         return file.read_text(encoding="utf-8")
 
+    def list_rules(self, project_repo: Path | None, domain: str) -> list[Rule]:
+        """Every ``##`` section of the domain's pages, flat, in page order. ``core`` lists
+        only ``core.md``; any other domain leaves the core rules out."""
+        out: list[Rule] = []
+        for info in self.list_pages(project_repo, domain):
+            if info.domain == domain:
+                out.extend(self._rules_of(info, project_repo))
+        return out
+
+    def _rules_of(self, info: PageInfo, project_repo: Path | None) -> list[Rule]:
+        file = self.root(project_repo) / info.path
+        _, blocks = split_source(file.read_text(encoding="utf-8"))
+        rules: list[Rule] = []
+        for n, block in enumerate(blocks):
+            heading, text = parse_block(block)
+            if not text:
+                continue  # not a chunk either
+            rules.append(
+                Rule(
+                    id=rule_id(info.path, n),
+                    path=info.path,
+                    domain=info.domain,
+                    scope=info.scope,
+                    heading=heading,
+                    text=text,
+                    words=len(text.split()),
+                    modified_at=info.modified_at,
+                )
+            )
+        return rules
+
     # -- write ---------------------------------------------------------------------------
 
     def write(self, path: str, text: str, project_repo: Path | None, *, author: str) -> PageInfo:
@@ -166,6 +246,66 @@ class StandardsEditor:
             raise FileNotFoundError(path)
         file.unlink()
         self._commit(root, rel, f"standards: remove {rel} (by {author})", delete=True)
+
+    # -- rules -------------------------------------------------------------------------
+
+    def add_rule(
+        self, domain: str, heading: str, text: str, project_repo: Path | None, *, author: str
+    ) -> Rule:
+        """Append a section to the domain's ``rules.md`` (``core.md`` for core), creating
+        the page when the domain has none yet."""
+        if domain not in DOMAINS:
+            raise PageError(f"unknown domain {domain!r} (expected one of {DOMAINS})")
+        heading, text = _clean_rule(heading, text)
+        path = "core.md" if domain == "core" else f"{domain}/{RULES_PAGE}"
+        file = self.root(project_repo) / path
+        if file.is_file():
+            head, blocks = split_source(file.read_text(encoding="utf-8"))
+        else:
+            head, blocks = split_source(new_page_text(domain, f"{domain.capitalize()} rules"))
+            blocks = []  # the template's placeholder section is not a rule
+        self._check_unique(heading, [parse_block(b)[0] for b in blocks])
+        blocks.append(render_block(heading, text))
+        info = self.write(path, _join(head, blocks), project_repo, author=author)
+        return self._rule(info, project_repo, len(blocks) - 1)
+
+    def update_rule(
+        self, rule: str, heading: str, text: str, project_repo: Path | None, *, author: str
+    ) -> Rule:
+        path, n = parse_rule_id(rule)
+        heading, text = _clean_rule(heading, text)
+        head, blocks = split_source(self.read(path, project_repo))
+        if n >= len(blocks):
+            raise FileNotFoundError(rule)
+        self._check_unique(heading, [parse_block(b)[0] for i, b in enumerate(blocks) if i != n])
+        blocks[n] = render_block(heading, text)
+        info = self.write(path, _join(head, blocks), project_repo, author=author)
+        return self._rule(info, project_repo, n)
+
+    def delete_rule(self, rule: str, project_repo: Path | None, *, author: str) -> None:
+        """Remove one section; a page left without sections goes with it (except
+        ``core.md``, which keeps at least one rule)."""
+        path, n = parse_rule_id(rule)
+        head, blocks = split_source(self.read(path, project_repo))
+        if n >= len(blocks):
+            raise FileNotFoundError(rule)
+        del blocks[n]
+        if not any(parse_block(b)[1] for b in blocks):
+            if path == "core.md":
+                raise PageError("core.md keeps at least one rule")
+            self.delete(path, project_repo, author=author)
+            return
+        self.write(path, _join(head, blocks), project_repo, author=author)
+
+    def _rule(self, info: PageInfo, project_repo: Path | None, n: int) -> Rule:
+        wanted = rule_id(info.path, n)
+        return next(r for r in self._rules_of(info, project_repo) if r.id == wanted)
+
+    @staticmethod
+    def _check_unique(heading: str, others: list[str]) -> None:
+        # the linter only sees duplicates across pages; within one page it is on us
+        if heading.lower() in {h.lower() for h in others}:
+            raise PageError(f"a rule titled {heading!r} already exists on this page")
 
     def _problems(self, file: Path, text: str, project_repo: Path | None) -> list[str]:
         """Lint the candidate page together with its siblings (duplicate headings)."""
@@ -224,4 +364,33 @@ class StandardsEditor:
             log.warning("standards: could not commit %s on %s: %s", rel, BRANCH, exc)
 
 
-__all__ = ["BRANCH", "PageError", "PageInfo", "StandardsEditor", "check_path", "new_page_text"]
+def _clean_rule(heading: str, text: str) -> tuple[str, str]:
+    heading = " ".join(heading.split())
+    text = text.strip()
+    if not heading:
+        raise PageError("a rule needs a title")
+    if not text:
+        raise PageError("a rule needs a text")
+    if _SECTION.search(text):
+        raise PageError("a rule's text cannot open a '## ' section; add another rule instead")
+    return heading, text
+
+
+def _join(head: str, blocks: list[str]) -> str:
+    body = "".join(b.rstrip("\n") + "\n\n" for b in blocks)
+    return head.rstrip("\n") + "\n\n" + body.rstrip("\n") + "\n"
+
+
+__all__ = [
+    "BRANCH",
+    "RULES_PAGE",
+    "PageError",
+    "PageInfo",
+    "Rule",
+    "StandardsEditor",
+    "check_path",
+    "new_page_text",
+    "parse_rule_id",
+    "rule_id",
+    "split_source",
+]

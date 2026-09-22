@@ -190,8 +190,16 @@ decision, never a model's. Engine code never names a model — a test greps for 
   the default chosen under Settings → Models). OpenAI and DeepSeek are driven through the
   OpenAI-compatible chat-completions API; `thinking_depth` becomes `reasoning_effort`
   where the vendor supports it (OpenAI) and is ignored where it does not (DeepSeek).
-- `model` is passed to the provider verbatim. Change it (Settings → Agents, or the seed
-  profile file) and that role runs on the new model — no code changes, no restart.
+- `model` is passed to the provider verbatim. Change it in the seed profile file and that
+  role runs on the new model — no code changes, no restart. A role without a `provider`
+  follows the default provider *and* that provider's default model (Settings → Models),
+  so the profile's model name only applies where the profile also names the vendor.
+- **Agents → (agent) → Setup** pins an agent to a provider and model for *every* project,
+  over whatever the profiles say (`PUT /api/agents/{role}/routing`). Saving is refused
+  when the provider has no key; *Test connection* asks the vendor whether the key works
+  and whether the model is in its list. If the assigned provider cannot be reached when a
+  job runs, the job fails with that reason in its history, and each call's log records
+  the model that actually answered.
 - `thinking_depth` is one of `off`, `low`, `medium`, `high`, `max`. On the Anthropic
   provider `off` disables thinking; the others enable adaptive thinking and set
   `output_config.effort` to the same word. Use `low` for cheap mechanical roles (DevOps),

@@ -103,22 +103,31 @@ class AgentSummary(BaseModel):
     provider: str | None
     effective_provider: str  # where the role runs right now (the default resolved)
     effective_model: str
+    # the pin set under Agents; None when the role follows the profile / default provider
+    assigned_provider: str | None = None
+    assigned_model: str | None = None
     thinking_depth: str
     permissions: list[str]
 
 
-Router = Callable[[RoleConfig], tuple[str, str]]
+Router = Callable[[RoleConfig, RoleName], tuple[str, str]]
+Assignment = Callable[[str], tuple[str, str] | None]
 
 
 def agent_summaries(
-    jobs: list[Job], seed: Profile, *, route: Router | None = None
+    jobs: list[Job],
+    seed: Profile,
+    *,
+    route: Router | None = None,
+    assigned: Assignment | None = None,
 ) -> list[AgentSummary]:
     items = [i for job in jobs for i in job_activity(job) if i.kind is ActivityKind.ROLE]
     out: list[AgentSummary] = []
     for role in RoleName:
         mine = [i for i in items if i.role is role]
         cfg = seed.roles[role]
-        provider, model = route(cfg) if route else (cfg.provider or "anthropic", cfg.model)
+        provider, model = route(cfg, role) if route else (cfg.provider or "anthropic", cfg.model)
+        pin = assigned(role.value) if assigned else None
         out.append(
             AgentSummary(
                 role=role,
@@ -131,6 +140,8 @@ def agent_summaries(
                 provider=cfg.provider,
                 effective_provider=provider,
                 effective_model=model,
+                assigned_provider=pin[0] if pin else None,
+                assigned_model=pin[1] if pin else None,
                 thinking_depth=cfg.thinking_depth.value,
                 permissions=[p.value for p in cfg.permissions],
             )

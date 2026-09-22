@@ -1649,6 +1649,91 @@ ol.hits summary {
   cursor: pointer;
 }
 
+/* an agent's rules: one flat list, edited in place */
+ul.rules {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+ul.rules .rule {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+ul.rules .rule:last-child {
+  border-bottom: 0;
+}
+ul.rules .rule:first-child {
+  padding-top: 0;
+}
+.rule-body {
+  flex: 1;
+  min-width: 0;
+}
+.rule-body > strong {
+  display: block;
+  font-size: 14px;
+  margin-bottom: 2px;
+}
+.rule-body .markdown {
+  color: var(--text-2);
+  font-size: 13.5px;
+}
+.rule-body .markdown p:first-child {
+  margin-top: 0;
+}
+.rule-actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+  opacity: 0.55;
+  transition: opacity 0.12s;
+}
+.rule:hover .rule-actions,
+.rule:focus-within .rule-actions {
+  opacity: 1;
+}
+.rule-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  padding: 12px;
+  margin-bottom: 12px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.rule .rule-editor {
+  margin-bottom: 0;
+}
+.rule-editor input,
+.rule-editor textarea {
+  width: 100%;
+}
+.rule-editor .callout {
+  margin: 0;
+}
+details.card > summary {
+  cursor: pointer;
+  list-style: none;
+}
+details.card > summary::-webkit-details-marker {
+  display: none;
+}
+details.card > summary::before {
+  content: "▸";
+  display: inline-block;
+  width: 14px;
+  color: var(--text-2);
+  transition: transform 0.12s;
+}
+details.card[open] > summary::before {
+  transform: rotate(90deg);
+}
+
 /* supervisor (T9.8) */
 .chip {
   display: inline-block;

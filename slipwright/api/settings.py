@@ -19,7 +19,7 @@ from slipwright.jira import JiraAccount, JiraError, JiraProject, JiraSettings
 from slipwright.providers import ProviderError
 from slipwright.providers.registry import PROVIDERS
 from slipwright.schemas.profile import Profile
-from slipwright.standards.editing import PageError, PageInfo
+from slipwright.standards.editing import PageError, PageInfo, Rule
 from slipwright.standards.index import StandardsIndexError
 from slipwright.store import ProjectNotFound
 
@@ -383,6 +383,31 @@ class PageCreate(BaseModel):
     project_id: str | None = None
 
 
+class StandardsRule(BaseModel):
+    id: str
+    path: str
+    domain: str
+    scope: str
+    heading: str
+    text: str
+    words: int
+    modified_at: datetime
+
+
+class RuleWrite(BaseModel):
+    heading: str = Field(min_length=1)
+    text: str = Field(min_length=1)
+    project_id: str | None = None
+
+
+class RuleCreate(RuleWrite):
+    domain: str
+
+
+def _rule(rule: Rule) -> StandardsRule:
+    return StandardsRule(**{k: getattr(rule, k) for k in StandardsRule.model_fields})
+
+
 def _page(info: PageInfo) -> StandardsPage:
     return StandardsPage(
         path=info.path,
@@ -468,6 +493,64 @@ def delete_standards_page(path: str, request: Request, project_id: str | None = 
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=f"no page {path}") from exc
+    eng.ensure_standards_indexed(project_id)
+
+
+# -- standards rules: one "##" section each, the list an agent's page shows -------------------
+
+
+@router.get("/standards/rules", response_model=list[StandardsRule])
+def list_standards_rules(
+    request: Request, domain: str, project_id: str | None = None
+) -> list[StandardsRule]:
+    """The domain's rules, flat, in the global corpus or a project's overrides."""
+    eng = _engine(request)
+    return [_rule(r) for r in eng.standards_editor.list_rules(_repo(eng, project_id), domain)]
+
+
+@router.post("/standards/rules", response_model=StandardsRule, status_code=201)
+def create_standards_rule(body: RuleCreate, request: Request) -> StandardsRule:
+    user = require_admin(request)
+    eng = _engine(request)
+    repo = _repo(eng, body.project_id)
+    try:
+        rule = eng.standards_editor.add_rule(
+            body.domain, body.heading, body.text, repo, author=user.username
+        )
+    except PageError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    eng.ensure_standards_indexed(body.project_id)
+    return _rule(rule)
+
+
+@router.put("/standards/rules/{rule_id:path}", response_model=StandardsRule)
+def put_standards_rule(rule_id: str, body: RuleWrite, request: Request) -> StandardsRule:
+    user = require_admin(request)
+    eng = _engine(request)
+    repo = _repo(eng, body.project_id)
+    try:
+        rule = eng.standards_editor.update_rule(
+            rule_id, body.heading, body.text, repo, author=user.username
+        )
+    except PageError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=f"no rule {rule_id}") from exc
+    eng.ensure_standards_indexed(body.project_id)
+    return _rule(rule)
+
+
+@router.delete("/standards/rules/{rule_id:path}", status_code=204)
+def delete_standards_rule(rule_id: str, request: Request, project_id: str | None = None) -> None:
+    user = require_admin(request)
+    eng = _engine(request)
+    repo = _repo(eng, project_id)
+    try:
+        eng.standards_editor.delete_rule(rule_id, repo, author=user.username)
+    except PageError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=f"no rule {rule_id}") from exc
     eng.ensure_standards_indexed(project_id)
 
 

@@ -93,10 +93,61 @@
         "title": "ActivityKind",
         "type": "string"
       },
+      "AgentRouting": {
+        "description": "Pin an agent to a provider and model for every project; both empty clears the pin.",
+        "properties": {
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          }
+        },
+        "title": "AgentRouting",
+        "type": "object"
+      },
       "AgentSummary": {
         "additionalProperties": false,
         "description": "One agent card: what it is and how much it has worked.",
         "properties": {
+          "assigned_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assigned Model"
+          },
+          "assigned_provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assigned Provider"
+          },
           "effective_model": {
             "title": "Effective Model",
             "type": "string"
@@ -164,6 +215,8 @@
           }
         },
         "required": [
+          "assigned_model",
+          "assigned_provider",
           "effective_model",
           "effective_provider",
           "invocations",
@@ -2958,6 +3011,73 @@
         "title": "RoleName",
         "type": "string"
       },
+      "RuleCreate": {
+        "properties": {
+          "domain": {
+            "title": "Domain",
+            "type": "string"
+          },
+          "heading": {
+            "minLength": 1,
+            "title": "Heading",
+            "type": "string"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "text": {
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "heading",
+          "text",
+          "domain"
+        ],
+        "title": "RuleCreate",
+        "type": "object"
+      },
+      "RuleWrite": {
+        "properties": {
+          "heading": {
+            "minLength": 1,
+            "title": "Heading",
+            "type": "string"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "text": {
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "heading",
+          "text"
+        ],
+        "title": "RuleWrite",
+        "type": "object"
+      },
       "StandardsHit": {
         "properties": {
           "domain": {
@@ -3102,6 +3222,55 @@
           "words"
         ],
         "title": "StandardsPageText",
+        "type": "object"
+      },
+      "StandardsRule": {
+        "properties": {
+          "domain": {
+            "title": "Domain",
+            "type": "string"
+          },
+          "heading": {
+            "title": "Heading",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "modified_at": {
+            "format": "date-time",
+            "title": "Modified At",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "scope": {
+            "title": "Scope",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "words": {
+            "title": "Words",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "domain",
+          "heading",
+          "id",
+          "modified_at",
+          "path",
+          "scope",
+          "text",
+          "words"
+        ],
+        "title": "StandardsRule",
         "type": "object"
       },
       "StandardsSettings": {
@@ -4016,6 +4185,55 @@
           }
         },
         "summary": "Get Agents"
+      }
+    },
+    "/api/agents/{role}/routing": {
+      "put": {
+        "description": "Pin an agent to a provider and model. 400 when the provider is unknown, has no\nkey, or no model was named -- the job would only fail at its first call.",
+        "operationId": "put_agent_routing_api_agents__role__routing_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "role",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/RoleName"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentRouting"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Agent Routing"
       }
     },
     "/api/auth/login": {
@@ -6447,6 +6665,209 @@
           }
         },
         "summary": "Put Standards Page",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/standards/rules": {
+      "get": {
+        "description": "The domain's rules, flat, in the global corpus or a project's overrides.",
+        "operationId": "list_standards_rules_api_standards_rules_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "domain",
+            "required": true,
+            "schema": {
+              "title": "Domain",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Project Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/StandardsRule"
+                  },
+                  "title": "Response List Standards Rules Api Standards Rules Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Standards Rules",
+        "tags": [
+          "settings"
+        ]
+      },
+      "post": {
+        "operationId": "create_standards_rule_api_standards_rules_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RuleCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardsRule"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Standards Rule",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/standards/rules/{rule_id}": {
+      "delete": {
+        "operationId": "delete_standards_rule_api_standards_rules__rule_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rule_id",
+            "required": true,
+            "schema": {
+              "title": "Rule Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Project Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Standards Rule",
+        "tags": [
+          "settings"
+        ]
+      },
+      "put": {
+        "operationId": "put_standards_rule_api_standards_rules__rule_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rule_id",
+            "required": true,
+            "schema": {
+              "title": "Rule Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RuleWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardsRule"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Standards Rule",
         "tags": [
           "settings"
         ]

@@ -246,7 +246,7 @@ def test_tests_tab_lists_runs_and_scrolls_to_the_failure() -> None:
 
 def test_settings_pages_cover_github_jira_agents_and_users() -> None:
     github = _src("pages/settings/GitHubSettingsPage.tsx")
-    for expected in ('type="password"', "token_hint", "Test connection", "useTestGitHub", "login"):
+    for expected in ('type="password"', "token_hint", "useGitHubIdentity", "clear_token", "login"):
         assert expected in github, expected
     jira = _src("pages/settings/JiraSettingsPage.tsx")
     for expected in ("site_url", "issue_types", "useTestJira", "clear_token", "display_name"):

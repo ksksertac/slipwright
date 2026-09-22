@@ -185,7 +185,7 @@ def invoke_role(
 
     return RoleResult(
         role=role,
-        model=role_cfg.model,
+        model=response.model or role_cfg.model,  # what answered (routing may differ)
         thinking_depth=role_cfg.thinking_depth,
         output=output,
         raw_text=response.text,

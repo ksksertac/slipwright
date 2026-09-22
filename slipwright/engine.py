@@ -259,6 +259,7 @@ class Engine:
                 self.provider_credentials,
                 default=self.default_provider_name,
                 default_model=self.default_model_for,
+                role_routing=self.agent_routing,
                 transport=self.http_transport,
             )
         return self._provider
@@ -276,12 +277,46 @@ class Engine:
         model = data.get("default_model")
         return str(model) if model else None
 
-    def effective_routing(self, cfg: RoleConfig) -> tuple[str, str]:
-        """(provider, model) a role actually runs on right now."""
+    def effective_routing(self, cfg: RoleConfig, role: RoleName | None = None) -> tuple[str, str]:
+        """(provider, model) a role actually runs on right now: its assignment under
+        Agents, else the profile's provider, else the default provider and its model."""
+        assigned = self.agent_routing(role.value) if role is not None else None
+        if assigned is not None:
+            return assigned
         if cfg.provider:
             return cfg.provider, cfg.model
         name = self.default_provider_name()
         return name, self.default_model_for(name) or cfg.model
+
+    # -- agent assignments -----------------------------------------------------------------
+
+    def agent_routing(self, role: str) -> tuple[str, str] | None:
+        """The (provider, model) an agent was assigned under Agents; None when it follows
+        the profile. Applies to every project, whatever the project's profile says."""
+        data: dict[str, Any] = self.store.get_setting(f"agents.{role}", {}) or {}
+        provider, model = data.get("provider"), data.get("model")
+        if not provider or not model or provider not in PROVIDERS:
+            return None
+        return str(provider), str(model)
+
+    def assign_agent(self, role: RoleName, provider: str | None, model: str | None) -> None:
+        """Pin an agent to a provider and model, or clear the pin when both are empty. A
+        provider without a key is refused here rather than failing every job later."""
+        provider, model = (provider or "").strip(), (model or "").strip()
+        if not provider and not model:
+            self.store.delete_setting(f"agents.{role.value}")
+            return
+        if provider not in PROVIDERS:
+            raise ValueError(f"unknown provider: {provider!r}")
+        if not model:
+            raise ValueError(f"pick a model for {PROVIDERS[provider].label}")
+        if self.provider_credentials(provider) is None:
+            spec = PROVIDERS[provider]
+            raise ProviderUnavailableError(
+                f"no API key for {spec.label}: add one under Settings → Models "
+                f"or set {spec.env_var}"
+            )
+        self.store.set_setting(f"agents.{role.value}", {"provider": provider, "model": model})
 
     def provider_credentials(self, name: str) -> Credentials | None:
         """Stored key first, else the vendor's environment variable; None when neither."""
@@ -1571,6 +1606,7 @@ class Engine:
         job.data.invocation_log.append(
             {
                 "role": role.value,
+                "model": result.model,  # what answered: the assignment, not the profile
                 "state": job.state.value,
                 "phase": job.data.phase_index + 1 if job.state is JobState.DEVELOPING else None,
                 "attempts": result.attempts,

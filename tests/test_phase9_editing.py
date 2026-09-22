@@ -16,7 +16,14 @@ from slipwright.schemas.job import JobState
 from slipwright.schemas.profile import Profile
 from slipwright.schemas.project import Project
 from slipwright.standards import GLOBAL_DIR, PROJECT_SUBDIR
-from slipwright.standards.editing import BRANCH, PageError, StandardsEditor, check_path
+from slipwright.standards.editing import (
+    BRANCH,
+    PageError,
+    StandardsEditor,
+    check_path,
+    parse_rule_id,
+    split_source,
+)
 from slipwright.store import JobStore
 from tests.pipeline import full_engine, full_provider
 
@@ -232,6 +239,131 @@ def test_pages_api(store: JobStore, worktrees_root: Path, seed: Profile, corpus:
         assert client.delete("/api/standards/pages/core.md").status_code == 400
 
 
+def test_split_source_round_trips_every_shipped_page() -> None:
+    for path in GLOBAL_DIR.rglob("*.md"):
+        text = path.read_text(encoding="utf-8")
+        head, blocks = split_source(text)
+        assert head + "".join(blocks) == text, path
+        assert all(b.startswith("## ") for b in blocks), path
+    assert parse_rule_id("product/backlog.md:2") == ("product/backlog.md", 2)
+    for bad in ("product/backlog.md", "product/backlog.md:x", "../x.md:1"):
+        with pytest.raises(PageError):
+            parse_rule_id(bad)
+
+
+def test_rules_are_the_sections_and_edit_in_place(corpus: Path, tmp_path: Path) -> None:
+    """The agent page lists one rule per ``##`` section; adding, editing and removing a
+    rule rewrites only that section and the rest of the page stays byte-identical."""
+    editor = StandardsEditor(corpus, tmp_path / "branches")
+    rules = editor.list_rules(None, "product")
+    assert [r.id for r in rules] == [f"product/backlog.md:{n}" for n in range(4)]
+    assert rules[1].heading == "What a task must say" and rules[1].words > 20
+    assert all(r.domain == "product" for r in rules)  # core does not ride along here
+    core = editor.list_rules(None, "core")
+    assert core and all(r.path == "core.md" for r in core)
+
+    # add: goes to product/rules.md, created on demand, in whatever language
+    added = editor.add_rule(
+        "product",
+        "Kabul kriterleri",
+        "Her story en az bir ölçülebilir kabul kriteri taşır.",
+        None,
+        author="ada",
+    )
+    assert added.id == "product/rules.md:0" and added.scope == "global"
+    text = (corpus / "product" / "rules.md").read_text(encoding="utf-8")
+    assert text.startswith("---\ndomain: product\n") and "# Product rules\n" in text
+    assert "## Kabul kriterleri\n\nHer story" in text
+    assert "## Rule" not in text  # the page template's placeholder is not a rule
+    again = editor.add_rule("product", "İkinci kural", "metin", None, author="ada")
+    assert again.id == "product/rules.md:1"
+    assert [r.heading for r in editor.list_rules(None, "product")][-2:] == [
+        "Kabul kriterleri",
+        "İkinci kural",
+    ]
+    with pytest.raises(PageError, match="already exists"):
+        editor.add_rule("product", "kabul KRITERLERI".lower(), "x", None, author="ada")
+
+    # edit: the other sections of the page are untouched
+    before = (corpus / "product" / "backlog.md").read_text(encoding="utf-8")
+    head, blocks = split_source(before)
+    edited = editor.update_rule(
+        "product/backlog.md:1",
+        "Bir görev ne söylemeli",
+        "Kısa ve test edilebilir.",
+        None,
+        author="ada",
+    )
+    assert edited.id == "product/backlog.md:1" and edited.heading == "Bir görev ne söylemeli"
+    after = (corpus / "product" / "backlog.md").read_text(encoding="utf-8")
+    head2, blocks2 = split_source(after)
+    assert head2 == head and [blocks2[i] for i in (0, 2, 3)] == [blocks[i] for i in (0, 2, 3)]
+    assert blocks2[1] == "## Bir görev ne söylemeli\n\nKısa ve test edilebilir.\n\n"
+    with pytest.raises(PageError, match="already exists"):
+        editor.update_rule("product/backlog.md:1", "When to stop and ask", "x", None, author="a")
+    with pytest.raises(PageError, match="duplicates"):  # across pages: the linter
+        editor.update_rule("product/rules.md:0", "When to stop and ask", "x", None, author="a")
+    with pytest.raises(PageError, match="title"):
+        editor.update_rule("product/backlog.md:1", "  ", "x", None, author="a")
+    with pytest.raises(PageError, match="section"):
+        editor.update_rule("product/backlog.md:1", "T", "a\n## sneaky\nb", None, author="a")
+    with pytest.raises(FileNotFoundError):
+        editor.update_rule("product/backlog.md:9", "T", "x", None, author="a")
+
+    # delete: the last rule takes its page with it; core.md never empties
+    editor.delete_rule("product/rules.md:0", None, author="ada")
+    assert [r.heading for r in editor.list_rules(None, "product")][-1] == "İkinci kural"
+    editor.delete_rule("product/rules.md:0", None, author="ada")
+    assert not (corpus / "product" / "rules.md").exists()
+    assert "remove product/rules.md" in _git(corpus.parent, "log", "-1", BRANCH)
+    for _ in range(len(editor.list_rules(None, "core")) - 1):
+        editor.delete_rule("core.md:0", None, author="ada")
+    with pytest.raises(PageError, match="at least one"):
+        editor.delete_rule("core.md:0", None, author="ada")
+
+
+def test_rules_api(store: JobStore, worktrees_root: Path, seed: Profile, corpus: Path) -> None:
+    engine = _engine(store, worktrees_root, seed, corpus)
+    app = create_app(engine, resume_on_startup=False, require_auth=False)
+    with TestClient(app) as client:
+        rules = client.get("/api/standards/rules?domain=web").json()
+        assert rules and {r["domain"] for r in rules} == {"web"}
+        assert {"id", "heading", "text", "words", "scope"} <= set(rules[0])
+
+        created = client.post(
+            "/api/standards/rules",
+            json={
+                "domain": "web",
+                "heading": "Boş durumlar",
+                "text": "Her liste boş durumunu söyler.",
+            },
+        )
+        assert created.status_code == 201, created.text
+        rid = created.json()["id"]
+        assert rid == "web/rules.md:0"
+        hits = client.get("/api/settings/standards/search?q=boş+liste+durum&domain=web").json()
+        assert hits and hits[0]["heading"].endswith("Boş durumlar")  # indexed at once
+
+        put = client.put(
+            f"/api/standards/rules/{rid}", json={"heading": "Boş durumlar", "text": "Daha kısa."}
+        )
+        assert put.status_code == 200 and put.json()["text"] == "Daha kısa."
+        dup = client.put(
+            f"/api/standards/rules/{rid}", json={"heading": rules[0]["heading"], "text": "x"}
+        )
+        assert dup.status_code == 422 and "duplicates" in dup.json()["detail"]
+        assert (
+            client.put(
+                "/api/standards/rules/web/nope.md:0", json={"heading": "a", "text": "b"}
+            ).status_code
+            == 404
+        )
+        assert client.delete(f"/api/standards/rules/{rid}").status_code == 204
+        assert client.delete(f"/api/standards/rules/{rid}").status_code == 404
+        assert client.delete("/api/standards/rules/etc/passwd:0").status_code == 422
+        assert client.get("/api/standards/rules?domain=web&project_id=nope").status_code == 404
+
+
 def test_review_health_on_the_project_progress(seed: Profile, repo: Path) -> None:
     from slipwright.schemas.job import Job
 
@@ -248,11 +380,12 @@ def test_standards_ui_sources() -> None:
     text = {p.name: p.read_text(encoding="utf-8") for p in (WEB / "src").rglob("*.tsx")}
     tab = text["AgentStandardsTab.tsx"]
     for expected in (
-        "useStandardsPages",
-        "New page",
+        "useStandardsRules",
+        "useCreateStandardsRule",
+        "useSaveStandardsRule",
+        "useDeleteStandardsRule",
+        "Add rule",
         "Markdown",
-        "preview",
-        "core.md",
         "Try a search",
         "Reindex now",
         "embedder",
@@ -262,4 +395,4 @@ def test_standards_ui_sources() -> None:
         assert expected in tab, expected
     assert "review_blocking" in text["ProjectPage.tsx"]
     hooks = (WEB / "src" / "api" / "hooks.ts").read_text(encoding="utf-8")
-    assert "/api/standards/pages" in hooks and "/api/settings/standards" in hooks
+    assert "/api/standards/rules" in hooks and "/api/settings/standards" in hooks

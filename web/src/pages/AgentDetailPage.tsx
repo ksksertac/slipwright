@@ -1,8 +1,23 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, NavLink, useParams } from "react-router-dom";
-import { api, describeError, type Permission, type Profile, type RoleConfig } from "../api/client";
-import { useActivity_all, useAgents, usePatchProject, useProject, useProjects } from "../api/hooks";
+import {
+  api,
+  describeError,
+  type AgentSummary,
+  type Permission,
+  type Profile,
+  type RoleConfig,
+} from "../api/client";
+import {
+  useActivity_all,
+  useAgents,
+  useAssignAgent,
+  usePatchProject,
+  useProject,
+  useProjects,
+  useTestProvider,
+} from "../api/hooks";
 import { ActivityRow } from "../components/ActivityRow";
 import { AgentIcon } from "../components/agents";
 import { Crumbs } from "../components/Crumbs";
@@ -56,26 +71,28 @@ export function AgentDetailPage() {
           </NavLink>
         ))}
       </nav>
-      {current === "setup" && <SetupTab role={role} />}
+      {current === "setup" && <SetupTab agent={agent} />}
       {current === "standards" && <AgentStandardsTab role={role} domain={agent.standards_domain} />}
       {current === "activity" && <ActivityTab role={role} />}
     </div>
   );
 }
 
-// -- setup: this role's row of a project's seed profile ------------------------------------
+// -- setup: the agent's model (every project), then this role's row of a project profile --
 
-function SetupTab({ role }: { role: string }) {
+function SetupTab({ agent }: { agent: AgentSummary }) {
   const tx = useT();
   const projects = useProjects();
   const [selected, setSelected] = useState("");
   const projectId = selected || projects.data?.[0]?.id || "";
+  const role = agent.role;
   return (
     <div className="stack">
-      <p className="muted small">
-        Model, thinking depth and permissions are read from the project's seed profile — never from
-        engine code. Pick a project; projects without their own profile start from the engine
-        default and get one when you save.
+      <ModelCard key={role} agent={agent} />
+      <p className="muted small" style={{ marginTop: 18 }}>
+        {tx(
+          "Thinking depth and permissions are read from the project's seed profile — never from engine code. Pick a project; projects without their own profile start from the engine default and get one when you save.",
+        )}
       </p>
       {projects.data && projects.data.length === 0 && (
         <Empty>
@@ -99,6 +116,180 @@ function SetupTab({ role }: { role: string }) {
         </div>
       )}
       {projectId && <RoleSetup key={`${projectId}:${role}`} projectId={projectId} role={role} />}
+    </div>
+  );
+}
+
+/** Which provider and model this agent runs on, for every project. Saving is refused when
+ *  the provider has no key; "Test" asks the vendor whether the key and model work. */
+function ModelCard({ agent }: { agent: AgentSummary }) {
+  const tx = useT();
+  const { user } = useAuth();
+  const admin = !!user?.is_admin;
+  const toast = useToast();
+  const providers = useProviders();
+  const assign = useAssignAgent(agent.role);
+  const test = useTestProvider();
+  const [provider, setProvider] = useState(agent.assigned_provider ?? "");
+  const [model, setModel] = useState(agent.assigned_model ?? "");
+  const [dirty, setDirty] = useState(false);
+  const models = useProviderModels(provider || null);
+  const spec = providers.data?.find((p) => p.name === provider);
+  const defaultProvider = providers.data?.find((p) => p.is_default);
+  const pinned = !!agent.assigned_provider;
+  const listed = models.data?.models ?? [];
+  const known = listed.length > 0;
+
+  const pick = (name: string) => {
+    setProvider(name);
+    setModel("");
+    setDirty(true);
+    test.reset();
+  };
+  const save = (body: { provider: string | null; model: string | null }) =>
+    assign.mutate(body, {
+      onSuccess: (card) => {
+        setDirty(false);
+        setProvider(card.assigned_provider ?? "");
+        setModel(card.assigned_model ?? "");
+        toast.ok(
+          card.assigned_provider
+            ? tx("{agent} now runs on {model}", {
+                agent: tx(agent.label),
+                model: card.assigned_model ?? "",
+              })
+            : tx("{agent} follows the default provider again", { agent: tx(agent.label) }),
+        );
+      },
+    });
+
+  return (
+    <div className="card form">
+      <div className="row spread">
+        <h3>{tx("Model")}</h3>
+        <span className="faint small">
+          {pinned
+            ? tx("assigned — every project")
+            : tx("follows the default provider (Settings → Models)")}
+        </span>
+      </div>
+      <p className="muted small" style={{ marginTop: 6 }}>
+        {tx(
+          "Pick the provider and model this agent works with. It runs there on every project, whatever the project profile says; if the provider cannot be reached the job fails with the reason.",
+        )}
+      </p>
+      <div className="grid-2" style={{ marginTop: 10 }}>
+        <div className="field">
+          <label>{tx("Provider")}</label>
+          <select value={provider} disabled={!admin} onChange={(e) => pick(e.target.value)}>
+            <option value="">
+              {tx("default ({provider})", { provider: defaultProvider?.name ?? "…" })}
+            </option>
+            {(providers.data ?? []).map((p) => (
+              <option key={p.name} value={p.name}>
+                {p.label}
+                {p.key_set ? "" : ` — ${tx("no key")}`}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="field">
+          <label>{tx("Model")}</label>
+          {provider && known ? (
+            <select
+              className="mono"
+              value={model}
+              disabled={!admin}
+              onChange={(e) => {
+                setModel(e.target.value);
+                setDirty(true);
+              }}
+            >
+              <option value="">{tx("pick a model…")}</option>
+              {model && !listed.includes(model) && <option value={model}>{model}</option>}
+              {listed.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              type="text"
+              className="mono"
+              value={model}
+              disabled={!admin || !provider}
+              placeholder={
+                !provider
+                  ? tx("the provider's default model")
+                  : spec && !spec.key_set
+                    ? tx("add a key under Settings → Models first")
+                    : tx("model id")
+              }
+              onChange={(e) => {
+                setModel(e.target.value);
+                setDirty(true);
+              }}
+            />
+          )}
+          {provider && spec && !spec.key_set && (
+            <span className="faint tiny">
+              {tx("no API key for {provider}", { provider: spec.label })}
+            </span>
+          )}
+        </div>
+      </div>
+      {provider && models.error && (
+        <div className="callout error">{describeError(models.error)}</div>
+      )}
+      {assign.error && <div className="callout error">{describeError(assign.error)}</div>}
+      {test.data && test.data.name === provider && (
+        <div
+          className={`callout ${model && !test.data.models.includes(model) ? "warn" : "notice"}`}
+        >
+          {tx("Connected to {provider}: {n} model(s).", {
+            provider: spec?.label ?? provider,
+            n: test.data.models.length,
+          })}{" "}
+          {model &&
+            (test.data.models.includes(model)
+              ? tx("{model} is available.", { model })
+              : tx("{model} is not in the vendor's list — it may still fail at run time.", {
+                  model,
+                }))}
+        </div>
+      )}
+      {test.error && test.variables === provider && (
+        <div className="callout error">{describeError(test.error)}</div>
+      )}
+      {admin && (
+        <div className="row">
+          <button
+            className="btn primary"
+            disabled={!dirty || assign.isPending || (!!provider && !model)}
+            onClick={() => save({ provider: provider || null, model: model || null })}
+          >
+            {assign.isPending ? tx("Saving…") : tx("Save")}
+          </button>
+          <button
+            className="btn"
+            disabled={!provider || !spec?.key_set || test.isPending}
+            onClick={() => test.mutate(provider)}
+          >
+            {test.isPending ? tx("Testing…") : tx("Test connection")}
+          </button>
+          {pinned && !dirty && (
+            <button
+              className="btn"
+              disabled={assign.isPending}
+              onClick={() => save({ provider: null, model: null })}
+            >
+              {tx("Clear assignment")}
+            </button>
+          )}
+          {dirty && <span className="muted small">{tx("unsaved changes")}</span>}
+        </div>
+      )}
     </div>
   );
 }
@@ -132,7 +323,6 @@ function RoleForm({
   const { user } = useAuth();
   const patch = usePatchProject(projectId);
   const toast = useToast();
-  const providers = useProviders();
   const admin = !!user?.is_admin;
   const initial: RoleConfig = profile.roles[role] ?? {
     model: "",
@@ -141,8 +331,6 @@ function RoleForm({
   };
   const [cfg, setCfg] = useState<RoleConfig>(initial);
   const [dirty, setDirty] = useState(false);
-  const defaultProvider = providers.data?.find((p) => p.is_default)?.name ?? "anthropic";
-  const models = useProviderModels(cfg.provider ?? defaultProvider);
   const set = (patchCfg: Partial<RoleConfig>) => {
     setCfg({ ...cfg, ...patchCfg });
     setDirty(true);
@@ -162,44 +350,12 @@ function RoleForm({
   return (
     <div className="card form">
       <div className="row spread">
-        <h3>{tx("Routing")}</h3>
+        <h3>{tx("Project profile")}</h3>
         <span className="faint small">
-          {hasOwn ? "project profile" : "engine default (saved into the project on save)"}
+          {hasOwn ? tx("project profile") : tx("engine default (saved into the project on save)")}
         </span>
       </div>
       <div className="grid-2" style={{ marginTop: 10 }}>
-        <div className="field">
-          <label>{tx("Provider")}</label>
-          <select
-            value={cfg.provider ?? ""}
-            disabled={!admin}
-            onChange={(e) => set({ provider: e.target.value || null })}
-          >
-            <option value="">default ({defaultProvider})</option>
-            {(providers.data ?? []).map((p) => (
-              <option key={p.name} value={p.name}>
-                {p.label}
-                {p.key_set ? "" : " — no key"}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="field">
-          <label>{tx("Model")}</label>
-          <input
-            type="text"
-            className="mono"
-            list={`models-${role}`}
-            value={cfg.model}
-            disabled={!admin}
-            onChange={(e) => set({ model: e.target.value })}
-          />
-          <datalist id={`models-${role}`}>
-            {(models.data?.models ?? []).map((m) => (
-              <option key={m} value={m} />
-            ))}
-          </datalist>
-        </div>
         <div className="field">
           <label>{tx("Thinking depth")}</label>
           <select

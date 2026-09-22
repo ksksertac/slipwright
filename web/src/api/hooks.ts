@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   api,
   type ActivityItem,
+  type AgentRouting,
   type AgentSummary,
   type ApiToken,
   type BatchResult,
@@ -28,8 +29,7 @@ import {
   type Project,
   type ProjectPatch,
   type StandardsHit,
-  type StandardsPage,
-  type StandardsPageText,
+  type StandardsRule,
   type StandardsSettingsIn,
   type StandardsStatus,
   type ProjectProgress,
@@ -68,8 +68,7 @@ export const keys = {
   providerModels: (name: string) => ["settings", "providers", name, "models"] as const,
   tokens: (userId: string) => ["users", userId, "tokens"] as const,
   standards: ["standards", "status"] as const,
-  standardsPages: (scope: string, domain: string) => ["standards", "pages", scope, domain] as const,
-  standardsPage: (scope: string, path: string) => ["standards", "page", scope, path] as const,
+  standardsRules: (scope: string, domain: string) => ["standards", "rules", scope, domain] as const,
   standardsSearch: (scope: string, domain: string, q: string) =>
     ["standards", "search", scope, domain, q] as const,
 };
@@ -87,6 +86,20 @@ export function useAgents() {
   return useQuery({
     queryKey: keys.agents,
     queryFn: () => api.get<AgentSummary[]>("/api/agents"),
+  });
+}
+
+/** Pin an agent to a provider and model for every project (admin); both empty clears it. */
+export function useAssignAgent(role: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: AgentRouting) => api.put<AgentSummary>(`/api/agents/${role}/routing`, body),
+    onSuccess: (card) => {
+      qc.setQueryData<AgentSummary[]>(keys.agents, (old) =>
+        old ? old.map((a) => (a.role === card.role ? card : a)) : old,
+      );
+      void qc.invalidateQueries({ queryKey: keys.agents });
+    },
   });
 }
 
@@ -385,8 +398,15 @@ export function useSaveGitHubSettings() {
   });
 }
 
-export function useTestGitHub() {
-  return useMutation({ mutationFn: () => api.post<GitHubIdentity>("/api/settings/github/test") });
+/** Who the stored token belongs to; re-checked whenever the token changes. */
+export function useGitHubIdentity(enabled: boolean, tokenHint: string | null) {
+  return useQuery({
+    queryKey: [...keys.github, "identity", tokenHint] as const,
+    queryFn: () => api.post<GitHubIdentity>("/api/settings/github/test"),
+    enabled,
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  });
 }
 
 export function useGitHubRepos(enabled: boolean) {
@@ -566,30 +586,32 @@ export function useReindexStandards() {
   });
 }
 
-export function useStandardsPages(projectId: string | null, domain: string) {
+// One rule = one "##" section; the id ("<path>:<n>") is what the server hands back.
+export function useStandardsRules(projectId: string | null, domain: string) {
   return useQuery({
-    queryKey: keys.standardsPages(projectId ?? "global", domain),
+    queryKey: keys.standardsRules(projectId ?? "global", domain),
     queryFn: () =>
-      api.get<StandardsPage[]>(
-        `/api/standards/pages?domain=${encodeURIComponent(domain)}&${scopeParam(projectId)}`,
+      api.get<StandardsRule[]>(
+        `/api/standards/rules?domain=${encodeURIComponent(domain)}&${scopeParam(projectId)}`,
       ),
   });
 }
 
-export function useStandardsPage(projectId: string | null, path: string | null) {
-  return useQuery({
-    queryKey: keys.standardsPage(projectId ?? "global", path ?? ""),
-    queryFn: () =>
-      api.get<StandardsPageText>(`/api/standards/pages/${path}?${scopeParam(projectId)}`),
-    enabled: path !== null,
+export function useCreateStandardsRule(projectId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { domain: string; heading: string; text: string }) =>
+      api.post<StandardsRule>("/api/standards/rules", { ...args, project_id: projectId }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["standards"] }),
   });
 }
 
-export function useSaveStandardsPage(projectId: string | null) {
+export function useSaveStandardsRule(projectId: string | null) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (args: { path: string; text: string }) =>
-      api.put<StandardsPage>(`/api/standards/pages/${args.path}`, {
+    mutationFn: (args: { id: string; heading: string; text: string }) =>
+      api.put<StandardsRule>(`/api/standards/rules/${args.id}`, {
+        heading: args.heading,
         text: args.text,
         project_id: projectId,
       }),
@@ -597,20 +619,11 @@ export function useSaveStandardsPage(projectId: string | null) {
   });
 }
 
-export function useCreateStandardsPage(projectId: string | null) {
+export function useDeleteStandardsRule(projectId: string | null) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (args: { domain: string; title: string; text: string }) =>
-      api.post<StandardsPage>("/api/standards/pages", { ...args, project_id: projectId }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["standards"] }),
-  });
-}
-
-export function useDeleteStandardsPage(projectId: string | null) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (path: string) =>
-      api.delete<void>(`/api/standards/pages/${path}?${scopeParam(projectId)}`),
+    mutationFn: (id: string) =>
+      api.delete<void>(`/api/standards/rules/${id}?${scopeParam(projectId)}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["standards"] }),
   });
 }
