@@ -31,7 +31,7 @@ from pydantic import ValidationError
 from slipwright.events import EventBus
 from slipwright.gates import DEFAULT_TIMEOUT_S as GATE_TIMEOUT_S
 from slipwright.gates import GateResult, build_gate, run_command
-from slipwright.githost import CiState, CiStatus, GitHost, GitHostError
+from slipwright.githost import CiState, CiStatus, GitHost, GitHostError, NoRemote
 from slipwright.github import GitHubClient, GitHubError, GitHubSettings
 from slipwright.invoke import DEFAULT_TIMEOUT_S, RETRYABLE, InvokeError, InvokeErrorKind, RoleResult
 from slipwright.jira import DEFAULT_ISSUE_TYPES, JiraClient, JiraError, JiraSettings
@@ -2084,6 +2084,8 @@ class Engine:
                 job.data.pr_url = self.git_host.open_pr(
                     worktree, job.branch, result.output.pr_title, result.output.pr_body
                 )
+            except NoRemote:
+                return self._done_locally(job, result.output)
             except GitHostError as exc:
                 return self._fail(job, f"devops: {exc}")
             self.store.save(job)
@@ -2128,6 +2130,22 @@ class Engine:
                 self.git_host.push(worktree, job.branch)
             except GitHostError as exc:
                 return self._fail(job, f"devops: {exc}")
+
+    def _done_locally(self, job: Job, result: DevOpsResult) -> Job:
+        """A local checkout with no remote: there is nowhere to push and no pull request
+        to open, so the finished branch stays in the checkout and the DevOps write-up
+        becomes the note for whoever merges it."""
+        project = self._project_of(job)
+        checkout = project.repo_path if project else None
+        return self.orchestrator.transition(
+            job,
+            JobState.DONE,
+            note=(
+                f"branch {job.branch} is ready in the checkout {checkout} (no remote to push "
+                f"to); merge it there with `git merge {job.branch}`"
+            ),
+            detail=f"{result.pr_title}\n\n{result.pr_body}".strip(),
+        )
 
     def _poll_ci(self, job: Job) -> CiStatus:
         worktree = require_worktree(job)

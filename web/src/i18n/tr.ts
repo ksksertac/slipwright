@@ -1,5 +1,8 @@
 // Turkish. Keys are the English source strings; anything missing shows the English.
 export const TR: Record<string, string> = {
+  "Copy to clipboard": "Panoya kopyala",
+  Copy: "Kopyala",
+  Copied: "Kopyalandı",
   // -- navigation, shell -------------------------------------------------------------------
   Dashboard: "Panel",
   Projects: "Projeler",

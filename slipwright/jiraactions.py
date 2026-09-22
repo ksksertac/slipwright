@@ -5,7 +5,9 @@ result and the engine runs them through the agent account after checking that th
 has ``Permission.JIRA`` and that every issue belongs to the project's Jira project. Each
 action carries a content-derived idempotency key, so executing the same result twice
 (a restart mid-phase) never repeats an action. When Jira is unreachable the remaining
-actions are queued on the job and retried on the next transition.
+actions are queued on the job and retried on the next transition and by the PO's round;
+an action that keeps failing is given up after ``MAX_QUEUE_ATTEMPTS`` rounds, with the
+reason in the history, so the queue never loops forever.
 """
 
 from __future__ import annotations
@@ -39,6 +41,9 @@ class ActionOutcome(BaseModel):
         )
 
 
+MAX_QUEUE_ATTEMPTS = 5
+
+
 class ActionRunner:
     """Executes a role's actions for one job. The engine owns the client and persists
     ``job.data`` afterwards."""
@@ -46,6 +51,7 @@ class ActionRunner:
     def __init__(self, client: JiraClient | None, project: Project) -> None:
         self.client = client
         self.project = project
+        self._types: list[dict[str, Any]] | None = None
 
     @property
     def key(self) -> str:
@@ -94,7 +100,17 @@ class ActionRunner:
         for entry in queued:
             action = JiraAction.model_validate(entry["action"])
             role = RoleName(entry["role"])
-            outcomes.append(self._execute(job, role, action, entry["key"]))
+            attempts = int(entry.get("attempts", 1))
+            outcome = self._execute(job, role, action, entry["key"], attempts=attempts + 1)
+            if outcome.status == "queued" and attempts + 1 >= MAX_QUEUE_ATTEMPTS:
+                job.data.jira_queue.pop()  # _execute re-queued it; this was the last try
+                outcome = ActionOutcome(
+                    action=action,
+                    key=entry["key"],
+                    status="refused",
+                    detail=f"gave up after {attempts + 1} attempts: {outcome.detail}",
+                )
+            outcomes.append(outcome)
         return outcomes
 
     def _confinement_problem(self, action: JiraAction) -> str | None:
@@ -104,7 +120,9 @@ class ActionRunner:
                 return f"{field_name} {value} is outside project {self.key}"
         return None
 
-    def _execute(self, job: Job, role: RoleName, action: JiraAction, key: str) -> ActionOutcome:
+    def _execute(
+        self, job: Job, role: RoleName, action: JiraAction, key: str, *, attempts: int = 1
+    ) -> ActionOutcome:
         if self.client is None:
             return ActionOutcome(
                 action=action, key=key, status="refused", detail="Jira is not configured"
@@ -113,23 +131,65 @@ class ActionRunner:
             detail = self._call(action)
         except JiraError as exc:
             job.data.jira_queue.append(
-                {"role": role.value, "key": key, "action": action.model_dump(mode="json")}
+                {
+                    "role": role.value,
+                    "key": key,
+                    "action": action.model_dump(mode="json"),
+                    "attempts": attempts,
+                }
             )
             return ActionOutcome(action=action, key=key, status="queued", detail=str(exc))
         job.data.jira_done.append(key)
         return ActionOutcome(action=action, key=key, status="done", detail=detail)
 
+    def _issue_types(self) -> list[dict[str, Any]]:
+        if self._types is None:
+            assert self.client is not None
+            try:
+                self._types = self.client.issue_types(self.key)
+            except JiraError:
+                self._types = []  # the create call will report the real problem
+        return self._types
+
+    def _create_issue(self, action: JiraAction) -> str:
+        """A role names a type and maybe a parent; Jira Cloud only nests a sub-task type
+        under a story. A Bug (or any other top-level type) that names a story as its
+        parent is created at the top level and *linked* to the story instead — that is
+        what the role meant. A type name the project does not have falls back to Task."""
+        assert self.client is not None
+        wanted = action.issue_type or "Task"
+        parent = (action.parent or "").upper() or None
+        types = self._issue_types()
+        by_name = {t["name"].lower(): t for t in types}
+        chosen = by_name.get(wanted.lower())
+        note = ""
+        if types and chosen is None:
+            fallback = by_name.get("task") or next(
+                (t for t in types if not t["subtask"] and t["level"] == 0), None
+            )
+            if fallback is not None:
+                note = f" ({wanted!r} is not an issue type here; created as {fallback['name']})"
+                chosen = fallback
+        name = chosen["name"] if chosen else wanted
+        link_to: str | None = None
+        if parent and chosen is not None and not chosen["subtask"]:
+            link_to, parent = parent, None
+        created = self.client.create_issue(
+            self.key,
+            name,
+            _clean(action.summary or ""),
+            _clean(action.description or ""),
+            parent_key=parent,
+        )
+        if link_to:
+            self.client.link(created, link_to, "Relates")
+            note += f", linked to {link_to}"
+        return f"created {created}{note}"
+
     def _call(self, action: JiraAction) -> str:
         assert self.client is not None
         if action.action is JiraActionType.CREATE_ISSUE:
-            created = self.client.create_issue(
-                self.key,
-                action.issue_type or "Task",
-                action.summary or "",
-                action.description or "",
-                parent_key=action.parent,
-            )
-            return f"created {created}"
+            return self._create_issue(action)
         assert action.issue is not None
         issue = action.issue.upper()
         if action.action is JiraActionType.TRANSITION:
@@ -143,6 +203,12 @@ class ActionRunner:
             return f"logged {action.minutes} min"
         self.client.link(issue, (action.target or "").upper(), action.link_type)
         return f"linked to {action.target}"
+
+
+def _clean(text: str) -> str:
+    """Model output occasionally carries lone surrogates (a mangled emoji); Jira rejects
+    the request body for them, so they are replaced before anything is sent."""
+    return text.encode("utf-8", errors="replace").decode("utf-8")
 
 
 def jira_context(

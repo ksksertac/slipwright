@@ -165,7 +165,11 @@ class FakeJira:
             level = {"Epic": 1, "Story": 0, "Task": 0, "Bug": 0, "Subtask": -1}.get(
                 fields["issuetype"]["name"], 0
             )
-            if parent is not None and fields["issuetype"]["name"] != "Bug":
+            if fields["issuetype"]["name"] not in ("Epic", "Story", "Task", "Bug", "Subtask"):
+                return httpx.Response(
+                    400, json={"errors": {"issuetype": "Specify a valid issue type"}}
+                )
+            if parent is not None:
                 parent_level = {"Epic": 1, "Story": 0, "Task": 0, "Bug": 0, "Subtask": -1}.get(
                     self.issues.get(parent, {}).get("type", ""), 0
                 )

@@ -352,7 +352,6 @@ p {
 }
 .topbar {
   display: flex;
-  justify-content: space-between;
   align-items: center;
   gap: 12px;
   padding: 12px 28px;
@@ -369,6 +368,7 @@ p {
   color: var(--text-3);
   font-size: 13px;
   min-width: 0;
+  flex: 1;
 }
 .crumbs a {
   color: var(--text-2);
@@ -1678,4 +1678,49 @@ ol.hits summary {
 }
 .recommendation {
   margin-top: 8px;
+}
+
+/* output blocks with a copy button in the corner */
+.copyable {
+  position: relative;
+}
+.copyable > pre,
+.copyable > .diff {
+  margin: 0;
+}
+.copyable .copy-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  padding: 2px 8px;
+  font-size: 11.5px;
+  opacity: 0.55;
+  z-index: 1;
+}
+.copyable:hover .copy-btn,
+.copyable .copy-btn:focus-visible,
+.copyable .copy-btn.copied {
+  opacity: 1;
+}
+.copyable .copy-btn.copied {
+  color: var(--ok);
+}
+
+/* settings: connection card */
+.connection-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 28px;
+}
+.connection-status strong {
+  font-size: 14px;
+}
+.connection > .form {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.bad-text {
+  color: var(--bad-text);
 }

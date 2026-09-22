@@ -11,6 +11,7 @@ import {
 import { IconFlask, IconPlay } from "../components/icons";
 import { Empty, ErrorBox, Loading, formatTime } from "../components/ui";
 import { useT } from "../i18n";
+import { Copyable } from "../components/Copyable";
 
 const STATUS_CLASS: Record<TestRun["status"], string> = {
   running: "work",
@@ -186,18 +187,20 @@ function RunOutput({ runId }: { runId: string }) {
       </div>
       {output.isLoading && <Loading />}
       {output.data !== undefined && (
-        <pre className="log" style={{ marginTop: 8 }}>
-          {lines.map((line, i) =>
-            i === failIndex ? (
-              <span key={i} ref={failRef} className="fail">
-                {line + "\n"}
-              </span>
-            ) : (
-              <span key={i}>{line + "\n"}</span>
-            ),
-          )}
-          {running && <span className="muted">{tx("… still running")}</span>}
-        </pre>
+        <Copyable text={output.data}>
+          <pre className="log" style={{ marginTop: 8 }}>
+            {lines.map((line, i) =>
+              i === failIndex ? (
+                <span key={i} ref={failRef} className="fail">
+                  {line + "\n"}
+                </span>
+              ) : (
+                <span key={i}>{line + "\n"}</span>
+              ),
+            )}
+            {running && <span className="muted">{tx("… still running")}</span>}
+          </pre>
+        </Copyable>
       )}
     </div>
   );

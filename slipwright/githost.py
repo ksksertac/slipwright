@@ -40,6 +40,11 @@ class GitHostError(RuntimeError):
     pass
 
 
+class NoRemote(GitHostError):
+    """The checkout has no remote to push to: a local folder the engine turned into a
+    repository. The engine finishes the development on the branch instead."""
+
+
 class GitHost(Protocol):
     def push(self, worktree: Path, branch: str) -> None: ...
 
@@ -77,6 +82,8 @@ class GhHost:
         return env
 
     def push(self, worktree: Path, branch: str) -> None:
+        if not g.has_remote(worktree, self.remote):
+            raise NoRemote(f"the checkout has no remote named {self.remote!r}")
         try:
             g.run(
                 worktree, "push", "--force-with-lease", "-u", self.remote, branch, env=self._env()

@@ -1,5 +1,6 @@
 // The standards review (T9.5) as people read it: a findings table, and the review
 import { useT } from "../i18n";
+import { Copyable } from "./Copyable";
 // record a history entry carries as JSON rendered through it.
 export interface ReviewRecord {
   phase: number;
@@ -64,7 +65,12 @@ export function ReviewDetail({ text }: { text: string }) {
   } catch {
     record = null;
   }
-  if (!record) return <pre>{text}</pre>;
+  if (!record)
+    return (
+      <Copyable text={text}>
+        <pre>{text}</pre>
+      </Copyable>
+    );
   return (
     <div>
       {record.summary && <p className="small">{record.summary}</p>}

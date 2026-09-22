@@ -697,3 +697,25 @@ def test_roles_write_for_people_in_the_projects_language(
         assert (
             client.patch(f"/api/projects/{project.id}", json={"language": "de"}).status_code == 422
         )
+
+
+def test_a_checkout_without_a_remote_finishes_on_its_branch(
+    store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
+) -> None:
+    """A local folder turned into a repository has nowhere to push: DevOps leaves the
+    branch in the checkout and the development is done, with the merge command noted."""
+    from slipwright.githost import GhHost
+
+    engine = full_engine(
+        store, worktrees_root, seed, full_provider(seed, phases=1), git_host=GhHost(gh="gh-missing")
+    )
+    project = engine.create_project(Project(name="demo", repo_path=repo))
+    job = engine.start(engine.create_job("x", project_id=project.id).id)
+    job = engine.approve(engine.approve(job.id).id)  # backlog, architecture
+    job = engine.approve(engine.approve(job.id).id)  # test cases, written tests -> devops
+    assert job.state is JobState.DONE, [t.note for t in job.history]
+    assert job.data.pr_url is None
+    last = job.history[-1]
+    assert f"branch {job.branch} is ready in the checkout {repo}" in (last.note or "")
+    assert f"git merge {job.branch}" in (last.note or "")
+    assert last.detail  # the DevOps write-up, for whoever merges

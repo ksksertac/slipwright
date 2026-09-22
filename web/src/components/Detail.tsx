@@ -1,5 +1,6 @@
 import { Diff, looksLikeDiff } from "./Diff";
 import { useT } from "../i18n";
+import { Copyable } from "./Copyable";
 
 function prettyJson(text: string): string | null {
   const trimmed = text.trim();
@@ -15,7 +16,16 @@ function prettyJson(text: string): string | null {
 export function Detail({ text }: { text: string | null | undefined }) {
   const tx = useT();
   if (!text) return <span className="muted">{tx("no detail")}</span>;
-  if (looksLikeDiff(text)) return <Diff text={text} />;
+  if (looksLikeDiff(text))
+    return (
+      <Copyable text={text}>
+        <Diff text={text} />
+      </Copyable>
+    );
   const json = prettyJson(text);
-  return <pre>{json ?? text}</pre>;
+  return (
+    <Copyable text={json ?? text}>
+      <pre>{json ?? text}</pre>
+    </Copyable>
+  );
 }

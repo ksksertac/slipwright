@@ -200,11 +200,10 @@ def test_agents_act_in_jira_through_the_engine(
     assert dev_ctx["transitions"] == {"todo": "To Do", "in_progress": "In Progress", "done": "Done"}
     assert [i["kind"] for i in dev_ctx["issues"]] == ["epic", "story", "task", "task"]
 
-    # qa stage 1 opened a bug under the story
-    assert (
-        jira.issues["DEM-5"]["type"] == "Bug"
-        and jira.issues["DEM-5"]["parent"] == keys[_story_id(job)]
-    )
+    # qa stage 1 opened a bug for the story: Jira Cloud nests only sub-task types, so the
+    # bug is created beside the story and linked to it
+    assert jira.issues["DEM-5"]["type"] == "Bug" and jira.issues["DEM-5"]["parent"] is None
+    assert {"type": "Relates", "inward": "DEM-5", "outward": keys[_story_id(job)]} in jira.links
     job = engine.approve(job.id)  # qa stage 2 closes the bug
     assert jira.statuses["DEM-5"] == "Done"
     assert jira.comments["DEM-5"] == ["fixed and covered by tests"]
@@ -212,7 +211,7 @@ def test_agents_act_in_jira_through_the_engine(
     assert job.state is JobState.DONE
     story_key = keys[_story_id(job)]
     assert "PR opened, CI green" in jira.comments[story_key]
-    assert jira.links == [{"type": "Relates", "inward": story_key, "outward": "DEM-5"}]
+    assert {"type": "Relates", "inward": story_key, "outward": "DEM-5"} in jira.links
 
     # everything the agents did went through the bot account
     from base64 import b64encode
@@ -312,3 +311,72 @@ def _story_id(job: Any) -> str:
     from slipwright.board import job_epics
 
     return job_epics(job)[0].stories[0].id
+
+
+def test_a_bug_under_a_story_is_created_at_the_top_and_linked(
+    store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
+) -> None:
+    """Jira Cloud only nests sub-task types: a Bug naming a story as its parent is
+    created beside it and linked with Relates; an unknown type name becomes a Task."""
+    jira = _fake()
+    engine = full_engine(store, worktrees_root, seed, full_provider(seed, phases=1, breakdown=None))
+    _connect(engine, jira)
+    project = engine.create_project(Project(name="demo", repo_path=repo, jira_project_key="DEM"))
+    job = engine.start(engine.create_job("x", project_id=project.id).id)
+    job = engine.approve(job.id)
+    job = engine.approve(job.id)
+    story_key = job.data.jira_keys[_story_id(job)]
+    runner = ActionRunner(engine.jira_client(agent=True), project)
+
+    outcomes = runner.run(
+        job,
+        RoleName.QA,
+        seed,
+        [
+            JiraAction(
+                action="create_issue",
+                issue_type="Bug",
+                summary="Form crashes \udc81 on save",
+                description="details",
+                parent=story_key,
+            ),
+            JiraAction(action="create_issue", issue_type="Defect", summary="odd type"),
+        ],
+    )
+    assert [o.status for o in outcomes] == ["done", "done"]
+    bug = next(i for i in jira.issues.values() if i["type"] == "Bug")
+    assert bug["parent"] is None and "\udc81" not in bug["summary"]
+    assert {"type": "Relates", "inward": bug["key"], "outward": story_key} in jira.links
+    assert f"linked to {story_key}" in outcomes[0].detail
+    odd = next(i for i in jira.issues.values() if i["summary"] == "odd type")
+    assert odd["type"] == "Task" and "not an issue type here" in outcomes[1].detail
+
+
+def test_a_queued_action_is_given_up_after_repeated_failures(
+    store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
+) -> None:
+    from slipwright.jiraactions import MAX_QUEUE_ATTEMPTS
+
+    jira = _fake()
+    engine = full_engine(store, worktrees_root, seed, full_provider(seed, phases=1, breakdown=None))
+    _connect(engine, jira)
+    project = engine.create_project(Project(name="demo", repo_path=repo, jira_project_key="DEM"))
+    job = engine.start(engine.create_job("x", project_id=project.id).id)
+    job = engine.approve(job.id)
+    job = engine.approve(job.id)
+    key = job.data.jira_keys[_tasks(job)[0].id]
+    runner = ActionRunner(engine.jira_client(agent=True), project)
+    jira.down = True
+    runner.run(job, RoleName.BACKEND, seed, [JiraAction(action="comment", issue=key, body="x")])
+    engine.store.save(job)
+    for _ in range(MAX_QUEUE_ATTEMPTS - 2):
+        job = engine._jira_reconcile(engine.store.get(job.id))
+        assert len(job.data.jira_queue) == 1
+    job = engine._jira_reconcile(engine.store.get(job.id))
+    assert job.data.jira_queue == []
+    gave_up = [t for t in job.history if "jira (retry): 1 refused" in (t.note or "")]
+    assert len(gave_up) == 1 and "gave up after" in (gave_up[0].detail or "")
+    # once given up, the round leaves the job alone
+    before = len(job.history)
+    job = engine._jira_reconcile(engine.store.get(job.id))
+    assert len(job.history) == before

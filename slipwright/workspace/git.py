@@ -43,6 +43,11 @@ def clone(url: str, target: Path) -> None:
         raise GitError(["clone", url, str(target)], proc.returncode, proc.stderr)
 
 
+def has_remote(repo: Path, name: str = "origin") -> bool:
+    proc = run(repo, "remote", "get-url", name, check=False)
+    return proc.returncode == 0
+
+
 def branch_exists(repo: Path, branch: str) -> bool:
     proc = run(repo, "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}", check=False)
     return proc.returncode == 0

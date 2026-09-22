@@ -38,6 +38,7 @@ import { ProfileForm } from "../components/ProfileForm";
 import { useToast } from "../components/Toast";
 import { ErrorBox, Loading, StateBadge, formatTime } from "../components/ui";
 import { useT } from "../i18n";
+import { Copyable } from "../components/Copyable";
 
 const STEPS: { state: JobState; label: string; gate?: boolean }[] = [
   { state: "backlog", label: "backlog" },
@@ -695,9 +696,13 @@ function Phases({ job }: { job: Job }) {
                 ) : isStandards ? (
                   <StandardsList text={t.detail ?? ""} />
                 ) : isGate ? (
-                  <pre>{t.detail}</pre>
+                  <Copyable text={t.detail ?? ""}>
+                    <pre>{t.detail}</pre>
+                  </Copyable>
                 ) : (
-                  <Diff text={t.detail ?? ""} />
+                  <Copyable text={t.detail ?? ""}>
+                    <Diff text={t.detail ?? ""} />
+                  </Copyable>
                 )}
               </details>
             );
@@ -925,7 +930,9 @@ function History({ job, projectId }: { job: Job; projectId: string }) {
       {job.profile && job.state !== "awaiting_architecture_approval" && (
         <details className="card" style={{ marginTop: 12 }}>
           <summary>{tx("Approved profile")}</summary>
-          <pre>{JSON.stringify(job.profile, null, 2)}</pre>
+          <Copyable text={JSON.stringify(job.profile, null, 2)}>
+            <pre>{JSON.stringify(job.profile, null, 2)}</pre>
+          </Copyable>
         </details>
       )}
       <div className="muted small" style={{ marginTop: 8 }}>
