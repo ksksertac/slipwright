@@ -634,7 +634,9 @@ def _mount_spa(app: FastAPI, static_dir: Path) -> None:
         candidate = static_dir / path
         if path and candidate.is_file() and static_dir in candidate.resolve().parents:
             return FileResponse(candidate)
-        return FileResponse(index)
+        # the shell names hashed bundles: a browser that keeps an old copy after a redeploy
+        # asks for bundles that no longer exist and shows nothing, so it must revalidate
+        return FileResponse(index, headers={"Cache-Control": "no-cache"})
 
 
 def openapi_schema() -> dict[str, Any]:

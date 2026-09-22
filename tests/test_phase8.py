@@ -6,6 +6,7 @@ import re
 from pathlib import Path
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from slipwright.api import create_app
@@ -332,3 +333,21 @@ def test_overview_and_job_deletion(engine: Engine, repo: Path) -> None:
         assert client.get(f"/api/jobs/{job['id']}").status_code == 404
         assert client.delete(f"/api/jobs/{job['id']}").status_code == 404
         assert client.get("/api/overview").json()["jobs_total"] == 0
+
+
+def test_the_shell_is_never_served_from_a_stale_cache(tmp_path: Path) -> None:
+    """index.html names hashed bundles; after a redeploy a cached shell would ask for
+    bundles that no longer exist, so browsers must revalidate it every time."""
+    from slipwright.api import _mount_spa
+
+    static = tmp_path / "static"
+    (static / "assets").mkdir(parents=True)
+    (static / "index.html").write_text("<html>shell</html>")
+    (static / "assets" / "index-abc.js").write_text("js")
+    app = FastAPI()
+    _mount_spa(app, static)
+    with TestClient(app) as client:
+        for path in ("/", "/settings/models"):
+            resp = client.get(path)
+            assert resp.status_code == 200 and resp.headers["cache-control"] == "no-cache"
+        assert client.get("/assets/index-abc.js").status_code == 200
