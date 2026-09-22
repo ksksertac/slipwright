@@ -1,9 +1,10 @@
 """Known model providers and the router that picks one per request.
 
-A role names its provider in the profile (``roles.<role>.provider``); unset means the
-configured default. Credentials come from the settings store (encrypted) or, failing
-that, the provider's environment variable. No module here names a model: the settings
-page lists models by asking each vendor's ``/models`` endpoint.
+An agent assigned a provider and model under Agents runs there, whatever any profile
+says. Otherwise a role names its provider in the profile (``roles.<role>.provider``);
+unset means the configured default. Credentials come from the settings store (encrypted)
+or, failing that, the provider's environment variable. No module here names a model: the
+settings page lists models by asking each vendor's ``/models`` endpoint.
 """
 
 from __future__ import annotations
@@ -26,6 +27,10 @@ from slipwright.providers import (
 ANTHROPIC = "anthropic"
 OPENAI = "openai"
 DEEPSEEK = "deepseek"
+GEMINI = "gemini"
+QWEN = "qwen"
+GLM = "glm"
+MINIMAX = "minimax"
 DEFAULT_PROVIDER = ANTHROPIC
 
 
@@ -69,6 +74,46 @@ PROVIDERS: dict[str, ProviderSpec] = {
         max_tokens_param="max_tokens",
         docs_url="https://platform.deepseek.com/api_keys",
         max_tokens=8_192,  # the chat model rejects anything larger
+    ),
+    # the rest speak the OpenAI protocol on their own host, so the same client serves
+    # them; only Gemini's layer understands reasoning effort
+    GEMINI: ProviderSpec(
+        name=GEMINI,
+        label="Google (Gemini)",
+        env_var="GEMINI_API_KEY",
+        default_base_url="https://generativelanguage.googleapis.com/v1beta/openai",
+        supports_effort=True,
+        max_tokens_param="max_tokens",
+        docs_url="https://aistudio.google.com/apikey",
+    ),
+    QWEN: ProviderSpec(
+        name=QWEN,
+        label="Alibaba (Qwen)",
+        env_var="DASHSCOPE_API_KEY",
+        default_base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+        supports_effort=False,
+        max_tokens_param="max_tokens",
+        docs_url="https://bailian.console.alibabacloud.com/?tab=model#/api-key",
+        max_tokens=8_192,  # raise it under Settings → Models for the models that allow more
+    ),
+    GLM: ProviderSpec(
+        name=GLM,
+        label="Z.ai (GLM)",
+        env_var="ZHIPUAI_API_KEY",
+        default_base_url="https://api.z.ai/api/paas/v4",
+        supports_effort=False,
+        max_tokens_param="max_tokens",
+        docs_url="https://z.ai/manage-apikey/apikey-list",
+    ),
+    MINIMAX: ProviderSpec(
+        name=MINIMAX,
+        label="MiniMax",
+        env_var="MINIMAX_API_KEY",
+        default_base_url="https://api.minimax.io/v1",
+        supports_effort=False,
+        max_tokens_param="max_tokens",
+        docs_url="https://www.minimax.io/platform/user-center/basic-information/interface-key",
+        max_tokens=8_192,
     ),
 }
 
@@ -121,6 +166,8 @@ def list_models(creds: Credentials, *, transport: httpx.BaseTransport | None = N
 
 
 CredentialsResolver = Callable[[str], Credentials | None]
+# the (provider, model) an agent is assigned under Agents; None when it follows the profile
+RoleRouting = Callable[[str], tuple[str, str] | None]
 
 
 class RoutingProvider:
@@ -134,12 +181,16 @@ class RoutingProvider:
         *,
         default: Callable[[], str] | None = None,
         default_model: Callable[[str], str | None] | None = None,
+        role_routing: RoleRouting | None = None,
         transport: httpx.BaseTransport | None = None,
     ) -> None:
         self._resolve = resolve
         self._default = default or (lambda: DEFAULT_PROVIDER)
         # the model a "default" role runs on for a given provider (Settings -> Models)
         self._default_model = default_model or (lambda _name: None)
+        # what an agent was assigned under Agents; read per request so a change applies
+        # to the next call without a restart
+        self._role_routing = role_routing or (lambda _role: None)
         self._transport = transport
         self._clients: dict[Credentials, ModelProvider] = {}
         self._lock = threading.Lock()
@@ -162,17 +213,21 @@ class RoutingProvider:
                 self._clients[creds] = client
             return client
 
-    def route(self, provider: str | None, model: str) -> tuple[str, str]:
-        """Where a role's request goes. A role that names no provider follows the default
-        provider *and* that provider's default model when one is configured -- a model
-        name from another vendor's profile would only fail there."""
+    def route(self, role: str, provider: str | None, model: str) -> tuple[str, str]:
+        """Where a role's request goes: its assignment under Agents first. Without one, a
+        role that names no provider follows the default provider *and* that provider's
+        default model when one is configured -- a model name from another vendor's
+        profile would only fail there."""
+        assigned = self._role_routing(role)
+        if assigned is not None:
+            return assigned
         if provider:
             return provider, model
         name = self._default()
         return name, self._default_model(name) or model
 
     def complete(self, request: ModelRequest) -> ModelResponse:
-        name, model = self.route(request.provider, request.model)
+        name, model = self.route(request.role.value, request.provider, request.model)
         if (name, model) != (request.provider, request.model):
             request = request.model_copy(update={"provider": name, "model": model})
         try:
@@ -186,11 +241,16 @@ __all__ = [
     "ANTHROPIC",
     "DEEPSEEK",
     "DEFAULT_PROVIDER",
+    "GEMINI",
+    "GLM",
+    "MINIMAX",
     "OPENAI",
+    "QWEN",
     "PROVIDERS",
     "Credentials",
     "CredentialsResolver",
     "ProviderSpec",
+    "RoleRouting",
     "RoutingProvider",
     "build_client",
     "list_models",

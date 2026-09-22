@@ -293,7 +293,8 @@ def test_provider_settings_endpoints(
     engine.http_transport = httpx.MockTransport(vendor.handler)
 
     rows = client.get("/api/settings/providers").json()
-    assert [r["name"] for r in rows] == ["anthropic", "openai", "deepseek"]
+    assert [r["name"] for r in rows] == list(PROVIDERS)
+    assert rows[0]["name"] == "anthropic"  # the built-in default comes first
     assert all(r["key_set"] is False for r in rows)
     assert rows[1]["label"] == "OpenAI (ChatGPT)" and rows[2]["env_var"] == "DEEPSEEK_API_KEY"
     assert client.post("/api/settings/providers/openai/test").status_code == 400
@@ -367,6 +368,9 @@ def test_models_settings_page_and_role_provider_column_exist() -> None:
     assert "useProviderModels" in form and "provider: e.target.value" in form and "datalist" in form
     hooks = (web / "api" / "hooks.ts").read_text(encoding="utf-8")
     assert "/api/settings/providers" in hooks
+    # an agent's page pins it to a provider and model and can test the connection
+    agent = (web / "pages" / "AgentDetailPage.tsx").read_text(encoding="utf-8")
+    assert "useAssignAgent" in agent and "useTestProvider" in agent and "assigned_model" in agent
 
 
 def test_default_roles_follow_the_default_provider_and_its_default_model(
@@ -419,3 +423,136 @@ def test_default_roles_follow_the_default_provider_and_its_default_model(
         ] == "deep-model"
         agents = {a["role"]: a for a in client.get("/api/agents").json()}
         assert agents["po"]["effective_model"] == "deep-model" and agents["po"]["provider"] is None
+
+
+def test_an_agent_assigned_a_model_runs_on_it_whatever_the_profile_says(
+    store: JobStore,
+    worktrees_root: Path,
+    seed: Profile,
+    repo: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Pinning the PO to OpenAI's ``gpt-model`` under Agents must win over both the
+    project profile (which names DeepSeek) and the default provider; clearing the pin
+    puts the profile back in charge."""
+    for spec in PROVIDERS.values():
+        monkeypatch.delenv(spec.env_var, raising=False)
+    vendors = {"openai": FakeVendor("sk-o", ["gpt-model"]), "deepseek": FakeVendor("sk-d", [])}
+    from tests.pipeline import default_backlog
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        vendor = vendors["deepseek" if "deepseek" in request.url.host else "openai"]
+        vendor.reply = {"summary": "s", "breakdown": default_backlog(1)}
+        return vendor.handler(request)
+
+    data = seed.model_dump(mode="json")
+    data["roles"]["po"]["provider"] = "deepseek"
+    routed = Profile.model_validate(data)
+    engine = full_engine(
+        store, worktrees_root, routed, None, http_transport=httpx.MockTransport(handler)
+    )
+    engine.update_provider_settings("deepseek", api_key="sk-d", make_default=True)
+
+    # no key for OpenAI yet: the assignment is refused, not saved
+    with pytest.raises(ProviderUnavailableError, match="no API key for OpenAI"):
+        engine.assign_agent(RoleName.PO, "openai", "gpt-model")
+    assert engine.agent_routing("po") is None
+    with pytest.raises(ValueError, match="unknown provider"):
+        engine.assign_agent(RoleName.PO, "bogus", "m")
+    with pytest.raises(ValueError, match="pick a model"):
+        engine.assign_agent(RoleName.PO, "deepseek", "")
+
+    engine.update_provider_settings("openai", api_key="sk-o")
+    engine.assign_agent(RoleName.PO, "openai", "gpt-model")
+    assert engine.agent_routing("po") == ("openai", "gpt-model")
+    assert engine.effective_routing(routed.roles[RoleName.PO], RoleName.PO) == (
+        "openai",
+        "gpt-model",
+    )
+    # other roles are untouched
+    assert engine.effective_routing(routed.roles[RoleName.QA], RoleName.QA)[0] == "deepseek"
+
+    job = engine.start(engine.create_job("x", repo).id)
+    assert job.state is JobState.AWAITING_BACKLOG_APPROVAL, job.history[-1].detail
+    assert [r["model"] for r in vendors["openai"].requests] == ["gpt-model"]
+    assert vendors["deepseek"].requests == []
+    # the call log records the model that answered, not the profile's name
+    assert job.data.invocation_log[-1]["model"] == "gpt-model"
+
+    # the assigned provider stops working (key revoked): the job fails with the reason
+    engine.update_provider_settings("openai", clear_key=True)
+    broken = engine.start(engine.create_job("y", repo).id)
+    assert broken.state is JobState.FAILED
+    assert "provider_unavailable" in (broken.history[-1].note or "")
+    assert "OpenAI" in (broken.history[-1].detail or "")
+
+    # cleared: back to the profile's own provider
+    engine.assign_agent(RoleName.PO, None, None)
+    assert engine.agent_routing("po") is None
+    again = engine.start(engine.create_job("z", repo).id)
+    assert again.state is JobState.AWAITING_BACKLOG_APPROVAL, again.history[-1].detail
+    assert len(vendors["deepseek"].requests) == 1
+
+
+def test_agent_routing_endpoint(engine: Engine, monkeypatch: pytest.MonkeyPatch) -> None:
+    for spec in PROVIDERS.values():
+        monkeypatch.delenv(spec.env_var, raising=False)
+    engine.store.create_user("ada", "pw")
+    engine.store.create_user("bob", "pw")
+    engine.update_provider_settings("deepseek", api_key="sk-d", make_default=True)
+    with TestClient(create_app(engine, resume_on_startup=False)) as c:
+        c.post("/api/auth/login", json={"username": "bob", "password": "pw"})
+        body = {"provider": "deepseek", "model": "deep-model"}
+        assert c.put("/api/agents/qa/routing", json=body).status_code == 403
+        c.post("/api/auth/login", json={"username": "ada", "password": "pw"})
+        # a provider without a key is a 400 with the same note the job would fail with
+        resp = c.put("/api/agents/qa/routing", json={"provider": "openai", "model": "gpt"})
+        assert resp.status_code == 400 and "no API key for OpenAI" in resp.json()["detail"]
+        resp = c.put("/api/agents/qa/routing", json={"provider": "deepseek", "model": ""})
+        assert resp.status_code == 400 and "pick a model" in resp.json()["detail"]
+        assert c.put("/api/agents/nope/routing", json=body).status_code == 422
+
+        resp = c.put("/api/agents/qa/routing", json=body)
+        assert resp.status_code == 200, resp.text
+        card = resp.json()
+        assert card["role"] == "qa"
+        assert (card["assigned_provider"], card["assigned_model"]) == ("deepseek", "deep-model")
+        assert (card["effective_provider"], card["effective_model"]) == ("deepseek", "deep-model")
+        agents = {a["role"]: a for a in c.get("/api/agents").json()}
+        assert agents["qa"]["assigned_model"] == "deep-model"
+        assert agents["po"]["assigned_model"] is None
+
+        resp = c.put("/api/agents/qa/routing", json={"provider": None, "model": None})
+        assert resp.status_code == 200 and resp.json()["assigned_model"] is None
+
+
+def test_every_provider_is_reachable_with_its_own_client(
+    client: TestClient, engine: Engine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Each vendor in the registry can be configured, tested and assigned to an agent:
+    Anthropic has its own client, the rest speak the OpenAI protocol on their own host."""
+    for spec in PROVIDERS.values():
+        monkeypatch.delenv(spec.env_var, raising=False)
+    vendors = {name: FakeVendor(f"sk-{name}", [f"{name}-model"]) for name in PROVIDERS}
+
+    def route(request: httpx.Request) -> httpx.Response:
+        host = request.url.host
+        name = next(n for n, s in PROVIDERS.items() if httpx.URL(s.default_base_url).host == host)
+        return vendors[name].handler(request)
+
+    engine.http_transport = httpx.MockTransport(route)
+    for name, spec in PROVIDERS.items():
+        resp = client.put(f"/api/settings/providers/{name}", json={"api_key": f"sk-{name}"})
+        assert resp.status_code == 200, (name, resp.text)
+        row = next(r for r in resp.json() if r["name"] == name)
+        assert row["key_set"] and row["default_base_url"] == spec.default_base_url
+        assert client.post(f"/api/settings/providers/{name}/test").json()["models"] == [
+            f"{name}-model"
+        ]
+        assert (
+            client.put(
+                "/api/agents/backend/routing", json={"provider": name, "model": f"{name}-model"}
+            ).json()["effective_provider"]
+            == name
+        )
+    assert client.put("/api/agents/backend/routing", json={}).status_code == 200

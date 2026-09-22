@@ -1093,6 +1093,11 @@ in bulk.
   `MAX_QUEUE_ATTEMPTS` (5) rounds with the reason in the history. **Copy button** on
   every log, diff and JSON block (`Copyable`).
 
+- [x] **More vendors.** Gemini, Qwen (DashScope), GLM (Z.ai) and MiniMax join Anthropic,
+  OpenAI and DeepSeek in `PROVIDERS`; each speaks the OpenAI protocol on its own host, so
+  `build_client` needs no new code, and each appears on Settings → Models with its own key,
+  base URL, default model and output limit, and can be pinned to an agent under Agents.
+
 ## Phase 10 — Proposed (not started)
 
 ### T10.1 — Parallel phases per domain
