@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Navigate, useLocation } from "react-router-dom";
 import { api, ApiError, UNAUTHORIZED_EVENT, type User } from "../api/client";
 import { keys } from "../api/hooks";
+import { useT } from "../i18n";
 
 interface AuthState {
   user: User | null;
@@ -80,9 +81,10 @@ export function useAuth(): AuthState {
 
 /** Wraps routes that need a session; unauthenticated visits go to /login and back. */
 export function RequireAuth({ children }: { children: ReactNode }) {
+  const tx = useT();
   const { user, loading } = useAuth();
   const location = useLocation();
-  if (loading) return <div className="centered muted">Loading…</div>;
+  if (loading) return <div className="centered muted">{tx("Loading…")}</div>;
   if (!user) return <Navigate to="/login" replace state={{ from: location }} />;
   return <>{children}</>;
 }

@@ -146,8 +146,9 @@ export function ProjectJiraSetup() {
     <div className="card">
       <h3 style={{ marginBottom: 6 }}>{tx("Project → Jira project")}</h3>
       <p className="muted small">
-        Approved plans are mirrored as epics, stories and sub-tasks here; task statuses map to the
-        transition names below.
+        {tx(
+          "Approved plans are mirrored as epics, stories and sub-tasks here; task statuses map to the transition names below.",
+        )}
       </p>
       {projects.data && projects.data.length === 0 && (
         <div className="muted small">

@@ -23,9 +23,10 @@ export function ModelsSettingsPage() {
         subtitle={tx("API keys for Anthropic, OpenAI and DeepSeek.")}
       />
       <p className="muted">
-        Enter an API key for each provider you want to use. Keys are stored encrypted and never
-        shown again; a key from the server's environment is used when none is stored. Every agent
-        runs on the provider marked <strong>default</strong> below, on that provider's{" "}
+        {tx(
+          "Enter an API key for each provider you want to use. Keys are stored encrypted and never shown again; a key from the server's environment is used when none is stored. Every agent runs on the provider marked",
+        )}{" "}
+        <strong>{tx("default")}</strong> {tx("below, on that provider's")}{" "}
         <strong>{tx("default model")}</strong>{" "}
         {tx("— unless a role is pinned to a provider and model of its own under")}{" "}
         <strong>{tx("Agents")}</strong>.
@@ -78,12 +79,13 @@ function ProviderCard({ provider: p }: { provider: ProviderSettings }) {
       <div className="row spread">
         <h3 style={{ marginBottom: 0 }}>
           {p.label}
-          {p.is_default && <span className="tag">default</span>}
+          {p.is_default && <span className="tag">{tx("default")}</span>}
         </h3>
         <span className="small">
           {p.key_set ? (
             <span className="badge ok">
-              key set {p.key_hint} {p.key_from_env ? `(from ${p.env_var})` : ""}
+              {tx("key set")} {p.key_hint}{" "}
+              {p.key_from_env ? tx("(from {env})", { env: p.env_var }) : ""}
             </span>
           ) : (
             <span className="badge idle">{tx("no key")}</span>
@@ -100,18 +102,22 @@ function ProviderCard({ provider: p }: { provider: ProviderSettings }) {
             value={key}
             disabled={!admin}
             onChange={(e) => setKey(e.target.value)}
-            placeholder={p.key_set ? `set, ends with ${p.key_hint}` : "paste a key"}
+            placeholder={
+              p.key_set
+                ? tx("set, ends with {hint}", { hint: p.key_hint ?? "" })
+                : tx("paste a key")
+            }
           />
           <div className="muted small">
-            Get one at{" "}
+            {tx("Get one at")}{" "}
             <a href={p.docs_url} target="_blank" rel="noreferrer">
               {p.docs_url.replace(/^https?:\/\//, "")}
             </a>
-            ; or set <code>{p.env_var}</code> {tx("on the server.")}
+            ; {tx("or set")} <code>{p.env_var}</code> {tx("on the server.")}
           </div>
         </div>
         <div className="field">
-          <label htmlFor={`${p.name}-url`}>Base URL (optional)</label>
+          <label htmlFor={`${p.name}-url`}>{tx("Base URL (optional)")}</label>
           <input
             id={`${p.name}-url`}
             type="url"
@@ -121,7 +127,9 @@ function ProviderCard({ provider: p }: { provider: ProviderSettings }) {
             onChange={(e) => setBaseUrl(e.target.value)}
             placeholder={p.default_base_url}
           />
-          <div className="muted small">Leave empty for {p.default_base_url}; set for proxies.</div>
+          <div className="muted small">
+            {tx("Leave empty for {url}; set for proxies.", { url: p.default_base_url })}
+          </div>
         </div>
         <div className="field">
           <label htmlFor={`${p.name}-model`}>{tx("Default model")}</label>
@@ -150,13 +158,15 @@ function ProviderCard({ provider: p }: { provider: ProviderSettings }) {
               value={modelValue}
               disabled={!admin}
               onChange={(e) => setModel(e.target.value)}
-              placeholder={p.key_set ? "model id" : "add a key to list the models"}
+              placeholder={p.key_set ? tx("model id") : tx("add a key to list the models")}
             />
           )}
           <div className="muted small">
             {p.is_default
-              ? "What every agent without a pinned provider runs on right now."
-              : "Used by every agent without a pinned provider once this provider is the default."}
+              ? tx("What every agent without a pinned provider runs on right now.")
+              : tx(
+                  "Used by every agent without a pinned provider once this provider is the default.",
+                )}
           </div>
         </div>
         <div className="field">
@@ -172,8 +182,9 @@ function ProviderCard({ provider: p }: { provider: ProviderSettings }) {
             placeholder={`${p.default_max_tokens} (vendor default)`}
           />
           <div className="muted small">
-            How long one answer may be. Raise it if the vendor's newer models allow more; an agent
-            that still hits the limit is asked for smaller parts automatically.
+            {tx(
+              "How long one answer may be. Raise it if the vendor's newer models allow more; an agent that still hits the limit is asked for smaller parts automatically.",
+            )}
           </div>
         </div>
       </div>
@@ -214,7 +225,7 @@ function ProviderCard({ provider: p }: { provider: ProviderSettings }) {
       )}
       {test.data && test.data.name === p.name && (
         <div className="callout notice">
-          Connected. {test.data.models.length} model(s) available:{" "}
+          {tx("Connected. {n} model(s) available:", { n: test.data.models.length })}{" "}
           <span className="mono">{test.data.models.slice(0, 12).join(", ")}</span>
           {test.data.models.length > 12 && " …"}
         </div>

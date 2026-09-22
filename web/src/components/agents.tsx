@@ -9,6 +9,7 @@ import {
   IconTicket,
   IconUsers,
 } from "./icons";
+import { useT } from "../i18n";
 
 /** Role -> icon, used on cards, badges and the pipeline view. */
 export function AgentIcon({ role }: { role: string }): ReactNode {
@@ -72,10 +73,11 @@ export const DOMAIN_LABEL: Record<string, string> = {
 };
 
 export function DomainBadge({ domain }: { domain: string | undefined }) {
+  const tx = useT();
   if (!domain || domain === "general") return null;
   return (
-    <span className="tag" title="domain">
-      {DOMAIN_LABEL[domain] ?? domain}
+    <span className="tag" title={tx("domain")}>
+      {tx(DOMAIN_LABEL[domain] ?? domain)}
     </span>
   );
 }

@@ -1,5 +1,46 @@
 // Turkish. Keys are the English source strings; anything missing shows the English.
 export const TR: Record<string, string> = {
+  "Loading…": "Yükleniyor…",
+  "Not found.": "Bulunamadı.",
+  passed: "geçti",
+  error: "hata",
+  domain: "alan",
+  backend: "backend",
+  web: "web",
+  mobile: "mobil",
+  infra: "altyapı",
+  docs: "doküman",
+  general: "genel",
+  "Approved plans are mirrored as epics, stories and sub-tasks here; task statuses map to the transition names below.":
+    "Onaylanan planlar burada epic, story ve alt görev olarak aynalanır; task durumları aşağıdaki geçiş adlarıyla eşleşir.",
+  "GitHub repository (owner/name)": "GitHub deposu (sahip/ad)",
+  "Retry continues from the step that failed": "Yeniden dene, hata alınan adımdan devam eder",
+  "everything built so far stays.": "o ana kadar üretilen her şey kalır.",
+  "QA proposes these test cases. Add, remove or rewrite them; the tests written next cover exactly this list.":
+    "QA bu test senaryolarını öneriyor. Ekle, çıkar ya da yeniden yaz; sonra yazılacak testler tam olarak bu listeyi kapsar.",
+  "No login exists yet. Create the first (admin) user on the server:":
+    "Henüz bir giriş yok. İlk (yönetici) kullanıcıyı sunucuda oluştur:",
+  "Pick a folder under {root}…": "{root} altından bir klasör seç…",
+  "Repository (owner/name)": "Depo (sahip/ad)",
+  development: "gelişim",
+  "With Jira connected, every approved plan is mirrored as epics, stories and sub-tasks in the project's Jira project, issues move as tasks complete, and PR links and failures are commented. This is the connection used by the engine; the account the agents themselves act as, and which Jira project each Slipwright project mirrors into, are set below.":
+    "Jira bağlıyken onaylanan her plan, projenin Jira projesine epic, story ve alt görev olarak aynalanır; tasklar bittikçe issue'lar ilerler, PR bağlantıları ve hatalar yorum olarak düşülür. Bu, motorun kullandığı bağlantıdır; ajanların hangi hesapla davrandığı ve hangi Slipwright projesinin hangi Jira projesine aynalandığı aşağıda ayarlanır.",
+  "so they nest under stories; use": "böylece story altına yerleşirler; eski sitelerde",
+  "Last round {when}: {jobs} development(s) checked, {updated} updated, {errors} with Jira errors.":
+    "Son tur {when}: {jobs} gelişim denetlendi, {updated} güncellendi, {errors} tanesinde Jira hatası.",
+  "Copy it now; it will not be shown again:": "Şimdi kopyala; bir daha gösterilmeyecek:",
+  "Enter an API key for each provider you want to use. Keys are stored encrypted and never shown again; a key from the server's environment is used when none is stored. Every agent runs on the provider marked":
+    "Kullanmak istediğin her sağlayıcı için bir API anahtarı gir. Anahtarlar şifreli saklanır ve bir daha gösterilmez; kayıtlı anahtar yoksa sunucunun ortam değişkenindeki kullanılır. Her ajan aşağıda",
+  "below, on that provider's": "işaretli sağlayıcıda, o sağlayıcının",
+  default: "varsayılan",
+  "— unless a role is pinned to a provider and model of its own under":
+    "ile çalışır — bir rol kendi sağlayıcı ve modeline sabitlenmemişse:",
+  "(from {env})": "({env} ortamından)",
+  "set, ends with {hint}": "kayıtlı, sonu {hint}",
+  "or set": "ya da sunucuda",
+  "Leave empty for {url}; set for proxies.":
+    "{url} için boş bırak; vekil sunucu kullanacaksan doldur.",
+  "Connected. {n} model(s) available:": "Bağlandı. {n} model kullanılabilir:",
   "Copy to clipboard": "Panoya kopyala",
   Copy: "Kopyala",
   Copied: "Kopyalandı",
@@ -441,8 +482,6 @@ export const TR: Record<string, string> = {
     "openai — metin gömmeleri (OpenAI anahtarı gerekir)",
   "local — sentence-transformers on this machine": "yerel — bu makinede sentence-transformers",
   "hashing — offline stand-in": "hashing — çevrimdışı yedek",
-  "e.g. Queues and dead letters": "örn. Kuyruklar ve dead letter'lar",
-  "Sections (Markdown)": "Bölümler (Markdown)",
   "task title": "task başlığı",
   "Add task": "Task ekle",
   "Remove task": "Taskı kaldır",

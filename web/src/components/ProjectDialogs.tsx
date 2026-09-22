@@ -72,7 +72,7 @@ export function EditProjectModal({ project, onClose }: { project: Project; onClo
       </div>
       <div className="grid-2">
         <div className="field">
-          <label htmlFor="ep-gh">GitHub repository (owner/name)</label>
+          <label htmlFor="ep-gh">{tx("GitHub repository (owner/name)")}</label>
           <input
             id="ep-gh"
             type="text"
@@ -136,8 +136,9 @@ export function EditProjectModal({ project, onClose }: { project: Project; onClo
           <option value="blocking">{tx("blocking — the specialist fixes, then you decide")}</option>
         </select>
         <div className="help faint small">
-          QA checks every phase's diff against the standards its specialist was given. In blocking
-          mode a blocking finding sends the phase back (two rounds) before it waits for you.
+          {tx(
+            "QA checks every phase's diff against the standards its specialist was given. In blocking mode a blocking finding sends the phase back (two rounds) before it waits for you.",
+          )}
         </div>
       </div>
       <fieldset className="field" style={{ border: 0, padding: 0 }}>
@@ -190,17 +191,18 @@ export function EditProjectModal({ project, onClose }: { project: Project; onClo
                   setSupervisor({ ...supervisor, allow_final_gate: e.target.checked })
                 }
               />
-              let it approve the written tests too (the gate before the pull request)
+              {tx("let it approve the written tests too (the gate before the pull request)")}
             </label>
           </div>
         )}
         <div className="help faint small">
-          Rejections are never automatic; every automatic approval is recorded on the job and can be
-          undone from the dashboard while the next step runs.
+          {tx(
+            "Rejections are never automatic; every automatic approval is recorded on the job and can be undone from the dashboard while the next step runs.",
+          )}
         </div>
       </fieldset>
       <fieldset className="field" style={{ border: 0, padding: 0 }}>
-        <label>Budget per development (blank = unlimited)</label>
+        <label>{tx("Budget per development (blank = unlimited)")}</label>
         <div className="grid-3">
           <div className="field">
             <label htmlFor="ep-b-tokens" className="small">
@@ -219,7 +221,7 @@ export function EditProjectModal({ project, onClose }: { project: Project; onClo
           </div>
           <div className="field">
             <label htmlFor="ep-b-clock" className="small">
-              Wall clock (seconds)
+              {tx("Wall clock (seconds)")}
             </label>
             <input
               id="ep-b-clock"

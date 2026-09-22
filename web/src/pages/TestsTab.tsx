@@ -69,10 +69,10 @@ export function TestsTab({ projectId }: { projectId: string }) {
           <div className="row">
             <select value={status} onChange={(e) => setStatus(e.target.value)}>
               <option value="">{tx("any status")}</option>
-              <option value="running">running</option>
-              <option value="passed">passed</option>
-              <option value="failed">failed</option>
-              <option value="error">error</option>
+              <option value="running">{tx("running")}</option>
+              <option value="passed">{tx("passed")}</option>
+              <option value="failed">{tx("failed")}</option>
+              <option value="error">{tx("error")}</option>
             </select>
             <select value={jobFilter} onChange={(e) => setJobFilter(e.target.value)}>
               <option value="">{tx("any job")}</option>

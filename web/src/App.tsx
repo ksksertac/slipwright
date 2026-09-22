@@ -13,6 +13,7 @@ import { JiraSettingsPage } from "./pages/settings/JiraSettingsPage";
 import { AgentsPage } from "./pages/AgentsPage";
 import { AgentDetailPage } from "./pages/AgentDetailPage";
 import { UsersSettingsPage } from "./pages/settings/UsersSettingsPage";
+import { useT } from "./i18n";
 
 export function App() {
   return (
@@ -40,8 +41,13 @@ export function App() {
         <Route path="/agents/:role" element={<AgentDetailPage />} />
         <Route path="/agents/:role/:tab" element={<AgentDetailPage />} />
         <Route path="/settings/users" element={<UsersSettingsPage />} />
-        <Route path="*" element={<div className="muted">Not found.</div>} />
+        <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>
   );
+}
+
+function NotFound() {
+  const tx = useT();
+  return <div className="muted">{tx("Not found.")}</div>;
 }

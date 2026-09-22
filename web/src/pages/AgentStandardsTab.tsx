@@ -562,7 +562,7 @@ function IndexSettings({ admin, projectId }: { admin: boolean; projectId: string
             onChange={(e) => setDraft({ ...form, embedder: e.target.value })}
           >
             <option value="none">{tx("none — keyword search only")}</option>
-            <option value="openai">openai — text embeddings (needs an OpenAI key)</option>
+            <option value="openai">{tx("openai — text embeddings (needs an OpenAI key)")}</option>
             <option value="local">{tx("local — sentence-transformers on this machine")}</option>
             <option value="hashing">{tx("hashing — offline stand-in")}</option>
           </select>

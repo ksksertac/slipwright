@@ -205,13 +205,13 @@ function GatePanel({ job }: { job: Job }) {
           </div>
           {last?.detail && (
             <details style={{ marginTop: 6 }}>
-              <summary>detail</summary>
+              <summary>{tx("detail")}</summary>
               <Detail text={last.detail} />
             </details>
           )}
           <div className="small muted" style={{ marginTop: 6 }}>
-            Retry continues from the step that failed (<code>{last?.from_state ?? "backlog"}</code>
-            ); everything built so far stays.
+            {tx("Retry continues from the step that failed")} (
+            <code>{last?.from_state ?? "backlog"}</code>); {tx("everything built so far stays.")}
           </div>
         </div>
       );
@@ -272,8 +272,9 @@ function ProfileGate({ job, profile }: { job: Job; profile: Profile }) {
   return (
     <div style={{ marginTop: 12 }}>
       <p className="muted small">
-        The Architect proposes how the project is built, tested and run. Edit anything before
-        approving; the roles come from the project's seed profile and stay a human decision.
+        {tx(
+          "The Architect proposes how the project is built, tested and run. Edit anything before approving; the roles come from the project's seed profile and stay a human decision.",
+        )}
       </p>
       <ProfileForm
         value={draft}
@@ -354,9 +355,10 @@ function DecisionGate({ job }: { job: Job }) {
         <strong>{stop?.note}</strong>
       </p>
       <p className="muted small">
-        {tx("Approving continues with")} <code>{resume}</code> as it was; rejecting continues too,
-        with your feedback delivered to the agent that runs next. Nothing more is spent until you
-        decide.
+        {tx("Approving continues with")} <code>{resume}</code>{" "}
+        {tx(
+          "as it was; rejecting continues too, with your feedback delivered to the agent that runs next. Nothing more is spent until you decide.",
+        )}
       </p>
       {stop?.detail && (
         <details>
@@ -502,8 +504,9 @@ function TestCasesGate({ job }: { job: Job }) {
   return (
     <div style={{ marginTop: 12 }}>
       <p className="muted small">
-        QA proposes these test cases. Add, remove or rewrite them; the tests written next cover
-        exactly this list.
+        {tx(
+          "QA proposes these test cases. Add, remove or rewrite them; the tests written next cover exactly this list.",
+        )}
       </p>
       <table>
         <thead>
@@ -859,7 +862,7 @@ function Steering({ job }: { job: Job }) {
                         {tx("read by")} <strong>{m.consumed_by}</strong> {formatTime(m.consumed_at)}
                       </>
                     ) : (
-                      <span className="badge wait">pending</span>
+                      <span className="badge wait">{tx("pending")}</span>
                     )}
                   </td>
                 </tr>

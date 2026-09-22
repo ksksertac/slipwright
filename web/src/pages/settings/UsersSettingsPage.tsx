@@ -258,7 +258,7 @@ function UserDetails({ user, me, onDelete }: { user: User; me: User; onDelete: (
         </div>
         {secret && (
           <div className="callout notice">
-            Copy it now; it will not be shown again:
+            {tx("Copy it now; it will not be shown again:")}
             <pre style={{ marginTop: 6 }}>{secret}</pre>
           </div>
         )}

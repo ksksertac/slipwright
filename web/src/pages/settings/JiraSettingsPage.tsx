@@ -53,10 +53,9 @@ export function JiraSettingsPage() {
         subtitle={tx("Mirror epics, stories and tasks into your tracker.")}
       />
       <p className="muted">
-        With Jira connected, every approved plan is mirrored as epics, stories and sub-tasks in the
-        project's Jira project, issues move as tasks complete, and PR links and failures are
-        commented. This is the connection used by the engine; the account the agents themselves act
-        as, and which Jira project each Slipwright project mirrors into, are set below.
+        {tx(
+          "With Jira connected, every approved plan is mirrored as epics, stories and sub-tasks in the project's Jira project, issues move as tasks complete, and PR links and failures are commented. This is the connection used by the engine; the account the agents themselves act as, and which Jira project each Slipwright project mirrors into, are set below.",
+        )}
       </p>
       <form className="form card" onSubmit={submit}>
         <div className="field">
@@ -98,8 +97,8 @@ export function JiraSettingsPage() {
         <h3>{tx("Issue type names")}</h3>
         <p className="muted small">
           {tx("As they are called in your Jira site. Tasks default to")}{" "}
-          <code>{tx("Subtask")}</code> so they nest under stories; use <code>{tx("Sub-task")}</code>{" "}
-          {tx("on older sites.")}
+          <code>{tx("Subtask")}</code> {tx("so they nest under stories; use")}{" "}
+          <code>{tx("Sub-task")}</code> {tx("on older sites.")}
         </p>
         <div className="grid-2">
           {TYPE_KEYS.map((k) => (
@@ -190,14 +189,17 @@ function SweepCard({ admin }: { admin: boolean }) {
         )}
       </div>
       <p className="muted small">
-        At startup and every hour, every development of a Jira-linked project is checked: missing
-        epics, stories and sub-tasks are created, stories join the sprint (one is started when none
-        is running), statuses catch up.
+        {tx(
+          "At startup and every hour, every development of a Jira-linked project is checked: missing epics, stories and sub-tasks are created, stories join the sprint (one is started when none is running), statuses catch up.",
+        )}
       </p>
       <div className="small">
         {s
-          ? `Last round ${timeAgo(s.at)}: ${s.jobs} development(s) checked, ${s.updated} updated, ${s.errors} with Jira errors.`
-          : "No round has run yet."}
+          ? tx(
+              "Last round {when}: {jobs} development(s) checked, {updated} updated, {errors} with Jira errors.",
+              { when: timeAgo(s.at), jobs: s.jobs, updated: s.updated, errors: s.errors },
+            )
+          : tx("No round has run yet.")}
       </div>
       {run.error && <div className="callout error">{describeError(run.error)}</div>}
     </div>

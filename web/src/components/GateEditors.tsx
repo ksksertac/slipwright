@@ -219,7 +219,7 @@ export function PlanEditor({
                 >
                   {DOMAINS.map((d) => (
                     <option key={d} value={d}>
-                      {DOMAIN_LABEL[d]}
+                      {tx(DOMAIN_LABEL[d] ?? d)}
                     </option>
                   ))}
                 </select>

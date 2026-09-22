@@ -110,11 +110,13 @@ export function NewProjectPage() {
         {source === "local" ? (
           <div className="field">
             <label htmlFor="repo_path">
-              {folders.length > 0 && !typing ? "Checkout" : "Path on the server"}
+              {folders.length > 0 && !typing ? tx("Checkout") : tx("Path on the server")}
             </label>
             {folders.length > 0 && !typing ? (
               <select id="repo_path" value={repoPath} onChange={(e) => setRepoPath(e.target.value)}>
-                <option value="">Pick a folder under {local.data?.root}…</option>
+                <option value="">
+                  {tx("Pick a folder under {root}…", { root: local.data?.root ?? "" })}
+                </option>
                 {folders.map((r) => (
                   <option key={r.path} value={r.path}>
                     {r.name}
@@ -178,7 +180,7 @@ export function NewProjectPage() {
           </div>
         ) : (
           <div className="field">
-            <label htmlFor="github_repo">Repository (owner/name)</label>
+            <label htmlFor="github_repo">{tx("Repository (owner/name)")}</label>
             {githubReady && repos.data && repos.data.length > 0 ? (
               <select
                 id="github_repo"
@@ -256,7 +258,9 @@ export function NewProjectPage() {
         </div>
 
         <div className="field">
-          <label htmlFor="first_request">What should the agents build first? (optional)</label>
+          <label htmlFor="first_request">
+            {tx("What should the agents build first? (optional)")}
+          </label>
           <textarea
             id="first_request"
             value={firstRequest}
@@ -267,7 +271,7 @@ export function NewProjectPage() {
             style={{ minHeight: 90 }}
           />
           <div className="help">
-            {tx("Every request becomes a")} <em>development</em>
+            {tx("Every request becomes a")} <em>{tx("development")}</em>
             {tx(
               ": the Product Owner turns it into epics, stories and tasks for you to approve, the Architect plans it, the specialists build it. You can add more later from the project's",
             )}{" "}

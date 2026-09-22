@@ -42,7 +42,7 @@ export function LoginPage() {
         </p>
         {noUsers ? (
           <div className="callout hint" style={{ display: "block" }}>
-            No login exists yet. Create the first (admin) user on the server:
+            {tx("No login exists yet. Create the first (admin) user on the server:")}
             <pre style={{ marginTop: 8 }}>slipwright user add &lt;name&gt;</pre>
           </div>
         ) : (

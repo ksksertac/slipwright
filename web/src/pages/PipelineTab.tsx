@@ -84,7 +84,7 @@ export function PipelineTab({ projectId }: { projectId: string }) {
       <div className="row spread">
         <div className="muted small">
           {waiting.size === 0
-            ? "Nothing waits for you."
+            ? tx("Nothing waits for you.")
             : tx("{n} development(s) waiting for your approval", { n: waiting.size })}
         </div>
         <div className="row">
@@ -229,7 +229,7 @@ function StepCardView({
       <div className="who">
         {step.role ? <AgentIcon role={step.role} /> : null}
         <span>{who}</span>
-        {step.status === "running" && <span className="pulse-dot" aria-label="running" />}
+        {step.status === "running" && <span className="pulse-dot" aria-label={tx("running")} />}
       </div>
       <div className="label">{stepLabel(tx, step)}</div>
       {step.task_title && <div className="task truncate">{step.task_title}</div>}
@@ -441,7 +441,7 @@ function SaveRow({
           {saving ? tx("Saving…") : tx("Save")}
         </button>
         <button className="btn ok small" disabled={busy} onClick={() => void saveAndApprove()}>
-          <IconCheck /> {dirty ? "Save & approve" : "Approve"}
+          <IconCheck /> {dirty ? tx("Save & approve") : tx("Approve")}
         </button>
         {!rejecting ? (
           <button className="btn bad small" disabled={busy} onClick={() => setRejecting(true)}>
@@ -474,6 +474,7 @@ function SaveRow({
 }
 
 function BacklogGateEditor({ job }: { job: Job }) {
+  const tx = useT();
   const server = job.data.backlog as BreakdownShape | null;
   const save = useSetBacklog(job.id);
   const [draft, setDraft] = useState<BreakdownShape | null>(server);
@@ -497,8 +498,9 @@ function BacklogGateEditor({ job }: { job: Job }) {
   return (
     <>
       <p className="muted small">
-        Rename epics, stories and tasks or add and remove tasks; the Architect designs one phase per
-        task from what you approve.
+        {tx(
+          "Rename epics, stories and tasks or add and remove tasks; the Architect designs one phase per task from what you approve.",
+        )}
       </p>
       <BacklogEditor
         value={draft}
@@ -618,6 +620,7 @@ function ArchitectureGateEditor({ job }: { job: Job }) {
 }
 
 function TestCasesGateEditor({ job }: { job: Job }) {
+  const tx = useT();
   const server = job.data.test_cases as unknown as TestCaseShape[];
   const save = useSetTestCases(job.id);
   const [draft, setDraft] = useState<TestCaseShape[]>(server);
@@ -642,7 +645,9 @@ function TestCasesGateEditor({ job }: { job: Job }) {
     );
   return (
     <>
-      <p className="muted small">QA proposed these cases; edit the list, then approve it.</p>
+      <p className="muted small">
+        {tx("QA proposed these cases; edit the list, then approve it.")}
+      </p>
       <TestCasesEditor
         value={draft}
         onChange={(next) => {
