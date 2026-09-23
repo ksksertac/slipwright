@@ -23,6 +23,10 @@ import {
   type Job,
   type JobResult,
   type NewProject,
+  type SourceIdentity,
+  type SourceRepo,
+  type SourceSettings,
+  type SourceSettingsIn,
   type Overview,
   type Profile,
   type Pipeline,
@@ -62,6 +66,8 @@ export const keys = {
   testRun: (id: string) => ["test-runs", id] as const,
   testRunOutput: (id: string) => ["test-runs", id, "output"] as const,
   github: ["settings", "github"] as const,
+  sources: ["settings", "sources"] as const,
+  sourceRepos: (name: string) => ["settings", "sources", name, "repos"] as const,
   githubRepos: ["settings", "github", "repos"] as const,
   jira: ["settings", "jira"] as const,
   jiraProjects: ["settings", "jira", "projects"] as const,
@@ -542,6 +548,42 @@ export function useRevokeToken(userId: string) {
 }
 
 // -- model providers ---------------------------------------------------------------------
+
+export function useSources() {
+  return useQuery({
+    queryKey: keys.sources,
+    queryFn: () => api.get<SourceSettings[]>("/api/settings/sources"),
+  });
+}
+
+export function useSaveSource() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ name, ...body }: SourceSettingsIn & { name: string }) =>
+      api.put<SourceSettings[]>(`/api/settings/sources/${name}`, body),
+    onSuccess: (data) => {
+      qc.setQueryData(keys.sources, data);
+      void qc.invalidateQueries({ queryKey: keys.github });
+    },
+  });
+}
+
+export function useTestSource() {
+  return useMutation({
+    mutationFn: (name: string) => api.post<SourceIdentity>(`/api/settings/sources/${name}/test`),
+  });
+}
+
+/** The repositories a connected source can see, for the new-project picker. */
+export function useSourceRepos(name: string | null) {
+  return useQuery({
+    queryKey: keys.sourceRepos(name ?? ""),
+    queryFn: () => api.get<SourceRepo[]>(`/api/settings/sources/${name}/repos`),
+    enabled: name !== null,
+    retry: false,
+    staleTime: 5 * 60_000,
+  });
+}
 
 export function useProviders() {
   return useQuery({

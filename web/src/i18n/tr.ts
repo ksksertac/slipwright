@@ -1,5 +1,25 @@
 // Turkish. Keys are the English source strings; anything missing shows the English.
 export const TR: Record<string, string> = {
+  Sources: "Kaynaklar",
+  "Where the code lives: clone, push and open pull requests.":
+    "Kodun yaşadığı yer: klonla, push'la ve pull request aç.",
+  "Connect the services your repositories live on. A token is stored encrypted and never shown again; a token from the server's environment is used when none is stored. A project keeps the service it was created from, and new projects start on the one marked":
+    "Depolarının bulunduğu servisleri bağla. Token şifreli saklanır ve bir daha gösterilmez; kayıtlı token yoksa sunucunun ortam değişkenindeki kullanılır. Bir proje hangi servisle açıldıysa onunla kalır; yeni projeler aşağıda",
+  "add a token to use it": "kullanmak için token ekle",
+  "no default {owner}": "varsayılan {owner} yok",
+  "token set": "token ayarlı",
+  "not connected": "bağlı değil",
+  "paste a token": "bir token yapıştır",
+  "Create one at": "Buradan oluştur:",
+  "New projects look here first when listing repositories.":
+    "Yeni projede depolar önce burada aranır.",
+  "What a pull request is opened against, and what a finished branch merges into.":
+    "Pull request'in açılacağı ve biten dalın birleşeceği dal.",
+  "API URL (optional)": "API adresi (isteğe bağlı)",
+  "Leave empty for {url}; set for a self-hosted server.":
+    "{url} için boş bırak; kendi sunucunu kullanıyorsan doldur.",
+  "Workspace or repository access token": "Workspace ya da depo erişim token'ı",
+  Workspace: "Workspace",
   "The last {n} days": "Son {n} gün",
   steps: "adım",
   "Where the developments stand": "Gelişimler nerede",

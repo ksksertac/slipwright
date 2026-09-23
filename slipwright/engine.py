@@ -23,7 +23,7 @@ import traceback
 from collections import defaultdict
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import httpx
 from pydantic import ValidationError
@@ -72,6 +72,15 @@ from slipwright.schemas.job import (
 from slipwright.schemas.profile import Permission, Profile, RoleConfig, RoleName
 from slipwright.schemas.project import BudgetSettings, Project, SupervisorSettings
 from slipwright.schemas.testrun import TestRun, TestRunSource, TestRunStatus
+from slipwright.sources import (
+    GITHUB,
+    SOURCES,
+    SourceCredentials,
+    SourceError,
+    SourceHost,
+    build_host,
+)
+from slipwright.sources.registry import SourceSettings
 from slipwright.standards import GLOBAL_DIR, PROJECT_SUBDIR, load_corpus
 from slipwright.standards.editing import StandardsEditor
 from slipwright.standards.index import (
@@ -427,11 +436,142 @@ class Engine:
     # -- GitHub connection -----------------------------------------------------------------
 
     def github_token(self) -> str | None:
+        return self.source_token(GITHUB)
+
+    # -- source hosts (GitHub, Bitbucket, ...) ---------------------------------------------
+
+    def source_settings(self) -> list[SourceSettings]:
+        """One row per known host, in registry order, with the default first-class."""
+        self._migrate_github_settings()
+        default = self.default_source()
+        rows: list[SourceSettings] = []
+        for name, spec in SOURCES.items():
+            data: dict[str, Any] = self.store.get_setting(f"sources.{name}", {}) or {}
+            token = self.source_token(name)
+            stored = self.store.get_setting(f"sources.{name}.token")
+            rows.append(
+                SourceSettings(
+                    name=name,
+                    label=spec.label,
+                    token_label=spec.token_label,
+                    token_docs_url=spec.token_docs_url,
+                    owner_label=spec.owner_label,
+                    default_api_url=spec.default_api_url,
+                    api_url=data.get("api_url") or None,
+                    env_var=spec.env_var,
+                    owner=data.get("owner"),
+                    base_branch=data.get("base_branch") or "main",
+                    token_set=token is not None,
+                    token_hint=f"…{token[-4:]}" if token else None,
+                    token_from_env=token is not None and not stored,
+                    is_default=name == default,
+                )
+            )
+        return rows
+
+    def default_source(self) -> str:
+        name = self.store.get_setting("sources.default")
+        return str(name) if name in SOURCES else GITHUB
+
+    def source_token(self, name: str) -> str | None:
+        """The stored token, else the host's environment variable."""
+        self._migrate_github_settings()
+        stored = self.store.get_setting(f"sources.{name}.token")
+        if stored:
+            return str(stored)
+        spec = SOURCES.get(name)
+        env = os.environ.get(spec.env_var) if spec else None
+        return env or None
+
+    def source_credentials(self, name: str) -> SourceCredentials | None:
+        token = self.source_token(name)
+        if token is None or name not in SOURCES:
+            return None
+        data: dict[str, Any] = self.store.get_setting(f"sources.{name}", {}) or {}
+        return SourceCredentials(
+            name=name,
+            token=token,
+            api_url=data.get("api_url") or SOURCES[name].default_api_url,
+            owner=data.get("owner") or None,
+        )
+
+    def update_source_settings(
+        self,
+        name: str,
+        *,
+        token: str | None = None,
+        owner: str | None = None,
+        base_branch: str | None = None,
+        api_url: str | None = None,
+        clear_token: bool = False,
+        make_default: bool = False,
+    ) -> list[SourceSettings]:
+        """Change what is given; an omitted token keeps the stored one."""
+        if name not in SOURCES:
+            raise ValueError(f"unknown source: {name!r}")
+        self._migrate_github_settings()
+        current: dict[str, Any] = self.store.get_setting(f"sources.{name}", {}) or {}
+        if owner is not None:
+            current["owner"] = owner.strip() or None
+        if base_branch is not None:
+            current["base_branch"] = base_branch.strip() or "main"
+        if api_url is not None:
+            current["api_url"] = api_url.strip() or None
+        self.store.set_setting(f"sources.{name}", current)
+        if clear_token:
+            self.store.delete_setting(f"sources.{name}.token")
+        elif token is not None and token.strip():
+            self.store.set_setting(f"sources.{name}.token", token.strip(), secret=True)
+        if make_default:
+            self.store.set_setting("sources.default", name)
+        return self.source_settings()
+
+    def source_host(self, name: str | None = None, *, base_branch: str | None = None) -> SourceHost:
+        """A client for the named host (the default when unnamed). Raises when it has no
+        token: a job must fail with that reason rather than half-way through a push."""
+        chosen = name or self.default_source()
+        creds = self.source_credentials(chosen)
+        if creds is None:
+            spec = SOURCES.get(chosen)
+            label = spec.label if spec else chosen
+            env = spec.env_var if spec else "?"
+            raise SourceError(
+                f"no token for {label}: add one under Settings → Sources or set {env}"
+            )
+        rows = {r.name: r for r in self.source_settings()}
+        branch = base_branch or rows[chosen].base_branch
+        return build_host(creds, transport=self.http_transport, base_branch=branch)
+
+    def host_for(self, project: Project | None) -> SourceHost:
+        """The host a project belongs to; the default for a project that names none."""
+        if self._git_host is not None:
+            # injected (tests, or a single-host deployment): it answers push/open_pr/
+            # ci_status, which is all a running job asks of a host
+            return cast(SourceHost, self._git_host)
+        return self.source_host(project.source if project else None)
+
+    def _host_of(self, job: Job) -> SourceHost:
+        return self.host_for(self._project_of(job))
+
+    def _migrate_github_settings(self) -> None:
+        """Settings written before the sources page keep working: github.* moves under
+        sources.github once, and the old keys are left alone in case of a rollback."""
+        if self.store.get_setting("sources.migrated"):
+            return
+        old: dict[str, Any] = self.store.get_setting("github", {}) or {}
+        if old:
+            current: dict[str, Any] = self.store.get_setting("sources.github", {}) or {}
+            for key in ("owner", "base_branch"):
+                if old.get(key) and not current.get(key):
+                    current[key] = old[key]
+            self.store.set_setting("sources.github", current)
         token = self.store.get_setting("github.token")
-        return str(token) if token else None
+        if token and not self.store.get_setting("sources.github.token"):
+            self.store.set_setting("sources.github.token", token, secret=True)
+        self.store.set_setting("sources.migrated", True)
 
     def github_settings(self) -> GitHubSettings:
-        data: dict[str, Any] = self.store.get_setting("github", {}) or {}
+        data: dict[str, Any] = self.store.get_setting("sources.github", {}) or {}
         token = self.github_token()
         return GitHubSettings(
             owner=data.get("owner"),
@@ -448,17 +588,11 @@ class Engine:
         base_branch: str | None = None,
         clear_token: bool = False,
     ) -> GitHubSettings:
-        """Change what is given; an omitted token keeps the stored one."""
-        current: dict[str, Any] = self.store.get_setting("github", {}) or {}
-        if owner is not None:
-            current["owner"] = owner.strip() or None
-        if base_branch is not None:
-            current["base_branch"] = base_branch.strip() or "main"
-        self.store.set_setting("github", current)
-        if clear_token:
-            self.store.delete_setting("github.token")
-        elif token is not None and token.strip():
-            self.store.set_setting("github.token", token.strip(), secret=True)
+        """Change what is given; an omitted token keeps the stored one. The GitHub page
+        is the sources page's older door: both write the same settings."""
+        self.update_source_settings(
+            GITHUB, token=token, owner=owner, base_branch=base_branch, clear_token=clear_token
+        )
         return self.github_settings()
 
     def github_client(self) -> GitHubClient:
@@ -837,7 +971,7 @@ class Engine:
             target = self.repos_root / project.id
             target.parent.mkdir(parents=True, exist_ok=True)
             try:
-                g.clone(self._authenticated(url), target)
+                g.clone(self._authenticated(url, project.source), target)
             except g.GitError as exc:
                 raise ProjectCloneError(f"could not clone {url}: {exc.stderr}") from exc
             project = project.model_copy(update={"repo_path": target})
@@ -893,14 +1027,13 @@ class Engine:
         except g.GitError as exc:
             raise ValueError(f"could not turn {path} into a git repository: {exc.stderr}") from exc
 
-    def _authenticated(self, url: str) -> str:
-        """Embed the stored token into a GitHub HTTPS URL for cloning; never persisted."""
-        token = self.github_token()
-        if token and url.startswith("https://github.com/"):
-            return url.replace(
-                "https://github.com/", f"https://x-access-token:{token}@github.com/", 1
-            )
-        return url
+    def _authenticated(self, url: str, source: str | None = None) -> str:
+        """Embed the host's stored token into an HTTPS clone URL; never persisted."""
+        try:
+            host = self.source_host(source)
+        except SourceError:
+            return url
+        return host.authenticated_url(url)
 
     def local_repos(self) -> list[dict[str, Any]]:
         """The folders under ``local_repos_root`` a project can be registered from, git
@@ -2264,9 +2397,10 @@ class Engine:
             if not result.ok:
                 return self._invocation_failed(job, result)
             assert isinstance(result.output, DevOpsResult)
+            host = self._host_of(job)
             try:
-                self.git_host.push(worktree, job.branch)
-                job.data.pr_url = self.git_host.open_pr(
+                host.push(worktree, job.branch)
+                job.data.pr_url = host.open_pr(
                     worktree, job.branch, result.output.pr_title, result.output.pr_body
                 )
             except NoRemote:
@@ -2312,7 +2446,7 @@ class Engine:
             g.stage_all(worktree)
             g.commit(worktree, f"slipwright: CI fix {job.data.ci_attempts}: {fix.output.summary}")
             try:
-                self.git_host.push(worktree, job.branch)
+                self._host_of(job).push(worktree, job.branch)
             except GitHostError as exc:
                 return self._fail(job, f"devops: {exc}")
 
@@ -2339,7 +2473,7 @@ class Engine:
         assert job.data.pr_url is not None
         deadline = time.monotonic() + self.ci_timeout_s
         while True:
-            status = self.git_host.ci_status(worktree, job.branch, job.data.pr_url)
+            status = self._host_of(job).ci_status(worktree, job.branch, job.data.pr_url)
             if status.terminal or time.monotonic() >= deadline:
                 return status
             time.sleep(self.ci_poll_s)

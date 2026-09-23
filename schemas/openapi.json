@@ -839,6 +839,57 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "Identity": {
+        "additionalProperties": false,
+        "description": "Who the stored token belongs to, as the settings page shows it.",
+        "properties": {
+          "login": {
+            "title": "Login",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "rate_limit_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rate Limit Limit"
+          },
+          "rate_limit_remaining": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rate Limit Remaining"
+          }
+        },
+        "required": [
+          "login",
+          "name",
+          "rate_limit_limit",
+          "rate_limit_remaining"
+        ],
+        "title": "Identity",
+        "type": "object"
+      },
       "InboxMessage": {
         "additionalProperties": false,
         "description": "A steering message from the human, delivered to the next role invocation.",
@@ -2589,7 +2640,7 @@
                 "type": "null"
               }
             ],
-            "description": "``owner/name`` on GitHub.",
+            "description": "``owner/name`` on the source host (``workspace/repo`` on Bitbucket).",
             "title": "Github Repo"
           },
           "id": {
@@ -2677,6 +2728,12 @@
             "title": "Review",
             "type": "string"
           },
+          "source": {
+            "default": "github",
+            "description": "Which hosting service the repository lives on (Settings \u2192 Sources).",
+            "title": "Source",
+            "type": "string"
+          },
           "supervisor": {
             "$ref": "#/components/schemas/SupervisorSettings"
           }
@@ -2696,6 +2753,7 @@
           "profile",
           "repo_path",
           "review",
+          "source",
           "supervisor"
         ],
         "title": "Project",
@@ -2830,6 +2888,17 @@
               }
             ],
             "title": "Review"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
           },
           "supervisor": {
             "anyOf": [
@@ -3133,6 +3202,51 @@
         "title": "Rejection",
         "type": "object"
       },
+      "Repo": {
+        "additionalProperties": false,
+        "description": "One repository the token can see.",
+        "properties": {
+          "default_branch": {
+            "default": "main",
+            "title": "Default Branch",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "full_name": {
+            "title": "Full Name",
+            "type": "string"
+          },
+          "html_url": {
+            "default": "",
+            "title": "Html Url",
+            "type": "string"
+          },
+          "private": {
+            "default": false,
+            "title": "Private",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "default_branch",
+          "description",
+          "full_name",
+          "html_url",
+          "private"
+        ],
+        "title": "Repo",
+        "type": "object"
+      },
       "Rerun": {
         "description": "Run one finished step again on the work that is already there.",
         "properties": {
@@ -3344,6 +3458,174 @@
           "text"
         ],
         "title": "RuleWrite",
+        "type": "object"
+      },
+      "SourceSettings": {
+        "additionalProperties": false,
+        "description": "One row of the sources page. The token itself is never returned.",
+        "properties": {
+          "api_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Url"
+          },
+          "base_branch": {
+            "default": "main",
+            "title": "Base Branch",
+            "type": "string"
+          },
+          "default_api_url": {
+            "title": "Default Api Url",
+            "type": "string"
+          },
+          "env_var": {
+            "title": "Env Var",
+            "type": "string"
+          },
+          "is_default": {
+            "default": false,
+            "title": "Is Default",
+            "type": "boolean"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner"
+          },
+          "owner_label": {
+            "title": "Owner Label",
+            "type": "string"
+          },
+          "token_docs_url": {
+            "title": "Token Docs Url",
+            "type": "string"
+          },
+          "token_from_env": {
+            "default": false,
+            "title": "Token From Env",
+            "type": "boolean"
+          },
+          "token_hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Last four characters, if set.",
+            "title": "Token Hint"
+          },
+          "token_label": {
+            "title": "Token Label",
+            "type": "string"
+          },
+          "token_set": {
+            "default": false,
+            "title": "Token Set",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "api_url",
+          "base_branch",
+          "default_api_url",
+          "env_var",
+          "is_default",
+          "label",
+          "name",
+          "owner",
+          "owner_label",
+          "token_docs_url",
+          "token_from_env",
+          "token_hint",
+          "token_label",
+          "token_set"
+        ],
+        "title": "SourceSettings",
+        "type": "object"
+      },
+      "SourceSettingsIn": {
+        "additionalProperties": false,
+        "description": "What the sources page may change. An omitted token keeps the stored one.",
+        "properties": {
+          "api_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Url"
+          },
+          "base_branch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Branch"
+          },
+          "clear_token": {
+            "default": false,
+            "title": "Clear Token",
+            "type": "boolean"
+          },
+          "make_default": {
+            "default": false,
+            "title": "Make Default",
+            "type": "boolean"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner"
+          },
+          "token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Token"
+          }
+        },
+        "title": "SourceSettingsIn",
         "type": "object"
       },
       "StandardsHit": {
@@ -6572,6 +6854,178 @@
           }
         },
         "summary": "Test Provider",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/settings/sources": {
+      "get": {
+        "description": "Every known host: whether it is connected, where it points, which is the default.",
+        "operationId": "get_sources_api_settings_sources_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SourceSettings"
+                  },
+                  "title": "Response Get Sources Api Settings Sources Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Sources",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/settings/sources/{name}": {
+      "put": {
+        "operationId": "put_source_api_settings_sources__name__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SourceSettingsIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SourceSettings"
+                  },
+                  "title": "Response Put Source Api Settings Sources  Name  Put",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Source",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/settings/sources/{name}/repos": {
+      "get": {
+        "description": "The repositories that host's token can see, for the new-project picker.",
+        "operationId": "source_repos_api_settings_sources__name__repos_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Repo"
+                  },
+                  "title": "Response Source Repos Api Settings Sources  Name  Repos Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Source Repos",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/settings/sources/{name}/test": {
+      "post": {
+        "description": "Ask the host who the stored token belongs to: 400 without a token, 502 when the\nhost refuses it.",
+        "operationId": "test_source_api_settings_sources__name__test_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Identity"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Test Source",
         "tags": [
           "settings"
         ]

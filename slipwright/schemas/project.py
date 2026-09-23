@@ -66,7 +66,14 @@ class Project(BaseModel):
     repo_path: Path | None = Field(
         default=None, description="Local checkout; filled in after cloning when absent."
     )
-    github_repo: str | None = Field(default=None, description="``owner/name`` on GitHub.")
+    source: str = Field(
+        default="github",
+        description="Which hosting service the repository lives on (Settings → Sources).",
+    )
+    github_repo: str | None = Field(
+        default=None,
+        description="``owner/name`` on the source host (``workspace/repo`` on Bitbucket).",
+    )
     clone_url: str | None = Field(
         default=None,
         description="Where to clone from when repo_path is absent; derived from github_repo.",
@@ -118,7 +125,10 @@ class Project(BaseModel):
         if self.clone_url:
             return self.clone_url
         if self.github_repo:
-            return f"https://github.com/{self.github_repo}.git"
+            from slipwright.sources.registry import SOURCES
+
+            spec = SOURCES.get(self.source) or SOURCES["github"]
+            return f"https://{spec.clone_host}/{self.github_repo}.git"
         return None
 
 
@@ -129,6 +139,7 @@ class ProjectPatch(BaseModel):
 
     name: str | None = Field(default=None, min_length=1)
     description: str | None = None
+    source: str | None = None
     github_repo: str | None = None
     jira_project_key: str | None = None
     language: Language | None = None

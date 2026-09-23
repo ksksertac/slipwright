@@ -63,8 +63,8 @@ export function Layout() {
           <NavLink to="/settings/models">
             <IconCpu /> {tx("Models")}
           </NavLink>
-          <NavLink to="/settings/github">
-            <IconGit /> {tx("GitHub")}
+          <NavLink to="/settings/sources">
+            <IconGit /> {tx("Sources")}
           </NavLink>
           <NavLink to="/settings/jira">
             <IconTicket /> {tx("Jira")}

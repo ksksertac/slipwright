@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from slipwright.api.auth import require_admin
 from slipwright.engine import Engine
@@ -19,6 +19,8 @@ from slipwright.jira import JiraAccount, JiraError, JiraProject, JiraSettings
 from slipwright.providers import ProviderError
 from slipwright.providers.registry import PROVIDERS
 from slipwright.schemas.profile import Profile
+from slipwright.sources import SOURCES, Identity, Repo, SourceError
+from slipwright.sources.registry import SourceSettings
 from slipwright.standards.editing import PageError, PageInfo, Rule
 from slipwright.standards.index import StandardsIndexError
 from slipwright.store import ProjectNotFound
@@ -87,6 +89,73 @@ class ProviderModels(BaseModel):
 def _engine(request: Request) -> Engine:
     eng: Engine = request.app.state.engine
     return eng
+
+
+class SourceSettingsIn(BaseModel):
+    """What the sources page may change. An omitted token keeps the stored one."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    token: str | None = None
+    owner: str | None = None
+    base_branch: str | None = None
+    api_url: str | None = None
+    clear_token: bool = False
+    make_default: bool = False
+
+
+@router.get("/settings/sources", response_model=list[SourceSettings])
+def get_sources(request: Request) -> list[SourceSettings]:
+    """Every known host: whether it is connected, where it points, which is the default."""
+    return _engine(request).source_settings()
+
+
+@router.put("/settings/sources/{name}", response_model=list[SourceSettings])
+def put_source(name: str, body: SourceSettingsIn, request: Request) -> list[SourceSettings]:
+    require_admin(request)
+    try:
+        return _engine(request).update_source_settings(
+            name,
+            token=body.token,
+            owner=body.owner,
+            base_branch=body.base_branch,
+            api_url=body.api_url,
+            clear_token=body.clear_token,
+            make_default=body.make_default,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/settings/sources/{name}/test", response_model=Identity)
+def test_source(name: str, request: Request) -> Identity:
+    """Ask the host who the stored token belongs to: 400 without a token, 502 when the
+    host refuses it."""
+    require_admin(request)
+    eng = _engine(request)
+    if name not in SOURCES:
+        raise HTTPException(status_code=404, detail=f"unknown source: {name}")
+    try:
+        host = eng.source_host(name)
+    except SourceError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    try:
+        return host.whoami()
+    except SourceError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@router.get("/settings/sources/{name}/repos", response_model=list[Repo])
+def source_repos(name: str, request: Request) -> list[Repo]:
+    """The repositories that host's token can see, for the new-project picker."""
+    eng = _engine(request)
+    if name not in SOURCES:
+        raise HTTPException(status_code=404, detail=f"unknown source: {name}")
+    try:
+        return eng.source_host(name).list_repos()
+    except SourceError as exc:
+        status = 400 if "no token" in str(exc) else 502
+        raise HTTPException(status_code=status, detail=str(exc)) from exc
 
 
 @router.get("/settings/github", response_model=GitHubSettings)
