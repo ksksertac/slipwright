@@ -5,33 +5,42 @@ import { PageHead } from "../components/ui";
 import { api, describeError, type Job, type NewProject } from "../api/client";
 import {
   useCreateProject,
-  useGitHubRepos,
-  useGitHubSettings,
+  useCreateSourceRepo,
   useJiraProjects,
   useJiraSettings,
   useLocalRepos,
+  useSourceRepos,
+  useSources,
 } from "../api/hooks";
 import { useT } from "../i18n";
 
-type Source = "local" | "github";
+// "local" is the checkout on this machine; anything else is a connected host
+type Source = string;
 
 export function NewProjectPage() {
   const tx = useT();
   const navigate = useNavigate();
   const create = useCreateProject();
-  const github = useGitHubSettings();
+  const sources = useSources();
   const jira = useJiraSettings();
-  const githubReady = !!github.data?.token_set;
+  const connected = (sources.data ?? []).filter((s) => s.token_set);
   const jiraReady = !!(jira.data?.token_set && jira.data.site_url);
-  const repos = useGitHubRepos(githubReady);
   const jiraProjects = useJiraProjects(jiraReady);
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [source, setSource] = useState<Source>(githubReady ? "github" : "local");
+  const [source, setSource] = useState<Source>("");
+  // the first connected host is the default; with none, the local checkout is
+  const host = source || connected[0]?.name || "local";
+  const hostRow = connected.find((s) => s.name === host);
+  const repos = useSourceRepos(hostRow ? host : null);
+  const openRepo = useCreateSourceRepo(host);
+  const [mode, setMode] = useState<"existing" | "new">("existing");
+  const [newRepoName, setNewRepoName] = useState("");
+  const [privateRepo, setPrivateRepo] = useState(true);
   const [repoPath, setRepoPath] = useState("");
   const [typing, setTyping] = useState(false); // type a path instead of picking a folder
-  const local = useLocalRepos(source === "local");
+  const local = useLocalRepos(host === "local");
   const folders = local.data?.repos ?? [];
   const [githubRepo, setGithubRepo] = useState("");
   const [jiraKey, setJiraKey] = useState("");
@@ -48,12 +57,24 @@ export function NewProjectPage() {
       jira_project_key: jiraKey.trim() || null,
       language,
     };
-    if (source === "local") {
+    if (host === "local") {
       body.repo_path = repoPath.trim();
       // optional here: with it the branch is pushed and a pull request opened
       if (githubRepo.trim()) body.github_repo = githubRepo.trim();
-    } else body.github_repo = githubRepo.trim();
+    } else {
+      body.source = host;
+      body.github_repo = githubRepo.trim();
+    }
     try {
+      if (host !== "local" && mode === "new") {
+        // open it on the host first: the project is created against what comes back
+        const made = await openRepo.mutateAsync({
+          name: newRepoName.trim(),
+          private: privateRepo,
+          description: description.trim(),
+        });
+        body.github_repo = made.full_name;
+      }
       const project = await create.mutateAsync(body);
       if (firstRequest.trim()) {
         // the first development starts right away; the pipeline shows it working
@@ -66,7 +87,12 @@ export function NewProjectPage() {
   };
 
   const canSubmit =
-    name.trim() !== "" && (source === "local" ? repoPath.trim() !== "" : githubRepo.trim() !== "");
+    name.trim() !== "" &&
+    (host === "local"
+      ? repoPath.trim() !== ""
+      : mode === "new"
+        ? newRepoName.trim() !== ""
+        : githubRepo.trim() !== "");
 
   return (
     <div>
@@ -93,21 +119,31 @@ export function NewProjectPage() {
         <div className="field">
           <label>{tx("Source")}</label>
           <div className="segmented">
+            {connected.map((row) => (
+              <button
+                key={row.name}
+                type="button"
+                className={host === row.name ? "on" : ""}
+                onClick={() => setSource(row.name)}
+              >
+                {row.label}
+              </button>
+            ))}
             <button
               type="button"
-              className={source === "github" ? "on" : ""}
-              onClick={() => setSource("github")}
-            >
-              {tx("GitHub repository")}
-            </button>
-            <button
-              type="button"
-              className={source === "local" ? "on" : ""}
+              className={host === "local" ? "on" : ""}
               onClick={() => setSource("local")}
             >
               {tx("Local checkout")}
             </button>
           </div>
+          {connected.length === 0 && (
+            <div className="help">
+              {tx("No source is connected yet:")}{" "}
+              <Link to="/settings/sources">{tx("connect one")}</Link>{" "}
+              {tx("to work on a hosted repository.")}
+            </div>
+          )}
         </div>
 
         {source === "local" ? (
@@ -185,20 +221,72 @@ export function NewProjectPage() {
           </div>
         ) : null}
 
+        {host !== "local" && (
+          <div className="field">
+            <label>{tx("Repository")}</label>
+            <div className="segmented">
+              <button
+                type="button"
+                className={mode === "existing" ? "on" : ""}
+                onClick={() => setMode("existing")}
+              >
+                {tx("An existing one")}
+              </button>
+              <button
+                type="button"
+                className={mode === "new" ? "on" : ""}
+                onClick={() => setMode("new")}
+              >
+                {tx("Open a new one")}
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="field">
           <label htmlFor="github_repo">
-            {source === "local"
-              ? tx("GitHub repository (optional)")
-              : tx("Repository (owner/name)")}
+            {host === "local"
+              ? tx("Push finished work to (optional)")
+              : mode === "new"
+                ? tx("Name of the new repository")
+                : tx("Repository (owner/name)")}
           </label>
-          {githubReady && repos.data && repos.data.length > 0 ? (
+          {host !== "local" && mode === "new" ? (
+            <>
+              <input
+                id="github_repo"
+                type="text"
+                value={newRepoName}
+                onChange={(e) => setNewRepoName(e.target.value)}
+                placeholder={name.trim() || tx("my-service")}
+              />
+              <label className="row small" style={{ marginTop: 6 }}>
+                <input
+                  type="checkbox"
+                  checked={privateRepo}
+                  onChange={(e) => setPrivateRepo(e.target.checked)}
+                />
+                {tx("Private")}
+              </label>
+              <div className="help">
+                {tx(
+                  "It is opened on {label} when you create the project, with a first commit in it, and the agents work there from the start.",
+                  { label: hostRow?.label ?? host },
+                )}
+                {hostRow?.owner ? ` (${hostRow.owner})` : ""}
+              </div>
+              {openRepo.error && (
+                <div className="callout error">{describeError(openRepo.error)}</div>
+              )}
+            </>
+          ) : repos.data && repos.data.length > 0 ? (
             <select
               id="github_repo"
               value={githubRepo}
               onChange={(e) => setGithubRepo(e.target.value)}
             >
               <option value="">
-                {source === "local" ? tx("Not linked") : tx("Pick a repository…")}
+                {host === "local" ? tx("Not linked") : tx("Pick a repository…")}
               </option>
               {repos.data.map((r) => (
                 <option key={r.full_name} value={r.full_name}>
@@ -217,25 +305,13 @@ export function NewProjectPage() {
               placeholder={tx("owner/name")}
             />
           )}
-          {source === "local" && (
+          {host === "local" && (
             <div className="help">
               {tx(
                 "Where finished work is pushed: each development pushes its branch and opens a pull request there. Leave it empty and the branch stays in the checkout for you to merge by hand.",
               )}
             </div>
           )}
-          {!githubReady && (
-            <div className="callout hint">
-              {source === "local"
-                ? tx("No GitHub token is configured, so nothing can be pushed.")
-                : tx(
-                    "No GitHub token is configured, so private repositories cannot be cloned.",
-                  )}{" "}
-              <Link to="/settings/github">{tx("Connect GitHub")}</Link>{" "}
-              {tx("to pick from your repositories.")}
-            </div>
-          )}
-          {repos.error && <div className="callout error">{describeError(repos.error)}</div>}
         </div>
 
         <div className="field">

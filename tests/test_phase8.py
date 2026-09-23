@@ -117,10 +117,21 @@ def test_login_and_projects_pages_use_the_api() -> None:
     for expected in ("useProjects", "useProgress", "pending_approvals", "jobs_running", "Empty"):
         assert expected in projects, expected
     new_project = _src("pages/NewProjectPage.tsx")
-    for expected in ("useGitHubRepos", "repo_path", "github_repo", "jira_project_key"):
+    for expected in (
+        "useSources",  # the hosts to choose between
+        "useSourceRepos",  # what that host can see
+        "useCreateSourceRepo",  # or a repository opened on it now
+        "repo_path",
+        "github_repo",
+        "jira_project_key",
+    ):
         assert expected in new_project, expected
     hooks = _src("api/hooks.ts")
-    for path in ("/api/projects", "/api/settings/github/repos", "/api/projects/${id}/progress"):
+    for path in (
+        "/api/projects",
+        "/api/settings/sources/${name}/repos",
+        "/api/projects/${id}/progress",
+    ):
         assert path in hooks, path
 
 

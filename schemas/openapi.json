@@ -2213,6 +2213,11 @@
             ],
             "title": "Review",
             "type": "string"
+          },
+          "source": {
+            "default": "github",
+            "title": "Source",
+            "type": "string"
           }
         },
         "required": [
@@ -2233,6 +2238,32 @@
           "request"
         ],
         "title": "NewProjectJob",
+        "type": "object"
+      },
+      "NewRepo": {
+        "additionalProperties": false,
+        "description": "Open a repository on the host, for a project that starts from nothing.",
+        "properties": {
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "name": {
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "private": {
+            "default": true,
+            "title": "Private",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "NewRepo",
         "type": "object"
       },
       "NewTestRun": {
@@ -7209,6 +7240,57 @@
           }
         },
         "summary": "Source Repos",
+        "tags": [
+          "settings"
+        ]
+      },
+      "post": {
+        "description": "Open a repository on the host and hand it back, ready for a project to clone.",
+        "operationId": "create_source_repo_api_settings_sources__name__repos_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewRepo"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Repo"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Source Repo",
         "tags": [
           "settings"
         ]

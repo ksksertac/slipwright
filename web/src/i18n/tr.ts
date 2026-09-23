@@ -1,5 +1,17 @@
 // Turkish. Keys are the English source strings; anything missing shows the English.
 export const TR: Record<string, string> = {
+  Repository: "Depo",
+  "An existing one": "Var olan bir depo",
+  "Open a new one": "Yeni depo aç",
+  "Name of the new repository": "Yeni deponun adı",
+  Private: "Özel",
+  "my-service": "servisim",
+  "It is opened on {label} when you create the project, with a first commit in it, and the agents work there from the start.":
+    "Projeyi oluşturduğunda {label} üzerinde açılır, içine ilk commit atılır ve ajanlar baştan orada çalışır.",
+  "No source is connected yet:": "Henüz bağlı kaynak yok:",
+  "connect one": "birini bağla",
+  "to work on a hosted repository.": "— barındırılan bir depoda çalışmak için.",
+  "Push finished work to (optional)": "Biten işi nereye push'lasın (isteğe bağlı)",
   "What the agents will do": "Ajanlar ne yapacak",
   "{tasks} task(s) in {phases} phase(s) — reword anything before it starts.":
     "{phases} fazda {tasks} görev — başlamadan önce istediğini düzelt.",

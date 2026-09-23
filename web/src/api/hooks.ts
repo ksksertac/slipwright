@@ -596,6 +596,15 @@ export function useSourceRepos(name: string | null) {
   });
 }
 
+export function useCreateSourceRepo(name: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { name: string; private?: boolean; description?: string }) =>
+      api.post<SourceRepo>(`/api/settings/sources/${name}/repos`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.sourceRepos(name) }),
+  });
+}
+
 export function useProviders() {
   return useQuery({
     queryKey: keys.providers,

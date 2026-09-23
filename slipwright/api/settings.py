@@ -145,6 +145,32 @@ def test_source(name: str, request: Request) -> Identity:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
+class NewRepo(BaseModel):
+    """Open a repository on the host, for a project that starts from nothing."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1)
+    private: bool = True
+    description: str = ""
+
+
+@router.post("/settings/sources/{name}/repos", response_model=Repo, status_code=201)
+def create_source_repo(name: str, body: NewRepo, request: Request) -> Repo:
+    """Open a repository on the host and hand it back, ready for a project to clone."""
+    require_admin(request)
+    eng = _engine(request)
+    if name not in SOURCES:
+        raise HTTPException(status_code=404, detail=f"unknown source: {name}")
+    try:
+        return eng.source_host(name).create_repo(
+            body.name.strip(), private=body.private, description=body.description.strip()
+        )
+    except SourceError as exc:
+        status = 400 if "no token" in str(exc) or "workspace" in str(exc) else 502
+        raise HTTPException(status_code=status, detail=str(exc)) from exc
+
+
 @router.get("/settings/sources/{name}/repos", response_model=list[Repo])
 def source_repos(name: str, request: Request) -> list[Repo]:
     """The repositories that host's token can see, for the new-project picker."""

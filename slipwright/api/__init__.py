@@ -85,6 +85,8 @@ class NewProject(BaseModel):
     profile: Profile | None = None
     review: ReviewMode = "advisory"
     language: Language = "tr"
+    # which hosting service the repository lives on (Settings → Sources)
+    source: str = "github"
     # a project made here reads one work list before anything is built; a project made
     # through the engine keeps the older two-gate flow unless it asks for this
     plan_gate: PlanGate = "combined"

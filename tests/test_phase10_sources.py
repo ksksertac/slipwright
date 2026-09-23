@@ -40,6 +40,7 @@ class FakeBitbucket:
         self.pull_requests: list[dict[str, Any]] = []
         self.statuses: list[dict[str, Any]] = []
         self.user: dict[str, Any] | None = {"username": "bot", "display_name": "Slipwright bot"}
+        self.created: dict[str, Any] = {}
 
     @property
     def transport(self) -> httpx.MockTransport:
@@ -76,6 +77,20 @@ class FakeBitbucket:
             created = {"id": 7, "links": {"html": {"href": PR_URL}}, **body}
             self.pull_requests.append(created)
             return httpx.Response(201, json=created)
+        if path.startswith(f"/repositories/{WORKSPACE}/") and request.method == "POST":
+            self.created = json.loads(request.content)
+            slug = path.rsplit("/", 1)[-1]
+            return httpx.Response(
+                201,
+                json={
+                    "full_name": f"{WORKSPACE}/{slug}",
+                    "is_private": self.created.get("is_private", True),
+                    "name": self.created.get("name"),
+                    "mainbranch": None,
+                    "links": {"html": {"href": f"https://bitbucket.org/{WORKSPACE}/{slug}"}},
+                    "description": self.created.get("description"),
+                },
+            )
         if path.startswith(f"/repositories/{REPO}/commit/") and path.endswith("/statuses"):
             return httpx.Response(200, json={"values": list(self.statuses)})
         return httpx.Response(404, json={"error": {"message": f"no route {path}"}})
@@ -278,3 +293,94 @@ def test_the_sources_endpoints_connect_test_and_list(
             f"/api/settings/sources/{BITBUCKET}", json={"clear_token": True}
         ).json()
         assert not next(r for r in cleared if r["name"] == BITBUCKET)["token_set"]
+
+
+def test_a_repository_can_be_opened_on_the_host(
+    store: JobStore, worktrees_root: Path, seed: Profile
+) -> None:
+    """A project that starts from nothing: the host opens the repository and hands back
+    the name to clone."""
+    engine = _engine(store, worktrees_root, seed)
+    fake = FakeBitbucket()
+    engine.http_transport = fake.transport
+    engine.update_source_settings(BITBUCKET, token=fake.token, owner=WORKSPACE)
+    made = engine.source_host(BITBUCKET).create_repo("Yeni Proje", description="a demo")
+    assert made.full_name == f"{WORKSPACE}/yeni-proje" and made.private
+    assert fake.created["name"] == "Yeni Proje" and fake.created["is_private"] is True
+
+    with TestClient(create_app(engine, resume_on_startup=False, require_auth=False)) as client:
+        resp = client.post(f"/api/settings/sources/{BITBUCKET}/repos", json={"name": "Başka Depo"})
+        # the slug is ASCII, and Turkish letters are folded rather than dropped
+        assert resp.status_code == 201
+        assert resp.json()["full_name"] == f"{WORKSPACE}/baska-depo"
+        assert (
+            client.post("/api/settings/sources/bogus/repos", json={"name": "x"}).status_code == 404
+        )
+
+
+def test_opening_a_repository_without_a_workspace_says_so(
+    store: JobStore, worktrees_root: Path, seed: Profile
+) -> None:
+    engine = _engine(store, worktrees_root, seed)
+    fake = FakeBitbucket()
+    engine.http_transport = fake.transport
+    engine.update_source_settings(BITBUCKET, token=fake.token)  # no workspace
+    with TestClient(create_app(engine, resume_on_startup=False, require_auth=False)) as client:
+        resp = client.post(f"/api/settings/sources/{BITBUCKET}/repos", json={"name": "x"})
+        assert resp.status_code == 400 and "workspace" in resp.json()["detail"]
+
+
+def test_a_project_is_created_from_a_repository_opened_on_the_host(
+    store: JobStore, worktrees_root: Path, seed: Profile, tmp_path: Path
+) -> None:
+    """The whole path the new-project page takes: open the repository, then create the
+    project against it. The clone of an empty repository still gives a usable checkout."""
+    import subprocess
+
+    bare = tmp_path / "opened.git"
+    subprocess.run(["git", "init", "--bare", "-q", str(bare)], check=True, capture_output=True)
+
+    engine = _engine(store, worktrees_root, seed)
+    fake = FakeBitbucket()
+    engine.http_transport = fake.transport
+    engine.update_source_settings(BITBUCKET, token=fake.token, owner=WORKSPACE)
+    made = engine.source_host(BITBUCKET).create_repo("opened")
+
+    # the host's clone URL stands in for the bare repository above — both the plain form
+    # and the one with the token in it, which is what the engine actually clones
+    for url in (
+        f"https://bitbucket.org/{made.full_name}.git",
+        f"https://x-token-auth:{TOKEN}@bitbucket.org/{made.full_name}.git",
+    ):
+        subprocess.run(
+            ["git", "config", "--global", "--add", f"url.{bare.as_uri()}.insteadOf", url],
+            check=True,
+            capture_output=True,
+        )
+    try:
+        project = engine.create_project(
+            Project(name="opened", source=BITBUCKET, github_repo=made.full_name)
+        )
+        assert project.repo_path is not None and (project.repo_path / "README.md").is_file()
+        head = subprocess.run(
+            ["git", "log", "--oneline", "-1"],
+            cwd=project.repo_path,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+        assert "first commit" in head
+        pushed = subprocess.run(
+            ["git", "branch", "--format=%(refname:short)"],
+            cwd=bare,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.split()
+        assert pushed == ["main"]  # the host has the same starting point
+    finally:
+        subprocess.run(
+            ["git", "config", "--global", "--unset-all", f"url.{bare.as_uri()}.insteadOf"],
+            check=False,
+            capture_output=True,
+        )

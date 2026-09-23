@@ -93,6 +93,29 @@ class GitHubHost:
             page += 1
         return repos[:limit]
 
+    def create_repo(self, name: str, *, private: bool = True, description: str = "") -> Repo:
+        """A repository with a first commit in it: an empty one has no branch to work from,
+        so ``auto_init`` is what makes the clone usable straight away. Created under the
+        configured owner when that is an organisation, else under the token's own account."""
+        body = {
+            "name": name,
+            "private": private,
+            "description": description,
+            "auto_init": True,
+        }
+        owner = (self.creds.owner or "").strip()
+        path = "/user/repos"
+        if owner and owner.lower() != self.whoami().login.lower():
+            path = f"/orgs/{owner}/repos"
+        data = self._post(path, json=body).json()
+        return Repo(
+            full_name=data["full_name"],
+            private=bool(data.get("private")),
+            default_branch=data.get("default_branch") or "main",
+            html_url=data.get("html_url") or "",
+            description=data.get("description"),
+        )
+
     # -- the repository itself --------------------------------------------------------------
 
     def clone_url(self, full_name: str) -> str:
@@ -118,8 +141,14 @@ class GitHubHost:
     # -- plumbing ---------------------------------------------------------------------------
 
     def _get(self, path: str, **kw: Any) -> httpx.Response:
+        return self._request("GET", path, **kw)
+
+    def _post(self, path: str, **kw: Any) -> httpx.Response:
+        return self._request("POST", path, **kw)
+
+    def _request(self, method: str, path: str, **kw: Any) -> httpx.Response:
         try:
-            resp = self._client.get(path, **kw)
+            resp = self._client.request(method, path, **kw)
         except httpx.HTTPError as exc:
             raise SourceError(f"GitHub request failed: {exc}") from exc
         if resp.status_code == 401:

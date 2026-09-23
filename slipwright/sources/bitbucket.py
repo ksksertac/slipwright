@@ -104,6 +104,31 @@ class BitbucketHost:
             path, params = nxt, None  # the next link carries its own query
         return repos[:limit]
 
+    def create_repo(self, name: str, *, private: bool = True, description: str = "") -> Repo:
+        """Bitbucket opens the repository empty; the caller seeds the first commit, because
+        a repository with no branch has nothing for a development to start from."""
+        workspace = (self.creds.owner or "").strip()
+        if not workspace:
+            raise SourceError("set the workspace on the Bitbucket source before opening a repo")
+        slug = _slug(name)
+        data = self._post(
+            f"/repositories/{workspace}/{slug}",
+            json={
+                "scm": "git",
+                "name": name,
+                "is_private": private,
+                "description": description,
+            },
+        ).json()
+        links = data.get("links") or {}
+        return Repo(
+            full_name=data.get("full_name") or f"{workspace}/{slug}",
+            private=bool(data.get("is_private", private)),
+            default_branch=(data.get("mainbranch") or {}).get("name") or "main",
+            html_url=(links.get("html") or {}).get("href") or "",
+            description=data.get("description") or None,
+        )
+
     # -- the repository itself --------------------------------------------------------------
 
     def clone_url(self, full_name: str) -> str:
@@ -205,6 +230,21 @@ class BitbucketHost:
                 f"Bitbucket returned {resp.status_code}: {message or resp.text[:200]}"
             )
         return resp
+
+
+# a slug is ASCII: the letters people actually type are folded rather than dropped
+_FOLD = str.maketrans(
+    {"ç": "c", "ğ": "g", "ı": "i", "ö": "o", "ş": "s", "ü": "u", "â": "a", "î": "i", "û": "u"}
+)
+
+
+def _slug(name: str) -> str:
+    """Bitbucket addresses a repository by slug: lowercase ASCII, words joined by hyphens."""
+    folded = name.strip().lower().translate(_FOLD)
+    slug = "".join(c if ("a" <= c <= "z" or "0" <= c <= "9") else "-" for c in folded)
+    while "--" in slug:
+        slug = slug.replace("--", "-")
+    return slug.strip("-") or "repo"
 
 
 def _origin(worktree: Path) -> str:

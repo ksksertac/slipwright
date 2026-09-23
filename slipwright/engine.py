@@ -974,6 +974,7 @@ class Engine:
                 g.clone(self._authenticated(url, project.source), target)
             except g.GitError as exc:
                 raise ProjectCloneError(f"could not clone {url}: {exc.stderr}") from exc
+            self._seed_if_empty(target, project)
             project = project.model_copy(update={"repo_path": target})
         elif not project.repo_path.is_dir():
             raise ValueError(f"repo_path is not a directory: {project.repo_path}")
@@ -1002,6 +1003,24 @@ class Engine:
             g.set_remote(project.repo_path, "origin", url)
         except g.GitError as exc:
             raise ValueError(f"could not point {project.repo_path} at {url}: {exc.stderr}") from exc
+
+    def _seed_if_empty(self, checkout: Path, project: Project) -> None:
+        """A repository the host opened empty has no branch, and a development cannot start
+        from nothing: the first commit is written here and pushed, so the checkout and the
+        host agree on where the work begins."""
+        if g.run(checkout, "rev-parse", "--verify", "--quiet", "HEAD", check=False).returncode == 0:
+            return
+        branch = self.github_settings().base_branch or "main"
+        readme = checkout / "README.md"
+        if not readme.exists():
+            readme.write_text(f"# {project.name}\n\n{project.description}\n", encoding="utf-8")
+        g.run(checkout, "checkout", "-q", "-B", branch)
+        g.stage_all(checkout)
+        g.commit(checkout, "slipwright: first commit")
+        try:
+            self.host_for(project).push(checkout, branch)
+        except (GitHostError, SourceError) as exc:  # the checkout is usable either way
+            log.warning("could not push the first commit of %s: %s", project.name, exc)
 
     @staticmethod
     def _ensure_git_repository(path: Path) -> None:

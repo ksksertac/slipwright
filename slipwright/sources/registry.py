@@ -108,6 +108,10 @@ class SourceHost(Protocol):
 
     def list_repos(self, *, limit: int = 300) -> list[Repo]: ...
 
+    def create_repo(self, name: str, *, private: bool = True, description: str = "") -> Repo:
+        """Open a new repository on the host and return it, ready to clone."""
+        ...
+
     def clone_url(self, full_name: str) -> str: ...
 
     def authenticated_url(self, url: str) -> str:
