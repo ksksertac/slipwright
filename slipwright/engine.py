@@ -2554,6 +2554,27 @@ class Engine:
             time.sleep(self.ci_poll_s)
 
 
+def plan_fingerprint(job: Job) -> str:
+    """What the plan asks for, as a short digest: the phases in order, each with its domain
+    and its goal, and the tasks they cover.
+
+    A step that produced something from the plan — the Designer's screens, say — stores this
+    beside it and can then tell whether that work is still about the current plan. Rejecting
+    the plan rewrites the phases, so the digest changes and the work is drawn again; a title
+    reworded at the gate does not touch a goal or a domain, so it does not.
+    """
+    plan: dict[str, Any] = job.data.plan or {}
+    parts: list[str] = []
+    for phase in plan.get("phases") or []:
+        if not isinstance(phase, dict):
+            continue
+        parts.append(f"{phase.get('domain') or 'general'}|{(phase.get('goal') or '').strip()}")
+    for task in sorted(str(t) for t in (job.data.backlog or {}).get("task_ids", [])):
+        parts.append(task)
+    digest = hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()
+    return digest[:16]
+
+
 def _reworded(planned: dict[str, Any], edited: Breakdown) -> dict[str, Any]:
     """The plan keeps its own copy of the breakdown (with the phase numbers); carry the new
     wording into it so the two never disagree."""
@@ -2581,4 +2602,5 @@ __all__ = [
     "JobIsRunning",
     "NotAwaitingApproval",
     "ProjectCloneError",
+    "plan_fingerprint",
 ]
