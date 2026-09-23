@@ -1,0 +1,79 @@
+{
+  "name": "slipwright",
+  "displayName": "Slipwright",
+  "description": "Watch and steer Slipwright developments from the editor: projects, gates and approvals.",
+  "version": "0.1.0",
+  "publisher": "slipwright",
+  "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/ksksertac/slipwright.git" },
+  "engines": { "vscode": "^1.90.0" },
+  "categories": ["Other"],
+  "main": "./dist/extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "slipwright",
+          "title": "Slipwright",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "slipwright": [
+        {
+          "id": "slipwright.projects",
+          "name": "Projects"
+        }
+      ]
+    },
+    "commands": [
+      { "command": "slipwright.signIn", "title": "Slipwright: Sign in" },
+      { "command": "slipwright.signOut", "title": "Slipwright: Sign out" },
+      { "command": "slipwright.refresh", "title": "Slipwright: Refresh", "icon": "$(refresh)" },
+      { "command": "slipwright.newDevelopment", "title": "Slipwright: New development", "icon": "$(add)" },
+      { "command": "slipwright.openInBrowser", "title": "Slipwright: Open in browser", "icon": "$(link-external)" }
+    ],
+    "menus": {
+      "view/title": [
+        { "command": "slipwright.refresh", "when": "view == slipwright.projects", "group": "navigation@1" },
+        { "command": "slipwright.newDevelopment", "when": "view == slipwright.projects", "group": "navigation@0" }
+      ],
+      "view/item/context": [
+        { "command": "slipwright.newDevelopment", "when": "view == slipwright.projects && viewItem == project", "group": "inline" },
+        { "command": "slipwright.openInBrowser", "when": "view == slipwright.projects && viewItem =~ /project|job/", "group": "inline" }
+      ]
+    },
+    "configuration": {
+      "title": "Slipwright",
+      "properties": {
+        "slipwright.endpoint": {
+          "type": "string",
+          "default": "http://localhost:8500",
+          "description": "The Slipwright server this extension talks to."
+        },
+        "slipwright.refreshSeconds": {
+          "type": "number",
+          "default": 20,
+          "minimum": 5,
+          "description": "How often the project tree is refreshed while the window is open."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "package": "vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.5",
+    "@types/vscode": "^1.90.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.3"
+  }
+}
