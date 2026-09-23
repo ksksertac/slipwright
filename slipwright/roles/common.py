@@ -105,7 +105,9 @@ def writing_rules(language: str) -> str:
     name = LANGUAGE_NAMES.get(language, language)
     return (
         f"Write every text a person will read in {name}: titles, descriptions, summaries, "
-        "reasons, feedback, test-case names and descriptions, decisions. Keep code, "
+        "reasons, feedback, test-case names and descriptions, decisions, and the plan — "
+        "its summary, its decisions and every phase title and goal, which are read on the "
+        f"project's board. All of it in {name}, including the phase titles. Keep code, "
         "identifiers, file paths, commands, commit messages and JSON keys in English. "
         "`summary` is for the person who approves the next step: two to four plain "
         "sentences saying what was done and what they should look at — no file lists, "

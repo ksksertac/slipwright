@@ -837,3 +837,30 @@ def test_a_finished_development_reports_what_it_produced(
     )
     merged = engine.job_result(job.id)
     assert merged.merged is True and merged.merge_command is None
+
+
+def test_every_role_is_told_which_language_to_write_in(
+    store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
+) -> None:
+    """A role that skips the shared context would quietly write English into a Turkish
+    project: every prompt carries the rule, and it names the plan, whose summary, decisions
+    and phase titles are what the board shows."""
+    from slipwright.roles.common import writing_rules
+
+    provider = full_provider(seed, phases=1)
+    engine = full_engine(store, worktrees_root, seed, provider)
+    project = engine.create_project(Project(name="demo", repo_path=repo))  # tr
+    job = engine.start(engine.create_job("x", project_id=project.id).id)
+    for _ in range(6):  # through the gates, so every role has answered
+        if job.state in (JobState.DONE, JobState.FAILED):
+            break
+        job = engine.approve(job.id)
+
+    rule = writing_rules("tr")
+    assert "Turkish" in rule and "phase title" in rule
+    seen = {r.role for r in provider.requests}
+    assert {RoleName.PO, RoleName.ARCHITECT, RoleName.QA, RoleName.DEVOPS} <= seen
+    # the context reaches the model as JSON, so the prompt carries the rule escaped
+    for request in provider.requests:
+        assert "Write every text a person will read in Turkish" in request.prompt, request.role
+        assert "including the phase titles" in request.prompt, request.role
