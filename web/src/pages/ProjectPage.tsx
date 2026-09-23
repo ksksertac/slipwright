@@ -34,6 +34,7 @@ import { PipelineTab } from "./PipelineTab";
 import { TestsTab } from "./TestsTab";
 import { useT } from "../i18n";
 import { ResultCard } from "../components/ResultCard";
+import { WorkListPanel } from "../components/WorkList";
 
 const TABS = ["pipeline", "overview", "board", "developments", "tests", "activity"] as const;
 type Tab = (typeof TABS)[number];
@@ -312,12 +313,16 @@ function DevelopmentsTab({ projectId }: { projectId: string }) {
   const navigate = useNavigate();
   const [request, setRequest] = useState("");
 
+  // a development that has not started yet is the list waiting to be read: it is shown
+  // here, so closing the tab (or the whole application) loses nothing
+  const planning = (jobs.data ?? []).find((j) => j.state === "awaiting_architecture_approval");
+
   const submit = (e: FormEvent) => {
     e.preventDefault();
     start.mutate(request.trim(), {
-      onSuccess: (job) => {
+      onSuccess: () => {
         setRequest("");
-        navigate(`/projects/${projectId}/jobs/${job.id}`);
+        void jobs.refetch();
       },
     });
   };
@@ -339,10 +344,22 @@ function DevelopmentsTab({ projectId }: { projectId: string }) {
         {start.error && <div className="error">{describeError(start.error)}</div>}
         <div className="row" style={{ marginTop: 8 }}>
           <button className="btn primary" disabled={!request.trim() || start.isPending}>
-            <IconPlus /> {start.isPending ? tx("Starting…") : tx("Start development")}
+            <IconPlus /> {start.isPending ? tx("Working it out…") : tx("Plan it")}
           </button>
+          <span className="faint small">
+            {tx("The Product Owner and the Architect answer first; nothing is built yet.")}
+          </span>
         </div>
       </form>
+
+      {planning && (
+        <div className="card">
+          <WorkListPanel
+            job={planning}
+            onStarted={() => navigate(`/projects/${projectId}/jobs/${planning.id}`)}
+          />
+        </div>
+      )}
 
       <div className="card flush">
         <div className="card-head">

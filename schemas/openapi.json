@@ -1566,6 +1566,12 @@
             "description": "The Architect's plan: summary, decisions, phases and the breakdown with phase numbers filled in.",
             "title": "Plan"
           },
+          "plan_gate": {
+            "default": "separate",
+            "description": "combined: the backlog flows straight into the architecture and both are approved as one work list.",
+            "title": "Plan Gate",
+            "type": "string"
+          },
           "pr_url": {
             "anyOf": [
               {
@@ -1685,6 +1691,7 @@
           "phase_base_commit",
           "phase_index",
           "plan",
+          "plan_gate",
           "pr_url",
           "qa_stage",
           "reject_rounds",
@@ -2164,6 +2171,15 @@
           "name": {
             "minLength": 1,
             "title": "Name",
+            "type": "string"
+          },
+          "plan_gate": {
+            "default": "combined",
+            "enum": [
+              "combined",
+              "separate"
+            ],
+            "title": "Plan Gate",
             "type": "string"
           },
           "profile": {
@@ -2693,6 +2709,16 @@
             "title": "Name",
             "type": "string"
           },
+          "plan_gate": {
+            "default": "separate",
+            "description": "combined: the Product Owner and the Architect run together and you approve one work list; separate: the backlog and the architecture are approved one after the other.",
+            "enum": [
+              "combined",
+              "separate"
+            ],
+            "title": "Plan Gate",
+            "type": "string"
+          },
           "profile": {
             "anyOf": [
               {
@@ -2750,6 +2776,7 @@
           "jira_transitions",
           "language",
           "name",
+          "plan_gate",
           "profile",
           "repo_path",
           "review",
@@ -2862,6 +2889,21 @@
               }
             ],
             "title": "Name"
+          },
+          "plan_gate": {
+            "anyOf": [
+              {
+                "enum": [
+                  "combined",
+                  "separate"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan Gate"
           },
           "profile": {
             "anyOf": [
@@ -4652,6 +4694,150 @@
         ],
         "title": "Version",
         "type": "object"
+      },
+      "WorkGroup": {
+        "additionalProperties": false,
+        "description": "One agent's part of the list.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/WorkItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/RoleName"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "label",
+          "role",
+          "summary"
+        ],
+        "title": "WorkGroup",
+        "type": "object"
+      },
+      "WorkItem": {
+        "additionalProperties": false,
+        "description": "One line of the work list.",
+        "properties": {
+          "detail": {
+            "default": "",
+            "title": "Detail",
+            "type": "string"
+          },
+          "domain": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Domain"
+          },
+          "editable": {
+            "default": false,
+            "title": "Editable",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "phase": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phase"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "detail",
+          "domain",
+          "editable",
+          "id",
+          "kind",
+          "phase",
+          "title"
+        ],
+        "title": "WorkItem",
+        "type": "object"
+      },
+      "WorkList": {
+        "additionalProperties": false,
+        "description": "The whole list, in the order the work happens.",
+        "properties": {
+          "editable": {
+            "title": "Editable",
+            "type": "boolean"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/WorkGroup"
+            },
+            "title": "Groups",
+            "type": "array"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "phases": {
+            "default": 0,
+            "title": "Phases",
+            "type": "integer"
+          },
+          "plan_summary": {
+            "default": "",
+            "title": "Plan Summary",
+            "type": "string"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "tasks": {
+            "default": 0,
+            "title": "Tasks",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "editable",
+          "groups",
+          "job_id",
+          "phases",
+          "plan_summary",
+          "state",
+          "tasks"
+        ],
+        "title": "WorkList",
+        "type": "object"
       }
     }
   },
@@ -5735,6 +5921,46 @@
           }
         },
         "summary": "Undo"
+      }
+    },
+    "/api/jobs/{job_id}/worklist": {
+      "get": {
+        "description": "What each agent is about to do, grouped by agent: the list the person reads\nbefore starting a development, and the one they edit at the plan gate.",
+        "operationId": "get_worklist_api_jobs__job_id__worklist_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Worklist"
       }
     },
     "/api/local-repos": {

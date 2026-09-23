@@ -1082,7 +1082,7 @@ class Engine:
                 project_id=project.id,
                 request=request,
                 repo_path=project.repo_path,
-                data=JobData(language=project.language),
+                data=JobData(language=project.language, plan_gate=project.plan_gate),
             )
         )
 
@@ -1177,15 +1177,34 @@ class Engine:
         return self.store.save(job)
 
     def set_backlog(self, job_id: str, breakdown: dict[str, Any]) -> Job:
-        """Replace the proposed backlog while the job waits at the backlog gate."""
+        """Replace the proposed backlog while the job waits at the backlog gate — or, with
+        the combined plan gate, while it waits at the one work list. There the architect has
+        already planned around these tasks, so the wording may change but the set of tasks
+        may not: adding or dropping one means rejecting the list and having it written again."""
         job = self.store.get(job_id)
-        if job.state is not JobState.AWAITING_BACKLOG_APPROVAL:
+        combined = (
+            job.state is JobState.AWAITING_ARCHITECTURE_APPROVAL
+            and job.data.plan_gate == "combined"
+        )
+        if job.state is not JobState.AWAITING_BACKLOG_APPROVAL and not combined:
             raise NotAwaitingApproval(job)
         try:
             tree = Breakdown.model_validate(breakdown)
             POResult(summary="edited", breakdown=tree)  # the PO's own checks (unique ids)
         except ValidationError as exc:
             raise InvalidEdit(str(exc)) from exc
+        if combined:
+            before = {t.id for t in Breakdown.model_validate(job.data.backlog).tasks()}
+            after = {t.id for t in tree.tasks()}
+            if before != after:
+                raise InvalidEdit(
+                    "the architect has already planned a phase per task: reword them here, "
+                    "or reject the list to have it written again"
+                )
+            plan = dict(job.data.plan or {})
+            if plan.get("breakdown"):
+                plan["breakdown"] = _reworded(plan["breakdown"], tree)
+                job.data.plan = plan
         job.data.backlog = tree.model_dump(mode="json")
         return self.store.save(job)
 
@@ -1928,14 +1947,18 @@ class Engine:
         stories = sum(len(e.stories) for e in breakdown.epics)
         # the note is the headline a feed can show in one line; the model's prose and the
         # backlog itself belong to the detail, where a page can lay them out
+        note = (
+            f"po: backlog ready — {len(breakdown.epics)} epics, "
+            f"{stories} stories, {len(tasks)} tasks"
+        )
+        detail = json.dumps({"summary": result.output.summary, **job.data.backlog}, indent=2)
+        if job.data.plan_gate == "combined":
+            # one work list: the architect goes on and the person approves both at once
+            return self.orchestrator.transition(
+                job, JobState.ARCHITECTURE, note=f"{note}; the architect continues", detail=detail
+            )
         return self.orchestrator.transition(
-            job,
-            JobState.AWAITING_BACKLOG_APPROVAL,
-            note=(
-                f"po: backlog ready — {len(breakdown.epics)} epics, "
-                f"{stories} stories, {len(tasks)} tasks"
-            ),
-            detail=json.dumps({"summary": result.output.summary, **job.data.backlog}, indent=2),
+            job, JobState.AWAITING_BACKLOG_APPROVAL, note=note, detail=detail
         )
 
     def _architecture(self, job: Job) -> Job:
@@ -2477,6 +2500,22 @@ class Engine:
             if status.terminal or time.monotonic() >= deadline:
                 return status
             time.sleep(self.ci_poll_s)
+
+
+def _reworded(planned: dict[str, Any], edited: Breakdown) -> dict[str, Any]:
+    """The plan keeps its own copy of the breakdown (with the phase numbers); carry the new
+    wording into it so the two never disagree."""
+    titles = {t.id: (t.title, t.description) for t in edited.tasks()}
+    stories = {s.id: (s.title, s.description) for e in edited.epics for s in e.stories}
+    epics = {e.id: (e.title, e.description) for e in edited.epics}
+    out = Breakdown.model_validate(planned)
+    for epic in out.epics:
+        epic.title, epic.description = epics.get(epic.id, (epic.title, epic.description))
+        for story in epic.stories:
+            story.title, story.description = stories.get(story.id, (story.title, story.description))
+            for task in story.tasks:
+                task.title, task.description = titles.get(task.id, (task.title, task.description))
+    return out.model_dump(mode="json")
 
 
 def is_approval_state(state: JobState) -> bool:

@@ -145,20 +145,26 @@ class _Reader:
         label: str,
         state: JobState,
         role: RoleName | None,
-        output_into: JobState,
+        output_into: JobState | tuple[JobState, ...],
         span: Span | None = None,
         current: bool = True,
     ) -> StepCard:
         """A working step: its latest visit to ``state`` inside ``span``; the output is
         the transition that then left it for ``output_into``. ``current`` says whether
-        the job's present state belongs to this card (QA is visited twice)."""
+        the job's present state belongs to this card (QA is visited twice).
+
+        ``output_into`` takes several states because a step can leave for more than one:
+        the backlog goes to its own gate, or -- under the combined plan gate -- straight
+        into the architecture. Naming only one made the card sit at ``pending`` after the
+        Product Owner had plainly run."""
+        exits = output_into if isinstance(output_into, tuple) else (output_into,)
         span = span or self.whole
         starts = self.visits(state, span)
         start_i = starts[-1] if starts else None
         out_i = (
             self._first(
                 (start_i + 1, span[1]),
-                lambda _i, t: t.from_state is state and t.to_state is output_into,
+                lambda _i, t: t.from_state is state and t.to_state in exits,
             )
             if start_i is not None
             else None
@@ -420,20 +426,29 @@ def lane_for(job: Job) -> Lane:
     r = _Reader(job)
     stage1, stage2 = r.qa_spans()
     in_stage1 = job.data.qa_stage == 1
+    # the combined plan gate never stops at the backlog on its own: showing a gate card
+    # that will never be reached reads as a step still to come, which it is not
+    combined = job.data.plan_gate == "combined"
     steps: list[StepCard] = [
         r.stage(
             key="backlog",
             label="Backlog",
             state=JobState.BACKLOG,
             role=RoleName.PO,
-            output_into=JobState.AWAITING_BACKLOG_APPROVAL,
+            output_into=(JobState.AWAITING_BACKLOG_APPROVAL, JobState.ARCHITECTURE),
         ),
-        r.gate(
-            key="backlog_gate",
-            label="Backlog approval",
-            state=JobState.AWAITING_BACKLOG_APPROVAL,
-            pending="backlog",
-            editable=True,
+        *(
+            []
+            if combined
+            else [
+                r.gate(
+                    key="backlog_gate",
+                    label="Backlog approval",
+                    state=JobState.AWAITING_BACKLOG_APPROVAL,
+                    pending="backlog",
+                    editable=True,
+                )
+            ]
         ),
         r.stage(
             key="architecture",

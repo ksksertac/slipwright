@@ -46,7 +46,13 @@ from slipwright.pipeline import Pipeline, pipeline
 from slipwright.providers import ProviderUnavailableError
 from slipwright.schemas.job import Job, JobResult, Transition
 from slipwright.schemas.profile import Profile, RoleName
-from slipwright.schemas.project import Language, Project, ProjectPatch, ReviewMode
+from slipwright.schemas.project import (
+    Language,
+    PlanGate,
+    Project,
+    ProjectPatch,
+    ReviewMode,
+)
 from slipwright.schemas.testrun import TestRun
 from slipwright.store import (
     JobInProgress,
@@ -55,6 +61,7 @@ from slipwright.store import (
     ProjectNotFound,
     TestRunNotFound,
 )
+from slipwright.worklist import WorkList, work_list
 
 log = logging.getLogger(__name__)
 
@@ -78,6 +85,9 @@ class NewProject(BaseModel):
     profile: Profile | None = None
     review: ReviewMode = "advisory"
     language: Language = "tr"
+    # a project made here reads one work list before anything is built; a project made
+    # through the engine keeps the older two-gate flow unless it asks for this
+    plan_gate: PlanGate = "combined"
 
 
 class LocalRepo(BaseModel):
@@ -601,6 +611,13 @@ def create_app(
             return eng.set_test_cases(job_id, [c.model_dump() for c in body.test_cases])
         except NotAwaitingApproval as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    @api.get("/jobs/{job_id}/worklist", response_model=WorkList)
+    def get_worklist(job_id: str, request: Request) -> WorkList:
+        """What each agent is about to do, grouped by agent: the list the person reads
+        before starting a development, and the one they edit at the plan gate."""
+        eng = _engine(request)
+        return work_list(_get(eng, job_id))
 
     @api.get("/jobs/{job_id}/result", response_model=JobResult)
     def get_job_result(job_id: str, request: Request) -> JobResult:

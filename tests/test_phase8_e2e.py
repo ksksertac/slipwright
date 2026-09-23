@@ -138,16 +138,17 @@ def test_a_new_user_ships_a_change_from_the_browser_alone(
     assert Path(project["repo_path"]).is_dir()
     assert browser.call("GET", "/api/projects")[0]["id"] == project["id"]
 
-    # start a development: the PO's backlog waits for approval, the board is still empty
+    # start a development: the Product Owner and the Architect answer, and the one work
+    # list waits to be read — nothing is built and the board is still empty
     job = browser.call("POST", f"/api/projects/{project['id']}/jobs", {"request": "health"})
     job = browser.call("GET", f"/api/jobs/{job['id']}")
-    assert job["state"] == "awaiting_backlog_approval"
-    assert browser.call("GET", f"/api/projects/{project['id']}/board")["epics"] == []
-    browser.call("POST", f"/api/jobs/{job['id']}/approve")  # backlog -> architecture
-    job = browser.call("GET", f"/api/jobs/{job['id']}")
     assert job["state"] == "awaiting_architecture_approval"
+    listed = browser.call("GET", f"/api/jobs/{job['id']}/worklist")
+    assert listed["editable"] and listed["tasks"] == 4
+    assert [g["role"] for g in listed["groups"]][:2] == ["po", "architect"]
+    assert [g["role"] for g in listed["groups"]][-2:] == ["qa", "devops"]
     board = browser.call("GET", f"/api/projects/{project['id']}/board")
-    assert board["tasks_total"] == 4 and board["tasks_done"] == 0  # mirrored, nothing built
+    assert board["tasks_total"] == 4 and board["tasks_done"] == 0  # planned, nothing built
     profile = job["profile"]  # the architect's proposal; edit it (a no-op here) and approve
     browser.call("PUT", f"/api/jobs/{job['id']}/profile", profile)
 

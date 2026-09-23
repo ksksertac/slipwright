@@ -1,5 +1,28 @@
 // Turkish. Keys are the English source strings; anything missing shows the English.
 export const TR: Record<string, string> = {
+  "What the agents will do": "Ajanlar ne yapacak",
+  "{tasks} task(s) in {phases} phase(s) — reword anything before it starts.":
+    "{phases} fazda {tasks} görev — başlamadan önce istediğini düzelt.",
+  "Everything is fine — start": "Her şey tamam — geliştirmeye başla",
+  "Save the wording": "Yazımı kaydet",
+  "Have it written again…": "Yeniden yazdır…",
+  "What should change?": "Ne değişsin?",
+  "{n} item(s)": "{n} madde",
+  "Working it out…": "Çıkarılıyor…",
+  "Plan it": "Planla",
+  "The Product Owner and the Architect answer first; nothing is built yet.":
+    "Önce Ürün Sahibi ve Mimar cevap verir; henüz hiçbir şey yazılmaz.",
+  "Turned the request into epics, stories and tasks": "İsteği epic, story ve tasklara böldü",
+  "Decided how it is built, tested and run":
+    "Nasıl kurulacağına, test edileceğine ve çalıştırılacağına karar verdi",
+  "Proposes the test cases, then writes the tests you approve":
+    "Test senaryolarını önerir, onayladıklarını yazar",
+  "Takes the finished branch to where the code lives": "Biten dalı kodun yaşadığı yere götürür",
+  "Propose the test cases for the approved backlog":
+    "Onaylanan backlog için test senaryolarını öner",
+  "Write the tests that cover the approved cases": "Onaylanan senaryoları kapsayan testleri yaz",
+  "Push the branch and open a pull request": "Dalı push'la ve pull request aç",
+  "Watch the checks and fix what they report": "Kontrolleri izle, bildirdiklerini düzelt",
   "What to build, and how it will be built and tested": "Ne yapılacak, nasıl kurulup test edilecek",
   "One phase per task, each behind the build gate":
     "Her task için bir faz, her biri build kapısından geçer",

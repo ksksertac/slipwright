@@ -3008,3 +3008,449 @@ details.acc[open] .acc-chev {
   width: calc(100% - 24px);
   justify-content: center;
 }
+
+/* ---------------------------------------------------------------------------------------
+   An agent's page: the setup side by side, and the "what it does" tab
+   --------------------------------------------------------------------------------------- */
+.setup-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+.setup-card .card-head {
+  gap: 10px;
+}
+.setup-card .card-body > .field:last-of-type {
+  margin-bottom: 16px;
+}
+/* a select that sits in a card's head: compact, and it never pushes the title out */
+.head-select {
+  width: auto;
+  max-width: 55%;
+  padding: 5px 28px 5px 10px;
+  font-size: 12.5px;
+}
+.perms {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.about {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.about-lead {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+.about-lead .lead {
+  margin: 0 0 8px;
+  font-size: 14.5px;
+  line-height: 1.65;
+  color: var(--text);
+}
+.about-lead p:last-child {
+  margin: 0;
+}
+.about-lists .card-body {
+  padding-top: 12px;
+}
+.ticks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 9px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+.ticks li {
+  position: relative;
+  padding-left: 20px;
+  line-height: 1.55;
+}
+.ticks li::before {
+  position: absolute;
+  left: 0;
+  top: 0;
+  font-weight: 700;
+}
+.ticks.in li::before {
+  content: "↓";
+  color: var(--info);
+}
+.ticks.out li::before {
+  content: "↑";
+  color: var(--good-text);
+}
+.ticks.no li::before {
+  content: "×";
+  color: var(--text-3);
+}
+.about-facts {
+  grid-template-columns: 150px 1fr;
+  margin: 0;
+}
+@media (max-width: 720px) {
+  .about-lead {
+    flex-direction: column;
+  }
+  .about-facts {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------------------------------------------------------------------------------------
+   The Tests tab: runs under the day they happened on, and a row that opens into what it
+   was for, what it ran, what was expected and how it ended.
+   --------------------------------------------------------------------------------------- */
+.test-day .card-head h3 {
+  font-size: 13.5px;
+  text-transform: capitalize;
+}
+table.runs td {
+  vertical-align: top;
+}
+table.runs tr.selected td {
+  background: var(--surface-2);
+}
+tr.run-detail td {
+  padding: 0;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--line);
+}
+.run-detail-body {
+  padding: 14px 16px 16px;
+  border-left: 3px solid var(--accent);
+}
+.run-facts {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 10px 16px;
+  margin: 0;
+  font-size: 13px;
+}
+.run-facts dt {
+  color: var(--text-3);
+  font-weight: 600;
+}
+.run-facts dd {
+  margin: 0;
+  color: var(--text-2);
+  line-height: 1.55;
+}
+.run-steps {
+  list-style: decimal;
+  margin: 0 0 6px;
+  padding-left: 20px;
+  display: grid;
+  gap: 4px;
+}
+.run-steps code {
+  font-size: 12px;
+  word-break: break-word;
+}
+.run-output {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+@media (max-width: 720px) {
+  .run-facts {
+    grid-template-columns: 1fr;
+    gap: 4px 0;
+  }
+  .run-facts dd {
+    margin-bottom: 8px;
+  }
+}
+
+/* -- the work list: who does what, before anything is built ---------------------------------
+   One group per agent in the order the work happens. A line the person may reword is an
+   input; a line that is simply what happens next is text. */
+.worklist-head {
+  margin-bottom: 4px;
+}
+.worklist-summary {
+  margin: 4px 0 12px;
+}
+.worklist-groups {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.worklist-group {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  padding: 12px 14px;
+}
+.worklist-group-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.worklist-n {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  border-radius: 50%;
+  background: var(--surface-3);
+  color: var(--text-3);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.worklist-agent {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+.worklist-agent svg {
+  width: 16px;
+  height: 16px;
+  color: var(--text-2);
+}
+.worklist-agent > span {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.worklist-items {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.worklist-items li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+}
+.worklist-items input {
+  width: 100%;
+  padding: 5px 8px;
+  font-size: 13px;
+}
+.worklist-items li.fixed .title {
+  font-size: 13px;
+  color: var(--text-2);
+}
+.worklist-items .detail {
+  max-width: 260px;
+  text-align: right;
+}
+.worklist-actions {
+  margin-top: 16px;
+}
+.worklist-reject {
+  margin-top: 10px;
+}
+@media (max-width: 720px) {
+  .worklist-items li {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .worklist-items .detail {
+    max-width: none;
+    text-align: left;
+  }
+}
+
+/* -- the step panel: what a step produced, as a list --------------------------------- */
+/* The panel used to be a stack of raw transition records. It is now a list per group:
+   one line per thing the step produced, folding open only where there is more under it. */
+.step-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.step-times {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.step-times div {
+  min-width: 0;
+}
+.step-times dt {
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.step-times dd {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--text-1);
+}
+.step-summary {
+  margin: 0;
+  color: var(--text-2);
+  line-height: 1.55;
+}
+.step-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.step-group-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 4px;
+}
+.step-group-head h4 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.step-empty {
+  font-size: 13px;
+  color: var(--text-3);
+  font-style: italic;
+}
+.step-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.step-item + .step-item {
+  border-top: 1px solid var(--border-soft, var(--border));
+}
+.step-item-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.step-item-line {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: default;
+}
+.step-item-line.foldable {
+  cursor: pointer;
+}
+.step-item-line.foldable:hover .step-item-title {
+  color: var(--accent);
+}
+.step-item-line .chev {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  color: var(--text-3);
+  transition: transform 0.12s ease;
+}
+.step-item-line .chev.open {
+  transform: rotate(90deg);
+}
+/* a status you can read down the left edge without reading the words */
+.step-dot {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-3);
+  color: var(--text-3);
+}
+.step-dot svg {
+  width: 10px;
+  height: 10px;
+}
+.step-dot.ok {
+  background: var(--good-soft);
+  color: var(--good-text);
+}
+.step-dot.bad {
+  background: var(--bad-soft);
+  color: var(--bad-text);
+}
+.step-dot.work {
+  background: var(--warn-soft);
+  color: var(--warn-text);
+}
+.step-item-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+.step-item.file .step-item-title,
+.step-item.fact .step-item-value {
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 12px;
+}
+.step-item-value {
+  flex: none;
+  max-width: 55%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.step-item-marks {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.step-item-marks .chip {
+  font-size: 11px;
+}
+.step-item-body {
+  padding: 0 0 8px 22px;
+}
+/* a nested list (story under epic, file under a phase) steps in rather than re-boxing */
+.step-item-body .step-items {
+  border-left: 1px solid var(--border);
+  padding-left: 10px;
+}
+.step-item.epic > .step-item-head .step-item-title {
+  font-weight: 600;
+}
+.step-raw {
+  margin-top: 18px;
+}
+.step-raw > summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-3);
+}

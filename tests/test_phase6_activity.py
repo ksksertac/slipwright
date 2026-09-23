@@ -108,7 +108,10 @@ def test_progress_activity_and_detail_endpoints(
 ) -> None:
     engine = full_engine(store, worktrees_root, seed, full_provider(seed, phases=1))
     with TestClient(create_app(engine, resume_on_startup=False, require_auth=False)) as client:
-        project = client.post("/api/projects", json={"name": "demo", "repo_path": str(repo)}).json()
+        project = client.post(
+            "/api/projects",
+            json={"name": "demo", "repo_path": str(repo), "plan_gate": "separate"},
+        ).json()
         job = client.post(f"/api/projects/{project['id']}/jobs", json={"request": "x"}).json()
         progress = client.get(f"/api/projects/{project['id']}/progress").json()
         assert progress["pending_approvals"] == 1

@@ -156,7 +156,10 @@ def test_pipeline_endpoint_lists_lanes_newest_first(
     engine, _ = _two_domain_engine(store, worktrees_root, seed)
     app = create_app(engine, resume_on_startup=False, require_auth=False)
     with TestClient(app) as client:
-        project = client.post("/api/projects", json={"name": "demo", "repo_path": str(repo)}).json()
+        project = client.post(
+            "/api/projects",
+            json={"name": "demo", "repo_path": str(repo), "plan_gate": "separate"},
+        ).json()
         first = client.post(f"/api/projects/{project['id']}/jobs", json={"request": "one"}).json()
         second = client.post(f"/api/projects/{project['id']}/jobs", json={"request": "two"}).json()
         body = client.get(f"/api/projects/{project['id']}/pipeline").json()

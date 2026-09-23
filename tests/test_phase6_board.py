@@ -168,7 +168,10 @@ def test_board_endpoint_merges_jobs(
     provider = full_provider(seed, phases=4, breakdown=BREAKDOWN)
     engine = full_engine(store, worktrees_root, seed, provider)
     with TestClient(create_app(engine, resume_on_startup=False, require_auth=False)) as client:
-        project = client.post("/api/projects", json={"name": "demo", "repo_path": str(repo)}).json()
+        project = client.post(
+            "/api/projects",
+            json={"name": "demo", "repo_path": str(repo), "plan_gate": "separate"},
+        ).json()
         ids = [
             client.post(f"/api/projects/{project['id']}/jobs", json={"request": r}).json()["id"]
             for r in ("one", "two")

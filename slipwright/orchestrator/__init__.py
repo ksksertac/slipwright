@@ -7,7 +7,13 @@ from slipwright.store import JobStore
 
 LEGAL_TRANSITIONS: dict[JobState, tuple[JobState, ...]] = {
     JobState.CREATED: (JobState.BACKLOG,),
-    JobState.BACKLOG: (JobState.AWAITING_BACKLOG_APPROVAL, JobState.FAILED),
+    # ARCHITECTURE: the combined plan gate, where the backlog flows straight into the
+    # design and both are approved as one work list
+    JobState.BACKLOG: (
+        JobState.AWAITING_BACKLOG_APPROVAL,
+        JobState.ARCHITECTURE,
+        JobState.FAILED,
+    ),
     JobState.AWAITING_BACKLOG_APPROVAL: (JobState.BACKLOG, JobState.ARCHITECTURE),
     JobState.ARCHITECTURE: (JobState.AWAITING_ARCHITECTURE_APPROVAL, JobState.FAILED),
     JobState.AWAITING_ARCHITECTURE_APPROVAL: (JobState.ARCHITECTURE, JobState.DEVELOPING),

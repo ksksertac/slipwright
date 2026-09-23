@@ -141,7 +141,10 @@ def test_project_endpoints(client: TestClient, repo: Path, tmp_path: Path) -> No
     assert resp.status_code == 400
     resp = client.post("/api/projects", json={"name": "demo", "repo_path": str(tmp_path / "no")})
     assert resp.status_code == 400
-    resp = client.post("/api/projects", json={"name": "demo", "repo_path": str(repo)})
+    resp = client.post(
+        "/api/projects",
+        json={"name": "demo", "repo_path": str(repo), "plan_gate": "separate"},
+    )
     assert resp.status_code == 201, resp.text
     project: dict[str, Any] = resp.json()
     assert project["repo_path"] == str(repo)
@@ -201,7 +204,8 @@ def test_cli_project_commands(
 
     assert cli.main(["project", "show", project_id]) == 0
     out = capsys.readouterr().out
-    assert "jobs:" in out and "awaiting_backlog_approval" in out
+    # a project made through the API reads one work list, so the development is planning
+    assert "jobs:" in out and ("architecture" in out or "backlog" in out)
 
     assert cli.main(["project", "list"]) == 0
     assert project_id in capsys.readouterr().out

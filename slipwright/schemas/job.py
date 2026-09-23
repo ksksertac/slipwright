@@ -102,6 +102,11 @@ class JobData(BaseModel):
     language: str = Field(
         default="en", description="The project's language for people-facing text."
     )
+    plan_gate: str = Field(
+        default="separate",
+        description="combined: the backlog flows straight into the architecture and both "
+        "are approved as one work list.",
+    )
     phase_index: int = Field(default=0, ge=0, description="Next plan phase to execute.")
     build_attempts: int = Field(default=0, ge=0)
     last_build_output: str | None = None

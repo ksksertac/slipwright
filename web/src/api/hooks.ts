@@ -28,6 +28,7 @@ import {
   type SourceSettings,
   type SourceSettingsIn,
   type Overview,
+  type WorkList,
   type Profile,
   type Pipeline,
   type PlanEdit,
@@ -62,7 +63,9 @@ export const keys = {
   testRuns: (id: string) => ["projects", id, "test-runs"] as const,
   job: (id: string) => ["jobs", id] as const,
   transition: (id: string, index: number) => ["jobs", id, "history", index] as const,
+  step: (id: string, key: string) => ["jobs", id, "steps", key] as const,
   jobResult: (id: string) => ["jobs", id, "result"] as const,
+  workList: (id: string) => ["jobs", id, "worklist"] as const,
   testRun: (id: string) => ["test-runs", id] as const,
   testRunOutput: (id: string) => ["test-runs", id, "output"] as const,
   github: ["settings", "github"] as const,
@@ -217,6 +220,14 @@ export function useJob(id: string, refetchInterval?: number) {
     queryKey: keys.job(id),
     queryFn: () => api.get<Job>(`/api/jobs/${id}`),
     refetchInterval,
+  });
+}
+
+/** What each agent is about to do, for the list shown before a development starts. */
+export function useWorkList(id: string) {
+  return useQuery({
+    queryKey: keys.workList(id),
+    queryFn: () => api.get<WorkList>(`/api/jobs/${id}/worklist`),
   });
 }
 

@@ -24,6 +24,7 @@ _JIRA_KEY = re.compile(r"^[A-Z][A-Z0-9_]*$")
 
 ReviewMode = Literal["off", "advisory", "blocking"]
 Language = Literal["tr", "en"]
+PlanGate = Literal["combined", "separate"]
 LANGUAGE_NAMES: dict[str, str] = {"tr": "Turkish", "en": "English"}
 SprintMode = Literal["off", "active", "create"]
 GateMode = Literal["manual", "assisted", "auto"]
@@ -77,6 +78,12 @@ class Project(BaseModel):
     clone_url: str | None = Field(
         default=None,
         description="Where to clone from when repo_path is absent; derived from github_repo.",
+    )
+    plan_gate: PlanGate = Field(
+        default="separate",
+        description="combined: the Product Owner and the Architect run together and you "
+        "approve one work list; separate: the backlog and the architecture are approved "
+        "one after the other.",
     )
     jira_project_key: str | None = None
     language: Language = Field(
@@ -139,6 +146,7 @@ class ProjectPatch(BaseModel):
 
     name: str | None = Field(default=None, min_length=1)
     description: str | None = None
+    plan_gate: PlanGate | None = None
     source: str | None = None
     github_repo: str | None = None
     jira_project_key: str | None = None
