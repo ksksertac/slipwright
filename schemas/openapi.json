@@ -1362,8 +1362,8 @@
         "type": "object"
       },
       "JobData": {
-        "additionalProperties": false,
-        "description": "Working state that phases read and write. Persisted with the job, never in history.",
+        "additionalProperties": true,
+        "description": "Working state that phases read and write. Persisted with the job, never in history.\n\nUnknown keys are kept rather than refused: a job written by a newer build must still\nload in an older one \u2014 a rollback, or a second process on the same database \u2014 and the\nfields that build added must survive the round trip instead of being dropped or\nbringing the server down.",
         "properties": {
           "auto_approvals": {
             "default": 0,

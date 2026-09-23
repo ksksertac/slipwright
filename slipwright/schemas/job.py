@@ -84,9 +84,15 @@ class InboxMessage(BaseModel):
 
 
 class JobData(BaseModel):
-    """Working state that phases read and write. Persisted with the job, never in history."""
+    """Working state that phases read and write. Persisted with the job, never in history.
 
-    model_config = ConfigDict(extra="forbid")
+    Unknown keys are kept rather than refused: a job written by a newer build must still
+    load in an older one — a rollback, or a second process on the same database — and the
+    fields that build added must survive the round trip instead of being dropped or
+    bringing the server down.
+    """
+
+    model_config = ConfigDict(extra="allow")
 
     base_commit: str | None = Field(default=None, description="Commit the job branched from.")
     feedback: str | None = Field(default=None, description="Rejection feedback for a re-run.")
