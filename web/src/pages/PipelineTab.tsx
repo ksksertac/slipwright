@@ -4,7 +4,7 @@
 // card coloured by state. Cards waiting for the human carry a checkbox for bulk approval;
 // clicking any card opens a side panel with that step's output, and editable gates edit
 // in place.
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import { Link } from "react-router-dom";
 import { describeError, type Job, type Lane, type Profile, type StepCard } from "../api/client";
 import {
@@ -32,7 +32,15 @@ import {
   type PlanShape,
   type TestCaseShape,
 } from "../components/GateEditors";
-import { IconCheck, IconUsers, IconX } from "../components/icons";
+import {
+  IconCheck,
+  IconCpu,
+  IconFlask,
+  IconGit,
+  IconLayers,
+  IconUsers,
+  IconX,
+} from "../components/icons";
 import { ProfileForm } from "../components/ProfileForm";
 import { useToast } from "../components/Toast";
 import { Empty, ErrorBox, Loading, ProgressBar, StateBadge, timeAgo } from "../components/ui";
@@ -150,6 +158,20 @@ const STAGE_LABEL: Record<string, string> = {
   test: "Testing",
   ship: "Delivery",
 };
+/** What each stage is for, and the icon that says it at a glance. */
+const STAGE_NOTE: Record<string, string> = {
+  plan: "What to build, and how it will be built and tested",
+  build: "One phase per task, each behind the build gate",
+  test: "The cases you approve, then the tests that cover them",
+  ship: "The branch, the pull request and its checks",
+};
+
+const STAGE_ICON: Record<string, ComponentType<{ className?: string }>> = {
+  plan: IconLayers,
+  build: IconCpu,
+  test: IconFlask,
+  ship: IconGit,
+};
 
 type Stage = { key: string; steps: StepCard[] };
 
@@ -259,12 +281,7 @@ function LaneRow({
       <div className="lane-flow">
         {groups.map((group) => (
           <div key={group.key} className={`flow-stage ${stageStatus(group.steps)}`}>
-            <div className="flow-stage-name">
-              <span>{tx(STAGE_LABEL[group.key] ?? group.key)}</span>
-              <span className="count">
-                {group.steps.filter((s) => s.status === "done").length}/{group.steps.length}
-              </span>
-            </div>
+            <StageHead stage={group} />
             <ol className="flow-rail">
               {group.steps.map((step, i) => (
                 <li key={step.key} className="flow-node">
@@ -282,6 +299,36 @@ function LaneRow({
         ))}
       </div>
     </section>
+  );
+}
+
+/** A stage's header: the icon does the naming at a glance, the line under it says what the
+ * stage is for, and the count and bar say how much of it is behind you. */
+function StageHead({ stage }: { stage: Stage }) {
+  const tx = useT();
+  const done = stage.steps.filter((s) => s.status === "done").length;
+  const Icon = STAGE_ICON[stage.key] ?? IconLayers;
+  return (
+    <div className="flow-stage-head">
+      <span className="flow-stage-icon">
+        <Icon />
+      </span>
+      <span className="flow-stage-id">
+        <span className="flow-stage-title">{tx(STAGE_LABEL[stage.key] ?? stage.key)}</span>
+        <span className="flow-stage-note">{tx(STAGE_NOTE[stage.key] ?? "")}</span>
+      </span>
+      <span className="flow-stage-progress">
+        <span className="count mono">
+          {done}/{stage.steps.length}
+        </span>
+        <span className="track">
+          <span
+            className="fill"
+            style={{ width: `${stage.steps.length ? (done / stage.steps.length) * 100 : 0}%` }}
+          />
+        </span>
+      </span>
+    </div>
   );
 }
 

@@ -2111,6 +2111,94 @@ table.mini .num {
   background: var(--warn);
   animation: pulse 1.4s infinite;
 }
+/* -- a stage of the flow: a header you can read from across the room --------------------
+   The icon names the stage faster than the word does; the note under it says what the
+   stage is for, so a lane reads as four steps of work and not twenty-two cards. */
+.flow-stage-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 18px 0 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+.flow-stage-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
+  color: var(--text-2);
+}
+.flow-stage-icon svg {
+  width: 18px;
+  height: 18px;
+}
+.flow-stage-id {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+.flow-stage-title {
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text);
+}
+.flow-stage-note {
+  font-size: 12px;
+  color: var(--text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.flow-stage-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+.flow-stage-progress .count {
+  font-size: 12px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+.flow-stage-progress .track {
+  width: 84px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+.flow-stage-progress .fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--good);
+}
+/* the stage that is running says so: its icon lights up and its bar takes the warm hue */
+.flow-stage.running .flow-stage-icon {
+  background: var(--warn-soft);
+  color: var(--warn-text);
+}
+.flow-stage.running .flow-stage-progress .fill {
+  background: var(--warn);
+}
+.flow-stage.done .flow-stage-icon {
+  background: var(--good-soft);
+  color: var(--good-text);
+}
+.flow-stage.waiting .flow-stage-icon {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+@media (max-width: 720px) {
+  .flow-stage-note {
+    display: none;
+  }
+}
 .flow-stage.waiting .flow-stage-name {
   color: var(--accent);
 }

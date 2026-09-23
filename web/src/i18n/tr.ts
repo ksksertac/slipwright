@@ -1,5 +1,11 @@
 // Turkish. Keys are the English source strings; anything missing shows the English.
 export const TR: Record<string, string> = {
+  "What to build, and how it will be built and tested": "Ne yapılacak, nasıl kurulup test edilecek",
+  "One phase per task, each behind the build gate":
+    "Her task için bir faz, her biri build kapısından geçer",
+  "The cases you approve, then the tests that cover them":
+    "Onayladığın senaryolar, sonra onları kapsayan testler",
+  "The branch, the pull request and its checks": "Dal, pull request ve kontrolleri",
   Sources: "Kaynaklar",
   "Where the code lives: clone, push and open pull requests.":
     "Kodun yaşadığı yer: klonla, push'la ve pull request aç.",
@@ -788,4 +794,205 @@ export const TR: Record<string, string> = {
   develop: "geliştirme",
   "review decision": "inceleme kararı",
   "test approval": "test onayı",
+
+  // -- an agent's page: scopes, the "what it does" tab, the setup --------------------------------------------
+  "What it does": "Ne yapar",
+  "Agent setup saved": "Ajan kurulumu kaydedildi",
+  off: "kapalı",
+  max: "en yüksek",
+  product: "ürün",
+  testing: "test",
+  "When it works": "Ne zaman çalışır",
+  "What it reads": "Ne okur",
+  "What it hands back": "Ne teslim eder",
+  "What it leaves to others": "Neyi başkasına bırakır",
+  "How it is set up right now": "Şu anki kurulumu",
+  "plus the shared rules": "artı ortak kurallar",
+  "Thinking depth and permissions come from the project you pick under Setup; the model is the one this agent is pinned to, on every project.":
+    "Düşünme derinliği ve izinler Kurulum sekmesinde seçtiğin projeden gelir; model ise bu ajanın her projede bağlı olduğu modeldir.",
+
+  // the one-liner under an agent's name (the engine's SCOPE table)
+  "Turns a request into epics, stories and tasks — the backlog that goes to Jira.":
+    "Bir isteği epic, story ve tasklara çevirir — Jira'ya giden backlog.",
+  "From backlog and repository: build/test/run profile, decisions, phases.":
+    "Backlog ve depodan: build/test/çalıştırma profili, kararlar, fazlar.",
+  "Services, APIs, data models, migrations, background jobs.":
+    "Servisler, API'ler, veri modelleri, migration'lar, arka plan işleri.",
+  "Web front-end: pages, components, state, styling, accessibility.":
+    "Web ön yüzü: sayfalar, bileşenler, durum, stil, erişilebilirlik.",
+  "Mobile apps: screens, navigation, platform APIs, offline state.":
+    "Mobil uygulamalar: ekranlar, gezinme, platform API'leri, çevrimdışı durum.",
+  "Proposes test cases; writes unit, integration and end-to-end tests.":
+    "Test vakalarını önerir; birim, entegrasyon ve uçtan uca testleri yazar.",
+  "Infrastructure phases, pull requests, CI, deployment.":
+    "Altyapı fazları, pull request'ler, CI, dağıtım.",
+  "Reads what waits at a gate and recommends approve or reject.":
+    "Kapıda bekleyeni okur, onay ya da ret önerir.",
+
+  // product owner
+  "The Product Owner turns the request into a backlog: epics, stories and tasks. It reads the repository lightly — the tree, the manifests, the README — so the backlog fits the product that already exists, but it decides nothing about technology or files. A task is one piece of work a single specialist can finish and a tester can verify.":
+    "Ürün Sahibi isteği bir backlog'a çevirir: epic'ler, story'ler ve tasklar. Depoya hafifçe bakar — dosya ağacı, manifestler, README — ki backlog var olan ürüne otursun; ama teknoloji ya da dosyalar hakkında hiçbir karar vermez. Bir task, tek bir uzmanın bitirebileceği ve bir testçinin doğrulayabileceği tek bir iş parçasıdır.",
+  "First, as soon as a development starts. Its backlog waits at the first gate for you; once approved it is mirrored into Jira and the Architect takes over.":
+    "En başta, gelişim başlar başlamaz. Yazdığı backlog ilk kapıda seni bekler; onaylanınca Jira'ya aynalanır ve sıra Mimar'a geçer.",
+  "Your request, in your words": "Senin isteğin, kendi cümlelerinle",
+  "The repository at a glance: tree, manifests, README":
+    "Depoya kuşbakışı: dosya ağacı, manifestler, README",
+  "Your feedback, when you rejected the previous backlog":
+    "Önceki backlog'u reddettiysen geri bildirimin",
+  "The product standards and the core rules": "Ürün standartları ve ortak kurallar",
+  "Epics, stories and tasks, ordered so that what others depend on comes first":
+    "Epic, story ve tasklar — başkalarının dayandığı iş önce gelecek şekilde sıralı",
+  "A one- or two-sentence description per task saying what done looks like":
+    'Her task için bir-iki cümlelik, "bitti" halinin neye benzediğini söyleyen açıklama',
+  "The Jira issues, once you approve the backlog": "Backlog'u onaylayınca Jira kayıtları",
+  "Choosing technology, libraries or files — that is the Architect's decision":
+    "Teknoloji, kütüphane ya da dosya seçmek — o Mimar'ın kararı",
+  "Writing a task that needs two specialists: it splits it in two and says which comes first":
+    "İki uzman isteyen bir task yazmak: ikiye böler ve hangisinin önce geldiğini söyler",
+
+  // architect
+  "The Architect reads the approved backlog together with the repository and decides how the work will be done: the project profile (the exact commands that build, test and run it), the decisions worth writing down, and the ordered phases — one phase per backlog task, each tagged with the domain whose specialist implements it.":
+    "Mimar onaylanan backlog'u depoyla birlikte okur ve işin nasıl yapılacağına karar verir: proje profili (projeyi build eden, test eden ve çalıştıran tam komutlar), yazmaya değer kararlar ve sıralı fazlar — her backlog task'ı için bir faz, her biri hangi uzmanın uygulayacağını söyleyen alan etiketiyle.",
+  "After you approve the backlog. Its plan waits at the architecture gate; once approved the specialists start on phase one.":
+    "Backlog'u onayladıktan sonra. Planı mimari kapısında bekler; onaylanınca uzmanlar birinci fazdan başlar.",
+  "The approved backlog": "Onaylanan backlog",
+  "The repository: manifests, lockfiles, CI configuration, README":
+    "Depo: manifestler, lock dosyaları, CI yapılandırması, README",
+  "The seed profile, whose model routing it must keep as given":
+    "Çekirdek profil — model yönlendirmesini verildiği gibi korumak zorundadır",
+  "Your feedback, when you rejected the previous plan": "Önceki planı reddettiysen geri bildirimin",
+  "The architecture standards and the core rules": "Mimari standartları ve ortak kurallar",
+  "The build, test and run commands — preferring the ones CI already runs":
+    "Build, test ve çalıştırma komutları — tercihen CI'ın zaten çalıştırdıkları",
+  "Architecture decisions: one sentence each, saying the choice and the reason":
+    "Mimari kararlar: her biri tek cümle, seçimi ve nedenini söyler",
+  "Ordered phases with the files each one will touch, backend contracts before the front-ends that use them":
+    "Her birinin dokunacağı dosyalarla birlikte sıralı fazlar; backend sözleşmeleri onları kullanan arayüzlerden önce",
+  "Choosing models — routing always comes from the project's seed profile":
+    "Model seçmek — yönlendirme her zaman projenin çekirdek profilinden gelir",
+  "Inventing a command the repository does not support: it says what is missing instead":
+    "Deponun desteklemediği bir komut uydurmak: bunun yerine neyin eksik olduğunu söyler",
+  "Guessing past an ambiguity that would change the design — it stops and asks at the gate":
+    "Tasarımı değiştirecek bir belirsizliği tahminle geçmek — durur ve kapıda sorar",
+
+  // the specialists
+  "The Backend specialist implements one phase at a time: services, HTTP and RPC APIs, data models and migrations, background jobs and integrations. It returns the complete contents of every file it creates or changes, and the change goes through the build gate before the next phase begins. Phases with no specialist domain of their own — general work and documentation — also come here.":
+    "Backend uzmanı her seferinde tek bir fazı uygular: servisler, HTTP ve RPC API'leri, veri modelleri ve migration'lar, arka plan işleri ve entegrasyonlar. Oluşturduğu ya da değiştirdiği her dosyanın tam içeriğini döner; değişiklik bir sonraki faz başlamadan build kapısından geçer. Kendi uzmanı olmayan fazlar — genel işler ve dokümantasyon — da buraya gelir.",
+  "During development, on every phase the Architect tagged backend (and on general and docs phases).":
+    "Geliştirme sırasında, Mimar'ın backend etiketlediği her fazda (ve genel ile doküman fazlarında).",
+  "The phase it was given, and only that phase": "Kendisine verilen faz, yalnızca o faz",
+  "The files the phase names, and the project's build and test commands":
+    "Fazın adını verdiği dosyalar ve projenin build ile test komutları",
+  "The build output, when its previous attempt failed the gate":
+    "Önceki denemesi kapıdan geçemediyse build çıktısı",
+  "The backend standards and the core rules": "Backend standartları ve ortak kurallar",
+  "The complete new contents of each file it touches": "Dokunduğu her dosyanın tam yeni içeriği",
+  "A summary saying what was done, what was not, and what it was unsure about":
+    "Neyin yapıldığını, neyin yapılmadığını ve neyden emin olmadığını söyleyen bir özet",
+  "The Jira transition and the work log on the task it implemented":
+    "Uyguladığı task üzerinde Jira durum geçişi ve iş kaydı",
+  "Touching front-end code: it finishes the backend part and describes the missing piece for the Architect":
+    "Arayüz koduna dokunmak: backend kısmını bitirir, eksik parçayı Mimar için anlatır",
+  "Refactoring beyond the phase, or weakening a check to make the build gate green":
+    "Fazın dışına taşan refactor ya da build kapısı yeşil olsun diye bir kontrolü gevşetmek",
+
+  "The Web UI specialist implements web front-end phases: pages, components, client state, styling, accessibility and front-end tests. It works against the contract the plan describes and keeps every call to the server in one client module.":
+    "Web Arayüzü uzmanı web ön yüz fazlarını uygular: sayfalar, bileşenler, istemci durumu, stil, erişilebilirlik ve ön yüz testleri. Planın tarif ettiği sözleşmeye göre çalışır ve sunucuya giden her çağrıyı tek bir istemci modülünde tutar.",
+  "During development, on every phase the Architect tagged web.":
+    "Geliştirme sırasında, Mimar'ın web etiketlediği her fazda.",
+  "The files the phase names, the design tokens and the existing components":
+    "Fazın adını verdiği dosyalar, tasarım token'ları ve mevcut bileşenler",
+  "The contract the backend phase defined, from the architecture decisions":
+    "Backend fazının tanımladığı sözleşme — mimari kararlardan",
+  "The web standards and the core rules": "Web standartları ve ortak kurallar",
+  "A summary naming any endpoint it needed that does not exist yet":
+    "İhtiyaç duyduğu ama henüz var olmayan uç noktaları adıyla söyleyen bir özet",
+  "Adding or changing a server endpoint — it says exactly which one is missing so the Architect can add a backend phase":
+    "Sunucu uç noktası eklemek ya da değiştirmek — Mimar backend fazı ekleyebilsin diye hangisinin eksik olduğunu tam olarak söyler",
+  "Hard-coding a colour, or shipping a control that the keyboard cannot reach":
+    "Renk kodunu koda gömmek ya da klavyeyle erişilemeyen bir kontrol bırakmak",
+
+  "The Mobile UI specialist implements mobile phases: screens, navigation, platform APIs, offline and sync state, and mobile tests. It prefers the platform's conventions over web patterns.":
+    "Mobil Arayüz uzmanı mobil fazları uygular: ekranlar, gezinme, platform API'leri, çevrimdışı ve senkron durumu, mobil testler. Web alışkanlıkları yerine platformun kendi kurallarını yeğler.",
+  "During development, on every phase the Architect tagged mobile.":
+    "Geliştirme sırasında, Mimar'ın mobil etiketlediği her fazda.",
+  "The app's structure: features, shared core, the API client":
+    "Uygulamanın yapısı: özellikler, ortak çekirdek, API istemcisi",
+  "The backend contracts it has to rely on": "Dayanmak zorunda olduğu backend sözleşmeleri",
+  "The mobile standards and the core rules": "Mobil standartları ve ortak kurallar",
+  "A summary naming the backend contracts it relied on and the ones that are missing":
+    "Dayandığı ve eksik olan backend sözleşmelerini adıyla söyleyen bir özet",
+  "Changing server code": "Sunucu kodunu değiştirmek",
+  "Putting business logic in a screen, or a token anywhere but the platform's secure store":
+    "İş mantığını ekrana koymak ya da bir token'ı platformun güvenli deposu dışında bir yere yazmak",
+
+  // qa
+  "QA does three jobs. After every phase it reviews the specialist's diff against the standards that specialist was told to follow, and reports each breach with the file, the line and a concrete fix. When the branch is complete it proposes the test cases that would prove the change works — for you to add to, remove from and approve. Then it writes automated tests for exactly the approved list.":
+    "QA üç iş yapar. Her fazdan sonra uzmanın diff'ini, o uzmana verilen standartlara karşı inceler ve her ihlali dosyası, satırı ve somut düzeltmesiyle bildirir. Dal tamamlandığında değişikliğin çalıştığını kanıtlayacak test vakalarını önerir — ekleyip çıkarman ve onaylaman için. Sonra yalnızca onaylanan liste için otomatik testleri yazar.",
+  "After each phase for the standards review, and once the whole branch is built for the test cases and the tests.":
+    "Standart incelemesi için her fazdan sonra; test vakaları ve testler için dalın tamamı kurulduğunda.",
+  "The phase diff, together with the standards sections that phase was given":
+    "Faz diff'i ve o faza verilen standart bölümleri",
+  "The branch diff, the plan and the backlog it implements":
+    "Dal diff'i, plan ve uyguladığı backlog",
+  "The project's existing test layout, frameworks and runners":
+    "Projenin mevcut test düzeni, çatıları ve koşucuları",
+  "The approved list of test cases — no more, no fewer":
+    "Onaylanan test vakası listesi — ne fazlası ne eksiği",
+  "Standards violations, each marked blocking or advisory, with a fix":
+    "Standart ihlalleri — her biri engelleyici ya da tavsiye olarak işaretli, düzeltmesiyle",
+  "At most fifteen proposed test cases, each in a sentence or two":
+    "En fazla on beş test vakası önerisi, her biri bir-iki cümle",
+  "The test files themselves, complete, in the project's own layout":
+    "Test dosyalarının kendisi — eksiksiz, projenin kendi düzeninde",
+  "A Jira bug for each defect it finds, closed once the fix passes":
+    "Bulduğu her kusur için bir Jira bug'ı; düzeltme geçtiğinde kapatılır",
+  "Inventing a rule that is not in the standards, or a finding to have something to report":
+    "Standartlarda olmayan bir kural uydurmak ya da rapor edecek bir şey olsun diye bulgu üretmek",
+  "Writing a test for a case you did not approve": "Onaylamadığın bir vaka için test yazmak",
+
+  // devops
+  "DevOps does the infrastructure phases — Dockerfiles, compose files, CI workflows, deployment and environment configuration — and, at the end of a development, writes the pull request: a title and a body that say what changed, why, and how it was tested, from the approved plan and the job history.":
+    "DevOps altyapı fazlarını yapar — Dockerfile'lar, compose dosyaları, CI akışları, dağıtım ve ortam yapılandırması — ve gelişimin sonunda pull request'i yazar: onaylanan plandan ve iş geçmişinden, neyin neden değiştiğini ve nasıl test edildiğini söyleyen bir başlık ve gövde.",
+  "During development on infra phases, and at the end of every development for the pull request.":
+    "Geliştirme sırasında altyapı fazlarında, ve her gelişimin sonunda pull request için.",
+  "The phase it was given, for infrastructure work": "Altyapı işi için kendisine verilen faz",
+  "The factual draft assembled from the plan and the job history":
+    "Plandan ve iş geçmişinden derlenen olgusal taslak",
+  "The branch diff: everything that actually changed": "Dal diff'i: gerçekte ne değiştiyse",
+  "The devops standards and the core rules": "DevOps standartları ve ortak kurallar",
+  "Packaging and pipeline files, with configuration through environment variables":
+    "Paketleme ve pipeline dosyaları; yapılandırma ortam değişkenleriyle",
+  "A pull request title under seventy characters and a Markdown body listing the phases":
+    "Yetmiş karakterin altında bir pull request başlığı ve fazları sıralayan Markdown gövde",
+  "A note on what a person still has to do by hand — create a secret, open a port":
+    "Bir insanın elle yapması gerekenlerin notu — bir secret oluşturmak, bir port açmak",
+  "The outcome commented on the Jira stories": "Sonucun Jira story'lerine yorum olarak düşülmesi",
+  "Inventing anything that is not in the draft or the diff":
+    "Taslakta ya da diff'te olmayan bir şey uydurmak",
+  "Committing a secret, or changing application code beyond what packaging needs":
+    "Bir secret'ı commit'lemek ya da paketlemenin gerektirdiğinden fazlasına uygulama kodunda dokunmak",
+
+  // supervisor
+  "The Supervisor reads exactly what you would read at a gate — the proposal and the history behind it — and recommends approve or reject, with its confidence, the risk it sees and short concrete reasons. When a phase fails the build gate there is nothing to approve: it decides whether the specialist tries again, the plan is redone, or a human is needed.":
+    "Denetçi bir kapıda senin okuyacağın şeyi okur — öneriyi ve arkasındaki geçmişi — ve onay ya da ret önerir; güveniyle, gördüğü riskle ve kısa somut gerekçelerle. Bir faz build kapısından geçemediğinde onaylanacak bir şey yoktur: uzmanın yeniden mi deneyeceğine, planın mı yenileneceğine, yoksa bir insana mı sorulacağına karar verir.",
+  "At every human gate, and whenever a phase fails the build gate.":
+    "Her insan kapısında, ve bir faz build kapısından her düştüğünde.",
+  "The material at the gate: a backlog, an architecture, a standards review, test cases or the written tests":
+    "Kapıdaki malzeme: bir backlog, bir mimari, bir standart incelemesi, test vakaları ya da yazılan testler",
+  "The job history so far, and the original request": "Şimdiye kadarki iş geçmişi ve asıl istek",
+  "The build output, when a phase failed the gate": "Bir faz kapıdan geçemediyse build çıktısı",
+  "The standards of every domain and the core rules": "Her alanın standartları ve ortak kurallar",
+  "Approve or reject, with a confidence between 0 and 1":
+    "Onay ya da ret — 0 ile 1 arasında bir güvenle",
+  "A risk reading: low, medium or high, and at most five reasons":
+    "Risk okuması: düşük, orta ya da yüksek; en fazla beş gerekçe",
+  "Feedback the agent can act on, when it rejects":
+    "Reddettiğinde ajanın üzerine iş yapabileceği geri bildirim",
+  "After a failed build: fix, replan or ask a human":
+    "Build düştüğünde: düzelt, yeniden planla ya da insana sor",
+  "Inventing objections — it prefers approving with medium risk noted":
+    "İtiraz uydurmak — riski orta diye not edip onaylamayı yeğler",
+  "Deciding in your place: the recommendation is yours to take or leave, unless you turned auto-approval on":
+    "Senin yerine karar vermek: otomatik onayı açmadıysan öneri senin alıp bırakacağın bir şeydir",
 };
