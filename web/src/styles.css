@@ -3238,10 +3238,30 @@ tr.run-detail td {
   gap: 6px;
 }
 .worklist-items li {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+/* the line that says what will be done: the phase chip, the text itself, its domain */
+.worklist-line {
+  display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+}
+.worklist-line input,
+.worklist-line .title {
+  flex: 1;
+  min-width: 0;
+}
+.worklist-line .chip {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--text-3);
+  background: var(--surface-3);
+  border-radius: var(--radius-sm);
+  padding: 2px 7px;
+  font-variant-numeric: tabular-nums;
 }
 .worklist-items input {
   width: 100%;

@@ -1,5 +1,12 @@
 // Turkish. Keys are the English source strings; anything missing shows the English.
 export const TR: Record<string, string> = {
+  "phase {n}": "faz {n}",
+  "Proposed these cases; it writes the tests for the ones you approve":
+    "Bu senaryoları önerdi; onayladıklarını test olarak yazacak",
+  "Plans the deployment, then takes the finished branch to where the code lives":
+    "Dağıtımı planlar, sonra biten dalı kodun yaşadığı yere götürür",
+  "Deploys to {target} and takes the finished branch to where the code lives":
+    "{target} üzerine dağıtır ve biten dalı kodun yaşadığı yere götürür",
   Repository: "Depo",
   "An existing one": "Var olan bir depo",
   "Open a new one": "Yeni depo aç",

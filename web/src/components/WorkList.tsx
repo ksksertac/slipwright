@@ -166,17 +166,22 @@ function Group({
       <ul className="worklist-items">
         {group.items.map((item) => (
           <li key={item.id} className={item.editable ? "" : "fixed"}>
-            {editable && item.editable ? (
-              <input
-                type="text"
-                value={edits[item.id] ?? item.title}
-                onChange={(e) => onEdit(item.id, e.target.value)}
-              />
-            ) : (
-              <span className="title">{item.kind === "step" ? tx(item.title) : item.title}</span>
-            )}
-            {item.detail && <span className="faint tiny detail truncate">{item.detail}</span>}
-            {item.domain && <span className="tag">{tx(item.domain)}</span>}
+            <span className="worklist-line">
+              {item.phase !== null && item.phase !== undefined && item.kind === "phase" && (
+                <span className="chip">{tx("phase {n}", { n: item.phase })}</span>
+              )}
+              {editable && item.editable ? (
+                <input
+                  type="text"
+                  value={edits[item.id] ?? item.title}
+                  onChange={(e) => onEdit(item.id, e.target.value)}
+                />
+              ) : (
+                <span className="title">{item.kind === "step" ? tx(item.title) : item.title}</span>
+              )}
+              {item.domain && <span className="tag">{tx(item.domain)}</span>}
+            </span>
+            {item.detail && <span className="faint tiny detail">{item.detail}</span>}
           </li>
         ))}
       </ul>

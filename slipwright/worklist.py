@@ -57,27 +57,7 @@ class WorkList(BaseModel):
     groups: list[WorkGroup] = Field(default_factory=list)
     tasks: int = 0
     phases: int = 0
-
-
-# the steps that always follow the phases, whatever the plan says
-_TAIL: tuple[tuple[RoleName, str, tuple[tuple[str, str], ...]], ...] = (
-    (
-        RoleName.QA,
-        "Proposes the test cases, then writes the tests you approve",
-        (
-            ("qa:cases", "Propose the test cases for the approved backlog"),
-            ("qa:tests", "Write the tests that cover the approved cases"),
-        ),
-    ),
-    (
-        RoleName.DEVOPS,
-        "Takes the finished branch to where the code lives",
-        (
-            ("devops:pr", "Push the branch and open a pull request"),
-            ("devops:ci", "Watch the checks and fix what they report"),
-        ),
-    ),
-)
+    cases: int = 0
 
 
 def work_list(job: Job) -> WorkList:
@@ -137,11 +117,17 @@ def work_list(job: Job) -> WorkList:
     by_role: dict[RoleName, list[WorkItem]] = {}
     for i, phase in enumerate(phases):
         role = specialist_for(phase.get("domain"))
+        # what the phase will do is the goal; a title like "phase 2" says nothing, so the
+        # goal leads and the title is kept behind it when it carries anything of its own
+        goal = str(phase.get("goal") or "").strip()
+        title = str(phase.get("title") or "").strip()
+        lead = goal or title or f"phase {i + 1}"
+        behind = title if (goal and title and title.lower() not in goal.lower()) else ""
         by_role.setdefault(role, []).append(
             WorkItem(
                 id=f"phase:{i}",
-                title=str(phase.get("title") or f"phase {i + 1}"),
-                detail=str(phase.get("goal") or phase.get("summary") or ""),
+                title=lead,
+                detail=behind,
                 kind="phase",
                 editable=editable,
                 domain=str(phase.get("domain") or "") or None,
@@ -158,15 +144,70 @@ def work_list(job: Job) -> WorkList:
             )
         )
 
-    for role, summary, steps in _TAIL:
-        out.groups.append(
-            WorkGroup(
-                role=role,
-                label=LABEL[role],
-                summary=summary,
-                items=[WorkItem(id=key, title=title, kind="step") for key, title in steps],
+    # QA: the cases it has proposed, when it has been asked yet; else what it will do
+    cases = job.data.test_cases or []
+    qa_items = [
+        WorkItem(
+            id=f"case:{i}",
+            title=str(case.get("title") or case.get("name") or f"case {i + 1}"),
+            detail=str(case.get("description") or case.get("detail") or ""),
+            kind="case",
+            editable=editable,
+        )
+        for i, case in enumerate(cases)
+    ]
+    out.cases = len(qa_items)
+    out.groups.append(
+        WorkGroup(
+            role=RoleName.QA,
+            label=LABEL[RoleName.QA],
+            summary=(
+                "Proposed these cases; it writes the tests for the ones you approve"
+                if qa_items
+                else "Proposes the test cases, then writes the tests you approve"
+            ),
+            items=qa_items
+            or [
+                WorkItem(id=key, title=title, kind="step")
+                for key, title in (
+                    ("qa:cases", "Propose the test cases for the approved backlog"),
+                    ("qa:tests", "Write the tests that cover the approved cases"),
+                )
+            ],
+        )
+    )
+
+    # DevOps: the deployment it has planned, when there is one, then the pull request
+    # the deployment proposal arrives with the deploy stage; read defensively so the list
+    # works the same before that stage has ever run for this job
+    deploy: dict[str, Any] = getattr(job.data, "deploy", None) or {}
+    devops_items: list[WorkItem] = []
+    for i, script in enumerate(deploy.get("scripts") or []):
+        devops_items.append(
+            WorkItem(
+                id=f"deploy:{i}",
+                title=str(script.get("path") or f"deployment file {i + 1}"),
+                detail=str(script.get("purpose") or script.get("description") or ""),
+                kind="deploy",
             )
         )
+    devops_items += [
+        WorkItem(id="devops:pr", title="Push the branch and open a pull request", kind="step"),
+        WorkItem(id="devops:ci", title="Watch the checks and fix what they report", kind="step"),
+    ]
+    target = str(deploy.get("target") or "")
+    out.groups.append(
+        WorkGroup(
+            role=RoleName.DEVOPS,
+            label=LABEL[RoleName.DEVOPS],
+            summary=(
+                f"Deploys to {target} and takes the finished branch to where the code lives"
+                if target and target != "none"
+                else "Plans the deployment, then takes the finished branch to where the code lives"
+            ),
+            items=devops_items,
+        )
+    )
     return out
 
 

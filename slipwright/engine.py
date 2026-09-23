@@ -2012,6 +2012,12 @@ class Engine:
         job.data.build_attempts = 0
         job.data.last_build_output = None
         self.store.save(job)
+        # what the gate shows, taken before QA is asked: the call returns a fresh job
+        detail = json.dumps(
+            {"profile": job.profile.model_dump(mode="json"), **job.data.plan}, indent=2
+        )
+        if job.data.plan_gate == "combined":
+            job = self._propose_test_cases_early(job)
         return self.orchestrator.transition(
             job,
             JobState.AWAITING_ARCHITECTURE_APPROVAL,
@@ -2019,10 +2025,37 @@ class Engine:
                 f"architect: plan ready — {len(result.output.phases)} phases, "
                 f"{len(result.output.decisions)} decisions"
             ),
-            detail=json.dumps(
-                {"profile": job.profile.model_dump(mode="json"), **job.data.plan}, indent=2
-            ),
+            detail=detail,
         )
+
+    def _propose_test_cases_early(self, job: Job) -> Job:
+        """With one work list, QA is asked for its cases while the list is still being read:
+        the person sees what will be tested before anything is built. They are a proposal —
+        QA revisits them once the code exists, and the test gate is still the human's.
+        A failure here costs the list a section, never the development."""
+        result = self._invoke(
+            RoleName.QA,
+            qa.run,
+            job,
+            profile=self._profile(job),
+            branch_diff="(nothing is built yet: propose the cases from the plan)",
+        )
+        if not result.ok or not isinstance(result.output, QAResult):
+            self.store.update_state(
+                job.id,
+                job.state,
+                note="qa: could not propose test cases yet; they are asked for again later",
+            )
+            return self.store.get(job.id)
+        job.data.test_cases = [c.model_dump(mode="json") for c in result.output.test_cases]
+        self.store.save(job)
+        self.store.update_state(
+            job.id,
+            job.state,
+            note=f"qa: {len(job.data.test_cases)} test case(s) proposed for the list",
+            detail=json.dumps(job.data.test_cases, indent=2),
+        )
+        return self.store.get(job.id)
 
     def _develop(self, job: Job) -> Job:
         profile = self._profile(job)

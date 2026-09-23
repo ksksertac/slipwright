@@ -140,3 +140,52 @@ def test_a_project_made_from_the_ui_reads_one_work_list(
         patched = client.patch(f"/api/projects/{made['id']}", json={"plan_gate": "separate"})
         assert patched.status_code == 200 and patched.json()["plan_gate"] == "separate"
     assert engine.create_project(Project(name="plain", repo_path=repo)).plan_gate == "separate"
+
+
+def test_the_list_says_what_each_phase_does_and_what_qa_will_test(
+    store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
+) -> None:
+    """A phase called "phase 2" says nothing: the goal leads. And QA is asked for its cases
+    while the list is still being read, so the tests are part of what you approve."""
+    engine = _engine(store, worktrees_root, seed)
+    project = engine.create_project(Project(name="demo", repo_path=repo, plan_gate="combined"))
+    job = engine.start(engine.create_job("x", project_id=project.id).id)
+
+    listed = work_list(job)
+    phases = [i for g in listed.groups for i in g.items if i.kind == "phase"]
+    assert phases and all(i.title and not i.title.startswith("phase ") for i in phases)
+
+    qa = next(g for g in listed.groups if g.role is RoleName.QA)
+    assert listed.cases == len(job.data.test_cases) > 0
+    assert [i.kind for i in qa.items] == ["case"] * listed.cases
+    assert all(i.title and i.editable for i in qa.items)
+    assert "Proposed these cases" in qa.summary
+
+    devops = next(g for g in listed.groups if g.role is RoleName.DEVOPS)
+    assert [i.id for i in devops.items][-2:] == ["devops:pr", "devops:ci"]
+
+
+def test_a_qa_that_cannot_answer_yet_leaves_the_rest_of_the_list_standing(
+    store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
+) -> None:
+    from slipwright.providers import ProviderError
+
+    provider = full_provider(seed, phases=1)
+    original = provider.complete
+
+    def refuse(request: object) -> object:
+        if getattr(request, "role", None) is RoleName.QA:
+            raise ProviderError("the vendor is down")
+        return original(request)
+
+    engine = full_engine(store, worktrees_root, seed, provider)
+    provider.complete = refuse  # type: ignore[method-assign]
+    project = engine.create_project(Project(name="demo", repo_path=repo, plan_gate="combined"))
+    job = engine.start(engine.create_job("x", project_id=project.id).id)
+
+    assert job.state is JobState.AWAITING_ARCHITECTURE_APPROVAL  # the list is still there
+    assert any("could not propose test cases" in (t.note or "") for t in job.history)
+    listed = work_list(job)
+    assert listed.cases == 0 and listed.tasks > 0
+    qa = next(g for g in listed.groups if g.role is RoleName.QA)
+    assert [i.kind for i in qa.items] == ["step", "step"]

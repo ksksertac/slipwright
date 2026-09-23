@@ -4823,6 +4823,11 @@
         "additionalProperties": false,
         "description": "The whole list, in the order the work happens.",
         "properties": {
+          "cases": {
+            "default": 0,
+            "title": "Cases",
+            "type": "integer"
+          },
           "editable": {
             "title": "Editable",
             "type": "boolean"
@@ -4859,6 +4864,7 @@
           }
         },
         "required": [
+          "cases",
           "editable",
           "groups",
           "job_id",
