@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from slipwright.api import create_app
@@ -189,3 +190,43 @@ def test_a_qa_that_cannot_answer_yet_leaves_the_rest_of_the_list_standing(
     assert listed.cases == 0 and listed.tasks > 0
     qa = next(g for g in listed.groups if g.role is RoleName.QA)
     assert [i.kind for i in qa.items] == ["step", "step"]
+
+
+def test_the_screens_the_designer_drew_are_items_too(
+    store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
+) -> None:
+    """One item per screen, under the Designer, before the specialists that build them.
+    A plan with no interface has no design at all, and the list simply has no such group."""
+    designer = getattr(RoleName, "DESIGNER", None)
+    if designer is None:
+        pytest.skip("this build has no design step")
+
+    engine = _engine(store, worktrees_root, seed)
+    project = engine.create_project(Project(name="demo", repo_path=repo, plan_gate="combined"))
+    job = engine.start(engine.create_job("x", project_id=project.id).id)
+    assert work_list(job).screens == 0  # nothing drawn yet
+
+    job.data.design = {  # type: ignore[attr-defined]
+        "principles": ["one column on a phone"],
+        "screens": [
+            {
+                "id": "s1",
+                "name": "Not listesi",
+                "platform": "web",
+                "purpose": "Notları arar ve siler",
+            },
+            {"id": "s2", "name": "Not formu", "platform": "both", "purpose": "Not yazar"},
+        ],
+    }
+    engine.store.save(job)
+
+    listed = work_list(engine.store.get(job.id))
+    assert listed.screens == 2
+    group = next(g for g in listed.groups if g.role is designer)
+    assert [i.title for i in group.items] == ["Not listesi", "Not formu"]
+    assert [i.kind for i in group.items] == ["screen", "screen"]
+    assert [i.domain for i in group.items] == ["web", "both"]
+    assert group.items[0].detail == "Notları arar ve siler"
+    # it comes before the specialists that build from it
+    roles = [g.role for g in listed.groups]
+    assert roles.index(designer) < roles.index(RoleName.QA)

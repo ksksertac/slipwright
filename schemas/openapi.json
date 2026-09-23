@@ -4853,6 +4853,11 @@
             "title": "Plan Summary",
             "type": "string"
           },
+          "screens": {
+            "default": 0,
+            "title": "Screens",
+            "type": "integer"
+          },
           "state": {
             "title": "State",
             "type": "string"
@@ -4870,6 +4875,7 @@
           "job_id",
           "phases",
           "plan_summary",
+          "screens",
           "state",
           "tasks"
         ],

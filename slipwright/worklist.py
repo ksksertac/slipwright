@@ -58,6 +58,7 @@ class WorkList(BaseModel):
     tasks: int = 0
     phases: int = 0
     cases: int = 0
+    screens: int = 0
 
 
 def work_list(job: Job) -> WorkList:
@@ -110,6 +111,32 @@ def work_list(job: Job) -> WorkList:
                 items=[
                     WorkItem(id=f"decision:{i}", title=d, kind="step")
                     for i, d in enumerate(decisions)
+                ],
+            )
+        )
+
+    # the Designer: one item per screen, so a person sees what will be drawn before the
+    # specialists build it. None of this exists for a backend-only plan, and the role
+    # itself only exists once the design step is installed.
+    designer = getattr(RoleName, "DESIGNER", None)
+    design: dict[str, Any] = getattr(job.data, "design", None) or {}
+    screens: list[dict[str, Any]] = list(design.get("screens") or [])
+    if designer is not None and screens:
+        out.screens = len(screens)
+        out.groups.append(
+            WorkGroup(
+                role=designer,
+                label=LABEL.get(designer, "Designer"),
+                summary="Drew these screens for the interface specialists to build",
+                items=[
+                    WorkItem(
+                        id=str(screen.get("id") or f"screen:{i}"),
+                        title=str(screen.get("name") or f"screen {i + 1}"),
+                        detail=str(screen.get("purpose") or ""),
+                        kind="screen",
+                        domain=str(screen.get("platform") or "") or None,
+                    )
+                    for i, screen in enumerate(screens)
                 ],
             )
         )
