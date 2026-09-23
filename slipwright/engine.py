@@ -176,6 +176,14 @@ class NotAwaitingApproval(ValueError):
         self.job = job
 
 
+class JobIsRunning(ValueError):
+    """A step cannot be re-run under a development that is still working."""
+
+    def __init__(self, job: Job) -> None:
+        super().__init__(f"job {job.id} is still running (state: {job.state.value})")
+        self.job = job
+
+
 class EmptyApproval(ValueError):
     """A gate whose material is empty cannot be approved (nothing would happen next)."""
 
@@ -1219,6 +1227,39 @@ class Engine:
         self._notify_webhook(job, gate, record)
         return job
 
+    def rerun(self, job_id: str, step: str, *, run: bool = True) -> Job:
+        """Run one finished step again, on the work that is already there.
+
+        ``tests`` runs the build gate: the test command over the current worktree, nothing
+        rewritten. ``devops`` runs the DevOps step from the top — the write-up, the push
+        and the pull request — which is how a development that finished with nowhere to
+        push reaches GitHub once the project names a repository.
+
+        Only a development that has stopped can be re-run; a running one is left alone.
+        """
+        targets = {"tests": JobState.BUILD_GATE, "devops": JobState.DEVOPS}
+        if step not in targets:
+            raise ValueError(f"unknown step {step!r}; expected one of {sorted(targets)}")
+        job = self.store.get(job_id)
+        if job.state in WORKING_STATES:
+            raise JobIsRunning(job)
+        if job.worktree_path is None:
+            raise ValueError("this development has no worktree to run anything in")
+        back = targets[step]
+        # the counters that made the step give up start over, as they do on a retry
+        job.data.build_attempts = 0
+        job.data.ci_attempts = 0
+        job.data.output_hashes = {}
+        # a passing gate stops here rather than carrying the whole tail of the pipeline
+        # again; a failing one hands over to the specialist, which is the point of asking
+        job.data.rerun_only = back is JobState.BUILD_GATE
+        if back is JobState.DEVOPS:
+            # the pull request is opened again; without this the step would only poll CI
+            job.data.pr_url = None
+        self.store.save(job)
+        job = self.orchestrator.transition(job, back, note=f"re-run by hand: {step}")
+        return self._run(job) if run else job
+
     def retry(self, job_id: str, *, run: bool = True, feedback: str | None = None) -> Job:
         """Continue a failed job from the step it failed in. Counters that made it give up
         (build attempts, retries, review rounds, CI fixes) start over; everything built so
@@ -1749,12 +1790,19 @@ class Engine:
         assert isinstance(result.output, POResult)
         job.data.backlog = result.output.breakdown.model_dump(mode="json")
         self.store.save(job)
-        tasks = result.output.breakdown.tasks()
+        breakdown = result.output.breakdown
+        tasks = breakdown.tasks()
+        stories = sum(len(e.stories) for e in breakdown.epics)
+        # the note is the headline a feed can show in one line; the model's prose and the
+        # backlog itself belong to the detail, where a page can lay them out
         return self.orchestrator.transition(
             job,
             JobState.AWAITING_BACKLOG_APPROVAL,
-            note=f"po: {result.output.summary} ({len(tasks)} tasks)",
-            detail=json.dumps(job.data.backlog, indent=2),
+            note=(
+                f"po: backlog ready — {len(breakdown.epics)} epics, "
+                f"{stories} stories, {len(tasks)} tasks"
+            ),
+            detail=json.dumps({"summary": result.output.summary, **job.data.backlog}, indent=2),
         )
 
     def _architecture(self, job: Job) -> Job:
@@ -1793,8 +1841,8 @@ class Engine:
             job,
             JobState.AWAITING_ARCHITECTURE_APPROVAL,
             note=(
-                f"architect: {result.output.summary} "
-                f"({len(result.output.phases)} phases, {len(result.output.decisions)} decisions)"
+                f"architect: plan ready — {len(result.output.phases)} phases, "
+                f"{len(result.output.decisions)} decisions"
             ),
             detail=json.dumps(
                 {"profile": job.profile.model_dump(mode="json"), **job.data.plan}, indent=2
@@ -1893,13 +1941,20 @@ class Engine:
         index = job.data.phase_index
         gate = self._run_gate(job)
         if gate.ok:
+            job.data.build_attempts = 0
+            job.data.last_build_output = None
+            if job.data.rerun_only:
+                # a hand-run of the tests on work that is already committed: report and stop
+                job.data.rerun_only = False
+                self.store.save(job)
+                return self.orchestrator.transition(
+                    job, JobState.DONE, note="tests re-run by hand: passed", detail=gate.tail
+                )
             worktree = require_worktree(job)
             g.stage_all(worktree)
             goal = phases[index].get("goal", "") if index < len(phases) else ""
             g.commit(worktree, f"slipwright: phase {index + 1}: {goal}")
             job.data.phase_index = index + 1
-            job.data.build_attempts = 0
-            job.data.last_build_output = None
             self.store.save(job)
             done = job.data.phase_index >= len(phases)
             if self.review_mode(job) != "off":
@@ -1915,6 +1970,7 @@ class Engine:
 
         job.data.build_attempts += 1
         job.data.last_build_output = gate.tail
+        job.data.rerun_only = False  # the specialist now fixes it the ordinary way
         self.store.save(job)
         if job.data.build_attempts >= self.max_build_attempts:
             return self._fail(
@@ -2146,8 +2202,10 @@ class Engine:
         return self.orchestrator.transition(
             job,
             JobState.AWAITING_TEST_APPROVAL,
-            note=f"qa: {len(job.data.test_cases)} test cases proposed — {output.summary}",
-            detail=json.dumps(job.data.test_cases, indent=2),
+            note=f"qa: {len(job.data.test_cases)} test cases proposed",
+            detail=json.dumps(
+                {"summary": output.summary, "test_cases": job.data.test_cases}, indent=2
+            ),
         )
 
     def _qa_write(self, job: Job) -> Job:
@@ -2295,6 +2353,7 @@ __all__ = [
     "APPROVAL_EDGES",
     "WORKING_STATES",
     "Engine",
+    "JobIsRunning",
     "NotAwaitingApproval",
     "ProjectCloneError",
 ]

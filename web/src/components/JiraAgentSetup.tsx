@@ -54,7 +54,9 @@ export function JiraAgentAccount() {
   return (
     <form className="form" onSubmit={submit}>
       {!s.token_set && (
-        <div className="callout hint">{tx("Finish step 1 first: Jira is not connected yet.")}</div>
+        <div className="callout hint">
+          {tx("Open the Connection tab first: Jira is not connected yet.")}
+        </div>
       )}
       {s.token_set && !s.agent_token_set && (
         <div className="callout hint">

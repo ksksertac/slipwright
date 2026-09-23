@@ -105,6 +105,11 @@ class JobData(BaseModel):
     phase_index: int = Field(default=0, ge=0, description="Next plan phase to execute.")
     build_attempts: int = Field(default=0, ge=0)
     last_build_output: str | None = None
+    rerun_only: bool = Field(
+        default=False,
+        description="A step the human re-ran by hand: a passing build gate stops there "
+        "instead of carrying the finished development through the pipeline again.",
+    )
     phase_base_commit: str | None = Field(
         default=None, description="HEAD when the current phase started; the review diffs from it."
     )

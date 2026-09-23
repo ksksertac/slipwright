@@ -57,6 +57,7 @@ class Lane(BaseModel):
 
     job_id: str
     request: str
+    summary: str | None = None  # the architect's one-paragraph summary, once there is a plan
     state: JobState
     created_at: datetime
     pending_approval: str | None
@@ -504,6 +505,7 @@ def lane_for(job: Job) -> Lane:
     return Lane(
         job_id=job.id,
         request=job.request,
+        summary=str((job.data.plan or {}).get("summary") or "").strip() or None,
         state=job.state,
         created_at=job.created_at,
         pending_approval=pending_approval(job),

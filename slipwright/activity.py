@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from enum import StrEnum
 from typing import Any
 
@@ -17,7 +17,14 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from slipwright.board import TaskStatus, job_epics
 from slipwright.roles.specialists import LABEL, SCOPE, STANDARDS_DOMAIN
-from slipwright.schemas.job import APPROVAL_STATES, TERMINAL_STATES, Job, JobState, Transition
+from slipwright.schemas.job import (
+    APPROVAL_STATES,
+    TERMINAL_STATES,
+    Job,
+    JobState,
+    Transition,
+    utcnow,
+)
 from slipwright.schemas.profile import Profile, RoleConfig, RoleName
 
 
@@ -70,6 +77,27 @@ class JobProgress(BaseModel):
     auto_approved: bool = False  # the last gate was approved by the supervisor, not undone
 
 
+class DayActivity(BaseModel):
+    """One day of the dashboard's activity chart."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    day: str  # ISO date, UTC
+    events: int  # history entries recorded that day
+    finished: int  # developments that reached done that day
+
+
+class RoleWork(BaseModel):
+    """How much one agent has worked, for the dashboard's load chart."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    role: RoleName
+    label: str
+    runs: int
+    last_used: datetime | None = None
+
+
 class Overview(BaseModel):
     """Dashboard numbers across every project."""
 
@@ -86,6 +114,9 @@ class Overview(BaseModel):
     waiting: list[JobProgress]
     recent: list[ActivityItem]
     auto_approved: list[JobProgress] = Field(default_factory=list)
+    # what the dashboard charts: the pace of the work and who did it
+    by_day: list[DayActivity] = Field(default_factory=list)
+    by_role: list[RoleWork] = Field(default_factory=list)
 
 
 class AgentSummary(BaseModel):
@@ -255,6 +286,47 @@ def project_progress(project_id: str, jobs: list[Job]) -> ProjectProgress:
     )
 
 
+def activity_by_day(jobs: list[Job], *, days: int = 14) -> list[DayActivity]:
+    """The last ``days`` days, oldest first, with the empty ones kept: a chart with a
+    gap for a quiet Sunday lies about the pace of the work."""
+    today = utcnow().date()
+    first = today - timedelta(days=days - 1)
+    events: dict[date, int] = {}
+    finished: dict[date, int] = {}
+    for job in jobs:
+        for t in job.history:
+            day = t.at.date()
+            if day < first:
+                continue
+            events[day] = events.get(day, 0) + 1
+            if t.to_state is JobState.DONE:
+                finished[day] = finished.get(day, 0) + 1
+    return [
+        DayActivity(
+            day=(d := first + timedelta(days=i)).isoformat(),
+            events=events.get(d, 0),
+            finished=finished.get(d, 0),
+        )
+        for i in range(days)
+    ]
+
+
+def role_work(jobs: list[Job]) -> list[RoleWork]:
+    """One row per agent: how many times it produced something, busiest first."""
+    items = [i for job in jobs for i in job_activity(job) if i.kind is ActivityKind.ROLE]
+    rows = [
+        RoleWork(
+            role=role,
+            label=LABEL[role],
+            runs=len(mine),
+            last_used=max((i.at for i in mine), default=None),
+        )
+        for role in RoleName
+        if (mine := [i for i in items if i.role is role]) is not None
+    ]
+    return sorted(rows, key=lambda r: (-r.runs, r.label))
+
+
 def overview(projects: int, jobs: list[Job], *, recent: int = 20) -> Overview:
     rows = [job_progress(j) for j in jobs]
     return Overview(
@@ -271,6 +343,8 @@ def overview(projects: int, jobs: list[Job], *, recent: int = 20) -> Overview:
         waiting=[r for r in rows if r.pending_approval],
         auto_approved=[r for r in rows if r.auto_approved],
         recent=project_activity(jobs, limit=recent),
+        by_day=activity_by_day(jobs),
+        by_role=role_work(jobs),
     )
 
 

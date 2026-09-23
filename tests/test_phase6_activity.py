@@ -4,9 +4,16 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from slipwright.activity import ActivityKind, job_activity, project_activity, project_progress
+from slipwright.activity import (
+    ActivityKind,
+    activity_by_day,
+    job_activity,
+    project_activity,
+    project_progress,
+    role_work,
+)
 from slipwright.api import create_app
-from slipwright.schemas.job import JobState
+from slipwright.schemas.job import JobState, utcnow
 from slipwright.schemas.profile import Profile, RoleName
 from slipwright.schemas.project import Project
 from slipwright.store import JobStore
@@ -119,3 +126,46 @@ def test_progress_activity_and_detail_endpoints(
         assert client.get("/api/jobs/nope/history/0").status_code == 404
         assert client.get("/api/projects/nope/progress").status_code == 404
         assert client.get("/api/projects/nope/activity").status_code == 404
+
+
+# --- what the dashboard charts ------------------------------------------------------------
+
+
+def test_overview_carries_the_two_series_the_dashboard_charts(
+    store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
+) -> None:
+    """The day series is a fixed-width window with its quiet days kept — a chart that
+    drops the empty days lies about the pace — and the role series is busiest first."""
+    provider = full_provider(seed, phases=2, breakdown=None)
+    engine = full_engine(store, worktrees_root, seed, provider)
+    project = engine.create_project(Project(name="demo", repo_path=repo))
+    job = engine.start(engine.create_job("health", project_id=project.id).id)
+    for _ in range(4):
+        job = engine.approve(job.id)
+    assert job.state is JobState.DONE
+
+    with TestClient(create_app(engine, require_auth=False, resume_on_startup=False)) as client:
+        body = client.get("/api/overview").json()
+
+    days = body["by_day"]
+    assert len(days) == 14
+    assert [d["day"] for d in days] == sorted(d["day"] for d in days)  # oldest first
+    assert days[-1]["day"] == utcnow().date().isoformat()
+    assert sum(d["events"] for d in days) == len(job.history)
+    assert sum(d["finished"] for d in days) == 1  # the one development that reached done
+    assert days[0]["events"] == 0  # a fortnight ago nothing happened, and the day is kept
+
+    roles = body["by_role"]
+    assert [r["role"] for r in roles] == [
+        r["role"] for r in sorted(roles, key=lambda r: (-r["runs"], r["label"]))
+    ]
+    assert {r["role"] for r in roles} == {r.value for r in RoleName}
+    by_role = {r["role"]: r["runs"] for r in roles}
+    assert by_role["po"] >= 1 and by_role["architect"] >= 1 and by_role["qa"] >= 1
+    assert roles[0]["runs"] == max(r["runs"] for r in roles)  # the busiest leads
+
+
+def test_activity_by_day_is_empty_but_shaped_with_no_jobs() -> None:
+    days = activity_by_day([], days=14)
+    assert len(days) == 14 and all(d.events == 0 and d.finished == 0 for d in days)
+    assert role_work([]) and all(r.runs == 0 for r in role_work([]))

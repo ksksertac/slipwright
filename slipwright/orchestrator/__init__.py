@@ -42,10 +42,13 @@ for _state in _WORKING:
 LEGAL_TRANSITIONS[JobState.AWAITING_DECISION] = _WORKING
 # a failed job can be retried: it re-enters the working state it failed in
 LEGAL_TRANSITIONS[JobState.FAILED] = _WORKING
+# a finished development can be run again a step at a time: the tests, or the DevOps push
+LEGAL_TRANSITIONS[JobState.DONE] = (JobState.BUILD_GATE, JobState.DEVOPS)
 # a failed build gate may send the phase back to the architect (the supervisor's "replan")
 LEGAL_TRANSITIONS[JobState.BUILD_GATE] = (
     *LEGAL_TRANSITIONS[JobState.BUILD_GATE],
     JobState.ARCHITECTURE,
+    JobState.DONE,  # tests re-run by hand on a finished development, and green
 )
 
 

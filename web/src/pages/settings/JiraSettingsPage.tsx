@@ -1,7 +1,8 @@
-// Jira setup as a sequence: connect, choose who the agents write as, name the issue
-// types, map each project, then the round that keeps it all true. Each step says in one
-// line what it is for and shows whether it is done, so the page reads top to bottom.
+// Jira setup as five tabs: connect, choose who the agents write as, name the issue types,
+// map each project, then the round that keeps it all true. Each tab carries a dot for its
+// state, so what is still missing shows without opening it, and only one form is on screen.
 import { useState, type FormEvent, type ReactNode } from "react";
+import { NavLink, useParams } from "react-router-dom";
 import { describeError, type JiraSettingsIn } from "../../api/client";
 import {
   useJiraSettings,
@@ -18,17 +19,20 @@ import { useT } from "../../i18n";
 
 const TYPE_KEYS = ["epic", "story", "task", "bug"] as const;
 
+const TABS = ["connection", "agent", "types", "projects", "sweep"] as const;
+type Tab = (typeof TABS)[number];
+
+/** "done" is settled, "todo" still wants a decision, "optional" is fine left alone. */
 type StepState = "done" | "todo" | "optional";
 
-function Step({
-  n,
+/** The one tab on screen: its full title, the line saying what it is for, and its state. */
+function Panel({
   title,
   why,
   state,
   stateText,
   children,
 }: {
-  n: number;
   title: string;
   why: string;
   state: StepState;
@@ -37,11 +41,9 @@ function Step({
 }) {
   const badge = state === "done" ? "ok" : state === "todo" ? "wait" : "idle";
   return (
-    <section className="card setup-step">
+    <section className="card setup-panel">
       <div className="row spread" style={{ alignItems: "baseline" }}>
-        <h3 style={{ margin: 0 }}>
-          <span className="step-n">{n}</span> {title}
-        </h3>
+        <h3 style={{ margin: 0 }}>{title}</h3>
         <span className={`badge ${badge}`}>{stateText}</span>
       </div>
       <p className="muted small" style={{ margin: "4px 0 14px" }}>
@@ -56,11 +58,30 @@ export function JiraSettingsPage() {
   const tx = useT();
   const { user } = useAuth();
   const settings = useJiraSettings();
+  const sweep = useJiraSweep();
+  const { tab = "connection" } = useParams();
+  const current: Tab = (TABS as readonly string[]).includes(tab) ? (tab as Tab) : "connection";
   const admin = !!user?.is_admin;
 
   if (settings.isLoading) return <Loading />;
   if (settings.error) return <ErrorBox error={settings.error} />;
   const s = settings.data!;
+
+  // The dots, so an unfinished tab says so from the tab strip.
+  const state: Record<Tab, StepState> = {
+    connection: s.token_set ? "done" : "todo",
+    agent: s.agent_token_set ? "done" : "optional",
+    types: "optional",
+    projects: "todo",
+    sweep: sweep.data ? "done" : "optional",
+  };
+  const label: Record<Tab, string> = {
+    connection: tx("Connection"),
+    agent: tx("Agent account"),
+    types: tx("Issue types"),
+    projects: tx("Projects"),
+    sweep: tx("The round"),
+  };
 
   return (
     <div className="settings-flow">
@@ -71,64 +92,77 @@ export function JiraSettingsPage() {
       />
       <p className="muted">
         {tx(
-          "Once this is set up an approved plan appears in Jira by itself: the Product Owner creates the epics, stories and sub-tasks, the specialists move them as they work, and pull request links and failures are commented. Five steps, top to bottom.",
+          "Once this is set up an approved plan appears in Jira by itself: the Product Owner creates the epics, stories and sub-tasks, the specialists move them as they work, and pull request links and failures are commented. Five tabs, left to right.",
         )}
       </p>
 
-      <Step
-        n={1}
-        title={tx("The connection")}
-        why={tx(
-          "The Jira site and the account Slipwright signs in with. Nothing works without it.",
-        )}
-        state={s.token_set ? "done" : "todo"}
-        stateText={s.token_set ? tx("connected") : tx("not connected yet")}
-      >
-        <ConnectionForm admin={admin} />
-      </Step>
+      <nav className="tabs dotted">
+        {TABS.map((t) => (
+          <NavLink key={t} to={`/settings/jira/${t}`} className={t === current ? "active" : ""}>
+            <span className={`tab-dot ${state[t]}`} />
+            {label[t]}
+          </NavLink>
+        ))}
+      </nav>
 
-      <Step
-        n={2}
-        title={tx("Who the agents write as")}
-        why={tx(
-          "Optional: a second Jira account for the bot, so comments and transitions carry its name instead of yours.",
-        )}
-        state={s.agent_token_set ? "done" : "optional"}
-        stateText={s.agent_token_set ? tx("its own account") : tx("your account")}
-      >
-        <JiraAgentAccount />
-      </Step>
+      {current === "connection" && (
+        <Panel
+          title={tx("The connection")}
+          why={tx(
+            "The Jira site and the account Slipwright signs in with. Nothing works without it.",
+          )}
+          state={state.connection}
+          stateText={s.token_set ? tx("connected") : tx("not connected yet")}
+        >
+          <ConnectionForm admin={admin} />
+        </Panel>
+      )}
 
-      <Step
-        n={3}
-        title={tx("Issue type names")}
-        why={tx(
-          "What your Jira site calls an epic, a story, a task and a bug. The defaults fit most sites.",
-        )}
-        state="optional"
-        stateText={tx("defaults")}
-      >
-        <IssueTypesForm admin={admin} />
-      </Step>
+      {current === "agent" && (
+        <Panel
+          title={tx("Who the agents write as")}
+          why={tx(
+            "Optional: a second Jira account for the bot, so comments and transitions carry its name instead of yours.",
+          )}
+          state={state.agent}
+          stateText={s.agent_token_set ? tx("its own account") : tx("your account")}
+        >
+          <JiraAgentAccount />
+        </Panel>
+      )}
 
-      <Step
-        n={4}
-        title={tx("Which project goes where")}
-        why={tx(
-          "Each Slipwright project mirrors into one Jira project, and each task status becomes a transition there.",
-        )}
-        state="todo"
-        stateText={tx("per project")}
-      >
-        <ProjectJiraSetup />
-      </Step>
+      {current === "types" && (
+        <Panel
+          title={tx("Issue type names")}
+          why={tx(
+            "What your Jira site calls an epic, a story, a task and a bug. The defaults fit most sites.",
+          )}
+          state={state.types}
+          stateText={tx("defaults")}
+        >
+          <IssueTypesForm admin={admin} />
+        </Panel>
+      )}
 
-      <SweepStep admin={admin} />
+      {current === "projects" && (
+        <Panel
+          title={tx("Which project goes where")}
+          why={tx(
+            "Each Slipwright project mirrors into one Jira project, and each task status becomes a transition there.",
+          )}
+          state={state.projects}
+          stateText={tx("per project")}
+        >
+          <ProjectJiraSetup />
+        </Panel>
+      )}
+
+      {current === "sweep" && <SweepPanel admin={admin} state={state.sweep} />}
     </div>
   );
 }
 
-/** Step 1: site, account and token — plus the connection test. */
+/** The connection tab: site, account and token — plus the connection test. */
 function ConnectionForm({ admin }: { admin: boolean }) {
   const tx = useT();
   const settings = useJiraSettings();
@@ -244,7 +278,7 @@ function ConnectionForm({ admin }: { admin: boolean }) {
   );
 }
 
-/** Step 3: the four type names, saved with the rest of the connection settings. */
+/** The issue types tab: the four names, saved with the rest of the connection settings. */
 function IssueTypesForm({ admin }: { admin: boolean }) {
   const tx = useT();
   const settings = useJiraSettings();
@@ -301,20 +335,19 @@ function IssueTypesForm({ admin }: { admin: boolean }) {
   );
 }
 
-/** Step 5: the PO's round — what the hourly sweep did last, and a button to run it now. */
-function SweepStep({ admin }: { admin: boolean }) {
+/** The round tab: what the hourly sweep did last, and a button to run it now. */
+function SweepPanel({ admin, state }: { admin: boolean; state: StepState }) {
   const tx = useT();
   const last = useJiraSweep();
   const run = useRunJiraSweep();
   const s = last.data;
   return (
-    <Step
-      n={5}
+    <Panel
       title={tx("The Product Owner's round")}
       why={tx(
         "Runs by itself at startup and every hour: missing epics, stories and sub-tasks are created, stories join the sprint (one is started when none is running), statuses catch up. Nothing to set — this is how a half-mirrored plan repairs itself.",
       )}
-      state={s ? "done" : "optional"}
+      state={state}
       stateText={s ? tx("last run {when}", { when: timeAgo(s.at) }) : tx("not run yet")}
     >
       <div className="small">
@@ -333,6 +366,6 @@ function SweepStep({ admin }: { admin: boolean }) {
         </div>
       )}
       {run.error && <div className="callout error">{describeError(run.error)}</div>}
-    </Step>
+    </Panel>
   );
 }

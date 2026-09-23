@@ -548,6 +548,31 @@
         "title": "Credentials",
         "type": "object"
       },
+      "DayActivity": {
+        "additionalProperties": false,
+        "description": "One day of the dashboard's activity chart.",
+        "properties": {
+          "day": {
+            "title": "Day",
+            "type": "string"
+          },
+          "events": {
+            "title": "Events",
+            "type": "integer"
+          },
+          "finished": {
+            "title": "Finished",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "day",
+          "events",
+          "finished"
+        ],
+        "title": "DayActivity",
+        "type": "object"
+      },
       "EpicView": {
         "additionalProperties": false,
         "properties": {
@@ -1514,6 +1539,12 @@
             "title": "Reject Rounds",
             "type": "integer"
           },
+          "rerun_only": {
+            "default": false,
+            "description": "A step the human re-ran by hand: a passing build gate stops there instead of carrying the finished development through the pipeline again.",
+            "title": "Rerun Only",
+            "type": "boolean"
+          },
           "resume_state": {
             "anyOf": [
               {
@@ -1606,6 +1637,7 @@
           "pr_url",
           "qa_stage",
           "reject_rounds",
+          "rerun_only",
           "resume_state",
           "review_rounds",
           "review_violations",
@@ -1905,6 +1937,17 @@
             },
             "title": "Steps",
             "type": "array"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
           }
         },
         "required": [
@@ -1913,7 +1956,8 @@
           "pending_approval",
           "request",
           "state",
-          "steps"
+          "steps",
+          "summary"
         ],
         "title": "Lane",
         "type": "object"
@@ -2209,6 +2253,20 @@
             "title": "Auto Approved",
             "type": "array"
           },
+          "by_day": {
+            "items": {
+              "$ref": "#/components/schemas/DayActivity"
+            },
+            "title": "By Day",
+            "type": "array"
+          },
+          "by_role": {
+            "items": {
+              "$ref": "#/components/schemas/RoleWork"
+            },
+            "title": "By Role",
+            "type": "array"
+          },
           "jobs_done": {
             "title": "Jobs Done",
             "type": "integer"
@@ -2258,6 +2316,8 @@
         },
         "required": [
           "auto_approved",
+          "by_day",
+          "by_role",
           "jobs_done",
           "jobs_failed",
           "jobs_running",
@@ -3073,6 +3133,24 @@
         "title": "Rejection",
         "type": "object"
       },
+      "Rerun": {
+        "description": "Run one finished step again on the work that is already there.",
+        "properties": {
+          "step": {
+            "enum": [
+              "tests",
+              "devops"
+            ],
+            "title": "Step",
+            "type": "string"
+          }
+        },
+        "required": [
+          "step"
+        ],
+        "title": "Rerun",
+        "type": "object"
+      },
       "Retry": {
         "properties": {
           "feedback": {
@@ -3163,6 +3241,43 @@
         ],
         "title": "RoleName",
         "type": "string"
+      },
+      "RoleWork": {
+        "additionalProperties": false,
+        "description": "How much one agent has worked, for the dashboard's load chart.",
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "last_used": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used"
+          },
+          "role": {
+            "$ref": "#/components/schemas/RoleName"
+          },
+          "runs": {
+            "title": "Runs",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "label",
+          "last_used",
+          "role",
+          "runs"
+        ],
+        "title": "RoleWork",
+        "type": "object"
       },
       "RuleCreate": {
         "properties": {
@@ -5091,6 +5206,56 @@
           }
         },
         "summary": "Reject"
+      }
+    },
+    "/api/jobs/{job_id}/rerun": {
+      "post": {
+        "description": "Run the tests, or the DevOps step, again on a development that has stopped.",
+        "operationId": "rerun_api_jobs__job_id__rerun_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Rerun"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rerun"
       }
     },
     "/api/jobs/{job_id}/result": {

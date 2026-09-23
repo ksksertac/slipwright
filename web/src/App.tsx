@@ -36,6 +36,7 @@ export function App() {
         <Route path="/settings/models" element={<ModelsSettingsPage />} />
         <Route path="/settings/github" element={<GitHubSettingsPage />} />
         <Route path="/settings/jira" element={<JiraSettingsPage />} />
+        <Route path="/settings/jira/:tab" element={<JiraSettingsPage />} />
         <Route path="/settings/agents" element={<Navigate to="/agents" replace />} />
         <Route path="/agents" element={<AgentsPage />} />
         <Route path="/agents/:role" element={<AgentDetailPage />} />

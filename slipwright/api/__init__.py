@@ -14,7 +14,7 @@ import threading
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 from fastapi import APIRouter, BackgroundTasks, Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -37,9 +37,11 @@ from slipwright.engine import (
     EmptyApproval,
     Engine,
     InvalidEdit,
+    JobIsRunning,
     NotAwaitingApproval,
     ProjectCloneError,
 )
+from slipwright.orchestrator import IllegalTransitionError
 from slipwright.pipeline import Pipeline, pipeline
 from slipwright.providers import ProviderUnavailableError
 from slipwright.schemas.job import Job, JobResult, Transition
@@ -108,6 +110,12 @@ class Rejection(BaseModel):
 
 class Retry(BaseModel):
     feedback: str | None = None
+
+
+class Rerun(BaseModel):
+    """Run one finished step again on the work that is already there."""
+
+    step: Literal["tests", "devops"]
 
 
 class Message(BaseModel):
@@ -613,6 +621,25 @@ def create_app(
             job = eng.retry(job_id, run=False, feedback=(body.feedback if body else None))
         except NotAwaitingApproval as exc:
             raise HTTPException(status_code=409, detail="only a failed job can be retried") from exc
+        background.add_task(_resume, eng, job.id)
+        return job
+
+    @api.post("/jobs/{job_id}/rerun", response_model=Job)
+    def rerun(job_id: str, body: Rerun, request: Request, background: BackgroundTasks) -> Job:
+        """Run the tests, or the DevOps step, again on a development that has stopped."""
+        eng = _engine(request)
+        _get(eng, job_id)
+        try:
+            job = eng.rerun(job_id, body.step, run=False)
+        except JobIsRunning as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        # IllegalTransitionError is a ValueError, so it has to be caught first
+        except IllegalTransitionError as exc:
+            raise HTTPException(
+                status_code=409, detail=f"this development cannot re-run {body.step}: {exc}"
+            ) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         background.add_task(_resume, eng, job.id)
         return job
 

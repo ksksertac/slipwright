@@ -46,7 +46,8 @@ export const TR: Record<string, string> = {
   "Projects this account can see:": "Bu hesabın gördüğü projeler:",
   none: "yok",
   "Tasks default to": "Tasklar varsayılan olarak",
-  "Finish step 1 first: Jira is not connected yet.": "Önce 1. adımı bitir: Jira henüz bağlı değil.",
+  "Open the Connection tab first: Jira is not connected yet.":
+    "Önce Bağlantı sekmesini aç: Jira henüz bağlı değil.",
   "No agent account is set: agents would act through the human connection ({email}).":
     "Ajan hesabı ayarlı değil: ajanlar senin bağlantınla ({email}) davranır.",
   "The name of the transition in your workflow, not the status: leave one empty to skip it.":
@@ -182,6 +183,9 @@ export const TR: Record<string, string> = {
   "continue from the step that failed; what was built stays":
     "düştüğü adımdan devam eder; yapılanlar kalır",
   "no detail": "ayrıntı yok",
+  more: "devamı",
+  less: "kısalt",
+  "the record as JSON": "kaydın JSON hâli",
   "what happened": "ne oldu",
   "open development →": "geliştirmeyi aç →",
   "open ↗": "aç ↗",
@@ -285,6 +289,12 @@ export const TR: Record<string, string> = {
   "Pick from the list": "Listeden seç",
   "Pick a repository…": "Bir depo seç…",
   "GitHub repository (optional)": "GitHub deposu (isteğe bağlı)",
+  "Run the tests again": "Testleri tekrar çalıştır",
+  "Run DevOps again": "DevOps'u tekrar çalıştır",
+  "Runs the test command over this development's worktree.":
+    "Bu geliştirmenin çalışma kopyasında test komutunu çalıştırır.",
+  "Writes the pull request again, pushes the branch and opens it.":
+    "Pull request metnini yeniden yazar, dalı push'lar ve PR'ı açar.",
   "Where finished work is pushed: each development pushes its branch and opens a pull request there. Leave it empty and the branch stays in the checkout for you to merge by hand.":
     "Biten iş buraya push'lanır: her geliştirme kendi dalını push'lar ve orada bir pull request açar. Boş bırakırsan dal klasörde kalır, merge'ü elle yaparsın.",
   "No GitHub token is configured, so nothing can be pushed.":
@@ -413,6 +423,26 @@ export const TR: Record<string, string> = {
   "Select all recommended ({n})": "Önerilenlerin tümünü seç ({n})",
   "the gates the supervisor recommends approving": "denetçinin onaylanmasını önerdiği kapılar",
   "started {ago}": "{ago} başladı",
+
+  // -- dashboard charts ---------------------------------------------------------------------
+  "Activity, last 14 days": "Etkinlik — son 14 gün",
+  "What each agent did": "Hangi ajan ne yaptı",
+  events: "olay",
+  finished: "biten",
+  runs: "çalışma",
+  "in total": "toplam",
+  "waiting for you": "seni bekliyor",
+  "table view": "tablo görünümü",
+  Day: "Gün",
+  "{done} of {total} steps": "{total} adımın {done} tanesi",
+  "What was asked": "İstenen",
+  "The plan": "Plan",
+  "show more": "devamını göster",
+  "show less": "kısalt",
+  Planning: "Planlama",
+  Building: "Geliştirme",
+  Testing: "Test",
+  Delivery: "Teslim",
   "recommends approve": "onay öneriyor",
   "recommends reject": "ret öneriyor",
   "approved by supervisor": "denetçi onayladı",
@@ -562,7 +592,22 @@ export const TR: Record<string, string> = {
   "Shared rules are edited under the every-project scope.":
     "Ortak kurallar “her proje” kapsamında düzenlenir.",
   "No shared rules.": "Ortak kural yok.",
-  "Advanced — search test and index": "Gelişmiş — arama denemesi ve dizin",
+  "Which rules would this agent get?": "Bu ajana hangi kurallar gider?",
+  "Write a task the way you would give it, and see the list it would be handed.":
+    "Vereceğin gibi bir görev yaz, ajana gidecek listeyi gör.",
+  "How matching works — index settings": "Eşleşme nasıl çalışır — dizin ayarları",
+  "Embeddings, how many rules a step gets and the token budget.":
+    "Gömmeler, bir adımın kaç kural alacağı ve token bütçesi.",
+  "Nothing is sent to the agent from here — this only shows which rules a task of that shape would pull in.":
+    "Buradan ajana bir şey gönderilmez — yalnızca bu şekildeki bir görevin hangi kuralları çekeceğini gösterir.",
+  "Looking through the rules…": "Kurallara bakılıyor…",
+  "The top {k} go into the prompt, together with the shared rules.":
+    "İlk {k} tanesi ortak kurallarla birlikte isteme girer.",
+  "goes to the agent": "ajana gider",
+  "not this time": "bu görevde gitmez",
+  "keyword {kw} · meaning {sem}": "anahtar kelime {kw} · anlam {sem}",
+  "this project": "bu proje",
+  "read the rule": "kuralı oku",
   "Rule title — e.g. Every story has an acceptance criterion":
     "Kural başlığı — örn. Her story'nin bir kabul kriteri olur",
   "What the agent must do or watch out for, and why. Markdown is fine; keep it under 400 words.":
@@ -626,6 +671,8 @@ export const TR: Record<string, string> = {
     "Bir cevap en fazla ne kadar uzun olabilir. Sağlayıcının yeni modelleri izin veriyorsa yükselt; sınıra yine takılan ajandan otomatik olarak daha küçük parçalar istenir.",
   "no key": "anahtar yok",
   "key set": "anahtar ayarlı",
+  "no default model": "varsayılan model seçilmedi",
+  "add a key to use it": "kullanmak için anahtar ekle",
   "default model": "varsayılan model",
   "Connected.": "Bağlandı.",
   "model(s) available:": "model kullanılabilir:",

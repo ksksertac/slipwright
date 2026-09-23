@@ -19,7 +19,7 @@ import {
   useTestProvider,
 } from "../api/hooks";
 import { ActivityRow } from "../components/ActivityRow";
-import { AgentIcon } from "../components/agents";
+import { AgentAvatar } from "../components/AgentAvatar";
 import { Crumbs } from "../components/Crumbs";
 import { useToast } from "../components/Toast";
 import { Empty, ErrorBox, Loading } from "../components/ui";
@@ -55,9 +55,7 @@ export function AgentDetailPage() {
       <Crumbs items={[{ label: "Agents", to: "/agents" }, { label: agent.label }]} />
       <div className="page-head">
         <div className="row" style={{ flexWrap: "nowrap", gap: 14 }}>
-          <span className="agent-ico lg">
-            <AgentIcon role={agent.role} />
-          </span>
+          <AgentAvatar role={agent.role} className="lg" />
           <div>
             <h1>{agent.label}</h1>
             <p>{agent.scope}</p>

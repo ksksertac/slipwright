@@ -103,7 +103,7 @@ def test_planner_produces_plan_and_stops_at_gate(
     assert job.data.plan is not None
     assert [p["goal"] for p in job.data.plan["phases"]] == ["first", "second"]
     assert job.data.phase_index == 0
-    assert job.history[-1].note == "architect: 2 phases (2 phases, 0 decisions)"
+    assert job.history[-1].note == "architect: plan ready — 2 phases, 0 decisions"
     assert json.loads(job.history[-1].detail or "{}")["phases"][1]["goal"] == "second"
     planner_req = [r for r in provider.requests if r.role is RoleName.ARCHITECT][0]
     assert planner_req.model == seed.roles[RoleName.ARCHITECT].model

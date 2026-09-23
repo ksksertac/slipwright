@@ -386,7 +386,7 @@ def test_standards_ui_sources() -> None:
         "useDeleteStandardsRule",
         "Add rule",
         "Markdown",
-        "Try a search",
+        "useStandardsSearch",  # the "which rules would this agent get?" try-out
         "Reindex now",
         "embedder",
         "Scope",

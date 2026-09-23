@@ -17,6 +17,7 @@ import {
   IconPlus,
 } from "../components/icons";
 import { ActivityRow } from "../components/ActivityRow";
+import { ActivityChart, RoleLoadChart, StateBar } from "../components/charts";
 import {
   Empty,
   ErrorBox,
@@ -95,23 +96,33 @@ export function DashboardPage() {
           label={tx("Outcomes")}
           icon={<IconCheck />}
           value={
-            <span>
-              <span style={{ color: "var(--good-text)" }}>{o.jobs_done}</span>
-              <span className="faint" style={{ fontSize: 15 }}>
-                {" "}
-                {tx("done")}
-              </span>{" "}
-              <span style={{ color: "var(--bad-text)" }}>{o.jobs_failed}</span>
-              <span className="faint" style={{ fontSize: 15 }}>
-                {" "}
-                {tx("failed")}
+            <span className="outcomes">
+              <span>
+                <span style={{ color: "var(--good-text)" }}>{o.jobs_done}</span>
+                <span className="unit">{tx("done")}</span>
+              </span>
+              <span>
+                <span style={{ color: "var(--bad-text)" }}>{o.jobs_failed}</span>
+                <span className="unit">{tx("failed")}</span>
               </span>
             </span>
           }
         />
       </div>
 
-      <div className="grid-2" style={{ marginTop: 18, alignItems: "start" }}>
+      <div className="dash-charts">
+        <div className="card">
+          <ActivityChart days={o.by_day} />
+        </div>
+        <div className="card">
+          <StateBar o={o} />
+        </div>
+        <div className="card">
+          <RoleLoadChart roles={o.by_role} />
+        </div>
+      </div>
+
+      <div className="grid-2" style={{ alignItems: "start" }}>
         <div className="card flush">
           <div className="card-head">
             <h3>
@@ -183,13 +194,14 @@ export function DashboardPage() {
               </div>
             </div>
           ) : (
-            <ul className="feed" style={{ padding: "0 20px" }}>
+            <ul className="feed capped">
               {o.recent.map((item) => (
                 <ActivityRow
                   key={`${item.job_id}:${item.index}`}
                   item={item}
                   projectId={item.project_id ?? ""}
                   projectName={byId.get(item.project_id ?? "")?.name}
+                  compact
                 />
               ))}
             </ul>

@@ -11,7 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from slipwright.api import create_app
-from slipwright.engine import Engine, NotAwaitingApproval
+from slipwright.engine import Engine, JobIsRunning, NotAwaitingApproval
 from slipwright.pipeline import lane_for
 from slipwright.providers import (
     ModelRequest,
@@ -721,6 +721,83 @@ def test_a_checkout_without_a_remote_finishes_on_its_branch(
     assert f"git merge {job.branch}" in (last.note or "")
     assert "set the project's GitHub repository" in (last.note or "")  # the way out
     assert last.detail  # the DevOps write-up, for whoever merges
+
+
+def test_a_finished_development_can_run_its_tests_again(
+    store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
+) -> None:
+    """Green stops where it is: re-running the tests on a finished development must not
+    walk the whole tail of the pipeline a second time."""
+    engine = full_engine(store, worktrees_root, seed, full_provider(seed, phases=1))
+    project = engine.create_project(Project(name="demo", repo_path=repo))
+    job = engine.start(engine.create_job("x", project_id=project.id).id)
+    job = engine.approve(engine.approve(job.id).id)
+    job = engine.approve(engine.approve(job.id).id)
+    assert job.state is JobState.DONE
+    before = len(job.history)
+
+    job = engine.rerun(job.id, "tests")
+    assert job.state is JobState.DONE
+    assert job.history[-1].note == "tests re-run by hand: passed"
+    assert job.data.rerun_only is False  # the flag never outlives the run
+    notes = [t.note or "" for t in job.history[before:]]
+    assert not any("build gate passed for phase" in n for n in notes)  # no second pass
+
+
+def test_re_running_the_tests_red_hands_the_development_back_to_the_specialist(
+    store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
+) -> None:
+    """The point of asking: a failing test command puts the specialist back to work with
+    the output, instead of leaving a finished development looking finished."""
+    engine = full_engine(store, worktrees_root, seed, full_provider(seed, phases=1))
+    project = engine.create_project(Project(name="demo", repo_path=repo))
+    job = engine.start(engine.create_job("x", project_id=project.id).id)
+    job = engine.approve(engine.approve(job.id).id)
+    job = engine.approve(engine.approve(job.id).id)
+    assert job.state is JobState.DONE
+
+    broken = job.profile.model_copy(update={"test_cmd": FALSE})  # type: ignore[union-attr]
+    job.profile = broken
+    store.save(job)
+    job = engine.rerun(job.id, "tests", run=False)
+    assert job.state is JobState.BUILD_GATE and job.data.rerun_only is True
+    job = engine._run(job)
+    assert job.data.last_build_output  # the human and the specialist both see why
+    assert job.data.rerun_only is False
+
+
+def test_the_rerun_endpoint_reports_why_it_will_not_run(
+    store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
+) -> None:
+    engine = full_engine(store, worktrees_root, seed, full_provider(seed, phases=1))
+    project = engine.create_project(Project(name="demo", repo_path=repo))
+    job = engine.start(engine.create_job("x", project_id=project.id).id)
+    with TestClient(create_app(engine, resume_on_startup=False, require_auth=False)) as client:
+        assert client.post(f"/api/jobs/{job.id}/rerun", json={"step": "nope"}).status_code == 422
+        # still at the first gate: the DevOps step has not been reached, so there is
+        # nothing to run again (and IllegalTransitionError must not read as a bad request)
+        early = client.post(f"/api/jobs/{job.id}/rerun", json={"step": "devops"})
+        assert early.status_code == 409
+        assert "cannot re-run devops" in early.json()["detail"]
+
+        job2 = engine.approve(engine.approve(job.id).id)
+        job2 = engine.approve(engine.approve(job2.id).id)
+        assert job2.state is JobState.DONE
+        ok = client.post(f"/api/jobs/{job2.id}/rerun", json={"step": "tests"})
+        assert ok.status_code == 200, ok.text
+
+
+def test_a_step_cannot_be_re_run_while_the_development_is_working(
+    store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
+) -> None:
+    engine = full_engine(store, worktrees_root, seed, full_provider(seed, phases=1))
+    project = engine.create_project(Project(name="demo", repo_path=repo))
+    job = engine.create_job("x", project_id=project.id)
+    job = engine.orchestrator.transition(job, JobState.BACKLOG)
+    with pytest.raises(JobIsRunning):
+        engine.rerun(job.id, "devops")
+    with pytest.raises(ValueError, match="unknown step"):
+        engine.rerun(job.id, "deploy")
 
 
 def test_a_finished_development_reports_what_it_produced(

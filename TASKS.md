@@ -1099,6 +1099,20 @@ in bulk.
   `MAX_QUEUE_ATTEMPTS` (5) rounds with the reason in the history. **Copy button** on
   every log, diff and JSON block (`Copyable`).
 
+- [x] **A finished step can be run again.** The step panel offers it on the QA and DevOps
+  steps of a development that has stopped (`POST /api/jobs/{id}/rerun`, `Engine.rerun`).
+  `tests` re-enters the build gate with `JobData.rerun_only`: green stops at done instead
+  of walking the tail of the pipeline a second time, red clears the flag and hands the
+  work back to the specialist with the output, which is the ordinary failed-gate path.
+  `devops` clears `pr_url` and runs the step from the top, so the write-up, the push and
+  the pull request happen again. A development that is still working is refused (409).
+
+- [x] **Every agent has a drawn character.** `AgentAvatar` gives each role a figure built
+  from one silhouette — the Product Owner is a clipboard, the Architect wears the hard
+  hat, Backend is a rack, QA looks through the glass — in `currentColor`, so the role's
+  hue in `styles.css` (`[data-agent]`) colours the drawing and both themes need one rule.
+  The pipeline's small glyphs take the same hue through `.role-ink`.
+
 - [x] **More vendors.** Gemini, Qwen (DashScope), GLM (Z.ai) and MiniMax join Anthropic,
   OpenAI and DeepSeek in `PROVIDERS`; each speaks the OpenAI protocol on its own host, so
   `build_client` needs no new code, and each appears on Settings → Models with its own key,

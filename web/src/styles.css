@@ -722,6 +722,17 @@ label {
   letter-spacing: -0.02em;
   line-height: 1.1;
 }
+.tile .outcomes {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+}
+.tile .outcomes .unit {
+  font-size: 15px;
+  font-weight: 400;
+  color: var(--text-3);
+  margin-left: 5px;
+}
 .tile .sub {
   font-size: 12px;
   color: var(--text-3);
@@ -1043,6 +1054,71 @@ a.tag:hover {
   font-weight: 600;
   margin-right: 6px;
 }
+.feed .note {
+  display: block;
+}
+.feed .note.clamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+button.linkish {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--accent);
+  cursor: pointer;
+}
+button.linkish:hover {
+  text-decoration: underline;
+}
+
+/* a history entry's detail, laid out as what it is; the JSON stays one click away */
+.detail > .lead {
+  margin: 0 0 10px;
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+.detail section {
+  margin-top: 12px;
+}
+.detail h4 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-3);
+  margin: 0 0 6px;
+}
+.detail ol.cases,
+.detail ol.phases {
+  margin: 0 0 0 18px;
+  padding: 0;
+  font-size: 13px;
+}
+.detail ol.cases li,
+.detail ol.phases li {
+  margin-bottom: 6px;
+}
+.detail section > .tree {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.detail section > .tree > li:last-child .node:last-of-type {
+  border-bottom: 0;
+}
+.detail details.raw {
+  margin-top: 14px;
+}
+.detail details.raw > summary {
+  cursor: pointer;
+  color: var(--text-3);
+  font-size: 12px;
+}
 .feed details {
   margin-top: 6px;
 }
@@ -1108,13 +1184,16 @@ a.tag:hover {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  position: relative;
   transition:
-    border-color 0.12s,
-    box-shadow 0.12s;
+    border-color 0.14s,
+    box-shadow 0.14s,
+    transform 0.14s;
 }
 .pcard:hover {
   border-color: var(--line-strong);
   box-shadow: var(--shadow-lg);
+  transform: translateY(-2px);
 }
 .pcard .title a {
   color: var(--text);
@@ -1137,6 +1216,134 @@ a.tag:hover {
   width: 14px;
   height: 14px;
   color: var(--text-3);
+}
+
+/* ---------------------------------------------------------------------------------------
+   A project card carries its own colour: one hue, hashed from the project, tints the
+   monogram, the wash behind the card and the border it lifts to. The hue arrives as
+   --proj-h/--proj-s on the card itself (ProjectsPage.tsx), the way agent roles work.
+   --------------------------------------------------------------------------------------- */
+.pcard.proj {
+  gap: 13px;
+  border-radius: var(--radius-lg);
+  padding-bottom: 0;
+  background-image: radial-gradient(
+    115% 95% at 0 0,
+    hsl(var(--proj-h) calc(var(--proj-s) * 1%) var(--proj-l, 52%) / var(--proj-wash, 0.1)),
+    transparent 62%
+  );
+}
+.pcard.proj:hover {
+  border-color: hsl(var(--proj-h) calc(var(--proj-s) * 1%) 55% / 0.5);
+}
+/* the name covers the whole card, so anywhere but the menu opens the project */
+.pcard.proj .title a::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+.pcard-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: nowrap;
+}
+.pcard.proj .title a {
+  font-size: 15.5px;
+  letter-spacing: -0.01em;
+}
+.pcard.proj .title a:hover {
+  color: var(--accent);
+  text-decoration: none;
+}
+.pcard-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: nowrap;
+  margin-left: auto;
+  position: relative;
+  z-index: 2;
+}
+.pmark {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  border-radius: 13px;
+  display: grid;
+  place-items: center;
+  font-size: 14.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  background: hsl(var(--proj-h) calc(var(--proj-s) * 1%) 92%);
+  color: hsl(var(--proj-h) calc(var(--proj-s) * 1%) 34%);
+  box-shadow: inset 0 0 0 1px hsl(var(--proj-h) calc(var(--proj-s) * 1%) 40% / 0.14);
+}
+.pcard-desc {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 34px;
+  margin-top: 2px;
+  line-height: 1.35;
+}
+.pcard.proj .meta {
+  gap: 6px;
+}
+.pcard.proj .meta span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 3px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-2);
+  font-size: 11.5px;
+}
+.pcard.proj .meta svg {
+  flex: 0 0 13px;
+  width: 13px;
+  height: 13px;
+}
+.pcard-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin: auto -20px 0;
+  padding: 9px 20px;
+  border-top: 1px solid var(--line);
+  background: var(--surface-2);
+  border-radius: 0 0 13px 13px;
+}
+/* Dark needs a heavier hand: the same wash over #171a20 would read as plain black. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .pcard.proj {
+    --proj-wash: 0.2;
+    --proj-l: 62%;
+  }
+  :root:not([data-theme="light"]) .pmark {
+    background: hsl(var(--proj-h) calc(var(--proj-s) * 0.5%) 18%);
+    color: hsl(var(--proj-h) calc(var(--proj-s) * 0.9%) 72%);
+    box-shadow: inset 0 0 0 1px hsl(var(--proj-h) calc(var(--proj-s) * 1%) 65% / 0.2);
+  }
+  :root:not([data-theme="light"]) .pcard-foot {
+    background: rgb(255 255 255 / 0.025);
+  }
+}
+:root[data-theme="dark"] .pcard.proj {
+  --proj-wash: 0.2;
+  --proj-l: 62%;
+}
+:root[data-theme="dark"] .pmark {
+  background: hsl(var(--proj-h) calc(var(--proj-s) * 0.5%) 18%);
+  color: hsl(var(--proj-h) calc(var(--proj-s) * 0.9%) 72%);
+  box-shadow: inset 0 0 0 1px hsl(var(--proj-h) calc(var(--proj-s) * 1%) 65% / 0.2);
+}
+:root[data-theme="dark"] .pcard-foot {
+  background: rgb(255 255 255 / 0.025);
 }
 
 /* menu */
@@ -1322,17 +1529,432 @@ a.tag:hover {
   width: 24px;
   height: 24px;
 }
+
+/* Role colours. One hue per agent, set on whatever carries data-agent; the ink and the
+   tint are derived from it, so a theme needs one rule instead of a second palette and a
+   new role needs one line. Used by the drawn characters (AgentAvatar) and by the small
+   glyphs on the pipeline steps. */
+[data-agent="po"] {
+  --agent-h: 42;
+  --agent-s: 78;
+}
+[data-agent="architect"] {
+  --agent-h: 186;
+  --agent-s: 80;
+}
+[data-agent="backend"] {
+  --agent-h: 252;
+  --agent-s: 70;
+}
+[data-agent="web_ui"] {
+  --agent-h: 212;
+  --agent-s: 68;
+}
+[data-agent="mobile_ui"] {
+  --agent-h: 330;
+  --agent-s: 68;
+}
+[data-agent="qa"] {
+  --agent-h: 150;
+  --agent-s: 74;
+}
+[data-agent="devops"] {
+  --agent-h: 14;
+  --agent-s: 76;
+}
+[data-agent="supervisor"] {
+  --agent-h: 228;
+  --agent-s: 34;
+}
+
+.agent-avatar {
+  width: 46px;
+  height: 46px;
+  flex: 0 0 46px;
+  border-radius: 13px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: hsl(var(--agent-h, 212) calc(var(--agent-s, 68) * 1%) 95%);
+  color: hsl(var(--agent-h, 212) calc(var(--agent-s, 68) * 1%) 40%);
+}
+.agent-avatar svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.agent-avatar.lg {
+  width: 62px;
+  height: 62px;
+  flex-basis: 62px;
+  border-radius: 17px;
+}
+/* the same hue on the pipeline's small glyphs, where a drawn character would not read */
+.role-ink {
+  display: inline-flex;
+  color: hsl(var(--agent-h, 212) calc(var(--agent-s, 68) * 1%) 40%);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .agent-avatar {
+    background: hsl(var(--agent-h, 212) calc(var(--agent-s, 68) * 0.42%) 13%);
+    color: hsl(var(--agent-h, 212) calc(var(--agent-s, 68) * 0.85%) 68%);
+  }
+  :root:not([data-theme="light"]) .role-ink {
+    color: hsl(var(--agent-h, 212) calc(var(--agent-s, 68) * 0.85%) 68%);
+  }
+}
+:root[data-theme="dark"] .agent-avatar {
+  background: hsl(var(--agent-h, 212) calc(var(--agent-s, 68) * 0.42%) 13%);
+  color: hsl(var(--agent-h, 212) calc(var(--agent-s, 68) * 0.85%) 68%);
+}
+:root[data-theme="dark"] .role-ink {
+  color: hsl(var(--agent-h, 212) calc(var(--agent-s, 68) * 0.85%) 68%);
+}
 a.pcard:hover {
   text-decoration: none;
 }
 
-/* pipeline (T9.9) */
+/* ---------------------------------------------------------------------------------------
+   Charts (the dashboard's figures)
+
+   One hue carries magnitude -- the accent, nothing else -- and the reserved status colours
+   appear only where a colour *means* running / waiting / done / failed, always beside the
+   label and count that actually say so. Marks are thin, the axis is a hairline, touching
+   fills are separated by 2px of surface rather than a stroke, and no figure puts a number
+   on every mark: the peak is labelled, the pointer reads the rest, and the folded table
+   under each figure keeps every value reachable with no pointer at all.
+   --------------------------------------------------------------------------------------- */
+.dash-charts {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1.25fr);
+  gap: 16px;
+  margin: 18px 0;
+}
+@media (max-width: 1240px) {
+  .dash-charts {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .dash-charts > .card:first-child {
+    grid-column: span 2;
+  }
+}
+@media (max-width: 760px) {
+  .dash-charts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .dash-charts > .card:first-child {
+    grid-column: auto;
+  }
+}
+/* the figure sits at the top of its card and the table toggle at the bottom, so three
+   cards of different content still line up along both edges */
+.dash-charts > .card {
+  display: flex;
+  flex-direction: column;
+}
+.dash-charts .figure {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.dash-charts .figure-table {
+  margin-top: auto;
+  padding-top: 12px;
+}
+.dash-charts .legend {
+  flex: 1;
+  justify-content: center;
+  gap: 10px;
+}
+
+.figure {
+  margin: 0;
+  min-width: 0;
+}
+.figure figcaption {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.figure-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.figure-lead {
+  font-size: 12.5px;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+.figure-lead strong {
+  color: var(--text);
+  font-weight: 600;
+}
+.figure-table {
+  margin-top: 12px;
+}
+.figure-table > summary {
+  font-size: 11.5px;
+  color: var(--text-3);
+  cursor: pointer;
+  list-style: none;
+}
+.figure-table > summary::-webkit-details-marker {
+  display: none;
+}
+.figure-table > summary::before {
+  content: "▸ ";
+}
+.figure-table[open] > summary::before {
+  content: "▾ ";
+}
+.figure-table > summary:hover {
+  color: var(--text-2);
+}
+table.mini {
+  width: 100%;
+  margin-top: 8px;
+  font-size: 12px;
+}
+table.mini th,
+table.mini td {
+  padding: 3px 0;
+  border: 0;
+  color: var(--text-2);
+  text-align: left;
+}
+table.mini th {
+  color: var(--text-3);
+  font-weight: 600;
+}
+table.mini .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-family: var(--mono);
+  color: var(--text);
+}
+
+/* -- the column chart -- */
+.chart-columns {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.cols {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px; /* the surface gap between neighbours; the bar's own width does the rest */
+  flex: 1;
+  min-height: 128px;
+  border-bottom: 1px solid var(--line); /* the baseline: hairline, solid, recessive */
+}
+.cols .band {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  position: relative;
+  cursor: default;
+}
+.cols .band:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+.cols .col {
+  width: 100%;
+  max-width: 22px; /* capped: the band's leftover is air, never filled */
+  border-radius: 4px 4px 0 0; /* 4px at the data end, square on the baseline */
+  background: var(--accent);
+  transition: background 0.12s;
+}
+.cols .band:hover .col,
+.cols .band:focus-visible .col {
+  background: var(--accent-hover);
+}
+/* the one value worth reading without a pointer */
+.cols .cap {
+  position: absolute;
+  bottom: 100%;
+  margin-bottom: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-2);
+}
+.chart-x {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-3);
+}
+.chart-tip {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  z-index: 2;
+  pointer-events: none;
+  white-space: nowrap;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  padding: 5px 9px;
+  font-size: 11.5px;
+  color: var(--text-2);
+}
+.chart-tip strong {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.chart-tip .when {
+  display: block;
+  color: var(--text-3);
+  font-size: 10.5px;
+}
+
+/* -- the stacked bar and its legend -- */
+.stackbar {
+  display: flex;
+  height: 14px;
+  gap: 2px; /* the surface gap: what separates the segments, not a stroke */
+  border-radius: 999px;
+  overflow: hidden;
+}
+.stackbar .seg {
+  min-width: 4px;
+  background: var(--text-3);
+}
+.stackbar .seg.ok {
+  background: var(--good);
+}
+.stackbar .seg.bad {
+  background: var(--bad);
+}
+.stackbar .seg.wait {
+  background: var(--accent);
+}
+.stackbar .seg.work {
+  background: var(--warn);
+}
+.legend {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.legend li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+.legend li.off {
+  color: var(--text-3);
+}
+.legend .key {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 9px;
+  border-radius: 3px;
+  background: var(--text-3);
+}
+.legend .key.ok {
+  background: var(--good);
+}
+.legend .key.bad {
+  background: var(--bad);
+}
+.legend .key.wait {
+  background: var(--accent);
+}
+.legend .key.work {
+  background: var(--warn);
+}
+.legend .num {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.legend li.off .num {
+  color: var(--text-3);
+}
+
+/* -- the horizontal bar list -- */
+.barlist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.barlist li {
+  display: grid;
+  grid-template-columns: 116px minmax(0, 1fr) 34px;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+.barlist .name {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.barlist .name svg {
+  width: 14px;
+  height: 14px;
+}
+.barlist .track {
+  height: 8px;
+  background: var(--surface-3);
+  border-radius: 999px;
+}
+.barlist .fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 0 4px 4px 0; /* square at the baseline, 4px at the data end */
+}
+.barlist .num {
+  text-align: right;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+/* the dashboard's feed is a glance: it scrolls inside its card instead of growing it */
+.feed.capped {
+  max-height: 420px;
+  overflow-y: auto;
+  padding: 0 20px;
+}
+
+/* pipeline (T9.9)
+
+   A lane is read top to bottom: who asked for what (a headline over the brief), how far
+   it has got (the bar), then the flow itself — the steps under the stage they belong to,
+   linked left to right. The stage headings are what keep twenty cards from reading as a
+   heap: each one says where the work is and how much of it is behind you. */
 .lane {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
-  padding: 12px 14px 10px;
+  padding: 16px 18px 14px;
 }
 .lane.waiting {
   border-color: var(--accent);
@@ -1340,48 +1962,241 @@ a.pcard:hover {
 }
 .lane-head {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
+  align-items: flex-start;
+  gap: 12px;
 }
 .lane-head input[type="checkbox"] {
   width: 16px;
   height: 16px;
+  margin-top: 3px;
   accent-color: var(--accent);
 }
-.lane-title {
-  font-weight: 600;
-  color: var(--text);
+.lane-id {
   min-width: 0;
   flex: 1;
 }
-.lane-steps {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(176px, 1fr));
-  gap: 8px;
-  padding: 2px 2px 4px;
+.lane-title {
+  display: block;
+  font-size: 16px;
+  font-weight: 650;
+  line-height: 1.3;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
+.lane-sub {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+.lane-progress {
+  flex: 0 0 168px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  align-items: flex-end;
+  padding-top: 3px;
+}
+.lane-progress .progress {
+  width: 100%;
+  height: 6px;
+}
+.lane-progress .row {
+  width: 100%;
+}
+
+/* the brief: what was asked, two lines, the rest a click away */
+.lane-brief {
+  margin: 12px 0 4px;
+  padding: 10px 14px;
+  background: var(--surface-2);
+  border-left: 3px solid var(--line-strong);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+.lane-brief-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin-bottom: 4px;
+}
+.lane-brief-plan {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 8px;
+  min-width: 0;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+.lane-brief-plan .lane-brief-label {
+  margin-bottom: 0;
+  flex: 0 0 auto;
+}
+.lane-brief p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-2);
+  white-space: pre-wrap;
+}
+.clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.text-btn {
+  background: none;
+  border: 0;
+  padding: 2px 0 0;
+  font: inherit;
+  color: var(--accent);
+  cursor: pointer;
+}
+.text-btn:hover {
+  text-decoration: underline;
+}
+
+/* the flow */
+.lane-flow {
+  margin-top: 10px;
+}
+.flow-stage + .flow-stage {
+  margin-top: 4px;
+}
+.flow-stage-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0 8px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.flow-stage-name::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--line-strong);
+  flex: 0 0 7px;
+}
+.flow-stage-name::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+.flow-stage-name .count {
+  font-family: var(--mono);
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--text-3);
+  order: 3;
+}
+.flow-stage.done .flow-stage-name::before {
+  background: var(--good);
+}
+.flow-stage.running .flow-stage-name {
+  color: var(--warn-text);
+}
+.flow-stage.running .flow-stage-name::before {
+  background: var(--warn);
+  animation: pulse 1.4s infinite;
+}
+.flow-stage.waiting .flow-stage-name {
+  color: var(--accent);
+}
+.flow-stage.waiting .flow-stage-name::before {
+  background: var(--accent);
+}
+.flow-stage.failed .flow-stage-name {
+  color: var(--bad-text);
+}
+.flow-stage.failed .flow-stage-name::before {
+  background: var(--bad);
+}
+
+.flow-rail {
+  list-style: none;
+  margin: 0;
+  padding: 2px 0 4px;
+  display: flex;
+  flex-wrap: wrap;
+  row-gap: 10px;
+}
+.flow-node {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  flex: 1 1 208px;
+  max-width: 320px;
+}
+/* the arrow from the step before: what makes the row a flow and not a grid. The first
+   step reserves the same width and draws nothing, so the cards line up in columns however
+   the row wraps. */
+.flow-link.first {
+  visibility: hidden;
+}
+.flow-link {
+  flex: 0 0 22px;
+  align-self: center;
+  position: relative;
+  height: 10px;
+}
+.flow-link::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  right: 6px;
+  top: 50%;
+  height: 1px;
+  background: var(--line-strong);
+}
+.flow-link::after {
+  content: "";
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  transform: translateY(-50%) rotate(45deg);
+  border-top: 1px solid var(--line-strong);
+  border-right: 1px solid var(--line-strong);
+}
+
 .step-card {
+  flex: 1;
   min-width: 0;
   text-align: left;
   font: inherit;
   color: var(--text-2);
   background: var(--surface-2);
   border: 1px solid var(--line);
+  border-left: 3px solid var(--line-strong);
   border-radius: var(--radius);
-  padding: 9px 11px 8px;
+  padding: 9px 11px 9px 12px;
   cursor: pointer;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  min-height: 92px;
+  gap: 5px;
+  min-height: 96px;
   position: relative;
   transition:
     border-color 0.12s,
+    box-shadow 0.12s,
     transform 0.12s;
 }
 .step-card:hover {
   border-color: var(--line-strong);
+  box-shadow: var(--shadow);
   transform: translateY(-1px);
 }
 .step-card.active {
@@ -1389,65 +2204,96 @@ a.pcard:hover {
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 .step-card.is-gate {
-  border-style: dashed;
+  border-top-style: dashed;
+  border-right-style: dashed;
+  border-bottom-style: dashed;
 }
 .step-card.done {
   background: var(--surface);
-  border-left: 3px solid var(--good);
+  border-left-color: var(--good);
 }
 .step-card.running {
   background: var(--surface);
-  border-left: 3px solid var(--warn);
+  border-left-color: var(--warn);
 }
 .step-card.failed {
   background: var(--surface);
-  border-left: 3px solid var(--bad);
+  border-left-color: var(--bad);
 }
 .step-card.waiting {
   background: var(--accent-soft);
-  border: 1px solid var(--accent);
+  border-color: var(--accent);
   color: var(--text);
 }
 .step-card.pending {
-  opacity: 0.7;
+  opacity: 0.65;
 }
 .step-card .who {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 10.5px;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
   color: var(--text-3);
 }
 .step-card .who svg {
   width: 13px;
   height: 13px;
 }
+.step-card .who .role-ink {
+  flex: 0 0 auto;
+}
+.step-card .gate-ink {
+  color: var(--text-3);
+}
+/* the step's place in the flow, so the cards read as an order even once they wrap */
+.step-card .step-no {
+  margin-left: auto;
+  flex: 0 0 auto;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--text-3);
+  background: var(--surface-3);
+  border-radius: 999px;
+  padding: 0 6px;
+  line-height: 16px;
+}
 .step-card .label {
   font-size: 13px;
   font-weight: 600;
   color: var(--text);
-  line-height: 1.3;
+  line-height: 1.32;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
 .step-card .task {
-  font-size: 12px;
-  color: var(--text-2);
+  font-size: 11.5px;
+  color: var(--text-3);
 }
 .step-card .meta {
   margin-top: auto;
+  padding-top: 2px;
   display: flex;
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
 }
+.step-card .meta .badge {
+  font-size: 11px;
+  padding: 1px 7px;
+}
 .step-card .meta .tag {
   margin-left: 0;
+}
+.step-card .meta .took {
+  margin-left: auto;
+  font-family: var(--mono);
 }
 .pulse-dot {
   width: 7px;
@@ -1455,6 +2301,23 @@ a.pcard:hover {
   border-radius: 50%;
   background: var(--warn);
   animation: pulse 1.2s infinite;
+}
+
+@media (max-width: 720px) {
+  .lane-head {
+    flex-wrap: wrap;
+  }
+  .lane-progress {
+    flex: 1 1 100%;
+    align-items: stretch;
+  }
+  .flow-node {
+    flex-basis: 100%;
+    max-width: none;
+  }
+  .flow-link {
+    display: none;
+  }
 }
 
 /* side panel */
@@ -1643,13 +2506,96 @@ textarea.editor {
   background: var(--surface-2);
 }
 ol.hits {
-  margin: 10px 0 0 18px;
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 ol.hits li {
-  margin-bottom: 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  background: var(--surface-2);
+  opacity: 0.68;
+}
+ol.hits li.given {
+  background: var(--surface);
+  border-color: var(--line-strong);
+  opacity: 1;
+}
+ol.hits .head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+ol.hits .rank {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--surface-3);
+  color: var(--text-2);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+ol.hits li.given .rank {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+ol.hits .head .title {
+  flex: 1;
+  min-width: 0;
+  font-size: 13.5px;
+}
+ol.hits .match {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0 2px;
+}
+ol.hits .bar {
+  flex: 0 0 120px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+ol.hits .bar i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--line-strong);
+}
+ol.hits li.given .bar i {
+  background: var(--accent);
 }
 ol.hits summary {
   cursor: pointer;
+  color: var(--accent);
+  font-size: 12.5px;
+  margin-top: 4px;
+}
+/* a plain disclosure inside a card, for the technical half of a section */
+details.sub > summary {
+  cursor: pointer;
+  list-style: none;
+}
+details.sub > summary::-webkit-details-marker {
+  display: none;
+}
+details.sub > summary::before {
+  content: "B8";
+  display: inline-block;
+  width: 14px;
+  color: var(--text-2);
+  transition: transform 0.12s;
+}
+details.sub[open] > summary::before {
+  transform: rotate(90deg);
 }
 
 /* an agent's rules: one flat list, edited in place */
@@ -1735,6 +2681,91 @@ details.card > summary::before {
 }
 details.card[open] > summary::before {
   transform: rotate(90deg);
+}
+
+/* Accordion cards (settings › models): one shut row per provider, opened on click. */
+.stack.tight {
+  gap: 8px;
+}
+details.acc {
+  padding: 0;
+  overflow: hidden;
+}
+details.acc > summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  user-select: none;
+  border-radius: var(--radius);
+  transition: background 0.12s;
+}
+details.acc > summary::before {
+  content: none;
+}
+details.acc > summary:hover {
+  background: var(--surface-2);
+}
+details.acc[open] > summary {
+  border-bottom: 1px solid var(--line);
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+.acc-chev {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  color: var(--text-3);
+  transition: transform 0.16s ease;
+}
+details.acc[open] .acc-chev {
+  transform: rotate(90deg);
+  color: var(--text-2);
+}
+.acc-title {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.acc-name {
+  font-size: 14px;
+  font-weight: 600;
+}
+.acc-sub {
+  font-size: 12px;
+  color: var(--text-3);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.acc-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+.acc-body {
+  padding: 16px;
+  animation: acc-open 0.16s ease;
+}
+@keyframes acc-open {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+.badge svg {
+  width: 13px;
+  height: 13px;
+  margin-left: -2px;
+  stroke-width: 2.6;
+}
+@media (prefers-reduced-motion: reduce) {
+  .acc-chev,
+  .acc-body {
+    transition: none;
+    animation: none;
+  }
 }
 
 /* supervisor (T9.8) */

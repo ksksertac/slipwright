@@ -136,11 +136,24 @@ export function AgentStandardsTab({ role, domain }: { role: string; domain: stri
 
       <details className="card">
         <summary>
-          <strong>{tx("Advanced — search test and index")}</strong>
+          <strong>{tx("Which rules would this agent get?")}</strong>{" "}
+          <span className="muted small">
+            {tx("Write a task the way you would give it, and see the list it would be handed.")}
+          </span>
         </summary>
         <div className="stack" style={{ marginTop: 12 }}>
-          <TrySearch projectId={projectId} domain={listDomain} />
-          <IndexSettings admin={admin} projectId={projectId} />
+          <TrySearch projectId={projectId} domain={listDomain} topK={topK} />
+          <details className="sub">
+            <summary>
+              <strong>{tx("How matching works — index settings")}</strong>{" "}
+              <span className="muted small">
+                {tx("Embeddings, how many rules a step gets and the token budget.")}
+              </span>
+            </summary>
+            <div style={{ marginTop: 12 }}>
+              <IndexSettings admin={admin} projectId={projectId} />
+            </div>
+          </details>
         </div>
       </details>
     </div>
@@ -388,20 +401,26 @@ function RuleEditor({
 
 // -- try a search --------------------------------------------------------------------------
 
-function TrySearch({ projectId, domain }: { projectId: string | null; domain: string }) {
+/** "Show me what the agent gets." A task goes in; the ranked rules come back, split at
+ *  top-k into the ones that reach the prompt and the ones that stay behind. */
+function TrySearch({
+  projectId,
+  domain,
+  topK,
+}: {
+  projectId: string | null;
+  domain: string;
+  topK: number | undefined;
+}) {
   const tx = useT();
   const [text, setText] = useState("");
   const [q, setQ] = useState("");
   const [d, setD] = useState(domain);
   const hits = useStandardsSearch(projectId, d, q);
+  const best = hits.data?.[0]?.score ?? 1;
+  const cut = topK ?? 4;
   return (
     <div>
-      <h3>{tx("Try a search")}</h3>
-      <p className="muted small">
-        {tx(
-          "Type a task the way a phase goal reads and see which rules the agent would be given, ranked.",
-        )}
-      </p>
       <form
         className="row"
         onSubmit={(e) => {
@@ -424,34 +443,68 @@ function TrySearch({ projectId, domain }: { projectId: string | null; domain: st
           ))}
           <option value="*">{tx("all domains")}</option>
         </select>
-        <button className="btn small" disabled={!text.trim()}>
+        <button className="btn primary small" disabled={!text.trim()}>
           <IconSearch /> {tx("Search")}
         </button>
       </form>
-      {hits.isFetching && <Loading rows={2} />}
+      {!q && !hits.isFetching && (
+        <p className="muted small" style={{ marginTop: 10 }}>
+          {tx(
+            "Nothing is sent to the agent from here — this only shows which rules a task of that shape would pull in.",
+          )}
+        </p>
+      )}
+      {hits.isFetching && (
+        <div style={{ marginTop: 10 }}>
+          <div className="muted small">{tx("Looking through the rules…")}</div>
+          <Loading rows={3} />
+        </div>
+      )}
       {hits.error && <ErrorBox error={hits.error} />}
-      {hits.data && hits.data.length === 0 && (
-        <div className="muted small" style={{ marginTop: 8 }}>
+      {!hits.isFetching && hits.data && hits.data.length === 0 && (
+        <div className="callout notice" style={{ marginTop: 10 }}>
           {tx("Nothing matched; the agent would get the domain's opening rules instead.")}
         </div>
       )}
-      {hits.data && hits.data.length > 0 && (
-        <ol className="hits">
-          {hits.data.map((h) => (
-            <li key={h.id}>
-              <details>
-                <summary>
-                  <strong>{h.heading}</strong>{" "}
-                  <span className="mono small muted">
-                    {h.page} · {h.scope} · score {h.score.toFixed(3)} (kw {h.keyword.toFixed(2)},
-                    sem {h.semantic.toFixed(2)})
+      {!hits.isFetching && hits.data && hits.data.length > 0 && (
+        <>
+          <p className="muted small" style={{ marginTop: 12 }}>
+            {tx("The top {k} go into the prompt, together with the shared rules.", {
+              k: Math.min(cut, hits.data.length),
+            })}
+          </p>
+          <ol className="hits">
+            {hits.data.map((h, i) => (
+              <li key={h.id} className={i < cut ? "given" : ""}>
+                <div className="head">
+                  <span className="rank">{i + 1}</span>
+                  <strong className="title">{h.heading}</strong>
+                  <span className={`badge plain ${i < cut ? "ok" : ""}`}>
+                    {i < cut ? tx("goes to the agent") : tx("not this time")}
                   </span>
-                </summary>
-                <Markdown text={h.text} />
-              </details>
-            </li>
-          ))}
-        </ol>
+                </div>
+                <div
+                  className="match"
+                  title={tx("keyword {kw} · meaning {sem}", {
+                    kw: h.keyword.toFixed(2),
+                    sem: h.semantic.toFixed(2),
+                  })}
+                >
+                  <span className="bar">
+                    <i style={{ width: `${Math.max(4, Math.round((h.score / best) * 100))}%` }} />
+                  </span>
+                  <span className="faint tiny">
+                    {h.scope === "project" ? tx("this project") : tx("every project")} · {h.page}
+                  </span>
+                </div>
+                <details>
+                  <summary>{tx("read the rule")}</summary>
+                  <Markdown text={h.text} />
+                </details>
+              </li>
+            ))}
+          </ol>
+        </>
       )}
     </div>
   );

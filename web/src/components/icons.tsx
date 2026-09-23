@@ -177,3 +177,8 @@ export const IconSearch = (p: P) => (
     <path d="M16 16l4.5 4.5" />
   </svg>
 );
+export const IconChevron = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M9 5l7 7-7 7" />
+  </svg>
+);

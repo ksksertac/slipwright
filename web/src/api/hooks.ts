@@ -273,6 +273,19 @@ export function useSendMessage(jobId: string) {
   });
 }
 
+/** Run one finished step again: the tests, or the DevOps push and pull request. */
+export function useRerunStep(jobId: string, projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (step: "tests" | "devops") => api.post<Job>(`/api/jobs/${jobId}/rerun`, { step }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.job(jobId) });
+      void qc.invalidateQueries({ queryKey: keys.pipeline(projectId) });
+      void qc.invalidateQueries({ queryKey: keys.projects });
+    },
+  });
+}
+
 export function useRetryJob(jobId: string) {
   const qc = useQueryClient();
   return useMutation({

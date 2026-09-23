@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import type { AgentSummary } from "../api/client";
 import { useAgents } from "../api/hooks";
 import { Crumbs } from "../components/Crumbs";
-import { AgentIcon } from "../components/agents";
+import { AgentAvatar } from "../components/AgentAvatar";
 import { ErrorBox, Loading, PageHead, timeAgo } from "../components/ui";
 import { useT } from "../i18n";
 
@@ -37,9 +37,7 @@ function AgentCard({ agent: a }: { agent: AgentSummary }) {
     <Link to={`/agents/${a.role}`} className="card pcard" style={{ color: "inherit" }}>
       <div className="row spread" style={{ flexWrap: "nowrap" }}>
         <div className="row" style={{ flexWrap: "nowrap", gap: 10 }}>
-          <span className="agent-ico">
-            <AgentIcon role={a.role} />
-          </span>
+          <AgentAvatar role={a.role} />
           <div>
             <div style={{ fontWeight: 600, fontSize: 15 }}>{tx(a.label)}</div>
             <div className="faint tiny mono">{a.role}</div>

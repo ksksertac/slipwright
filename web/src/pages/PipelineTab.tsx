@@ -1,7 +1,10 @@
-// The project's pipeline: one lane per development, a row of step cards each, coloured
-// by state. Cards waiting for the human carry a checkbox for bulk approval; clicking any
-// card opens a side panel with that step's output, and editable gates edit in place.
-import { useEffect, useMemo, useState } from "react";
+// The project's pipeline: one lane per development. A lane opens with what was asked --
+// a short headline over the brief -- and then reads left to right as a flow: the steps
+// grouped into the four stages every development goes through, linked by arrows, each
+// card coloured by state. Cards waiting for the human carry a checkbox for bulk approval;
+// clicking any card opens a side panel with that step's output, and editable gates edit
+// in place.
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { describeError, type Job, type Lane, type Profile, type StepCard } from "../api/client";
 import {
@@ -9,6 +12,7 @@ import {
   useJob,
   usePipeline,
   useReject,
+  useRerunStep,
   useSetBacklog,
   useSetPlan,
   useSetProfile,
@@ -28,10 +32,10 @@ import {
   type PlanShape,
   type TestCaseShape,
 } from "../components/GateEditors";
-import { IconCheck, IconX } from "../components/icons";
+import { IconCheck, IconUsers, IconX } from "../components/icons";
 import { ProfileForm } from "../components/ProfileForm";
 import { useToast } from "../components/Toast";
-import { Empty, ErrorBox, Loading, StateBadge, timeAgo } from "../components/ui";
+import { Empty, ErrorBox, Loading, ProgressBar, StateBadge, timeAgo } from "../components/ui";
 import { useT, type T } from "../i18n";
 
 export function PipelineTab({ projectId }: { projectId: string }) {
@@ -136,6 +140,69 @@ export function PipelineTab({ projectId }: { projectId: string }) {
   );
 }
 
+/** The four stages every development goes through. Grouping the cards under them is what
+ * turns a long row into something you can read: you see where the work is, not twenty
+ * equal boxes. A card whose key is not one of the fixed ones (the decision gate, which is
+ * inserted wherever it interrupted) stays in the stage it was inserted into. */
+const STAGE_LABEL: Record<string, string> = {
+  plan: "Planning",
+  build: "Building",
+  test: "Testing",
+  ship: "Delivery",
+};
+
+type Stage = { key: string; steps: StepCard[] };
+
+function stageOf(step: StepCard): string | null {
+  switch (step.key.split(":")[0]) {
+    case "backlog":
+    case "backlog_gate":
+    case "architecture":
+    case "architecture_gate":
+      return "plan";
+    case "develop":
+    case "phase":
+    case "review_gate":
+      return "build";
+    case "qa":
+    case "test_gate":
+      return "test";
+    case "devops":
+    case "done":
+      return "ship";
+    default:
+      return null;
+  }
+}
+
+function stages(steps: StepCard[]): Stage[] {
+  const out: Stage[] = [];
+  let current = "plan";
+  for (const step of steps) {
+    current = stageOf(step) ?? current;
+    if (out.length === 0 || out[out.length - 1]!.key !== current)
+      out.push({ key: current, steps: [] });
+    out[out.length - 1]!.steps.push(step);
+  }
+  return out;
+}
+
+function stageStatus(steps: StepCard[]): string {
+  if (steps.some((s) => s.status === "waiting")) return "waiting";
+  if (steps.some((s) => s.status === "failed")) return "failed";
+  if (steps.some((s) => s.status === "running")) return "running";
+  return steps.every((s) => s.status === "done") ? "done" : "pending";
+}
+
+/** A one-line title for a development whose request is a paragraph: the first sentence,
+ * clipped. The whole request is right below it, so nothing is lost by cutting here. */
+function headline(request: string): string {
+  const first = request.trim().split(/\r?\n/, 1)[0]!.trim();
+  const stop = first.search(/[;:.!?](\s|$)/);
+  const title = stop > 12 ? first.slice(0, stop) : first;
+  return title.length > 76 ? `${title.slice(0, 73).trimEnd()}…` : title;
+}
+
 function LaneRow({
   lane,
   projectId,
@@ -152,36 +219,116 @@ function LaneRow({
   openKey: string | null;
 }) {
   const tx = useT();
+  const groups = useMemo(() => stages(lane.steps), [lane.steps]);
+  const done = lane.steps.filter((s) => s.status === "done").length;
+  let place = 0; // the step's place in the whole flow, so the cards read as an order
+
   return (
-    <div className={`lane ${lane.pending_approval ? "waiting" : ""}`}>
+    <section className={`lane ${lane.pending_approval ? "waiting" : ""}`}>
       <div className="lane-head">
-        {lane.pending_approval ? (
+        {lane.pending_approval && (
           <input
             type="checkbox"
             checked={selected}
             onChange={(e) => onSelect(e.target.checked)}
-            aria-label={`select ${lane.request}`}
+            aria-label={`select ${headline(lane.request)}`}
           />
-        ) : (
-          <span style={{ width: 16 }} />
         )}
-        <Link to={`/projects/${projectId}/jobs/${lane.job_id}`} className="lane-title truncate">
-          {lane.request}
-        </Link>
-        <StateBadge state={lane.state} />
-        <span className="faint tiny">{tx("started {ago}", { ago: timeAgo(lane.created_at) })}</span>
+        <div className="lane-id">
+          <Link to={`/projects/${projectId}/jobs/${lane.job_id}`} className="lane-title">
+            {headline(lane.request)}
+          </Link>
+          <div className="lane-sub">
+            <StateBadge state={lane.state} />
+            <span className="faint tiny">
+              {tx("started {ago}", { ago: timeAgo(lane.created_at) })}
+            </span>
+          </div>
+        </div>
+        <div className="lane-progress">
+          <ProgressBar done={done} total={lane.steps.length} showText={false} />
+          <span className="faint tiny">
+            {tx("{done} of {total} steps", { done, total: lane.steps.length })}
+          </span>
+        </div>
         {lane.state === "failed" && <LaneRetry jobId={lane.job_id} />}
       </div>
-      <div className="lane-steps">
-        {lane.steps.map((step) => (
-          <StepCardView
-            key={step.key}
-            step={step}
-            active={openKey === step.key}
-            onOpen={() => onOpen(step.key)}
-          />
+
+      <LaneBrief request={lane.request} summary={lane.summary} />
+
+      <div className="lane-flow">
+        {groups.map((group) => (
+          <div key={group.key} className={`flow-stage ${stageStatus(group.steps)}`}>
+            <div className="flow-stage-name">
+              <span>{tx(STAGE_LABEL[group.key] ?? group.key)}</span>
+              <span className="count">
+                {group.steps.filter((s) => s.status === "done").length}/{group.steps.length}
+              </span>
+            </div>
+            <ol className="flow-rail">
+              {group.steps.map((step, i) => (
+                <li key={step.key} className="flow-node">
+                  <span className={`flow-link ${i === 0 ? "first" : ""}`} aria-hidden="true" />
+                  <StepCardView
+                    step={step}
+                    place={++place}
+                    active={openKey === step.key}
+                    onOpen={() => onOpen(step.key)}
+                  />
+                </li>
+              ))}
+            </ol>
+          </div>
         ))}
       </div>
+    </section>
+  );
+}
+
+/** What this development is, in the space above the flow: the request as it was written,
+ * two lines with the rest a click away, and under it the one line the architect settled
+ * on once there is a plan. A wall of prompt as the lane's title is what made this
+ * unreadable. */
+function LaneBrief({ request, summary }: { request: string; summary?: string | null }) {
+  const tx = useT();
+  const [open, setOpen] = useState(false);
+  const [clipped, setClipped] = useState(false);
+  const para = useRef<HTMLParagraphElement>(null);
+  const asked = request.trim();
+  const plan = (summary ?? "").trim();
+  // the unfold button only earns its place when two lines really do cut the request off,
+  // which depends on how wide the lane is drawn -- so it is measured, not guessed
+  useEffect(() => {
+    const el = para.current;
+    if (!el || open) return;
+    const measure = () => setClipped(el.scrollHeight > el.clientHeight + 1);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [asked, open]);
+  if (!asked && !plan) return null;
+  return (
+    <div className="lane-brief">
+      {asked && (
+        <>
+          <div className="lane-brief-label">{tx("What was asked")}</div>
+          <p ref={para} className={open ? "" : "clamp-2"}>
+            {asked}
+          </p>
+          {clipped && (
+            <button type="button" className="text-btn tiny" onClick={() => setOpen(!open)}>
+              {open ? tx("show less") : tx("show more")}
+            </button>
+          )}
+        </>
+      )}
+      {plan && (
+        <div className="lane-brief-plan">
+          <span className="lane-brief-label">{tx("The plan")}</span>
+          <span className="truncate">{plan}</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -210,10 +357,12 @@ function elapsed(s: number | null | undefined): string {
 
 function StepCardView({
   step,
+  place,
   active,
   onOpen,
 }: {
   step: StepCard;
+  place: number;
   active: boolean;
   onOpen: () => void;
 }) {
@@ -225,11 +374,18 @@ function StepCardView({
       className={`step-card ${step.status} ${step.gate ? "is-gate" : ""} ${active ? "active" : ""}`}
       onClick={onOpen}
       title={step.label}
+      data-agent={step.role ?? undefined}
     >
       <div className="who">
-        {step.role ? <AgentIcon role={step.role} /> : null}
-        <span>{who}</span>
-        {step.status === "running" && <span className="pulse-dot" aria-label={tx("running")} />}
+        {step.role ? (
+          <span className="role-ink">
+            <AgentIcon role={step.role} />
+          </span>
+        ) : (
+          <span className="role-ink gate-ink">{step.gate ? <IconUsers /> : <IconCheck />}</span>
+        )}
+        {who && <span className="truncate">{who}</span>}
+        <span className="step-no">{place}</span>
       </div>
       <div className="label">{stepLabel(tx, step)}</div>
       {step.task_title && <div className="task truncate">{step.task_title}</div>}
@@ -251,7 +407,7 @@ function StepCardView({
         </span>
         <DomainBadge domain={step.domain ?? undefined} />
         {step.elapsed_s !== null && step.elapsed_s !== undefined && (
-          <span className="faint tiny">{elapsed(step.elapsed_s)}</span>
+          <span className="faint tiny took">{elapsed(step.elapsed_s)}</span>
         )}
       </div>
     </button>
@@ -320,6 +476,12 @@ function StepPanel({
               </Link>
             </div>
             {step.status === "waiting" && <GateEditor job={job.data} step={step} />}
+            <RerunStep
+              jobId={jobId}
+              projectId={projectId}
+              role={step.role}
+              laneState={lane?.state}
+            />
             {step.outputs.map((index) => (
               <Output key={index} jobId={jobId} index={index} />
             ))}
@@ -330,6 +492,52 @@ function StepPanel({
         )}
       </div>
     </aside>
+  );
+}
+
+/**
+ * Run a finished step again. The QA step re-runs the tests over the work that is already
+ * there: green and it stops, red and the specialist picks it up with the output, which is
+ * the ordinary failed-gate path. The DevOps step pushes the branch and opens the pull
+ * request again — the way a development that finished with nowhere to push reaches GitHub
+ * once the project names a repository.
+ */
+function RerunStep({
+  jobId,
+  projectId,
+  role,
+  laneState,
+}: {
+  jobId: string;
+  projectId: string;
+  role: string | null | undefined;
+  laneState: string | undefined;
+}) {
+  const tx = useT();
+  const rerun = useRerunStep(jobId, projectId);
+  const step = role === "qa" ? "tests" : role === "devops" ? "devops" : null;
+  // only a development that has stopped: a running one is left alone
+  if (!step || (laneState !== "done" && laneState !== "failed")) return null;
+  return (
+    <div className="row spread" style={{ marginBottom: 12, gap: 8 }}>
+      <button
+        className="btn"
+        disabled={rerun.isPending}
+        onClick={() => rerun.mutate(step)}
+        title={
+          step === "tests"
+            ? tx("Runs the test command over this development's worktree.")
+            : tx("Writes the pull request again, pushes the branch and opens it.")
+        }
+      >
+        {rerun.isPending
+          ? tx("Starting…")
+          : step === "tests"
+            ? tx("Run the tests again")
+            : tx("Run DevOps again")}
+      </button>
+      {rerun.error && <span className="small bad-text">{describeError(rerun.error)}</span>}
+    </div>
   );
 }
 

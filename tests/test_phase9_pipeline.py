@@ -118,6 +118,20 @@ def test_lane_follows_the_job_through_every_gate(
     assert (job.history[cards["devops"].outputs[0]].note or "").startswith("PR ")
 
 
+def test_lane_carries_the_architects_summary_for_the_brief(
+    store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
+) -> None:
+    """The lane's brief reads the plan summary, so the UI has something short to show
+    above the flow instead of the whole request. There is none before the plan."""
+    engine, _ = _two_domain_engine(store, worktrees_root, seed)
+    job = engine.create_job("health", repo)
+    assert lane_for(job).summary is None
+
+    job = engine.approve(engine.start(job.id).id)  # the architect has planned
+    assert lane_for(job).summary == "2 phases"
+    assert lane_for(job).request == "health"  # the request is kept whole beside it
+
+
 def test_failed_job_marks_the_step_it_died_in(
     store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
 ) -> None:
@@ -361,6 +375,9 @@ def test_pipeline_ui_sources() -> None:
         "BulkBar",
         "Select all waiting",
         "StepPanel",
+        "flow-rail",
+        "lane-brief",
+        "STAGE_LABEL",
         "Save & approve",
         "PlanEditor",
         "BacklogEditor",

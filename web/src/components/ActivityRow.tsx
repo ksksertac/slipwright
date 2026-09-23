@@ -33,19 +33,29 @@ const KIND: Record<ActivityItem["kind"], { label: string; cls: string; icon: Rea
   other: { label: "", cls: "", icon: <IconActivity /> },
 };
 
+/** A note longer than this is a paragraph, not a headline: it is clamped to two lines
+ *  with a "more" toggle, so one talkative entry cannot bury the rest of the feed. */
+const LONG_NOTE = 180;
+
 export function ActivityRow({
   item,
   projectId,
   projectName,
   showJob = true,
+  compact = false,
 }: {
   item: ActivityItem;
   projectId: string;
   projectName?: string;
   showJob?: boolean;
+  /** On the dashboard the feed is a glance, not a reader: the detail stays folded away
+   *  on the development's own page, where there is room for it. One entry unfolding a
+   *  whole pull-request body used to push everything else off the screen. */
+  compact?: boolean;
 }) {
   const tx = useT();
   const [open, setOpen] = useState(false);
+  const [full, setFull] = useState(false);
   const detail = useTransition(item.job_id, open ? item.index : null);
   const kind = KIND[item.kind];
   const who = item.role ? tx(ROLE_LABEL[item.role] ?? item.role) : tx(kind.label);
@@ -55,12 +65,20 @@ export function ActivityRow({
       ? item.title.slice(item.role.length + 1).trim()
       : item.title;
   const gateFailed = item.kind === "gate" && item.title.includes("failed");
+  const long = title.length > LONG_NOTE;
   return (
     <li>
       <span className={`ico ${gateFailed ? "bad" : kind.cls}`}>{kind.icon}</span>
       <span style={{ minWidth: 0 }}>
-        {who && <span className="who">{who}</span>}
-        {title}
+        <span className={`note${long && !full ? " clamp" : ""}`}>
+          {who && <span className="who">{who}</span>}
+          {title}
+        </span>
+        {long && (
+          <button type="button" className="linkish" onClick={() => setFull(!full)}>
+            {full ? tx("less") : tx("more")}
+          </button>
+        )}
         {showJob && (
           <div className="faint tiny truncate">
             <Link to={`/projects/${projectId}/jobs/${item.job_id}`} className="faint">
@@ -69,7 +87,7 @@ export function ActivityRow({
             </Link>
           </div>
         )}
-        {item.has_detail && (
+        {item.has_detail && !compact && (
           <details onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
             <summary>detail</summary>
             {detail.isLoading && <Loading rows={2} />}
