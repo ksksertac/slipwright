@@ -2,12 +2,19 @@
   "name": "slipwright",
   "displayName": "Slipwright",
   "description": "Watch and steer Slipwright developments from the editor: projects, gates and approvals.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "slipwright",
   "license": "MIT",
-  "repository": { "type": "git", "url": "https://github.com/ksksertac/slipwright.git" },
-  "engines": { "vscode": "^1.90.0" },
-  "categories": ["Other"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ksksertac/slipwright.git"
+  },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
   "main": "./dist/extension.js",
   "activationEvents": [],
   "contributes": {
@@ -29,20 +36,69 @@
       ]
     },
     "commands": [
-      { "command": "slipwright.signIn", "title": "Slipwright: Sign in" },
-      { "command": "slipwright.signOut", "title": "Slipwright: Sign out" },
-      { "command": "slipwright.refresh", "title": "Slipwright: Refresh", "icon": "$(refresh)" },
-      { "command": "slipwright.newDevelopment", "title": "Slipwright: New development", "icon": "$(add)" },
-      { "command": "slipwright.openInBrowser", "title": "Slipwright: Open in browser", "icon": "$(link-external)" }
+      {
+        "command": "slipwright.signIn",
+        "title": "Slipwright: Sign in"
+      },
+      {
+        "command": "slipwright.signOut",
+        "title": "Slipwright: Sign out"
+      },
+      {
+        "command": "slipwright.refresh",
+        "title": "Slipwright: Refresh",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "slipwright.newDevelopment",
+        "title": "Slipwright: New development",
+        "icon": "$(add)"
+      },
+      {
+        "command": "slipwright.openInBrowser",
+        "title": "Slipwright: Open in browser",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "slipwright.openDevelopment",
+        "title": "Slipwright: Open development",
+        "icon": "$(preview)"
+      },
+      {
+        "command": "slipwright.newProject",
+        "title": "Slipwright: New project",
+        "icon": "$(repo-create)"
+      }
     ],
     "menus": {
       "view/title": [
-        { "command": "slipwright.refresh", "when": "view == slipwright.projects", "group": "navigation@1" },
-        { "command": "slipwright.newDevelopment", "when": "view == slipwright.projects", "group": "navigation@0" }
+        {
+          "command": "slipwright.refresh",
+          "when": "view == slipwright.projects",
+          "group": "navigation@1"
+        },
+        {
+          "command": "slipwright.newDevelopment",
+          "when": "view == slipwright.projects",
+          "group": "navigation@0"
+        },
+        {
+          "command": "slipwright.newProject",
+          "when": "view == slipwright.projects",
+          "group": "navigation@2"
+        }
       ],
       "view/item/context": [
-        { "command": "slipwright.newDevelopment", "when": "view == slipwright.projects && viewItem == project", "group": "inline" },
-        { "command": "slipwright.openInBrowser", "when": "view == slipwright.projects && viewItem =~ /project|job/", "group": "inline" }
+        {
+          "command": "slipwright.newDevelopment",
+          "when": "view == slipwright.projects && viewItem == project",
+          "group": "inline"
+        },
+        {
+          "command": "slipwright.openInBrowser",
+          "when": "view == slipwright.projects && viewItem =~ /project|job/",
+          "group": "inline"
+        }
       ]
     },
     "configuration": {

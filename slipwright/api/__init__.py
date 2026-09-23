@@ -245,6 +245,15 @@ def create_app(
             allow_methods=["*"],
             allow_headers=["*"],
         )
+
+    @app.middleware("http")
+    async def name_the_build(request: Request, call_next: Any) -> Any:
+        """Every response says which build answered it, so an editor or a script can
+        tell when the server moved under it."""
+        response = await call_next(request)
+        response.headers["X-Slipwright-Version"] = _build_id(static_dir)
+        return response
+
     api = APIRouter()
     app.include_router(auth_router, prefix="/api")
     app.include_router(settings_router, prefix="/api")
@@ -689,13 +698,22 @@ def create_app(
         project_id: str | None = None,
         limit: int | None = None,
         keepalive_s: float = 15.0,
+        since: int | None = None,
     ) -> StreamingResponse:
         """Server-sent events: ``job.state``, ``job.data``, ``test_run.state``,
         ``activity`` and ``project``. ``project_id`` filters; ``limit`` closes the
-        stream after that many events (for scripts and tests)."""
+        stream after that many events (for scripts and tests). ``since`` (or the
+        ``Last-Event-ID`` header a reader sends when it reconnects) replays what it
+        missed, as far back as the bus still holds."""
         eng = _engine(request)
         return StreamingResponse(
-            _event_stream(eng, project_id=project_id, limit=limit, keepalive_s=keepalive_s),
+            _event_stream(
+                eng,
+                project_id=project_id,
+                limit=limit,
+                keepalive_s=keepalive_s,
+                since=since if since is not None else _last_event_id(request),
+            ),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
@@ -794,14 +812,37 @@ def _tighten_response_schemas(schema: dict[str, Any]) -> dict[str, Any]:
     return schema
 
 
+def _last_event_id(request: Request) -> int | None:
+    """A reader reconnecting sends the last id it saw; honour it as ``since``."""
+    raw = request.headers.get("last-event-id")
+    try:
+        return int(raw) if raw else None
+    except ValueError:
+        return None
+
+
 async def _event_stream(
-    engine: Engine, *, project_id: str | None, limit: int | None, keepalive_s: float
+    engine: Engine,
+    *,
+    project_id: str | None,
+    limit: int | None,
+    keepalive_s: float,
+    since: int | None = None,
 ) -> AsyncIterator[str]:
     import anyio
 
     sent = 0
     with engine.events.subscribe() as q:
         yield ": connected\n\n"
+        if since is not None:
+            # what was published while this reader was away, oldest first
+            for event_id, missed in engine.events.since(since):
+                if project_id is not None and missed.project_id != project_id:
+                    continue
+                yield missed.sse(event_id)
+                sent += 1
+                if limit is not None and sent >= limit:
+                    return
         while limit is None or sent < limit:
             try:
                 event = await anyio.to_thread.run_sync(q.get, True, keepalive_s)

@@ -1,9 +1,12 @@
-// Slipwright in the editor (M1): sign in, see the projects and their developments, start a
-// development, open one in the browser. The token lives in VS Code's secret storage and
-// every request is made here, in the extension host — never in a view.
+// Slipwright in the editor: sign in, watch the projects and their developments, read the
+// work list of one and approve it, start a development, open a new project. The token lives
+// in VS Code's secret storage and every request is made here, in the extension host — never
+// in a view, which only ever receives what the host sends it.
 import * as vscode from "vscode";
-import { ApiError, SlipwrightApi } from "./api";
-import { ProjectsProvider, type Node } from "./tree";
+import { ApiError, SlipwrightApi, isWaiting, type Project } from "./api";
+import { DevelopmentPanel } from "./panel";
+import { EventStream, type ServerEvent } from "./stream";
+import { ProjectsProvider, headline, type Node } from "./tree";
 
 const TOKEN_KEY = "slipwright.token";
 
@@ -21,6 +24,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     token = next;
     api = new SlipwrightApi(endpoint(), token);
     tree.setApi(api);
+    DevelopmentPanel.forJob("*")?.setApi(api);
     if (next === null) await context.secrets.delete(TOKEN_KEY);
     else await context.secrets.store(TOKEN_KEY, next);
     await vscode.commands.executeCommand("setContext", "slipwright.signedIn", next !== null);
@@ -106,6 +110,40 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
     }),
 
+    vscode.commands.registerCommand(
+      "slipwright.openDevelopment",
+      async (nodeOrId?: Node | string) => {
+        let jobId: string | undefined;
+        let projectId: string | undefined;
+        let title = "Development";
+        if (typeof nodeOrId === "string") {
+          jobId = nodeOrId;
+          try {
+            const job = await api.job(jobId);
+            projectId = job.project_id ?? undefined;
+            title = headline(job.request, 40);
+          } catch {
+            /* the tree will say what is wrong; the panel can still open */
+          }
+        } else if (nodeOrId && nodeOrId.kind === "job") {
+          jobId = nodeOrId.job.id;
+          projectId = nodeOrId.project.id;
+          title = headline(nodeOrId.job.request, 40);
+        }
+        if (!jobId || !projectId) return;
+        DevelopmentPanel.show(context, api, jobId, projectId, title);
+      },
+    ),
+
+    vscode.commands.registerCommand("slipwright.newProject", async () => {
+      try {
+        await newProject(api);
+        refresh();
+      } catch (err) {
+        vscode.window.showErrorMessage(`Slipwright: ${message(err)}`);
+      }
+    }),
+
     vscode.commands.registerCommand("slipwright.openInBrowser", async (node?: Node) => {
       if (!node || node.kind === "message") return;
       const url =
@@ -119,6 +157,33 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       if (e.affectsConfiguration("slipwright.endpoint")) void useToken(token);
     }),
   );
+
+  const announced = new Set<string>();
+  const stream = new EventStream(
+    endpoint,
+    () => token,
+    (event: ServerEvent) => void onServerEvent(event),
+  );
+  stream.start();
+  context.subscriptions.push({ dispose: () => stream.stop() });
+
+  async function onServerEvent(event: ServerEvent): Promise<void> {
+    if (event.job_id) void DevelopmentPanel.forJob(event.job_id)?.refresh();
+    refresh();
+    const state = String((event.payload as { state?: string } | undefined)?.state ?? "");
+    if (!event.job_id || !isWaiting(state)) return;
+    const key = `${event.job_id}:${state}`;
+    if (announced.has(key)) return;
+    announced.add(key);
+    const open = "Open";
+    const choice = await vscode.window.showInformationMessage(
+      "Slipwright: a step is waiting for you.",
+      open,
+    );
+    if (choice === open) {
+      await vscode.commands.executeCommand("slipwright.openDevelopment", event.job_id);
+    }
+  }
 
   await vscode.commands.executeCommand("setContext", "slipwright.signedIn", token !== null);
   refresh();
@@ -147,6 +212,77 @@ async function pickProject(
     { title: "Which project?" },
   );
   return pick ? { id: pick.id, name: pick.label } : undefined;
+}
+
+/** New project: the source, the repository (an existing one or one opened now), the
+ * language the agents write in, and optionally the first thing to build. */
+async function newProject(api: SlipwrightApi): Promise<Project | undefined> {
+  const name = await vscode.window.showInputBox({ prompt: "Project name", ignoreFocusOut: true });
+  if (!name?.trim()) return undefined;
+  const sources = (await api.sources()).filter((s) => s.token_set);
+  const choices = [
+    ...sources.map((s) => ({ label: s.label, id: s.name })),
+    { label: "Local checkout on the server", id: "local" },
+  ];
+  const source = await vscode.window.showQuickPick(choices, { title: "Where does the code live?" });
+  if (!source) return undefined;
+
+  const body: Record<string, unknown> = { name: name.trim(), description: "" };
+  if (source.id === "local") {
+    const path = await vscode.window.showInputBox({
+      prompt: "Path on the server (as the server sees it)",
+      placeHolder: "/repos/my-service",
+      ignoreFocusOut: true,
+    });
+    if (!path?.trim()) return undefined;
+    body.repo_path = path.trim();
+  } else {
+    body.source = source.id;
+    const mode = await vscode.window.showQuickPick(
+      [
+        { label: "An existing repository", id: "existing" },
+        { label: "Open a new repository", id: "new" },
+      ],
+      { title: `On ${source.label}` },
+    );
+    if (!mode) return undefined;
+    if (mode.id === "new") {
+      const repoName = await vscode.window.showInputBox({
+        prompt: "Name of the new repository",
+        value: name.trim(),
+        ignoreFocusOut: true,
+      });
+      if (!repoName?.trim()) return undefined;
+      const made = await api.openRepo(source.id, repoName.trim());
+      body.github_repo = made.full_name;
+    } else {
+      const repos = await api.repos(source.id);
+      const pick = await vscode.window.showQuickPick(
+        repos.map((r) => ({ label: r.full_name, description: r.private ? "private" : "" })),
+        { title: "Which repository?" },
+      );
+      if (!pick) return undefined;
+      body.github_repo = pick.label;
+    }
+  }
+
+  const language = await vscode.window.showQuickPick(
+    [
+      { label: "Türkçe", id: "tr" },
+      { label: "English", id: "en" },
+    ],
+    { title: "Which language do the agents write in?" },
+  );
+  body.language = language?.id ?? "tr";
+
+  const project = await api.createProject(body);
+  const first = await vscode.window.showInputBox({
+    prompt: "What should the agents build first? (optional)",
+    ignoreFocusOut: true,
+  });
+  if (first?.trim()) await api.startDevelopment(project.id, first.trim());
+  vscode.window.showInformationMessage(`Slipwright: ${project.name} is ready.`);
+  return project;
 }
 
 function endpoint(): string {

@@ -36,6 +36,39 @@ export type Progress = {
   jobs: JobProgress[];
 };
 
+export type WorkItem = {
+  id: string;
+  title: string;
+  detail: string;
+  kind: string;
+  editable: boolean;
+  domain?: string | null;
+  phase?: number | null;
+};
+
+export type WorkGroup = { role: string; label: string; summary: string; items: WorkItem[] };
+
+export type WorkList = {
+  job_id: string;
+  state: string;
+  editable: boolean;
+  plan_summary: string;
+  groups: WorkGroup[];
+  tasks: number;
+  phases: number;
+  cases: number;
+};
+
+export type Source = {
+  name: string;
+  label: string;
+  owner?: string | null;
+  token_set: boolean;
+  is_default: boolean;
+};
+
+export type Repo = { full_name: string; private: boolean; description?: string | null };
+
 export type Me = { id: string; username: string; is_admin: boolean };
 
 export class ApiError extends Error {
@@ -102,6 +135,43 @@ export class SlipwrightApi {
     return (
       await this.request<Job>("POST", `/api/projects/${projectId}/jobs`, { request })
     ).body;
+  }
+
+  async job(jobId: string): Promise<Job> {
+    return (await this.request<Job>("GET", `/api/jobs/${jobId}`)).body;
+  }
+
+  async workList(jobId: string): Promise<WorkList> {
+    return (await this.request<WorkList>("GET", `/api/jobs/${jobId}/worklist`)).body;
+  }
+
+  async approve(jobId: string): Promise<Job> {
+    return (await this.request<Job>("POST", `/api/jobs/${jobId}/approve`)).body;
+  }
+
+  async reject(jobId: string, feedback: string): Promise<Job> {
+    return (await this.request<Job>("POST", `/api/jobs/${jobId}/reject`, { feedback })).body;
+  }
+
+  async sources(): Promise<Source[]> {
+    return (await this.request<Source[]>("GET", "/api/settings/sources")).body;
+  }
+
+  async repos(source: string): Promise<Repo[]> {
+    return (await this.request<Repo[]>("GET", `/api/settings/sources/${source}/repos`)).body;
+  }
+
+  async openRepo(source: string, name: string, isPrivate = true): Promise<Repo> {
+    return (
+      await this.request<Repo>("POST", `/api/settings/sources/${source}/repos`, {
+        name,
+        private: isPrivate,
+      })
+    ).body;
+  }
+
+  async createProject(body: Record<string, unknown>): Promise<Project> {
+    return (await this.request<Project>("POST", "/api/projects", body)).body;
   }
 
   /** The page a person opens for one of these, in a browser. */
