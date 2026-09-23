@@ -19,8 +19,11 @@ OPENAPI_TARGET = ROOT / "schemas" / "openapi.json"
 
 
 def export_openapi(path: Path) -> None:
+    # LF on every platform: the generated client carries a hash of these bytes and the
+    # repository stores the file with LF (.gitattributes), so a CRLF copy would make the
+    # committed pair disagree on a fresh checkout.
     text = json.dumps(openapi_schema(), indent=2, sort_keys=True) + "\n"
-    path.write_text(text, encoding="utf-8")
+    path.write_text(text, encoding="utf-8", newline="\n")
 
 
 if __name__ == "__main__":
