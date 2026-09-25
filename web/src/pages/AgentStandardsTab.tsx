@@ -54,7 +54,7 @@ export function AgentStandardsTab({ role, domain }: { role: string; domain: stri
                 setAdding(false);
               }}
             >
-              <option value="">{tx("every project")}</option>
+              <option value="">{tx("All projects")}</option>
               {(projects.data ?? [])
                 .filter((p) => p.repo_path)
                 .map((p) => (
@@ -67,7 +67,7 @@ export function AgentStandardsTab({ role, domain }: { role: string; domain: stri
               <select value={pick} onChange={(e) => setPick(e.target.value)}>
                 {DOMAINS.map((d) => (
                   <option key={d} value={d}>
-                    {d}
+                    {tx(d)}
                   </option>
                 ))}
               </select>
@@ -83,11 +83,11 @@ export function AgentStandardsTab({ role, domain }: { role: string; domain: stri
           {topK
             ? tx(
                 "At each step the {role} agent reads the rules below that best match its task (up to {k}), plus the shared rules. Write them in any language — the model reads it.",
-                { role, k: topK },
+                { role: tx(role), k: topK },
               )
             : tx(
                 "At each step the {role} agent reads the rules below that best match its task, plus the shared rules. Write them in any language — the model reads it.",
-                { role },
+                { role: tx(role) },
               )}
           {projectId
             ? ` ${tx("Rules in this scope apply to that project only and win over the shared list.")}`
@@ -119,7 +119,7 @@ export function AgentStandardsTab({ role, domain }: { role: string; domain: stri
         <div style={{ marginTop: 12 }}>
           {projectId ? (
             <p className="muted small">
-              {tx("Shared rules are edited under the every-project scope.")}
+              {tx("Shared rules are edited under the All projects scope.")}
             </p>
           ) : null}
           <RuleList
@@ -438,7 +438,7 @@ function TrySearch({
         <select value={d} onChange={(e) => setD(e.target.value)} style={{ width: 160 }}>
           {DOMAINS.map((x) => (
             <option key={x} value={x}>
-              {x}
+              {tx(x)}
             </option>
           ))}
           <option value="*">{tx("all domains")}</option>

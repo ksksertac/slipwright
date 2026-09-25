@@ -1,13 +1,7 @@
-import { useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useLocation, useParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import {
-  describeError,
-  type Job,
-  type JobState,
-  type Profile,
-  type Transition,
-} from "../api/client";
+import { describeError, type Job, type Profile, type Transition } from "../api/client";
 import { useNavigate } from "react-router-dom";
 import {
   keys,
@@ -15,13 +9,15 @@ import {
   useJob,
   useProject,
   useSendMessage,
+  usePipeline,
   useSetTestCases,
 } from "../api/hooks";
 import { api } from "../api/client";
 import { ActivityRow } from "../components/ActivityRow";
 import { BreakdownTree, type BreakdownShape, type PlanShape } from "../components/Breakdown";
-import { DomainBadge } from "../components/agents";
+import { AgentIcon, DomainBadge } from "../components/agents";
 import { Crumbs } from "../components/Crumbs";
+import { DesignGate } from "../components/DesignGate";
 import { Detail } from "../components/Detail";
 import { Diff } from "../components/Diff";
 import { ReviewDetail, ViolationsTable, type ReviewRecord } from "../components/Review";
@@ -32,33 +28,21 @@ import {
   failureOf,
   pendingApproval,
 } from "../components/GateActions";
-import { IconCheck, IconExternal, IconTrash, IconX } from "../components/icons";
+import { IconExternal, IconLayers, IconTrash } from "../components/icons";
 import { JiraLink } from "../components/JiraLink";
 import { ConfirmModal } from "../components/Modal";
+import { DeploymentGate } from "../components/DeploymentGate";
 import { ProfileForm } from "../components/ProfileForm";
+import { StackPanel } from "../components/StackPanel";
 import { useToast } from "../components/Toast";
-import { ErrorBox, Loading, StateBadge, formatTime } from "../components/ui";
-import { useT } from "../i18n";
+import { Empty, ErrorBox, Loading, StateBadge, formatTime } from "../components/ui";
+import { sentenceCase, useT } from "../i18n";
+import { SayProvider, useSay } from "../i18n/said";
 import { Copyable } from "../components/Copyable";
 import { ResultCard } from "../components/ResultCard";
-
-const STEPS: { state: JobState; label: string; gate?: boolean }[] = [
-  { state: "backlog", label: "backlog" },
-  { state: "awaiting_backlog_approval", label: "backlog approval", gate: true },
-  { state: "architecture", label: "architecture" },
-  { state: "awaiting_architecture_approval", label: "architecture approval", gate: true },
-  { state: "developing", label: "develop" },
-  { state: "build_gate", label: "build gate" },
-  { state: "review", label: "review" },
-  { state: "awaiting_review_approval", label: "review decision", gate: true },
-  { state: "qa", label: "qa" },
-  { state: "awaiting_test_approval", label: "test approval", gate: true },
-  { state: "devops", label: "devops" },
-  { state: "done", label: "done" },
-];
+import { STAGE_ICON, STAGE_LABEL, stageAgent, stageStatus, stages } from "../components/stages";
 
 export function JobPage() {
-  const tx = useT();
   const { projectId = "", jobId = "" } = useParams();
   const job = useJob(jobId);
   const project = useProject(projectId);
@@ -68,85 +52,199 @@ export function JobPage() {
   const j = job.data;
 
   return (
-    <div>
-      <Crumbs
-        items={[
-          { label: "Projects", to: "/projects" },
-          { label: project.data?.name ?? "project", to: `/projects/${projectId}` },
-          { label: j.request },
-        ]}
-      />
-      <div className="page-head">
-        <div style={{ minWidth: 0 }}>
-          <h1>
-            {j.request} <StateBadge state={j.state} />
-          </h1>
-          <p className="faint small mono">
-            {j.id} · branch slipwright/{j.id}
-            {j.port ? ` · port ${j.port}` : ""}
-          </p>
-        </div>
-        <div className="row" style={{ flexWrap: "nowrap" }}>
-          {j.data.pr_url && (
-            <a className="btn" href={j.data.pr_url} target="_blank" rel="noreferrer">
-              <IconExternal /> {tx("Pull request")}
-            </a>
-          )}
-          <DeleteJobButton job={j} projectId={projectId} />
-        </div>
+    // the plan, the backlog and the write-ups below are read in the platform's language
+    <SayProvider projectId={projectId}>
+      <div className="job-page">
+        <Crumbs
+          items={[
+            { label: "Projects", to: "/projects" },
+            { label: sentenceCase(project.data?.name ?? "project"), to: `/projects/${projectId}` },
+            { label: "Development" },
+          ]}
+        />
+        <JobHead job={j} projectId={projectId} />
+        <JobDetail job={j} projectId={projectId} />
       </div>
-
-      <Stepper job={j} />
-      <ResultCard job={j} />
-      <GatePanel job={j} />
-      <Phases job={j} />
-      <QaSection job={j} />
-      <Invocations job={j} />
-      <Steering job={j} />
-      <History job={j} projectId={projectId} />
-    </div>
+    </SayProvider>
   );
 }
 
-// -- stepper ---------------------------------------------------------------------------
-
-function Stepper({ job }: { job: Job }) {
+/** The head of the page. The request used to be the <h1>, which on a real request meant a
+ * fourteen-line heading and no page title at all; it is a paragraph, so it reads as one --
+ * two lines with the rest a click away -- under a title that says what this page is. */
+function JobHead({ job, projectId }: { job: Job; projectId: string }) {
   const tx = useT();
-  const reached = new Set(job.history.map((t) => t.to_state));
-  reached.add(job.state);
-  const currentIndex = STEPS.findIndex((s) => s.state === job.state);
-  const failed = job.state === "failed";
+  const [open, setOpen] = useState(false);
+  const long = job.request.length > 220;
   return (
-    <div className="stepper">
-      {STEPS.map((step, i) => {
-        const done = failed ? reached.has(step.state) : i < currentIndex || job.state === "done";
-        const current = step.state === job.state;
-        let cls = "step";
-        if (step.gate) cls += " is-gate";
-        if (done) cls += " done";
-        if (current) cls += " current";
+    <header className="job-head">
+      <div className="job-head-top">
+        <div className="job-head-id">
+          <h1>{tx("Development")}</h1>
+          <StateBadge state={job.state} />
+        </div>
+        <div className="row" style={{ flexWrap: "nowrap" }}>
+          {job.data.pr_url && (
+            <a className="btn" href={job.data.pr_url} target="_blank" rel="noreferrer">
+              <IconExternal /> {tx("Pull request")}
+            </a>
+          )}
+          <DeleteJobButton job={job} projectId={projectId} />
+        </div>
+      </div>
+      <div className="job-ask">
+        <div className="job-ask-label">{tx("What was asked")}</div>
+        <p className={open || !long ? "" : "clamp-2"}>{job.request}</p>
+        {long && (
+          <button type="button" className="text-btn tiny" onClick={() => setOpen(!open)}>
+            {open ? tx("show less") : tx("show more")}
+          </button>
+        )}
+      </div>
+      <dl className="job-facts">
+        <div>
+          <dt>{tx("Development")}</dt>
+          <dd className="mono">{job.id}</dd>
+        </div>
+        <div>
+          <dt>{tx("Branch")}</dt>
+          <dd className="mono">slipwright/{job.id}</dd>
+        </div>
+        {job.port !== null && job.port !== undefined && (
+          <div>
+            <dt>{tx("Port")}</dt>
+            <dd className="mono">{job.port}</dd>
+          </div>
+        )}
+      </dl>
+    </header>
+  );
+}
+
+/** Everything a development shows under its title: where the work is, whatever needs a
+ * decision from you, and the tabs. Its own page draws this under its header; a lane on the
+ * project's flow tab draws the same thing when it is unfolded, so "detail" means one thing
+ * in both places. `flow` is the lane's step-by-step view, which only the lane has.
+ */
+export function JobDetail({
+  job,
+  projectId,
+  flow,
+}: {
+  job: Job;
+  projectId: string;
+  flow?: ReactNode;
+}) {
+  if (flow) {
+    // A lane is opened to see the flow, so the flow is what it lands on -- with one thing
+    // in front of it. An approval is not repeated here: the flow already shows it as the
+    // card the work is sitting on, and clicking that card is what opens the gate, the panel
+    // that slides in from the right; drawn above the flow as well, an architecture gate (a
+    // whole plan, a profile and a decision list) pushed the thing the lane was opened for
+    // two screens down. A failure is the opposite case. It has no card of its own and it is
+    // the reason the development stopped, so under the flow it sat below twenty step cards
+    // where nobody found it. It belongs directly under the stages, where the eye already is.
+    return (
+      <>
+        <StageStepper job={job} projectId={projectId} />
+        {!pendingApproval(job) && <GatePanel job={job} />}
+        <JobTabs job={job} projectId={projectId} flow={flow} />
+      </>
+    );
+  }
+  return (
+    <>
+      <StageStepper job={job} projectId={projectId} />
+      {/* whatever needs you comes before anything you might only want to read */}
+      <GatePanel job={job} />
+      <JobTabs job={job} projectId={projectId} />
+    </>
+  );
+}
+
+/** Where the work is, in the four stages the pipeline already draws -- same names, same
+ * agent colours -- instead of twelve engine states in a row that wrapped onto three lines
+ * and named things ("build gate", "review decision") no one asked about. */
+function StageStepper({ job, projectId }: { job: Job; projectId: string }) {
+  const tx = useT();
+  const pipeline = usePipeline(projectId);
+  const lane = pipeline.data?.lanes.find((l) => l.job_id === job.id);
+  if (!lane) return null;
+  const groups = stages(lane.steps);
+  return (
+    <ol className="job-stages">
+      {groups.map((group) => {
+        const done = group.steps.filter((s) => s.status === "done").length;
+        const agent = stageAgent(group.steps);
+        const Icon = STAGE_ICON[group.key] ?? IconLayers;
         return (
-          <span key={step.state} style={{ display: "contents" }}>
-            {i > 0 && <span className={`step-line ${done || current ? "done" : ""}`} />}
-            <span className={cls}>
-              <span className="dot">{done ? <IconCheck style={{ width: 12 }} /> : i + 1}</span>
-              {tx(step.label)}
+          <li
+            key={group.key}
+            className={`job-stage ${stageStatus(group.steps)}`}
+            data-agent={agent}
+          >
+            <span className="job-stage-icon">{agent ? <AgentIcon role={agent} /> : <Icon />}</span>
+            <span className="job-stage-id">
+              <span className="job-stage-title">{tx(STAGE_LABEL[group.key] ?? group.key)}</span>
+              <span className="faint tiny mono">
+                {done}/{group.steps.length}
+              </span>
             </span>
-          </span>
+          </li>
         );
       })}
-      {failed && (
-        <>
-          <span className="step-line" />
-          <span className="step failed current">
-            <span className="dot">
-              <IconX style={{ width: 12 }} />
-            </span>
-            failed
-          </span>
-        </>
-      )}
-    </div>
+    </ol>
+  );
+}
+
+const TABS = ["result", "phases", "tests", "calls", "steering", "history"] as const;
+type Tab = (typeof TABS)[number] | "flow";
+
+const TAB_LABEL: Record<Tab, string> = {
+  flow: "Flow",
+  result: "What came out",
+  phases: "Phases",
+  tests: "Tests",
+  calls: "Model calls",
+  steering: "Steering",
+  history: "History",
+};
+
+/** The page used to stack every section open at once: the result, the phases with their
+ * diffs, the test cases, every model call and the whole history, one after another. They
+ * are the same sections, behind tabs, so the page opens on the one answer most people came
+ * for and the rest is a click rather than a scroll. */
+function JobTabs({ job, projectId, flow }: { job: Job; projectId: string; flow?: ReactNode }) {
+  const tx = useT();
+  // the flow is what a lane is opened for, so it is the tab a lane opens on; the page has
+  // no flow of its own and opens on the result, the one answer most people came for
+  const [tab, setTab] = useState<Tab>(flow ? "flow" : "result");
+  const tabs: Tab[] = flow ? ["flow", ...TABS] : [...TABS];
+  return (
+    <>
+      <nav className="tabs" role="tablist">
+        {tabs.map((key) => (
+          <button
+            key={key}
+            role="tab"
+            aria-selected={tab === key}
+            className={tab === key ? "tab active" : "tab"}
+            onClick={() => setTab(key)}
+          >
+            {tx(TAB_LABEL[key])}
+          </button>
+        ))}
+      </nav>
+      <div className="job-tab-body">
+        {tab === "flow" && flow}
+        {tab === "result" && <ResultCard job={job} />}
+        {tab === "phases" && <Phases job={job} />}
+        {tab === "tests" && <QaSection job={job} />}
+        {tab === "calls" && <Invocations job={job} />}
+        {tab === "steering" && <Steering job={job} />}
+        {tab === "history" && <History job={job} projectId={projectId} />}
+      </div>
+    </>
   );
 }
 
@@ -204,7 +302,7 @@ function GatePanel({ job }: { job: Job }) {
             <span>
               <strong>{tx("Failed:")}</strong> {last?.note}
             </span>
-            <RetryActions job={job} compact />
+            <RetryActions job={job} />
           </div>
           {last?.detail && (
             <details style={{ marginTop: 6 }}>
@@ -232,6 +330,7 @@ function GatePanel({ job }: { job: Job }) {
       <Recommendation job={job} detailed />
       {job.state === "awaiting_backlog_approval" && <BacklogGate job={job} />}
       {job.state === "awaiting_architecture_approval" && <ArchitectureGate job={job} />}
+      {job.state === "awaiting_design_approval" && <DesignGate jobId={job.id} />}
       {job.state === "awaiting_review_approval" && <ReviewGate job={job} />}
       {job.state === "awaiting_decision" && <DecisionGate job={job} />}
       {job.state === "awaiting_test_approval" && job.data.qa_stage === 1 && (
@@ -240,6 +339,7 @@ function GatePanel({ job }: { job: Job }) {
       {job.state === "awaiting_test_approval" && job.data.qa_stage === 2 && (
         <WrittenTestsGate job={job} />
       )}
+      {job.state === "awaiting_deploy_approval" && <DeploymentGate job={job} />}
     </div>
   );
 }
@@ -319,17 +419,19 @@ function BacklogGate({ job }: { job: Job }) {
 /** The Architect's proposal: profile, decisions and the phases mapped onto the backlog. */
 function ArchitectureGate({ job }: { job: Job }) {
   const tx = useT();
+  const say = useSay();
   const plan = job.data.plan as PlanShape | null;
   if (!plan) return null;
   return (
     <div style={{ marginTop: 12 }}>
-      {plan.summary && <p>{plan.summary}</p>}
+      {plan.summary && <p>{say(plan.summary)}</p>}
+      <StackPanel job={job} editable />
       {plan.decisions && plan.decisions.length > 0 && (
         <>
           <h3>{tx("Decisions")}</h3>
           <ul>
             {plan.decisions.map((d, i) => (
-              <li key={i}>{d}</li>
+              <li key={i}>{say(d)}</li>
             ))}
           </ul>
         </>
@@ -528,7 +630,7 @@ function groupByPhase(job: Job): PhaseGroup[] {
   }));
   for (const t of job.history) {
     const note = t.note ?? "";
-    const m = /(?:\w+ phase|build gate (?:passed for|failed on) phase) (\d+)/.exec(note);
+    const m = /(?:\w+:? phase|build gate (?:passed for|failed on) phase) (\d+)/.exec(note);
     if (m) {
       const n = Number(m[1]);
       groups[n - 1]?.entries.push(t);
@@ -537,92 +639,167 @@ function groupByPhase(job: Job): PhaseGroup[] {
   return groups;
 }
 
+type PhaseState = "done" | "in review" | "in progress" | "failed" | "pending";
+
+const PHASE_TONE: Record<PhaseState, string> = {
+  done: "ok",
+  "in review": "work",
+  "in progress": "work",
+  failed: "bad",
+  pending: "idle",
+};
+
+/** Where a phase stands. Read off the job, not off the phase's own entries: what the
+ *  engine is doing right now is the only thing that says which phase is live. */
+function phaseState(job: Job, number: number): PhaseState {
+  const at = job.data.phase_index;
+  if ((job.state === "review" || job.state === "awaiting_review_approval") && at === number)
+    return "in review";
+  if (at > number - 1) return "done";
+  if (at === number - 1) {
+    if (job.state === "failed") return "failed";
+    if (job.state === "developing" || job.state === "build_gate") return "in progress";
+  }
+  return "pending";
+}
+
+type StepKind = "diff" | "gate" | "standards" | "review" | "qa";
+type StepBody = "diff" | "output" | "review" | "standards";
+
+/** What one entry under a phase is, how it went, and what its detail holds. The engine
+ *  writes these notes, so they are a closed set; anything else reads as a plain diff. */
+function stepKind(note: string): { kind: StepKind; tone: string; body: StepBody } {
+  if (note.startsWith("qa: phase")) {
+    const corrected = note.includes("the test was wrong");
+    // a corrected test comes with the diff of the correction; every other verdict
+    // carries the failure that prompted it
+    return { kind: "qa", tone: corrected ? "ok" : "bad", body: corrected ? "diff" : "output" };
+  }
+  if (note.startsWith("build gate"))
+    return { kind: "gate", tone: note.includes("passed") ? "ok" : "bad", body: "output" };
+  if (note.startsWith("standards")) return { kind: "standards", tone: "idle", body: "standards" };
+  if (note.startsWith("review phase")) {
+    const clean = note.includes("clean");
+    const blocked = note.includes("blocking, 0 advisory") || note.includes("needs your decision");
+    return { kind: "review", tone: clean ? "ok" : blocked ? "bad" : "work", body: "review" };
+  }
+  return { kind: "diff", tone: "work", body: "diff" };
+}
+
+/** What a collapsed phase says about itself: how many times its specialist had to write
+ *  it, and how many gates it lost on the way. Nothing that did not happen is counted. */
+function tally(entries: Transition[]): { attempts: number; failures: number } {
+  let attempts = 0;
+  let failures = 0;
+  for (const t of entries) {
+    const note = t.note ?? "";
+    const { kind } = stepKind(note);
+    if (kind === "diff") attempts += 1;
+    if (kind === "gate" && !note.includes("passed")) failures += 1;
+  }
+  return { attempts, failures };
+}
+
 function Phases({ job }: { job: Job }) {
   const tx = useT();
   const groups = useMemo(() => groupByPhase(job), [job]);
+  // the board links a task straight at its phase (#phase-3): that one opens and is
+  // scrolled to, or the link would land on a panel that is shut
+  const asked = Number(/^#phase-(\d+)$/.exec(useLocation().hash)?.[1] ?? 0);
+  useEffect(() => {
+    if (asked) document.getElementById(`phase-${asked}`)?.scrollIntoView({ block: "start" });
+  }, [asked]);
   const active =
     job.state !== "awaiting_architecture_approval" &&
     job.state !== "architecture" &&
     groups.length > 0;
-  if (!active) return null;
+  if (!active)
+    return <Empty>{tx("Nothing is built yet: the plan has to be approved first.")}</Empty>;
+  // otherwise the phase being worked on opens itself and the rest stay shut -- which is
+  // the point of the tab: the shape of the work first, a phase's detail when asked for
+  const live = groups.find((g) => g.entries.length > 0 && phaseState(job, g.number) !== "done");
+  const opened = asked || live?.number;
   return (
     <section>
       <h2>{tx("Phases")}</h2>
-      {groups.map((g) => (
-        <div key={g.number} className="card" id={`phase-${g.number}`}>
-          <div className="row spread">
-            <div>
-              <strong>{tx("Phase {n}: {goal}", { n: g.number, goal: g.goal })}</strong>
-              <DomainBadge domain={g.domain} />
-              {g.files.length > 0 && <div className="muted small mono">{g.files.join(", ")}</div>}
-            </div>
-            <span className="muted small">
-              {(job.state === "review" || job.state === "awaiting_review_approval") &&
-              job.data.phase_index === g.number
-                ? tx("in review")
-                : job.data.phase_index > g.number - 1
-                  ? tx("done")
-                  : job.data.phase_index === g.number - 1 &&
-                      (job.state === "developing" || job.state === "build_gate")
-                    ? tx("in progress")
-                    : job.state === "failed" && job.data.phase_index === g.number - 1
-                      ? tx("failed")
-                      : tx("pending")}
-            </span>
-          </div>
-          {g.entries.map((t, i) => {
-            const note = t.note ?? "";
-            const isGate = note.startsWith("build gate");
-            const isStandards = note.startsWith("standards");
-            const isReview = note.startsWith("review phase");
-            const badge = isReview
-              ? "review"
-              : isStandards
-                ? "standards"
-                : isGate
-                  ? "gate"
-                  : "diff";
-            const cls = isReview
-              ? note.includes("clean")
-                ? "ok"
-                : note.includes("blocking, 0 advisory") || note.includes("needs your decision")
-                  ? "bad"
-                  : "work"
-              : isStandards
-                ? "idle"
-                : isGate
-                  ? note.includes("passed")
-                    ? "ok"
-                    : "bad"
-                  : "work";
-            return (
-              <details
-                key={i}
-                open={!isGate && !isStandards && !isReview && i === g.entries.length - 1}
-              >
-                <summary>
-                  <span className={`badge ${cls}`}>{badge}</span> {note}{" "}
-                  <span className="muted small">· {formatTime(t.at)}</span>
-                </summary>
-                {isReview ? (
-                  <ReviewDetail text={t.detail ?? ""} />
-                ) : isStandards ? (
-                  <StandardsList text={t.detail ?? ""} />
-                ) : isGate ? (
-                  <Copyable text={t.detail ?? ""}>
-                    <pre>{t.detail}</pre>
-                  </Copyable>
-                ) : (
-                  <Copyable text={t.detail ?? ""}>
-                    <Diff text={t.detail ?? ""} />
-                  </Copyable>
-                )}
-              </details>
-            );
-          })}
-        </div>
-      ))}
+      <div className="phase-list">
+        {groups.map((g) => (
+          <PhasePanel key={g.number} job={job} group={g} open={g.number === opened} />
+        ))}
+      </div>
     </section>
+  );
+}
+
+function PhasePanel({ job, group, open }: { job: Job; group: PhaseGroup; open: boolean }) {
+  const tx = useT();
+  const say = useSay();
+  const state = phaseState(job, group.number);
+  const { attempts, failures } = tally(group.entries);
+  const label: Record<PhaseState, string> = {
+    done: tx("done"),
+    "in review": tx("in review"),
+    "in progress": tx("in progress"),
+    failed: tx("failed"),
+    pending: tx("pending"),
+  };
+  return (
+    <details className="phase" id={`phase-${group.number}`} open={open} data-state={state}>
+      <summary>
+        <span className="phase-no">{group.number}</span>
+        <span className="phase-head">
+          <span className="goal">{say(group.goal)}</span>
+          <span className="phase-meta">
+            <DomainBadge domain={group.domain} />
+            {group.entries.length > 0 && (
+              <span className="tag">{tx("{n} step(s)", { n: group.entries.length })}</span>
+            )}
+            {attempts > 1 && <span className="tag">{tx("{n} attempt(s)", { n: attempts })}</span>}
+            {failures > 0 && (
+              <span className="tag bad">{tx("{n} gate failure(s)", { n: failures })}</span>
+            )}
+            {group.files.length > 0 && <span className="tag mono">{group.files.join(", ")}</span>}
+          </span>
+        </span>
+        <span className={`badge ${PHASE_TONE[state]} plain`}>{label[state]}</span>
+      </summary>
+      <div className="phase-body">
+        {group.entries.length === 0 ? (
+          <div className="muted small">{tx("Nothing has run in this phase yet.")}</div>
+        ) : (
+          group.entries.map((t, i) => (
+            <Step key={i} entry={t} last={i === group.entries.length - 1} />
+          ))
+        )}
+      </div>
+    </details>
+  );
+}
+
+function Step({ entry, last }: { entry: Transition; last: boolean }) {
+  const note = entry.note ?? "";
+  const { kind, tone, body } = stepKind(note);
+  const detail = entry.detail ?? "";
+  return (
+    <details className="step-row" open={kind === "diff" && last}>
+      <summary>
+        <span className={`badge ${tone}`}>{kind}</span> {note}{" "}
+        <span className="muted small">· {formatTime(entry.at)}</span>
+      </summary>
+      {body === "review" ? (
+        <ReviewDetail text={detail} />
+      ) : body === "standards" ? (
+        <StandardsList text={detail} />
+      ) : body === "output" ? (
+        <Copyable text={detail}>
+          <pre>{detail}</pre>
+        </Copyable>
+      ) : (
+        <Copyable text={detail}>
+          <Diff text={detail} />
+        </Copyable>
+      )}
+    </details>
   );
 }
 
@@ -671,7 +848,7 @@ interface InvocationEntry {
 function Invocations({ job }: { job: Job }) {
   const tx = useT();
   const log = job.data.invocation_log as unknown as InvocationEntry[];
-  if (log.length === 0) return null;
+  if (log.length === 0) return <Empty>{tx("No model call has been recorded yet.")}</Empty>;
   const tokens = log.reduce((n, e) => n + (e.input_tokens ?? 0) + (e.output_tokens ?? 0), 0);
   return (
     <section>
@@ -728,8 +905,11 @@ function Invocations({ job }: { job: Job }) {
 
 function QaSection({ job }: { job: Job }) {
   const tx = useT();
+  const say = useSay();
   const cases = job.data.test_cases as { name: string; description: string }[];
-  if (cases.length === 0 || job.state === "awaiting_test_approval") return null;
+  if (job.state === "awaiting_test_approval") return null;
+  if (cases.length === 0)
+    return <Empty>{tx("QA has not proposed any test cases for this development.")}</Empty>;
   return (
     <section>
       <h2>{tx("Test cases")}</h2>
@@ -737,7 +917,7 @@ function QaSection({ job }: { job: Job }) {
         <ul>
           {cases.map((c, i) => (
             <li key={i}>
-              <strong>{c.name}</strong> — {c.description}
+              <strong>{say(c.name)}</strong> — {say(c.description)}
             </li>
           ))}
         </ul>

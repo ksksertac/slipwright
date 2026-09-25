@@ -70,7 +70,7 @@ export const TR: Record<string, string> = {
   Workspace: "Workspace",
   "The last {n} days": "Son {n} gün",
   steps: "adım",
-  "Where the developments stand": "Gelişimler nerede",
+  "Where the developments stand": "Geliştirmeler nerede",
   "Who did the work": "İşi kim yaptı",
   "the numbers": "sayılar",
   Agent: "Ajan",
@@ -87,7 +87,7 @@ export const TR: Record<string, string> = {
   in: "·",
   "and {n} more": "ve {n} dosya daha",
   "Take it into your working copy:": "Kendi çalışma kopyana almak için:",
-  "Open the development": "Gelişimi aç",
+  "Open the development": "Geliştirmeyi aç",
   "What DevOps wrote about it": "DevOps'un yazdıkları",
   "the branch is no longer in the checkout": "dal artık çalışma kopyasında değil",
   "Runs by itself at startup and every hour: missing epics, stories and sub-tasks are created, stories join the sprint (one is started when none is running), statuses catch up. Nothing to set — this is how a half-mirrored plan repairs itself.":
@@ -97,7 +97,7 @@ export const TR: Record<string, string> = {
   Connection: "Bağlantı",
   "Agent account": "Ajan hesabı",
   "Issue types": "Konu tipleri",
-  "The round": "Tur",
+  "Automatic sync": "Otomatik eşitleme",
   "The connection": "Bağlantı",
   "The Jira site and the account Slipwright signs in with. Nothing works without it.":
     "Jira siteniz ve Slipwright'ın giriş yapacağı hesap. Bu olmadan hiçbiri çalışmaz.",
@@ -129,7 +129,7 @@ export const TR: Record<string, string> = {
     "İş akışındaki geçişin adı (durumun adı değil); boş bırakırsan o geçiş atlanır.",
   "Agent account saved": "Ajan hesabı kaydedildi",
   "Jira mapping saved": "Jira eşleştirmesi kaydedildi",
-  "last run {when}": "son tur {when}",
+  "last run {when}": "son eşitleme {when}",
   "not run yet": "henüz çalışmadı",
   in_progress: "devam ediyor",
   epic: "epic",
@@ -139,7 +139,7 @@ export const TR: Record<string, string> = {
   "{n} waiting": "{n} bekliyor",
   "{n} running": "{n} çalışıyor",
   "local checkout": "yerel çalışma kopyası",
-  "{n} development(s)": "{n} gelişim",
+  "{n} development(s)": "{n} geliştirme",
   "{n} failed": "{n} başarısız",
   "active {when}": "son hareket {when}",
   "No project matches “{query}”.": "“{query}” ile eşleşen proje yok.",
@@ -175,12 +175,12 @@ export const TR: Record<string, string> = {
     "Henüz bir giriş yok. İlk (yönetici) kullanıcıyı sunucuda oluştur:",
   "Pick a folder under {root}…": "{root} altından bir klasör seç…",
   "Repository (owner/name)": "Depo (sahip/ad)",
-  development: "gelişim",
+  development: "geliştirme",
   "With Jira connected, every approved plan is mirrored as epics, stories and sub-tasks in the project's Jira project, issues move as tasks complete, and PR links and failures are commented. This is the connection used by the engine; the account the agents themselves act as, and which Jira project each Slipwright project mirrors into, are set below.":
     "Jira bağlıyken onaylanan her plan, projenin Jira projesine epic, story ve alt görev olarak aynalanır; tasklar bittikçe issue'lar ilerler, PR bağlantıları ve hatalar yorum olarak düşülür. Bu, motorun kullandığı bağlantıdır; ajanların hangi hesapla davrandığı ve hangi Slipwright projesinin hangi Jira projesine aynalandığı aşağıda ayarlanır.",
   "so they nest under stories; use": "böylece story altına yerleşirler; eski sitelerde",
-  "Last round {when}: {jobs} development(s) checked, {updated} updated, {errors} with Jira errors.":
-    "Son tur {when}: {jobs} gelişim denetlendi, {updated} güncellendi, {errors} tanesinde Jira hatası.",
+  "Last sync {when}: {jobs} development(s) checked, {updated} updated, {errors} with Jira errors.":
+    "Son eşitleme {when}: {jobs} geliştirme denetlendi, {updated} güncellendi, {errors} tanesinde Jira hatası.",
   "Copy it now; it will not be shown again:": "Şimdi kopyala; bir daha gösterilmeyecek:",
   "Enter an API key for each provider you want to use. Keys are stored encrypted and never shown again; a key from the server's environment is used when none is stored. Every agent runs on the provider marked":
     "Kullanmak istediğin her sağlayıcı için bir API anahtarı gir. Anahtarlar şifreli saklanır ve bir daha gösterilmez; kayıtlı anahtar yoksa sunucunun ortam değişkenindeki kullanılır. Her ajan aşağıda",
@@ -233,8 +233,17 @@ export const TR: Record<string, string> = {
   Set: "Ayarla",
   Retry: "Yeniden dene",
   "Retrying…": "Yeniden deneniyor…",
-  "Retry with a note…": "Notla yeniden dene…",
-  "Send & retry": "Gönder ve yeniden dene",
+  "Try a different way…": "Farklı yol ile dene…",
+  "Try a different way": "Farklı yol ile dene",
+  "Say what should be tried instead. It goes to the Product Owner together with what failed: the backlog is written again and can gain tasks it was missing, the Architect plans the phases again, and you approve both as usual. The branch and everything built on it stay.":
+    "Bunun yerine ne denensin, yaz. Yazdığın, hatayla birlikte Ürün Sahibi'ne gider: backlog yeniden yazılır ve eksik kalan tasklar eklenebilir, Mimar fazları yeniden kurgular, ikisini de her zamanki gibi sen onaylarsın. Dal ve üzerinde üretilmiş her şey durur.",
+  "What failed": "Ne patladı",
+  "e.g. split the API phase in two and let the routing package be exported in its own phase":
+    "ör. API fazını ikiye böl, yönlendirme paketinin dışa aktarımı kendi fazında olsun",
+  "Plan it again": "Yeniden planla",
+  "Planning…": "Planlanıyor…",
+  "Nothing is thrown away; the phases are simply walked again from the first.":
+    "Hiçbir şey atılmıyor; fazlar baştan tekrar yürünüyor.",
   "Undo…": "Geri al…",
   "Create project": "Proje oluştur",
   "Creating…": "Oluşturuluyor…",
@@ -253,7 +262,6 @@ export const TR: Record<string, string> = {
   "{n} selected": "{n} seçili",
   "feedback for every selected gate": "seçili her kapı için geri bildirim",
   "what should change?": "ne değişmeli?",
-  "what the agent should know this time": "ajan bu sefer neyi bilmeli",
   "what the supervisor missed": "denetçinin gözden kaçırdığı şey",
   "continue from the step that failed; what was built stays":
     "düştüğü adımdan devam eder; yapılanlar kalır",
@@ -286,6 +294,11 @@ export const TR: Record<string, string> = {
   failed: "başarısız",
   pending: "bekliyor",
   running: "çalışıyor",
+  "Working on it": "üzerinde çalışıyor",
+  "last sign of life {ago}": "en son {ago} kıpırdadı",
+  "phase {at} of {of}": "{of} fazın {at}. fazı",
+  "the model was asked again {n} times": "modele {n} kez yeniden soruldu",
+
   waiting: "seni bekliyor",
   todo: "yapılacak",
   "in progress": "sürüyor",
@@ -309,10 +322,16 @@ export const TR: Record<string, string> = {
 
   // -- roles ------------------------------------------------------------------------------------
   "Product Owner": "Ürün Sahibi",
-  Architect: "Mimar",
-  Backend: "Backend",
-  "Web UI": "Web Arayüzü",
-  "Mobile UI": "Mobil Arayüz",
+  po: "Ürün Sahibi",
+  Architect: "Yazılım Mimarı",
+  architect: "Yazılım Mimarı",
+  web_ui: "Web Arayüzü",
+  mobile_ui: "Mobil Arayüz",
+  supervisor: "Denetçi",
+  "Backend Developer": "Backend Geliştirici",
+  "Web Developer": "Web Geliştirici",
+  "Mobile Developer": "Mobil Geliştirici",
+  Designer: "Tasarımcı",
   QA: "QA",
   DevOps: "DevOps",
   Supervisor: "Denetçi",
@@ -350,6 +369,18 @@ export const TR: Record<string, string> = {
   "No projects yet.": "Henüz proje yok.",
   "Add the first project": "İlk projeyi ekle",
   "No description": "Açıklama yok",
+  "The project": "Proje",
+  "The checkout": "Çalışma kopyası",
+  "What is already written stays as it was; this is for what comes next.":
+    "Yazılmış olanlar olduğu gibi kalır; bu, bundan sonrası için.",
+  "Where the agents work. It is set when the project is created and does not move: the developments already in it are worktrees of this checkout.":
+    "Ajanların çalıştığı yer. Proje açılırken belirlenir ve yerinden oynamaz: içindeki geliştirmeler bu kopyanın worktree'leri.",
+  "Epics, stories and tasks are mirrored into it from the next development onwards; what is already on the board stays where it is.":
+    "Epic, story ve tasklar bir sonraki geliştirmeden itibaren buraya aynalanır; panoda duranlar yerinde kalır.",
+
+  "Where the work happens": "İş nerede yapılacak",
+  Tracking: "Takip",
+  "The first development": "İlk geliştirme",
   "A repository for the agents to work on.": "Ajanların üzerinde çalışacağı bir depo.",
   Name: "Ad",
   Description: "Açıklama",
@@ -443,8 +474,17 @@ export const TR: Record<string, string> = {
   ") cannot be changed here; models and permissions per role live under Agents.":
     ") buradan değiştirilemez; rol başına model ve izinler Ajanlar altında.",
 
+  // -- paging ----------------------------------------------------------------------------------------
+  Previous: "Önceki",
+  Next: "Sonraki",
+  Continue: "Devam",
+  Back: "Geri",
+  "Something above is still missing.": "Yukarıda eksik bir şey kaldı.",
+
+  "{from}-{to} of {total}": "{total} kayıttan {from}-{to}",
+
   // -- project tabs ----------------------------------------------------------------------------------
-  Pipeline: "Akış",
+  Pipeline: "Akışlar",
   Overview: "Genel bakış",
   Board: "Pano",
   Developments: "Geliştirmeler",
@@ -471,8 +511,8 @@ export const TR: Record<string, string> = {
     "Motorun çalıştırdığı her build kapısı burada kayıtlıdır; projenin test komutunu istediğin zaman kendin de çalıştırabilirsin.",
   "Run tests": "Testleri çalıştır",
   "No test runs yet": "Henüz test çalıştırması yok",
-  "main checkout": "ana klasör",
-  "on the main checkout": "ana klasörde",
+  "main branch": "ana dal (main)",
+  "on the main branch": "ana dalda (main)",
   "any job": "herhangi bir iş",
   "any status": "herhangi bir durum",
   Command: "Komut",
@@ -498,6 +538,13 @@ export const TR: Record<string, string> = {
   "Select all recommended ({n})": "Önerilenlerin tümünü seç ({n})",
   "the gates the supervisor recommends approving": "denetçinin onaylanmasını önerdiği kapılar",
   "started {ago}": "{ago} başladı",
+  Details: "Detay",
+  Flow: "Akış",
+  // the supervisor's decision at a failed build gate, with its reasons under it
+  "The supervisor stopped and left the decision to you": "Süpervizör durdu, kararı sana bıraktı",
+  "The supervisor asked the Architect to plan it again":
+    "Süpervizör, Mimar'dan yeniden planlamasını istedi",
+  "The supervisor sent it back to the same specialist": "Süpervizör işi aynı uzmana geri gönderdi",
 
   // -- dashboard charts ---------------------------------------------------------------------
   "Activity, last 14 days": "Etkinlik — son 14 gün",
@@ -600,6 +647,58 @@ export const TR: Record<string, string> = {
   "Each card shows the provider and model the agent runs on right now; open one for its setup, standards and activity.":
     "Her kart ajanın şu an çalıştığı sağlayıcı ve modeli gösterir; kurulumu, standartları ve etkinliği için birini aç.",
   "{n} invocation(s)": "{n} çağrı",
+  // -- teams: the people an account puts on its agents (T12) --
+  "Who holds it": "Takım üyeleri",
+  "Add someone to the team": "Takıma birini ekle",
+  "nobody holds it yet": "henüz kimse tutmuyor",
+  "Which agents": "Hangi ajanlar",
+  "Pick at least one agent": "En az bir ajan seç",
+  "They approve at the gates of the agents you pick, edit what those agents propose and see this team's projects - nothing else.":
+    "Seçtiğin ajanların kapılarında onay verir, o ajanların önerdiğini düzenler ve bu ekibin projelerini görür — başka hiçbir şey yapamaz.",
+
+  "Whoever is on this agent approves at its gates, edits what it proposes and sees this team's projects — and nothing else. Work that arrives here is mailed to them.":
+    "Bu ajanda olan kişi, ajanın kapılarında onay verir, önerdiğini düzenler ve ekibin projelerini görür — başka hiçbir şey yapamaz. Buraya iş düştüğünde kendisine e-posta gider.",
+  "Nobody but you holds this agent.": "Bu ajanı senden başka tutan yok.",
+  "Put somebody on this agent": "Bu ajana birini ata",
+  "Work email": "İş e-postası",
+  "Name (optional)": "Ad (isteğe bağlı)",
+  "They get a letter with a link: they accept it by choosing a password, or decline. The address becomes part of this team and cannot open an account of its own afterwards.":
+    "Kişiye bağlantılı bir posta gider: şifre belirleyip kabul eder ya da reddeder. Adres artık bu ekibe aittir; sonrasında kendi başına hesap açamaz.",
+  "Send the invitation": "Daveti gönder",
+  "No longer on this agent": "Artık bu ajanda değil",
+  Person: "Kişi",
+  Since: "Tarih",
+  "Step off this agent": "Bu ajandan ayrıl",
+  "Take the agent back": "Ajanı geri al",
+  "Leave…": "Ayrıl…",
+  "Remove…": "Çıkar…",
+  invited: "davet edildi",
+  active: "çalışıyor",
+  declined: "reddetti",
+  left: "ayrıldı",
+  removed: "çıkarıldı",
+  "{n} person/people": "{n} kişi",
+  yours: "sende",
+  "You have been invited": "Ekibe davet edildin",
+  "{inviter} would like you on the {agents} agent.":
+    "{inviter} seni {agents} ajanına atamak istiyor.",
+  "You will approve at that agent's gates, edit the work it proposes and see the team's projects. Nothing else on the account is yours to change.":
+    "O ajanın kapılarında onay verir, önerdiği işi düzenler ve ekibin projelerini görürsün. Hesabın geri kalanı senin değiştirebileceğin bir şey değil.",
+  "Choose a password": "Bir şifre belirle",
+  "Accept and start": "Kabul et ve başla",
+  "Joining…": "Katılınıyor…",
+  "Decline this invitation": "Daveti reddet",
+  Declined: "Reddedildi",
+  "Nothing has been shared with you.": "Seninle hiçbir şey paylaşılmadı.",
+  "We have told them. If you change your mind, ask them to invite you again.":
+    "Karşı tarafa iletildi. Fikrini değiştirirsen seni yeniden davet etmesini isteyebilirsin.",
+  Invitation: "Davet",
+  "This link is no longer valid.": "Bu bağlantı artık geçerli değil.",
+  "You have been taken off this team's agents, so you are signed out.":
+    "Bu ekibin ajanlarından çıkarıldın, bu yüzden oturumun kapandı.",
+  "Accept your invitation first: the link is in the letter we sent you.":
+    "Önce davetini kabul et: bağlantı sana gönderdiğimiz postada.",
+  "Waiting for the {agent} agent.": "{agent} ajanını bekliyor.",
   "used {ago}": "{ago} kullanıldı",
   "never used": "hiç kullanılmadı",
   Model: "Model",
@@ -647,6 +746,7 @@ export const TR: Record<string, string> = {
 
   // -- standards tab --------------------------------------------------------------------------------------
   Scope: "Kapsam",
+  "All projects": "Tüm Projeler",
   "every project": "her proje",
   "only {name}": "yalnızca {name}",
   "Add rule": "Kural ekle",
@@ -664,8 +764,8 @@ export const TR: Record<string, string> = {
   "Shared rules — every agent": "Ortak kurallar — her ajan",
   "Read in full by every agent on every project; a rule above never overrides them.":
     "Her projede her ajan tamamını okur; yukarıdaki bir kural bunları asla geçersiz kılamaz.",
-  "Shared rules are edited under the every-project scope.":
-    "Ortak kurallar “her proje” kapsamında düzenlenir.",
+  "Shared rules are edited under the All projects scope.":
+    "Ortak kurallar “Tüm Projeler” kapsamında düzenlenir.",
   "No shared rules.": "Ortak kural yok.",
   "Which rules would this agent get?": "Bu ajana hangi kurallar gider?",
   "Write a task the way you would give it, and see the list it would be handed.":
@@ -794,10 +894,10 @@ export const TR: Record<string, string> = {
   "set up the connection": "bağlantıyı kur",
   "Project → Jira project": "Proje → Jira projesi",
   "Task status → Jira transition": "Task durumu → Jira geçişi",
-  "The Product Owner's round": "Ürün Sahibi'nin turu",
+  "The Product Owner's automatic sync": "Ürün Sahibi'nin otomatik eşitlemesi",
   "At startup and every hour, every development of a Jira-linked project is checked: missing epics, stories and sub-tasks are created, stories join the sprint (one is started when none is running), statuses catch up.":
     "Açılışta ve her saat, Jira'ya bağlı projelerin her geliştirmesi kontrol edilir: eksik epic, story ve alt görevler açılır, story'ler sprint'e girer (aktif sprint yoksa biri başlatılır), durumlar eşitlenir.",
-  "No round has run yet.": "Henüz tur çalışmadı.",
+  "No sync has run yet.": "Henüz eşitleme yapılmadı.",
   "Logins and API tokens.": "Girişler ve API token'ları.",
   "Add user": "Kullanıcı ekle",
   Username: "Kullanıcı adı",
@@ -875,7 +975,7 @@ export const TR: Record<string, string> = {
   "The Product Owner turns the request into a backlog: epics, stories and tasks. It reads the repository lightly — the tree, the manifests, the README — so the backlog fits the product that already exists, but it decides nothing about technology or files. A task is one piece of work a single specialist can finish and a tester can verify.":
     "Ürün Sahibi isteği bir backlog'a çevirir: epic'ler, story'ler ve tasklar. Depoya hafifçe bakar — dosya ağacı, manifestler, README — ki backlog var olan ürüne otursun; ama teknoloji ya da dosyalar hakkında hiçbir karar vermez. Bir task, tek bir uzmanın bitirebileceği ve bir testçinin doğrulayabileceği tek bir iş parçasıdır.",
   "First, as soon as a development starts. Its backlog waits at the first gate for you; once approved it is mirrored into Jira and the Architect takes over.":
-    "En başta, gelişim başlar başlamaz. Yazdığı backlog ilk kapıda seni bekler; onaylanınca Jira'ya aynalanır ve sıra Mimar'a geçer.",
+    "En başta, geliştirme başlar başlamaz. Yazdığı backlog ilk kapıda seni bekler; onaylanınca Jira'ya aynalanır ve sıra Mimar'a geçer.",
   "Your request, in your words": "Senin isteğin, kendi cümlelerinle",
   "The repository at a glance: tree, manifests, README":
     "Depoya kuşbakışı: dosya ağacı, manifestler, README",
@@ -995,9 +1095,9 @@ export const TR: Record<string, string> = {
 
   // devops
   "DevOps does the infrastructure phases — Dockerfiles, compose files, CI workflows, deployment and environment configuration — and, at the end of a development, writes the pull request: a title and a body that say what changed, why, and how it was tested, from the approved plan and the job history.":
-    "DevOps altyapı fazlarını yapar — Dockerfile'lar, compose dosyaları, CI akışları, dağıtım ve ortam yapılandırması — ve gelişimin sonunda pull request'i yazar: onaylanan plandan ve iş geçmişinden, neyin neden değiştiğini ve nasıl test edildiğini söyleyen bir başlık ve gövde.",
+    "DevOps altyapı fazlarını yapar — Dockerfile'lar, compose dosyaları, CI akışları, dağıtım ve ortam yapılandırması — ve geliştirmenin sonunda pull request'i yazar: onaylanan plandan ve iş geçmişinden, neyin neden değiştiğini ve nasıl test edildiğini söyleyen bir başlık ve gövde.",
   "During development on infra phases, and at the end of every development for the pull request.":
-    "Geliştirme sırasında altyapı fazlarında, ve her gelişimin sonunda pull request için.",
+    "Geliştirme sırasında altyapı fazlarında, ve her geliştirmenin sonunda pull request için.",
   "The phase it was given, for infrastructure work": "Altyapı işi için kendisine verilen faz",
   "The factual draft assembled from the plan and the job history":
     "Plandan ve iş geçmişinden derlenen olgusal taslak",
@@ -1037,4 +1137,554 @@ export const TR: Record<string, string> = {
     "İtiraz uydurmak — riski orta diye not edip onaylamayı yeğler",
   "Deciding in your place: the recommendation is yours to take or leave, unless you turned auto-approval on":
     "Senin yerine karar vermek: otomatik onayı açmadıysan öneri senin alıp bırakacağın bir şeydir",
+
+  // -- the tests tab: what ran, when, what it was for and how it ended --------------------------
+  Today: "Bugün",
+  Yesterday: "Dün",
+  "under a second": "bir saniyeden az",
+  "build gate · phase {n}": "build kapısı · faz {n}",
+  "by hand · on the development's branch": "elle · geliştirmenin dalında",
+  "by hand · on the main branch": "elle · ana dalda (main)",
+  "in the development: {request}": "geliştirmede: {request}",
+  "any development": "herhangi bir geliştirme",
+  "The project's test command, run on the branch you pick. Every build gate the engine ran is in the same list — open a row to see what it was for and how it ended.":
+    "Projenin test komutu, seçtiğin dalda çalışır. Motorun geçtiği her build kapısı da aynı listede — bir satırı aç, neden çalıştığını ve nasıl bittiğini gör.",
+  "Nothing matches these filters": "Bu süzgeçlere uyan yok",
+  "Clear the status or the development filter to see the runs again.":
+    "Koşuları yeniden görmek için durum ya da geliştirme süzgecini temizle.",
+  "{n} run(s)": "{n} çalıştırma",
+  "{n} passed": "{n} geçti",
+  "What was tested": "Ne test edildi",
+  Development: "Geliştirme",
+  "Why this ran": "Neden çalıştı",
+  "What it ran": "Ne çalıştırdı",
+  "What was expected": "Ne bekleniyordu",
+  "What happened": "Ne oldu",
+  "The specialist finished phase {n} of this development. Before the next phase starts, the engine builds the branch and runs the whole test suite: this is that check.":
+    "Uzman bu geliştirmenin {n}. fazını bitirdi. Bir sonraki faz başlamadan önce motor dalı kurar ve test takımının tamamını koşar: bu, o kontrol.",
+  "The engine built the branch and ran the whole test suite before letting the development move on.":
+    "Motor, geliştirmenin devam etmesine izin vermeden önce dalı kurdu ve test takımının tamamını koştu.",
+  "You started this run yourself, on the development's own branch.":
+    "Bu koşuyu, geliştirmenin kendi dalında sen başlattın.",
+  "You started this run yourself, on the project's main branch.":
+    "Bu koşuyu, projenin ana dalında (main) sen başlattın.",
+  "All {n} commands end in exit code 0 — the build, the linters and the type checks first, then the whole test suite, with no test skipped or weakened.":
+    "{n} komutun hepsi 0 çıkış koduyla bitmeli — önce build, linter'lar ve tip kontrolleri, sonra test takımının tamamı; hiçbir test atlanmadan ya da gevşetilmeden.",
+  "The command ends in exit code 0 — the whole test suite green, with no test skipped or weakened.":
+    "Komut 0 çıkış koduyla bitmeli — test takımının tamamı yeşil; hiçbir test atlanmadan ya da gevşetilmeden.",
+  "Still running.": "Hâlâ çalışıyor.",
+  "Every command ended in exit code 0: nothing to fix here.":
+    "Her komut 0 çıkış koduyla bitti: burada düzeltilecek bir şey yok.",
+  "The run could not be carried out at all.": "Koşu hiç yapılamadı.",
+  "A command ended in exit code {code}; the first failure is highlighted below.":
+    "Bir komut {code} çıkış koduyla bitti; ilk hata aşağıda işaretli.",
+  "Took {duration}.": "{duration} sürdü.",
+  Output: "Çıktı",
+  "scrolled to the first failure": "ilk hataya kaydırıldı",
+
+  // -- the activity feed: the engine's own notes, read back in Turkish (i18n/notes.ts) ----------
+  "Development started": "Geliştirme başladı",
+  "{1}, by {2}; continues with {3}": "{1} — onaylayan: {2}; {3} ile devam ediyor",
+  "{1}; continues with {2}": "{1}; {2} ile devam ediyor",
+  "{1}, by {2}": "{1} — onaylayan: {2}",
+  Approved: "Onaylandı",
+  "{1} test cases approved": "{1} test senaryosu onaylandı",
+  "Phase {1} approved despite the review": "{1}. faz, incelemeye rağmen onaylandı",
+  "Sent back: {1}": "Geri gönderildi: {1}",
+  "Taken back: {1}": "Geri alındı: {1}",
+  "Tests re-run by hand": "Testler elle yeniden çalıştırıldı",
+  "DevOps step re-run by hand": "DevOps adımı elle yeniden çalıştırıldı",
+  "Retried, continuing from {1}": "Yeniden denendi, {1} adımından devam ediliyor",
+  "Retried, continuing from {1} ({2})": "Yeniden denendi, {1} adımından devam ediliyor ({2})",
+  "Tests re-run by hand: passed": "Testler elle yeniden çalıştırıldı: geçti",
+  "Backlog ready: {1} epics, {2} stories, {3} tasks":
+    "Backlog hazır: {1} epic, {2} story, {3} task",
+  "Plan ready: {1} phases, {2} decisions": "Plan hazır: {1} faz, {2} karar",
+  "Phase {1}/{2}, build fix {3}: {4} ({5} files)":
+    "{1}/{2}. faz, {3}. build düzeltmesi: {4} ({5} dosya)",
+  "Phase {1}/{2}, review fix {3}: {4} ({5} files)":
+    "{1}/{2}. faz, {3}. inceleme düzeltmesi: {4} ({5} dosya)",
+  "Phase {1}/{2}, part {3}: {4} ({5} files so far)":
+    "{1}/{2}. faz, {3}. parça: {4} (şimdiye kadar {5} dosya)",
+  "Phase {1}/{2} built in {5} parts: {3} ({4} files)":
+    "{1}/{2}. faz {5} parçada yapıldı: {3} ({4} dosya)",
+  "Phase {1}/{2} built: {3} ({4} files)": "{1}/{2}. faz yapıldı: {3} ({4} dosya)",
+  "Build gate passed — phase {1}/{2}": "Build kapısı geçildi — {1}/{2}. faz",
+  "Build gate — phase {1}": "Build kapısı — {1}. faz",
+  "Build gate failed — phase {1} (attempt {2}/{3})":
+    "Build kapısı geçilemedi — {1}. faz ({2}/{3}. deneme)",
+  "Build gate failed {1} times on phase {2} — giving up":
+    "Build kapısı {2}. fazda {1} kez geçilemedi — vazgeçildi",
+  "The test was wrong, not the code — phase {1}, corrected ({2} files): {3}":
+    "Hatalı olan kod değil testti — {1}. faz, düzeltildi ({2} dosya): {3}",
+  "The code is wrong, not the test — phase {1}: {2}": "Hatalı olan test değil kod — {1}. faz: {2}",
+  "Test fix refused — it changed {2}, which is not a test":
+    "Test düzeltmesi kabul edilmedi — test dosyası olmayan {2} değiştirilmiş",
+  "Called the test wrong but sent no correction": "Test hatalı dendi ama düzeltmesi gelmedi",
+  "Test fix not written ({2})": "Test düzeltmesi yazılamadı ({2})",
+  "{1}; Supervisor: re-plan ({2})": "{1}; Süpervizör: yeniden planla ({2})",
+  "{1}; Supervisor: asks you ({2})": "{1}; Süpervizör: sana soruyor ({2})",
+  "{1}; Supervisor: the same specialist fixes it ({2})":
+    "{1}; Süpervizör: aynı uzman düzeltsin ({2})",
+  "Supervisor recommends {1} (confidence {2}, risk {3})":
+    "Süpervizörün önerisi: {1} (güven {2}, risk {3})",
+  "{1}; waits for you: {2}": "{1}; seni bekliyor: {2}",
+  "Supervisor failed ({1}) — the gate waits for you":
+    "Süpervizör çalışmadı ({1}) — kapı seni bekliyor",
+  "Supervisor: {1} ({2})": "Süpervizör: {1} ({2})",
+  "Supervisor (confidence {1}): {2}": "Süpervizör (güven {1}): {2}",
+  "Review of phase {1}/{2}: {3}": "{1}/{2}. fazın incelemesi: {3}",
+  "nothing to fix": "düzeltilecek bir şey yok",
+  "{1} findings, {2} blocking, {3} advisory": "{1} bulgu, {2} engelleyici, {3} tavsiye",
+  "{1} — fix round {2}/{3}": "{1} — {2}/{3}. düzeltme turu",
+  "{1}, after {2} fix rounds — needs your decision":
+    "{1}, {2} düzeltme turundan sonra — kararını bekliyor",
+  "{1} test cases proposed": "{1} test senaryosu önerildi",
+  "No test cases came back — asking again": "Cevapta test senaryosu yoktu — yeniden soruluyor",
+  "Tests written and passing ({1} files): {2}": "Testler yazıldı ve geçiyor ({1} dosya): {2}",
+  "Jira, second try: {1}": "Jira, ikinci deneme: {1}",
+  "Jira: {1}": "Jira: {1}",
+  "Jira: {1} updates": "Jira: {1} güncelleme",
+  "Jira could not be reached — will retry": "Jira'ya ulaşılamadı — yeniden denenecek",
+  "{1} written": "{1} yazıldı",
+  "{1} refused": "{1} reddedildi",
+  "{1} queued": "{1} kuyrukta",
+  "{1} unchanged": "{1} değişmedi",
+  "Standards read for phase {1}: {2} sections": "{1}. faz için standartlar okundu: {2} bölüm",
+  "Standards read: {1} sections": "Standartlar okundu: {1} bölüm",
+  "{1} messages from you went to {2}": "Senden gelen {1} mesajı {2} okudu",
+  "Attempt {1} failed ({2}) — trying again in {3}s, {4} of {5} retries used":
+    "{1}. deneme başarısız ({2}) — {3} sn sonra yeniden; {5} denemenin {4} tanesi kullanıldı",
+  "Attempt {1} hit the answer limit — asking for a smaller part ({3}/{4})":
+    "{1}. deneme cevap sınırına takıldı — daha küçük bir parça isteniyor ({3}/{4})",
+  "{1} gave up after {3} attempts: {2}": "{1} {3} denemeden sonra vazgeçti: {2}",
+  "{1} failed: {2}": "{1} başarısız oldu: {2}",
+  "{1} crashed: {2}": "{1} çöktü: {2}",
+  "Went in circles: {1}": "Döngüye girildi: {1}",
+  "DevOps could not finish: {1}": "DevOps tamamlayamadı: {1}",
+  "CI was still running after {1}s": "CI {1} sn sonra hâlâ sürüyordu",
+  "CI still red after {1} fix attempts": "CI {1} düzeltme denemesinden sonra hâlâ kırmızı",
+  "Pull request {1} ({2})": "Pull request {1} ({2})",
+  "Nothing was pushed: the checkout {1} has no remote. The branch {2} is ready there — merge it with `git merge {2}`, or give the project a GitHub repository so the next development pushes and opens a pull request.":
+    "Hiçbir şey gönderilmedi: {1} çalışma kopyasının uzak deposu yok. {2} dalı orada hazır — `git merge {2}` ile birleştir ya da projeye bir GitHub deposu tanımla; sonraki geliştirme kendiliğinden gönderip pull request açsın.",
+  // why a role's turn ended badly (InvokeErrorKind)
+  "timed out": "zaman aşımı",
+  "provider error": "sağlayıcı hatası",
+  "provider unavailable": "sağlayıcıya ulaşılamadı",
+  "the provider refused the account": "sağlayıcı hesabı reddetti",
+  "refused by the model": "model reddetti",
+  "unusable answer": "kullanılamaz cevap",
+  "budget spent": "bütçe bitti",
+  "went in circles": "döngüye girdi",
+  "answer cut off": "cevap kesildi",
+  // -- the step panel: what each step produced, item by item ----------------------------
+  "Epics, stories and tasks": "Epic, story ve task'lar",
+  "Every epic opens onto its stories, and every story onto its tasks.":
+    "Her epic story'lerine, her story de task'larına açılır.",
+  "The Product Owner has not written the backlog yet.": "Ürün sahibi backlog'u henüz yazmadı.",
+  Jira: "Jira",
+  "Where the backlog ended up: one issue per epic, story and task.":
+    "Backlog nereye gitti: her epic, story ve task için bir iş kaydı.",
+  "What was mirrored to Jira, and what is still waiting.": "Jira'ya ne yansıdı, ne hâlâ bekliyor.",
+  "Nothing was sent to Jira for this step.": "Bu adım için Jira'ya bir şey gönderilmedi.",
+  "Mirrored to Jira": "Jira'ya yansıtıldı",
+  Sprint: "Sprint",
+  "the last Jira sync failed": "son Jira eşitlemesi başarısız oldu",
+  "not in Jira": "Jira'da yok",
+  "What the Architect settled on, and why the plan looks the way it does.":
+    "Mimarın neye karar verdiği ve planın neden böyle olduğu.",
+  "The Architect recorded no separate decisions.": "Mimar ayrıca bir karar kaydetmedi.",
+  "How it is built, tested and run": "Nasıl kurulur, test edilir ve çalıştırılır",
+  "No build facts were proposed.": "Kurulum bilgisi önerilmedi.",
+  Build: "Kurulum",
+  Run: "Çalıştırma",
+  "One phase per backlog task, in the order they are built.":
+    "Her backlog task'ı için bir faz, yapılacakları sırayla.",
+  "No phases were planned.": "Hiç faz planlanmadı.",
+  "What this phase was asked to do": "Bu fazdan ne istendi",
+  Files: "Dosyalar",
+  "Planned by the Architect, then what the diff actually touched.":
+    "Mimarın planladıkları, sonra diff'in gerçekten dokunduğu dosyalar.",
+  "No files were named for this phase.": "Bu faz için dosya belirtilmedi.",
+  planned: "planlanan",
+  changed: "değişen",
+  phase: "faz",
+  files: "dosya",
+  "The phase's own run and every build gate it went through.":
+    "Fazın kendi koşusu ve geçtiği her build kapısı.",
+  "Nothing recorded yet.": "Henüz bir kayıt yok.",
+  "Standards review": "Standart incelemesi",
+  "What QA found when it read this phase's diff against the standards.":
+    "QA, bu fazın diff'ini standartlara göre okuduğunda ne buldu.",
+  "No standards review was recorded for this phase.":
+    "Bu faz için standart incelemesi kaydedilmedi.",
+  "The scenarios QA proposed; the tests are written against exactly these.":
+    "QA'in önerdiği senaryolar; testler tam olarak bunlara göre yazılır.",
+  "QA proposed no test cases.": "QA hiç test senaryosu önermedi.",
+  "Test files written": "Yazılan test dosyaları",
+  "QA wrote no new test files: the approved cases were already covered.":
+    "QA yeni test dosyası yazmadı: onaylanan senaryolar zaten kapsanıyordu.",
+  "The run": "Koşu",
+  "What the build and test commands said.": "Kurulum ve test komutları ne dedi.",
+  "Where the work ended up: the branch, the pull request and its checks.":
+    "İş nerede bitti: dal, pull request ve kontrolleri.",
+  Branch: "Dal",
+  "Pull request": "Pull request",
+  pushed: "gönderildi",
+  "not pushed": "gönderilmedi",
+  "CI fix rounds": "CI düzeltme turu",
+  "What this development produced": "Bu geliştirme ne üretti",
+  "The decision": "Karar",
+  "Nobody has decided yet.": "Henüz kimse karar vermedi.",
+  "The supervisor's advice": "Süpervizörün önerisi",
+  recommends: "öneri",
+  confidence: "güven",
+  risk: "risk",
+  "The agent's record, as it was written": "Ajanın kaydı, yazıldığı hâliyle",
+  approved: "onaylandı",
+  "by you": "senin tarafından",
+  "by the supervisor": "süpervizör tarafından",
+  "not started": "başlamadı",
+  "not touched": "dokunulmadı",
+  // -- a development's own page --------------------------------------------------------
+  Port: "Port",
+  "What came out": "Ne çıktı ortaya",
+  "{n} step(s)": "{n} adım",
+  "{n} attempt(s)": "{n} deneme",
+  "{n} gate failure(s)": "{n} kapı hatası",
+  "Nothing has run in this phase yet.": "Bu fazda henüz bir şey çalışmadı.",
+  "Nothing is built yet: the plan has to be approved first.":
+    "Henüz bir şey yapılmadı: önce planın onaylanması gerekiyor.",
+  "QA has not proposed any test cases for this development.":
+    "QA bu geliştirme için test senaryosu önermedi.",
+  "No model call has been recorded yet.": "Henüz bir model çağrısı kaydedilmedi.",
+  "Propose the test cases again": "Test senaryolarını yeniden öner",
+  "Asks QA for the list of scenarios again, from the top.":
+    "QA'e senaryo listesini en baştan yeniden sorar.",
+  // -- about the project: the analysis, the intake, the brief (T11.1-T11.3) -------------
+  "About the project": "Proje hakkında",
+  "What the agents know about this project": "Ajanların bu proje hakkında bildikleri",
+  "The Architect reads the checkout and writes down what this project is. Every agent is handed this list at every step, so strike out anything wrong and correct anything half-right before you approve it.":
+    "Mimar depoyu okur ve bu projenin ne olduğunu maddeler hâlinde yazar. Bu liste her adımda her ajana verilir; onaylamadan önce yanlış olanı sil, yarım doğru olanı düzelt.",
+  "The repository is empty, so the Product Owner asks you about the product. Your answers become the first development and the list below, which every agent is handed at every step.":
+    "Depo boş, o yüzden Ürün Sahibi ürünü sana sorar. Cevapların hem ilk geliştirmeye hem de aşağıdaki listeye dönüşür; o liste her adımda her ajana verilir.",
+  "Nothing has been written down yet.": "Henüz hiçbir şey yazılmadı.",
+  "Analyse the repository": "Depoyu analiz et",
+  "Analyse again": "Yeniden analiz et",
+  "Reading the repository…": "Depo okunuyor…",
+  "Project brief": "Proje künyesi",
+  "Add a line": "Madde ekle",
+  "No lines yet.": "Henüz madde yok.",
+  "Approved — every agent reads this.": "Onaylandı — bunu her ajan okuyor.",
+  "Not approved yet: the agents are told nothing until you approve it.":
+    "Henüz onaylanmadı: sen onaylayana kadar ajanlara hiçbir şey söylenmiyor.",
+  "Save draft": "Taslağı kaydet",
+  "Approve and continue": "Onayla ve devam et",
+  "Saved — the agents read this from now on": "Kaydedildi — ajanlar bundan sonra bunu okuyor",
+  Detail: "Ayrıntı",
+  // the brief's categories
+  stack: "teknoloji",
+  modules: "modüller",
+  conventions: "kurallar",
+  deployment: "dağıtım",
+  risks: "riskler",
+  // the intake
+  "A few questions": "Birkaç soru",
+  "round {n} of {max}": "{max} turdan {n}. tur",
+  "Send the answers": "Cevapları gönder",
+  "The Product Owner is reading your answers…": "Ürün Sahibi cevaplarını okuyor…",
+  "Tell the agents what you are building and they will start from there.":
+    "Ajanlara ne yaptığını anlat, oradan başlasınlar.",
+  "What you answered before": "Daha önce ne cevapladın",
+  // -- the stack and the deployment (T11.5, T11.6) --------------------------------------
+  "What it is written in": "Neyle yazılıyor",
+  "Add a part": "Parça ekle",
+  Framework: "Framework",
+  "The stack was changed": "Teknoloji seçimi değişti",
+  "needs deployment approval": "dağıtım onayı bekliyor",
+  "DevOps: deployment plan": "DevOps: dağıtım planı",
+  "Deployment approval": "Dağıtım onayı",
+  "Files it will write": "Yazacağı dosyalar",
+  "What you have to supply": "Senin sağlaman gerekenler",
+  "Add a file": "Dosya ekle",
+  "The deployment plan was changed": "Dağıtım planı değişti",
+  "Every file lives under deployment/ — DevOps opens pull requests, it does not edit the product.":
+    "Her dosya deployment/ altında durur — DevOps pull request açar, ürünü düzenlemez.",
+  Target: "Hedef",
+  aws: "AWS",
+  azure: "Azure",
+  Path: "Yol",
+  "Nothing to deploy for this development.": "Bu geliştirme için dağıtılacak bir şey yok.",
+  "That is a project name, not its key. The key is short and uppercase, like SCRUM.":
+    "Bu projenin adı, anahtarı değil. Anahtar kısa ve büyük harflidir, SCRUM gibi.",
+  "The Jira project list could not be loaded, so type the key yourself.":
+    "Jira proje listesi yüklenemedi, anahtarı kendin yaz.",
+  "Which Jira project? (optional)": "Hangi Jira projesi? (isteğe bağlı)",
+  "Jira is connected ({site}).": "Jira bağlı ({site}).",
+  "Pick the project its epics, stories and tasks are written into.":
+    "Epic, story ve task'larının yazılacağı projeyi seç.",
+  "An existing Jira project": "Var olan bir Jira projesi",
+  "Open a new Jira project": "Yeni Jira projesi aç",
+  "A Scrum project with this key is opened on Jira when you create the project, named after it, led by the connected account.":
+    "Projeyi oluşturduğunda Jira'da bu anahtarla bir Scrum projesi açılır, adı projenin adı olur ve bağlı hesap yönetici olur.",
+  "A Jira key is 2 to 10 characters, starts with a letter, like SCRUM.":
+    "Jira anahtarı 2-10 karakterdir ve harfle başlar, SCRUM gibi.",
+  // -- the architecture gate's own tabs and the build setup under them -------------------
+  Preferences: "Tercihler",
+  "Run command (must contain {port})": "Çalıştırma komutu ({port} içermeli)",
+  // -- the Designer ---------------------------------------------------------------------
+  Design: "Tasarım",
+  "Design approval": "Tasarım onayı",
+  design: "tasarım",
+  "The screens": "Ekranlar",
+  "all {n} approved": "{n} ekranın hepsi onaylı",
+  "{done} of {total} approved": "{total} ekranın {done} tanesi onaylı",
+  "The web and mobile phases start when every screen has a yes; the backend ones do not wait.":
+    "Web ve mobil fazları her ekran onaylanınca başlar; arka uç fazları beklemez.",
+  "Open the screen": "Ekranı aç",
+  "Not this — draw it again…": "Bunu beğenmedim — yeniden çiz…",
+  "what should be different?": "ne değişsin? (zorunlu)",
+  "Send it back": "Geri gönder",
+  "Is this the screen?": "Bu ekran böyle mi olsun?",
+  Surface: "Yüzey",
+  Web: "Web",
+  Mobile: "Mobil",
+  "You asked for:": "Senin istediğin:",
+  "no mock": "görsel yok",
+  Screens: "Ekranlar",
+  "What the Web and Mobile specialists build from.":
+    "Web ve Mobil uzmanlarının üzerine inşa ettiği şey.",
+  "The Designer has not written the screens yet.": "Tasarımcı ekranları henüz yazmadı.",
+  Principles: "İlkeler",
+  "What holds across every screen.": "Her ekranda geçerli olanlar.",
+  "No principle was recorded beyond the screens themselves.":
+    "Ekranların kendisi dışında bir ilke kaydedilmedi.",
+  Layout: "Yerleşim",
+  components: "bileşenler",
+  states: "durumlar",
+  interactions: "etkileşimler",
+  Notes: "Notlar",
+  "Designs the screens the two UI specialists build: purpose, layout, states, interactions.":
+    "İki arayüz uzmanının inşa edeceği ekranları tasarlar: amaç, yerleşim, durumlar, etkileşimler.",
+  "designing the screens": "ekranları tasarlıyor",
+  // -- the cost tab ---------------------------------------------------------------------
+  Costs: "Maliyet",
+  Spent: "Harcanan",
+  Expected: "Beklenen",
+  Difference: "Fark",
+  expected: "beklenen",
+  "By agent": "Ajana göre",
+  "By phase": "Faza göre",
+  "By model": "Modele göre",
+  Calls: "Çağrı",
+  "Based on": "Neye dayanıyor",
+  "no history": "geçmiş yok",
+  "{n} call(s)": "{n} çağrı",
+  "calls with no stored price": "kayıtlı fiyatı olmayan çağrılar",
+  "No model prices yet": "Henüz model fiyatı yok",
+  "Nothing can be costed until the price table has been fetched. It runs once a day, and you can fetch it now from Settings.":
+    "Fiyat tablosu çekilmeden hiçbir şey hesaplanamaz. Günde bir kez çalışır, Ayarlar'dan hemen de çekebilirsin.",
+  "No development has run yet.": "Henüz bir geliştirme çalışmadı.",
+  "{n} call(s) ran on a model with no stored price and are not in these totals.":
+    "{n} çağrı, kayıtlı fiyatı olmayan bir modelde koştu ve bu toplamlara dâhil değil.",
+
+  // -- accounts: signing up, confirming an address, getting back in -----------------------------
+  "Create an account": "Hesap aç",
+  "Create account": "Hesabı aç",
+  "You bring your own model keys; Slipwright runs the agents.":
+    "Model anahtarların sende kalır; ajanları Slipwright çalıştırır.",
+  Email: "E-posta",
+  "Your name": "Adın",
+  optional: "isteğe bağlı",
+  "At least 8 characters.": "En az 8 karakter.",
+  "Already have an account?": "Hesabın var mı?",
+  "Confirm your email": "E-postanı doğrula",
+  "Confirming…": "Doğrulanıyor…",
+  "We sent a link to {email}. Open it to finish setting up your account.":
+    "{email} adresine bir bağlantı gönderdik. Hesabını tamamlamak için aç.",
+  "Open the link we sent you to finish setting up your account.":
+    "Hesabını tamamlamak için gönderdiğimiz bağlantıyı aç.",
+  "Send the link again": "Bağlantıyı yeniden gönder",
+  "Sending…": "Gönderiliyor…",
+  "Sent. Check your inbox.": "Gönderildi. Gelen kutuna bak.",
+  "Back to sign in": "Girişe dön",
+  "Forgot your password?": "Şifreni mi unuttun?",
+  "We will mail you a link to set a new one.":
+    "Yeni bir şifre belirlemen için sana bağlantı yollayacağız.",
+  "Send the link": "Bağlantıyı gönder",
+  "Check your inbox": "Gelen kutuna bak",
+  "If that address has an account, a link is on its way.":
+    "O adrese ait bir hesap varsa bağlantı yola çıktı.",
+  "Set a new password": "Yeni şifre belirle",
+  "New password": "Yeni şifre",
+  "Signing in everywhere else will need the new password.":
+    "Diğer her yerde artık yeni şifreyle gireceksin.",
+  "Save and sign in": "Kaydet ve gir",
+  "This link is no longer valid": "Bu bağlantı artık geçerli değil",
+  "Ask for a new one": "Yenisini iste",
+  "Confirm {email} before starting any work.": "İş başlatmadan önce {email} adresini doğrula.",
+  "Confirm now": "Şimdi doğrula",
+  "needs design approval": "tasarım onayı bekliyor",
+  // -- the Designer's About card --------------------------------------------------------
+  "The Designer decides what each screen is before anyone builds one: what a person comes there to do, what sits where, which states it has and what every control does. It draws each screen as a self-contained HTML mock so you approve a picture rather than a paragraph. The Web and Mobile specialists then build the same screen from the same decision, which is what keeps the two halves of a product looking like one product.":
+    "Tasarımcı, kimse bir ekran yazmadan önce o ekranın ne olduğuna karar verir: kişi oraya ne yapmaya gelir, ne nerede durur, hangi durumları vardır ve her kontrol ne yapar. Her ekranı kendi içinde kapalı bir HTML maket olarak çizer, böylece bir paragrafı değil bir resmi onaylarsın. Web ve Mobil uzmanları sonra aynı ekranı aynı karardan inşa eder; ürünün iki yarısını tek bir ürün gibi gösteren de budur.",
+  "After you approve the plan, and only when that plan has a web or mobile phase in it. The backend phases are built while its screens wait for you; the first UI phase stops until they are approved.":
+    "Planı onayladıktan sonra, ve yalnız o planda bir web ya da mobil faz varsa. Backend fazları, ekranlar seni beklerken yapılır; ilk arayüz fazı onaylanana kadar durur.",
+  "The approved backlog and the plan's phases": "Onaylanmış backlog ve planın fazları",
+  "The design standards and the core rules": "Tasarım standartları ve çekirdek kurallar",
+  "Its previous screens, and your reason when you sent one back":
+    "Önceki ekranları ve birini geri gönderdiğindeki gerekçen",
+  "One entry per screen: purpose, layout, components, states and interactions":
+    "Ekran başına bir kayıt: amaç, yerleşim, bileşenler, durumlar ve etkileşimler",
+  "An HTML mock of each screen, drawn in its ordinary state":
+    "Her ekranın olağan hâliyle çizilmiş HTML maketi",
+  "The few principles that hold across every screen": "Her ekranda geçerli olan birkaç ilke",
+  "Writing code or files — it has no permission to, and the specialists build from what it wrote":
+    "Kod ya da dosya yazmak — buna izni yok, uzmanlar onun yazdığından inşa eder",
+  "Inventing a screen the backlog does not ask for: it says so in the notes instead":
+    "Backlog'un istemediği bir ekranı uydurmak: bunun yerine notlarında söyler",
+  "Choosing colours, fonts or a component library — that follows the stack the Architect chose":
+    "Renk, yazı tipi ya da bileşen kütüphanesi seçmek — o, Mimar'ın seçtiği yığını izler",
+
+  // -- support and email settings --------------------------------------------------------
+  Support: "Destek",
+  "Write to us and we answer by email.": "Bize yaz, e-posta ile dönelim.",
+  "Tell us what you need. It reaches us as an email, and we reply to the address below — so a question written here does not need chasing anywhere else.":
+    "Neye ihtiyacın olduğunu yaz. Talebin bize e-posta olarak ulaşır ve aşağıdaki adrese yanıt veririz — yani buraya yazdığın soruyu başka bir yerden takip etmen gerekmez.",
+  "What is it about?": "Konu nedir?",
+  "A question": "Bir sorum var",
+  "Something is broken": "Bir şey bozuk",
+  Billing: "Faturalandırma",
+  "A request": "Bir talebim var",
+  "Something else": "Başka bir şey",
+  "Reply to": "Yanıt adresi",
+  "your address": "adresin",
+  "Empty means {email}, the address on your account.":
+    "Boş bırakırsan hesabındaki adres kullanılır: {email}",
+  "Your account has no address, so please give one here.":
+    "Hesabında adres yok; lütfen buraya bir adres yaz.",
+  Subject: "Konu",
+  "One line: what happened": "Tek satır: ne oldu",
+  "Your message": "Mesajın",
+  "What you were doing, what you expected, and what happened instead. A project name or a job link helps.":
+    "Ne yapıyordun, ne bekliyordun ve onun yerine ne oldu. Bir proje adı ya da iş bağlantısı işimizi kolaylaştırır.",
+  "What you have asked before": "Daha önce sorduklarım",
+  "Nothing yet.": "Henüz bir şey yok.",
+  "Anything you send will be listed here with its state.":
+    "Gönderdiğin her talep, durumuyla birlikte burada listelenir.",
+  About: "Konusu",
+  Sent: "Gönderildi",
+  answered: "yanıtlandı",
+  open: "açık",
+  "Sent. We reply to {email}.": "Gönderildi. {email} adresine yanıt vereceğiz.",
+  "Saved. This installation has no mail server configured yet, so an administrator reads it in the app rather than by email.":
+    "Kaydedildi. Bu kurulumda henüz posta sunucusu tanımlı değil; talebini bir yönetici e-posta yerine uygulama üzerinden okuyacak.",
+  "Saved, but the email could not be sent — an administrator can still read it here. Nothing you wrote was lost.":
+    "Kaydedildi ama e-posta gönderilemedi — bir yönetici yine de burada okuyabilir. Yazdıklarının hiçbiri kaybolmadı.",
+
+  "The sender every letter goes out from, and where support requests land.":
+    "Tüm postaların çıktığı gönderici ve destek taleplerinin düştüğü adres.",
+  Sending: "Gönderim",
+  "letters go out over SMTP": "postalar SMTP ile gidiyor",
+  "no mail server: letters wait in the outbox":
+    "posta sunucusu yok: postalar giden kutusunda bekliyor",
+  "Until a mail server is set here, verification links, password resets and support requests are written to the outbox instead of being sent. Nothing is lost either way.":
+    "Burada bir posta sunucusu tanımlanana kadar doğrulama bağlantıları, şifre sıfırlamaları ve destek talepleri gönderilmek yerine giden kutusuna yazılır. Her iki durumda da hiçbir şey kaybolmaz.",
+  Transport: "Taşıma",
+  "SMTP server": "SMTP sunucusu",
+  "Outbox only (send nothing)": "Yalnızca giden kutusu (hiçbir şey gönderme)",
+  Security: "Güvenlik",
+  "STARTTLS (usually port 587)": "STARTTLS (genelde port 587)",
+  "SSL/TLS (usually port 465)": "SSL/TLS (genelde port 465)",
+  "None (port 25)": "Yok (port 25)",
+  Server: "Sunucu",
+  "Leave empty for a server that needs no login.": "Giriş istemeyen bir sunucu için boş bırak.",
+  "paste a password": "bir şifre yapıştır",
+  "Stored encrypted and never shown again. Empty keeps the stored one.":
+    "Şifrelenerek saklanır ve bir daha gösterilmez. Boş bırakırsan kayıtlı olan korunur.",
+  "Sender address": "Gönderici adresi",
+  "Sender name": "Gönderici adı",
+  "Address of this installation": "Bu kurulumun adresi",
+  "What the links in the letters point at — verification and password resets.":
+    "Postalardaki bağlantıların işaret ettiği adres — doğrulama ve şifre sıfırlama.",
+  "Forget the password": "Şifreyi unut",
+  "Send a test message to": "Deneme mesajını şu adrese gönder",
+  "Send a test message": "Deneme mesajı gönder",
+  "Sent to {email}. If it arrives, the settings are right.":
+    "{email} adresine gönderildi. Ulaştıysa ayarlar doğru.",
+  "Written to the outbox for {email}: no mail server is configured yet.":
+    "{email} için giden kutusuna yazıldı: henüz tanımlı bir posta sunucusu yok.",
+  "Support requests": "Destek talepleri",
+  "What people write on the support page is emailed here. Several addresses may be given, separated by commas. Left empty, it goes to every administrator who has confirmed an address.":
+    "Destek sayfasına yazılanlar bu adrese e-posta olarak gider. Virgülle ayırarak birden çok adres yazabilirsin. Boş bırakırsan adresini doğrulamış tüm yöneticilere gider.",
+  "Support address": "Destek adresi",
+  "support@example.com": "destek@ornek.com",
+  "As things stand a request reaches:": "Şu anki ayarlarla bir talep şuraya ulaşıyor:",
+  "A request would reach nobody: no support address is set and no administrator has a confirmed address. Requests are still kept, under Requests.":
+    "Bir talep şu an kimseye ulaşmaz: destek adresi tanımlı değil ve hiçbir yöneticinin doğrulanmış adresi yok. Talepler yine de saklanır; Talepler sekmesinden görebilirsin.",
+  "What people have written": "Gelen talepler",
+  "Requests written on the support page are kept here as well as emailed.":
+    "Destek sayfasına yazılan talepler e-postayla gönderilmenin yanı sıra burada da saklanır.",
+  "The email did not go out:": "E-posta gönderilemedi:",
+  "Mark answered": "Yanıtlandı olarak işaretle",
+  Reopen: "Yeniden aç",
+  emailed: "e-postalandı",
+  "in the outbox": "giden kutusunda",
+  "not sent": "gönderilemedi",
+  "The outbox": "Giden kutusu",
+  "Letters written but never sent — verification links included.":
+    "Yazılmış ama hiç gönderilmemiş postalar — doğrulama bağlantıları dâhil.",
+  "Empty.": "Boş.",
+
+  // -- email settings, as tabs ------------------------------------------------------------
+  Requests: "Talepler",
+  "How letters leave": "Postalar nasıl çıkıyor",
+  "The mail server every letter goes out from: verification links, password resets and support requests alike.":
+    "Her postanın çıktığı posta sunucusu: doğrulama bağlantıları, şifre sıfırlamaları ve destek talepleri dâhil.",
+  "nothing is sent yet": "henüz hiçbir şey gönderilmiyor",
+  "Where support requests land": "Destek talepleri nereye düşüyor",
+  "The inbox that receives what people write on the support page. Left empty, it falls back to the administrators.":
+    "Destek sayfasına yazılanların düştüğü kutu. Boş bırakılırsa yöneticilere geri düşer.",
+  "someone gets them": "ulaşacak biri var",
+  "nobody gets them": "ulaşacak kimse yok",
+  "Every request, kept here whatever the mail server did, so an unanswered question is never only an email.":
+    "Posta sunucusu ne yaparsa yapsın her talep burada saklanır; yanıtlanmamış bir soru hiçbir zaman yalnızca bir e-postadan ibaret kalmaz.",
+  "nothing waiting": "bekleyen yok",
+  "Letters written but never sent, verification links included. An installation with no mail server keeps them here.":
+    "Yazılmış ama hiç gönderilmemiş postalar — doğrulama bağlantıları dâhil. Posta sunucusu olmayan bir kurulum bunları burada tutar.",
+  empty: "boş",
+  "Nothing is waiting: every letter has gone out.": "Bekleyen yok: bütün postalar çıkmış.",
+  "Several addresses may be given, separated by commas.":
+    "Virgülle ayırarak birden çok adres yazabilirsin.",
+
+  // -- the result tab before there is a result ---------------------------------------------
+  "Nothing has come out yet.": "Henüz ortaya bir şey çıkmadı.",
+  "This development is still running — it is {state}. What it produced, and how to take it into your working copy, appears here once it finishes.":
+    "Bu geliştirme hâlâ sürüyor — şu an {state}. Ne ürettiği ve onu kendi çalışma kopyana nasıl alacağın, iş bittiğinde burada görünecek.",
+
+  // -- the tests tab filter bar ------------------------------------------------------------
+  "Clear the filters": "Filtreleri temizle",
+  "{shown} of {total} run(s)": "{total} çalıştırmanın {shown} tanesi",
+  "All {n} run(s) are still here — the filters above are hiding them.":
+    "{n} çalıştırmanın hepsi hâlâ burada — yukarıdaki filtreler onları gizliyor.",
+
+  // -- getting started: the checklist a new account sees -----------------------------------------
+  "Getting set up": "Kuruluma başlayalım",
+  "Hide this": "Bunu gizle",
+  "Slipwright runs the agents; the model keys stay yours. Two things to connect and you are ready.":
+    "Ajanları Slipwright çalıştırır; model anahtarları sende kalır. İki şeyi bağlayınca hazırsın.",
+  "Add a model key": "Model anahtarı ekle",
+  "Your own key, from any provider. Nothing runs without one.":
+    "Kendi anahtarın, hangi sağlayıcıdan istersen. Bu olmadan hiçbir şey koşmaz.",
+  "Connect GitHub or Bitbucket": "GitHub ya da Bitbucket bağla",
+  "So a finished development can be pushed and opened as a pull request.":
+    "Biten geliştirme gönderilip pull request olarak açılabilsin diye.",
+  "Optional. The backlog is mirrored there when you do.":
+    "İsteğe bağlı. Bağlarsan backlog oraya aynalanır.",
+  "Start your first project": "İlk projeni aç",
+  "Pick a repository, or let Slipwright open a new one.":
+    "Bir depo seç ya da Slipwright senin için yeni bir tane açsın.",
+  "Example: a Notes app": "Örnek: Notlar uygulaması",
+  "this is the example project: it is there to read, not to run":
+    "bu örnek proje: okumak için var, çalıştırmak için değil",
 };

@@ -23,6 +23,9 @@ class JobState(StrEnum):
     AWAITING_BACKLOG_APPROVAL = "awaiting_backlog_approval"
     ARCHITECTURE = "architecture"  # the Architect proposes profile, decisions and phases
     AWAITING_ARCHITECTURE_APPROVAL = "awaiting_architecture_approval"
+    DESIGN = "design"  # the Designer draws the screens the UI specialists build
+    # the screens are signed off one at a time, and only the UI phases wait for them
+    AWAITING_DESIGN_APPROVAL = "awaiting_design_approval"
     DEVELOPING = "developing"
     BUILD_GATE = "build_gate"
     REVIEW = "review"  # QA checks the phase diff against the standards (T9.5)
@@ -30,6 +33,7 @@ class JobState(StrEnum):
     QA = "qa"
     AWAITING_TEST_APPROVAL = "awaiting_test_approval"
     DEVOPS = "devops"
+    AWAITING_DEPLOY_APPROVAL = "awaiting_deploy_approval"  # the deployment scripts (T11.6)
     AWAITING_DECISION = "awaiting_decision"  # stuck (loop, or the supervisor asked): T9.7
     DONE = "done"
     FAILED = "failed"
@@ -39,8 +43,10 @@ APPROVAL_STATES: frozenset[JobState] = frozenset(
     {
         JobState.AWAITING_BACKLOG_APPROVAL,
         JobState.AWAITING_ARCHITECTURE_APPROVAL,
+        JobState.AWAITING_DESIGN_APPROVAL,
         JobState.AWAITING_REVIEW_APPROVAL,
         JobState.AWAITING_TEST_APPROVAL,
+        JobState.AWAITING_DEPLOY_APPROVAL,
         JobState.AWAITING_DECISION,
     }
 )
@@ -108,14 +114,45 @@ class JobData(BaseModel):
     language: str = Field(
         default="en", description="The project's language for people-facing text."
     )
+    brief: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="The project brief as it stood when this job started: what the agents "
+        "were told the project is (see slipwright/schemas/brief.py).",
+    )
     plan_gate: str = Field(
         default="separate",
         description="combined: the backlog flows straight into the architecture and both "
         "are approved as one work list.",
     )
+    design: dict[str, Any] | None = Field(
+        default=None,
+        description="The Designer's screens and principles; the UI specialists build from "
+        "it. None when the development has no screen in it.",
+    )
+    design_approvals: dict[str, bool] = Field(
+        default_factory=dict,
+        description="Screen id -> signed off by a person. The web and mobile phases wait "
+        "until every screen is in here; the backend phases never do.",
+    )
+    design_feedback: dict[str, str] = Field(
+        default_factory=dict,
+        description="Screen id -> what the person asked to be different. The Designer draws "
+        "those screens again and leaves the rest as they are.",
+    )
     phase_index: int = Field(default=0, ge=0, description="Next plan phase to execute.")
     build_attempts: int = Field(default=0, ge=0)
     last_build_output: str | None = None
+    qa_gate_fixes: int = Field(
+        default=0,
+        ge=0,
+        description="Times QA judged the failing test itself wrong on this phase and "
+        "corrected it. Bounded, so a test and a change cannot chase each other.",
+    )
+    qa_diagnosis: str | None = Field(
+        default=None,
+        description="QA's reading of the last failed build gate when the code, not the "
+        "test, was the side that was wrong. The specialist fixing it reads this.",
+    )
     rerun_only: bool = Field(
         default=False,
         description="A step the human re-ran by hand: a passing build gate stops there "
@@ -140,12 +177,24 @@ class JobData(BaseModel):
         "confidence, risk, reasons, feedback, acted (none | auto | error), undone.",
     )
     auto_approvals: int = Field(default=0, ge=0, description="Gates the supervisor approved.")
+    notified: list[str] = Field(
+        default_factory=list,
+        description="Gates whose agent's team has already been written to, as "
+        "'<state>:<visit>'. Kept on the job so a restart does not write the letter "
+        "again and a gate reached twice writes it twice.",
+    )
     # -- hardening (T9.7) --
     resume_state: str | None = Field(
         default=None, description="Where the job continues after the decision gate."
     )
     invocations: int = Field(default=0, ge=0, description="Model calls made so far.")
     tokens_used: int = Field(default=0, ge=0, description="Input + output tokens so far.")
+    cost_usd: float = Field(
+        default=0.0,
+        ge=0.0,
+        description="What the model calls have cost so far, in US dollars. Calls whose "
+        "model has no stored price add nothing, and are listed as unpriced.",
+    )
     invocation_log: list[dict[str, Any]] = Field(
         default_factory=list,
         description="One entry per model call: role, phase, attempts, prompt_chars, tokens, at.",
@@ -155,6 +204,21 @@ class JobData(BaseModel):
     )
     test_cases: list[dict[str, Any]] = Field(default_factory=list)
     qa_stage: int = Field(default=1, ge=1, le=2)
+    devops_stage: int = Field(
+        default=1,
+        ge=1,
+        le=2,
+        description="1: DevOps proposes how this is deployed; 2: it writes the scripts "
+        "and opens the pull request (T11.6).",
+    )
+    deploy: dict[str, Any] | None = Field(
+        default=None,
+        description="The deployment proposal: target, services, scripts, notes. Approved "
+        "(and possibly edited) by a person before anything is written.",
+    )
+    deploy_written: list[str] = Field(
+        default_factory=list, description="Deployment files written into the branch."
+    )
     pr_url: str | None = None
     ci_attempts: int = Field(default=0, ge=0)
     inbox: list[InboxMessage] = Field(default_factory=list)
@@ -227,6 +291,11 @@ class Job(BaseModel):
         default=None,
         description="Owning project. Every job the engine creates has one; only workspace-"
         "level code (and its tests) builds jobs without.",
+    )
+    owner_id: str | None = Field(
+        default=None,
+        description="Copied from the project when the job is created. It decides who may "
+        "see the job and, once it runs, whose model keys pay for it.",
     )
     request: str = Field(min_length=1, description="What the job should accomplish.")
     repo_path: Path

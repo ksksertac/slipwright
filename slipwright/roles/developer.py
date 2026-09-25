@@ -30,7 +30,10 @@ complete new contents of every file you create or change (`content: null` delete
 file); paths are relative to the project root. Keep changes minimal and consistent with
 the existing code. Set `phase_complete` to true when the phase's goal is met.
 If `build_failure` is present, the build or tests failed after your previous attempt on
-this phase: read the output, fix the cause, and return the corrected files.
+this phase: read the output, fix the cause, and return the corrected files. When
+`qa_diagnosis` is there too, QA has already read that failure and says the code is the
+side that is wrong and what it must do instead: start from that reading, and do not
+change the test it names to make the failure go away.
 If a `jira` section is present you are expected to keep the tracker current: transition
 `current_task_key` to in progress, and add a short comment on it (and `log_work` with a
 realistic estimate) describing what you changed.
@@ -75,6 +78,7 @@ def run(
     continuation: dict[str, Any] | None = None,
 ) -> RoleResult:
     """Run the generic developer or, with ``role``, one of the specialists."""
+    from slipwright.roles import designer
     from slipwright.roles.specialists import INSTRUCTIONS as SPECIALIST_INSTRUCTIONS
 
     plan = job.data.plan or {}
@@ -95,8 +99,15 @@ def run(
         phase = phases[index] if index < len(phases) else {}
         context = base_context(job, instructions=instructions, jira=jira, standards=standards)
         context["current_phase"] = {"number": index + 1, "of": len(phases), **phase}
+        # a UI phase builds the Designer's screens rather than inventing its own; only
+        # this phase's screens are handed over, not the whole design
+        screens = designer.for_phase(job, phase)
+        if screens is not None:
+            context["design"] = screens
         if job.data.last_build_output:
             context["build_failure"] = job.data.last_build_output
+        if job.data.qa_diagnosis:
+            context["qa_diagnosis"] = job.data.qa_diagnosis
         if review:
             context["standards_review"] = review
         wanted = list(phase.get("files", []))

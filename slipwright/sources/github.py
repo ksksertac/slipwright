@@ -5,12 +5,15 @@ older settings path)."""
 from __future__ import annotations
 
 import contextlib
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
 import httpx
 
-from slipwright.githost import CiStatus, GhHost
+from slipwright import net
+from slipwright.githost import CiStatus, GhHost, GitHostError
 from slipwright.sources.registry import (
     Identity,
     Repo,
@@ -18,6 +21,7 @@ from slipwright.sources.registry import (
     SourceError,
     SourceSpec,
 )
+from slipwright.sources.scrub import scrub
 
 
 class GitHubHost:
@@ -130,13 +134,28 @@ class GitHubHost:
         )
 
     def push(self, worktree: Path, branch: str) -> None:
-        self._gh.push(worktree, branch)
+        # git and `gh` print back the URL they were given, token and all, and whatever
+        # they print ends up in the job's history and on the page
+        with self._quiet_about_the_token():
+            self._gh.push(worktree, branch)
 
     def open_pr(self, worktree: Path, branch: str, title: str, body: str) -> str:
-        return self._gh.open_pr(worktree, branch, title, body)
+        with self._quiet_about_the_token():
+            return self._gh.open_pr(worktree, branch, title, body)
 
     def ci_status(self, worktree: Path, branch: str, pr_url: str) -> CiStatus:
-        return self._gh.ci_status(worktree, branch, pr_url)
+        with self._quiet_about_the_token():
+            return self._gh.ci_status(worktree, branch, pr_url)
+
+    @contextmanager
+    def _quiet_about_the_token(self) -> Iterator[None]:
+        """Re-raise whatever the host says with the credential masked."""
+        try:
+            yield
+        except SourceError as exc:
+            raise SourceError(scrub(str(exc), self.creds.token)) from exc
+        except GitHostError as exc:
+            raise type(exc)(scrub(str(exc), self.creds.token)) from exc
 
     # -- plumbing ---------------------------------------------------------------------------
 
@@ -148,17 +167,39 @@ class GitHubHost:
 
     def _request(self, method: str, path: str, **kw: Any) -> httpx.Response:
         try:
-            resp = self._client.request(method, path, **kw)
+            resp = net.request(self._client, method, path, **kw)
         except httpx.HTTPError as exc:
             raise SourceError(f"GitHub request failed: {exc}") from exc
         if resp.status_code == 401:
             raise SourceError("GitHub rejected the token (401)")
         if resp.status_code >= 400:
-            message = ""
-            with contextlib.suppress(ValueError):
-                message = resp.json().get("message", "")
-            raise SourceError(f"GitHub returned {resp.status_code}: {message or resp.text[:200]}")
+            raise SourceError(f"GitHub returned {resp.status_code}: {_why(resp)}")
         return resp
+
+
+def _why(resp: httpx.Response) -> str:
+    """What GitHub actually objected to. Its top-level ``message`` is a headline -- a 422
+    on repository creation says only "Repository creation failed." -- and the reason a
+    person can act on ("name already exists on this account") is in ``errors``. Reporting
+    the headline alone left people guessing, so both are shown."""
+    body: dict[str, Any] = {}
+    with contextlib.suppress(ValueError):
+        parsed = resp.json()
+        body = parsed if isinstance(parsed, dict) else {}
+    message = str(body.get("message") or "").strip()
+    reasons: list[str] = []
+    for item in body.get("errors") or []:
+        if isinstance(item, str):
+            reasons.append(item)
+        elif isinstance(item, dict):
+            detail = str(item.get("message") or item.get("code") or "").strip()
+            field = str(item.get("field") or "").strip()
+            if detail:
+                reasons.append(f"{field}: {detail}" if field and field not in detail else detail)
+    if reasons:
+        joined = "; ".join(dict.fromkeys(reasons))
+        return f"{message} ({joined})" if message else joined
+    return message or resp.text[:200]
 
 
 __all__ = ["GitHubHost"]

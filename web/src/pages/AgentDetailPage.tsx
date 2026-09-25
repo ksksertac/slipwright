@@ -25,11 +25,21 @@ import { useToast } from "../components/Toast";
 import { Empty, ErrorBox, Loading } from "../components/ui";
 import { useAuth } from "../auth/AuthProvider";
 import { useProviderModels, useProviders } from "../api/hooks";
+import { AgentAboutTab } from "./AgentAboutTab";
 import { AgentStandardsTab } from "./AgentStandardsTab";
+import { AgentTeamTab } from "./AgentTeamTab";
 import { useT } from "../i18n";
 
-const TABS = ["setup", "standards", "activity"] as const;
+const TABS = ["about", "setup", "team", "standards", "activity"] as const;
 type Tab = (typeof TABS)[number];
+// the tab strip's labels: English source strings, translated like the rest of the UI
+const TAB_LABEL: Record<Tab, string> = {
+  about: "What it does",
+  setup: "Setup",
+  team: "Who holds it",
+  standards: "Standards",
+  activity: "Activity",
+};
 const DEPTHS = ["off", "low", "medium", "high", "max"] as const;
 const PERMISSIONS: Permission[] = [
   "read_files",
@@ -42,9 +52,9 @@ const PERMISSIONS: Permission[] = [
 
 export function AgentDetailPage() {
   const tx = useT();
-  const { role = "", tab = "setup" } = useParams();
+  const { role = "", tab = "about" } = useParams();
   const agents = useAgents();
-  const current: Tab = (TABS as readonly string[]).includes(tab) ? (tab as Tab) : "setup";
+  const current: Tab = (TABS as readonly string[]).includes(tab) ? (tab as Tab) : "about";
   const agent = agents.data?.find((a) => a.role === role);
   if (agents.isLoading) return <Loading />;
   if (agents.error) return <ErrorBox error={agents.error} />;
@@ -52,23 +62,25 @@ export function AgentDetailPage() {
 
   return (
     <div>
-      <Crumbs items={[{ label: "Agents", to: "/agents" }, { label: agent.label }]} />
+      <Crumbs items={[{ label: "Agents", to: "/agents" }, { label: tx(agent.label) }]} />
       <div className="page-head">
         <div className="row" style={{ flexWrap: "nowrap", gap: 14 }}>
           <AgentAvatar role={agent.role} className="lg" />
           <div>
-            <h1>{agent.label}</h1>
-            <p>{agent.scope}</p>
+            <h1>{tx(agent.label)}</h1>
+            <p>{tx(agent.scope)}</p>
           </div>
         </div>
       </div>
       <nav className="tabs">
         {TABS.map((t) => (
           <NavLink key={t} to={`/agents/${role}/${t}`} className={t === current ? "active" : ""}>
-            {tx(t[0]!.toUpperCase() + t.slice(1))}
+            {tx(TAB_LABEL[t])}
           </NavLink>
         ))}
       </nav>
+      {current === "about" && <AgentAboutTab agent={agent} />}
+      {current === "team" && <AgentTeamTab agent={agent} />}
       {current === "setup" && <SetupTab agent={agent} />}
       {current === "standards" && <AgentStandardsTab role={role} domain={agent.standards_domain} />}
       {current === "activity" && <ActivityTab role={role} />}
@@ -84,36 +96,46 @@ function SetupTab({ agent }: { agent: AgentSummary }) {
   const [selected, setSelected] = useState("");
   const projectId = selected || projects.data?.[0]?.id || "";
   const role = agent.role;
+  const none = projects.data && projects.data.length === 0;
   return (
-    <div className="stack">
+    <div className="setup-grid">
       <ModelCard key={role} agent={agent} />
-      <p className="muted small" style={{ marginTop: 18 }}>
-        {tx(
-          "Thinking depth and permissions are read from the project's seed profile — never from engine code. Pick a project; projects without their own profile start from the engine default and get one when you save.",
-        )}
-      </p>
-      {projects.data && projects.data.length === 0 && (
-        <Empty>
-          {tx("No projects yet.")} <Link to="/projects/new">{tx("Create one")}</Link> {tx("first.")}
-        </Empty>
-      )}
-      {projects.data && projects.data.length > 0 && (
-        <div className="field" style={{ maxWidth: 420 }}>
-          <label htmlFor="agent-project">{tx("Project")}</label>
-          <select
-            id="agent-project"
-            value={projectId}
-            onChange={(e) => setSelected(e.target.value)}
-          >
-            {projects.data.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
+      <section className="card flush setup-card">
+        <div className="card-head">
+          <h3>{tx("Project profile")}</h3>
+          {projects.data && projects.data.length > 0 && (
+            <select
+              id="agent-project"
+              aria-label={tx("Project")}
+              className="head-select"
+              value={projectId}
+              onChange={(e) => setSelected(e.target.value)}
+            >
+              {projects.data.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
-      )}
-      {projectId && <RoleSetup key={`${projectId}:${role}`} projectId={projectId} role={role} />}
+        <div className="card-body">
+          <p className="muted small" style={{ marginTop: 0 }}>
+            {tx(
+              "Thinking depth and permissions are read from the project's seed profile — never from engine code. Pick a project; projects without their own profile start from the engine default and get one when you save.",
+            )}
+          </p>
+          {none && (
+            <Empty>
+              {tx("No projects yet.")} <Link to="/projects/new">{tx("Create one")}</Link>{" "}
+              {tx("first.")}
+            </Empty>
+          )}
+          {projectId && (
+            <RoleSetup key={`${projectId}:${role}`} projectId={projectId} role={role} />
+          )}
+        </div>
+      </section>
     </div>
   );
 }
@@ -162,8 +184,8 @@ function ModelCard({ agent }: { agent: AgentSummary }) {
     });
 
   return (
-    <div className="card form">
-      <div className="row spread">
+    <section className="card flush setup-card">
+      <div className="card-head">
         <h3>{tx("Model")}</h3>
         <span className="faint small">
           {pinned
@@ -171,12 +193,12 @@ function ModelCard({ agent }: { agent: AgentSummary }) {
             : tx("follows the default provider (Settings → Models)")}
         </span>
       </div>
-      <p className="muted small" style={{ marginTop: 6 }}>
-        {tx(
-          "Pick the provider and model this agent works with. It runs there on every project, whatever the project profile says; if the provider cannot be reached the job fails with the reason.",
-        )}
-      </p>
-      <div className="grid-2" style={{ marginTop: 10 }}>
+      <div className="card-body">
+        <p className="muted small" style={{ marginTop: 0 }}>
+          {tx(
+            "Pick the provider and model this agent works with. It runs there on every project, whatever the project profile says; if the provider cannot be reached the job fails with the reason.",
+          )}
+        </p>
         <div className="field">
           <label>{tx("Provider")}</label>
           <select value={provider} disabled={!admin} onChange={(e) => pick(e.target.value)}>
@@ -236,59 +258,59 @@ function ModelCard({ agent }: { agent: AgentSummary }) {
             </span>
           )}
         </div>
-      </div>
-      {provider && models.error && (
-        <div className="callout error">{describeError(models.error)}</div>
-      )}
-      {assign.error && <div className="callout error">{describeError(assign.error)}</div>}
-      {test.data && test.data.name === provider && (
-        <div
-          className={`callout ${model && !test.data.models.includes(model) ? "warn" : "notice"}`}
-        >
-          {tx("Connected to {provider}: {n} model(s).", {
-            provider: spec?.label ?? provider,
-            n: test.data.models.length,
-          })}{" "}
-          {model &&
-            (test.data.models.includes(model)
-              ? tx("{model} is available.", { model })
-              : tx("{model} is not in the vendor's list — it may still fail at run time.", {
-                  model,
-                }))}
-        </div>
-      )}
-      {test.error && test.variables === provider && (
-        <div className="callout error">{describeError(test.error)}</div>
-      )}
-      {admin && (
-        <div className="row">
-          <button
-            className="btn primary"
-            disabled={!dirty || assign.isPending || (!!provider && !model)}
-            onClick={() => save({ provider: provider || null, model: model || null })}
+        {provider && models.error && (
+          <div className="callout error">{describeError(models.error)}</div>
+        )}
+        {assign.error && <div className="callout error">{describeError(assign.error)}</div>}
+        {test.data && test.data.name === provider && (
+          <div
+            className={`callout ${model && !test.data.models.includes(model) ? "warn" : "notice"}`}
           >
-            {assign.isPending ? tx("Saving…") : tx("Save")}
-          </button>
-          <button
-            className="btn"
-            disabled={!provider || !spec?.key_set || test.isPending}
-            onClick={() => test.mutate(provider)}
-          >
-            {test.isPending ? tx("Testing…") : tx("Test connection")}
-          </button>
-          {pinned && !dirty && (
+            {tx("Connected to {provider}: {n} model(s).", {
+              provider: spec?.label ?? provider,
+              n: test.data.models.length,
+            })}{" "}
+            {model &&
+              (test.data.models.includes(model)
+                ? tx("{model} is available.", { model })
+                : tx("{model} is not in the vendor's list — it may still fail at run time.", {
+                    model,
+                  }))}
+          </div>
+        )}
+        {test.error && test.variables === provider && (
+          <div className="callout error">{describeError(test.error)}</div>
+        )}
+        {admin && (
+          <div className="row">
+            <button
+              className="btn primary"
+              disabled={!dirty || assign.isPending || (!!provider && !model)}
+              onClick={() => save({ provider: provider || null, model: model || null })}
+            >
+              {assign.isPending ? tx("Saving…") : tx("Save")}
+            </button>
             <button
               className="btn"
-              disabled={assign.isPending}
-              onClick={() => save({ provider: null, model: null })}
+              disabled={!provider || !spec?.key_set || test.isPending}
+              onClick={() => test.mutate(provider)}
             >
-              {tx("Clear assignment")}
+              {test.isPending ? tx("Testing…") : tx("Test connection")}
             </button>
-          )}
-          {dirty && <span className="muted small">{tx("unsaved changes")}</span>}
-        </div>
-      )}
-    </div>
+            {pinned && !dirty && (
+              <button
+                className="btn"
+                disabled={assign.isPending}
+                onClick={() => save({ provider: null, model: null })}
+              >
+                {tx("Clear assignment")}
+              </button>
+            )}
+            {dirty && <span className="muted small">{tx("unsaved changes")}</span>}
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -340,73 +362,71 @@ function RoleForm({
       {
         onSuccess: () => {
           setDirty(false);
-          toast.ok("Agent setup saved");
+          toast.ok(tx("Agent setup saved"));
         },
       },
     );
 
   return (
-    <div className="card form">
+    <>
+      <div className="field">
+        <label htmlFor="agent-depth">{tx("Thinking depth")}</label>
+        <select
+          id="agent-depth"
+          value={cfg.thinking_depth}
+          disabled={!admin}
+          onChange={(e) => set({ thinking_depth: e.target.value as RoleConfig["thinking_depth"] })}
+        >
+          {DEPTHS.map((d) => (
+            <option key={d} value={d}>
+              {tx(d)}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="field">
+        <label>{tx("Permissions")}</label>
+        <div className="perms">
+          {PERMISSIONS.map((perm) => {
+            const on = (cfg.permissions ?? []).includes(perm);
+            return (
+              <label key={perm} className="check">
+                <input
+                  type="checkbox"
+                  checked={on}
+                  disabled={!admin}
+                  onChange={(e) => {
+                    const current = cfg.permissions ?? [];
+                    set({
+                      permissions: e.target.checked
+                        ? [...current, perm]
+                        : current.filter((p) => p !== perm),
+                    });
+                  }}
+                />
+                {perm}
+              </label>
+            );
+          })}
+        </div>
+      </div>
+      {patch.error && <div className="callout error">{describeError(patch.error)}</div>}
       <div className="row spread">
-        <h3>{tx("Project profile")}</h3>
+        {admin ? (
+          <div className="row">
+            <button className="btn primary" disabled={!dirty || patch.isPending} onClick={save}>
+              {patch.isPending ? tx("Saving…") : tx("Save")}
+            </button>
+            {dirty && <span className="muted small">{tx("unsaved changes")}</span>}
+          </div>
+        ) : (
+          <span />
+        )}
         <span className="faint small">
           {hasOwn ? tx("project profile") : tx("engine default (saved into the project on save)")}
         </span>
       </div>
-      <div className="grid-2" style={{ marginTop: 10 }}>
-        <div className="field">
-          <label>{tx("Thinking depth")}</label>
-          <select
-            value={cfg.thinking_depth}
-            disabled={!admin}
-            onChange={(e) =>
-              set({ thinking_depth: e.target.value as RoleConfig["thinking_depth"] })
-            }
-          >
-            {DEPTHS.map((d) => (
-              <option key={d} value={d}>
-                {d}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="field">
-          <label>{tx("Permissions")}</label>
-          <div className="row" style={{ gap: 8 }}>
-            {PERMISSIONS.map((perm) => {
-              const on = (cfg.permissions ?? []).includes(perm);
-              return (
-                <label key={perm} className="check">
-                  <input
-                    type="checkbox"
-                    checked={on}
-                    disabled={!admin}
-                    onChange={(e) => {
-                      const current = cfg.permissions ?? [];
-                      set({
-                        permissions: e.target.checked
-                          ? [...current, perm]
-                          : current.filter((p) => p !== perm),
-                      });
-                    }}
-                  />
-                  {perm}
-                </label>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-      {patch.error && <div className="callout error">{describeError(patch.error)}</div>}
-      {admin && (
-        <div className="row">
-          <button className="btn primary" disabled={!dirty || patch.isPending} onClick={save}>
-            {patch.isPending ? tx("Saving…") : tx("Save")}
-          </button>
-          {dirty && <span className="muted small">{tx("unsaved changes")}</span>}
-        </div>
-      )}
-    </div>
+    </>
   );
 }
 

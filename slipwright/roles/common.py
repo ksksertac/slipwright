@@ -123,10 +123,14 @@ def base_context(
     jira: dict[str, Any] | None = None,
     standards: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Context every role receives: the request, any rejection feedback, pending inbox,
-    and (only for roles allowed to act in Jira) the Jira section."""
+    """Context every role receives: the request, the project brief, any rejection
+    feedback, pending inbox, and (only for roles allowed to act in Jira) the Jira
+    section."""
     ctx: dict[str, Any] = {"instructions": instructions, "request": job.request}
     ctx["writing"] = writing_rules(job.data.language)
+    if job.data.brief:
+        # what this project is, approved by a person before any agent read it
+        ctx["project"] = job.data.brief
     if feedback:
         ctx["feedback"] = feedback
     if jira:
@@ -140,12 +144,14 @@ def base_context(
 
 
 def plan_outline(plan: dict[str, Any] | None) -> dict[str, Any] | None:
-    """The plan as a role that implements or tests it needs it: summary, decisions and
-    the phase goals — never the breakdown tree or file lists of other phases."""
+    """The plan as a role that implements or tests it needs it: summary, stack,
+    decisions and the phase goals — never the breakdown tree or file lists of other
+    phases."""
     if not plan:
         return None
     return {
         "summary": plan.get("summary"),
+        "stack": plan.get("stack", []),
         "decisions": plan.get("decisions", []),
         "phases": [
             {"number": i + 1, "goal": p.get("goal"), "domain": p.get("domain", "general")}

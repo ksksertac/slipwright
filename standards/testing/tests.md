@@ -4,55 +4,56 @@ tags: [pytest, unit, integration, e2e, fixtures, coverage, flaky, test-cases, re
 applies_to: [python, pytest, typescript, vitest, playwright, any]
 ---
 
-# Testing
+# Test
 
-## Test pyramid and what to test
+## Test piramidi ve neyi test etmeli
 
-Most tests are unit tests of behaviour through the public interface; integration tests
-cover one real boundary at a time (the database, the HTTP layer, a queue) with fakes for
-the rest; a few end-to-end tests walk the main user journeys. Do not test private
-helpers directly, do not assert on log text, and do not test the framework.
+Testlerin çoğu, davranışı herkese açık arayüz üzerinden sınayan birim testleridir;
+entegrasyon testleri her seferinde tek bir gerçek sınırı (veritabanı, HTTP katmanı, bir
+kuyruk) kapsar, gerisi sahtedir; birkaç uçtan uca test ana kullanıcı yolculuklarını
+yürür. Özel yardımcıları doğrudan test etme, log metnine göre doğrulama yapma ve çatıyı
+test etme.
 
-## Naming and structure
+## Adlandırma ve yapı
 
-Test files mirror the source tree (`tests/test_<module>.py`, `Foo.test.ts`). Names
-state the behaviour and the condition: `test_refund_is_rejected_when_invoice_is_unpaid`.
-Arrange–act–assert with blank lines between the three; one behaviour per test; the
-assertion message explains what should have happened. Shared setup lives in fixtures,
-not in module-level globals.
+Test dosyaları kaynak ağacını yansıtır (`tests/test_<modul>.py`, `Foo.test.ts`). Adlar
+davranışı ve koşulu söyler: `test_odenmemis_faturada_iade_reddedilir`. Hazırla–uygula–
+doğrula, aralarında boş satırla; test başına tek davranış; doğrulama mesajı ne olması
+gerektiğini açıklar. Ortak kurulum modül düzeyindeki global'lerde değil, fixture'larda
+yaşar.
 
-## Fixtures and fakes
+## Fixture'lar ve sahteler
 
-Prefer in-process fakes over mocks for external services (a fake Jira, a fake mail
-sender that records calls); mock only at the boundary you own. Every fake enforces the
-same contract as the real thing (status codes, error shapes). Tests never touch the
-network, the real clock or the real file system outside a temporary directory.
+Dış servisler için mock yerine süreç içi sahteleri yeğle (sahte bir Jira, çağrıları
+kaydeden sahte bir posta göndericisi); yalnızca kendi sahip olduğun sınırda mock'la. Her
+sahte, gerçeğiyle aynı sözleşmeyi uygular (durum kodları, hata biçimleri). Testler ağa,
+gerçek saate ya da geçici dizin dışındaki gerçek dosya sistemine asla dokunmaz.
 
-## Proposing test cases
+## Test vakalarını önermek
 
-When asked for test cases before code is written, list them as `name` + what it checks,
-covering: the happy path, each validation rule, each error path the code declares, the
-empty/zero case, boundaries (limits, pagination edges), concurrency or idempotency where
-the design promises it, and permissions. One case per behaviour; no "test everything"
-cases; no cases for behaviour the phase does not implement.
+Kod yazılmadan önce test vakası istendiğinde, bunları `name` + neyi kontrol ettiği olarak
+listele: mutlu yol, her doğrulama kuralı, kodun beyan ettiği her hata yolu, boş/sıfır
+durumu, sınırlar (limitler, sayfalama uçları), tasarımın söz verdiği yerlerde eşzamanlılık
+ya da idempotency, ve izinler. Davranış başına tek vaka; "her şeyi test et" vakaları yok;
+fazın uygulamadığı davranışlar için vaka yok.
 
-## Determinism and speed
+## Belirlilik ve hız
 
-No sleeps, no time-dependent assertions (inject a clock), no order dependence between
-tests, no shared mutable state. A unit test runs in milliseconds; mark anything slower
-than a second and keep it out of the default run. Fix flaky tests the day they appear;
-never wrap them in retries.
+Uyku yok, zamana bağlı doğrulama yok (saati enjekte et), testler arası sıra bağımlılığı
+yok, paylaşılan değişken durum yok. Bir birim testi milisaniyelerle ölçülür; bir saniyeden
+yavaş olan her şeyi işaretle ve varsayılan koşunun dışında tut. Kararsız testleri
+göründükleri gün düzelt; asla yeniden denemeyle sarmalama.
 
-## Coverage and gates
+## Kapsam ve kapılar
 
-New code ships with tests for every branch it adds; the build gate runs the whole
-suite, not a subset. Coverage is a signal, not a target: never write assertion-free
-tests to move the number. A failing test is fixed by fixing the cause or, when the test
-was wrong, by changing the test in the same change with the reason in the summary.
+Yeni kod, eklediği her dal için testiyle gelir; build kapısı bir alt kümeyi değil, tüm
+takımı koşar. Kapsam bir hedef değil, bir işarettir: sayıyı büyütmek için doğrulamasız
+test yazma. Düşen bir test, nedeni düzeltilerek ya da test yanlışsa aynı değişiklik içinde
+ve nedeni özette yazılarak değiştirilerek onarılır.
 
-## Reviewing a change against the standards
+## Bir değişikliği standartlara karşı incelemek
 
-When reviewing a diff, cite the section a violation breaks, the file and line, and a
-concrete fix. Classify: `blocking` for security, data loss, broken contracts or missing
-tests for new behaviour; `advisory` for naming, structure and style. Say "no
-violations" when the diff is clean — do not invent findings to have something to report.
+Bir diff'i incelerken ihlalin kırdığı bölümü, dosyayı, satırı ve somut düzeltmeyi yaz.
+Sınıflandır: güvenlik, veri kaybı, kırılan sözleşmeler ya da yeni davranışın eksik
+testleri için `blocking`; adlandırma, yapı ve biçim için `advisory`. Diff temizse "ihlal
+yok" de — rapor edecek bir şey olsun diye bulgu uydurma.

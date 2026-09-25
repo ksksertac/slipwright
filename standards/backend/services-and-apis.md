@@ -4,53 +4,53 @@ tags: [api, http, rest, errors, validation, pagination, versioning]
 applies_to: [python, fastapi, node, go, java, any]
 ---
 
-# Services and APIs
+# Servisler ve API'ler
 
-## API design
+## API tasarımı
 
-Resources are nouns in plural (`/invoices`, `/invoices/{id}`); actions that are not CRUD
-are sub-resources or verbs under the resource (`/invoices/{id}/refund`). Use the HTTP
-verb for intent: GET reads and is idempotent, PUT replaces, PATCH updates part, DELETE
-removes, POST creates or triggers. Return 201 with the created representation, 204 with
-no body for deletes, 404 for unknown ids and 409 for state conflicts (a resource that
-cannot change in its current state). Never return 200 with an error inside the body.
+Kaynaklar çoğul isimlerdir (`/invoices`, `/invoices/{id}`); CRUD olmayan eylemler kaynağın
+altında alt kaynak ya da fiil olur (`/invoices/{id}/refund`). Niyeti HTTP fiiliyle söyle:
+GET okur ve idempotent'tir, PUT değiştirir, PATCH bir kısmını günceller, DELETE siler,
+POST oluşturur ya da tetikler. Oluşturmada 201 ile yeni temsili, silmede gövdesiz 204,
+bilinmeyen kimlikte 404, durum çakışmasında (mevcut durumunda değişemeyen kaynak) 409
+dön. Gövdesinde hata taşıyan 200 asla dönme.
 
-## Request validation
+## İstek doğrulama
 
-Validate every request at the boundary with the framework's schema layer (pydantic,
-zod, bean validation …), never by hand inside handlers. Reject unknown fields. Return
-422 (or the framework's validation status) with a machine-readable list of field errors.
-Business rules that need data (uniqueness, balance checks) live in the service layer and
-map to 409 or 400 with a stable error code, not a free-text message.
+Her isteği sınırda, çatının şema katmanıyla doğrula (pydantic, zod, bean validation …),
+asla handler içinde elle değil. Bilinmeyen alanları reddet. 422 (ya da çatının doğrulama
+durumu) ile makinece okunabilir bir alan hatası listesi dön. Veri gerektiren iş kuralları
+(tekillik, bakiye kontrolü) servis katmanında yaşar ve serbest metin yerine kararlı bir
+hata koduyla 409 ya da 400'e eşlenir.
 
-## Error responses
+## Hata yanıtları
 
-Every error body has the same shape: `{"error": {"code": "invoice_not_found",
-"message": "human readable", "details": {...}}}`. Codes are stable snake_case
-identifiers clients can switch on; messages may change. Never leak stack traces,
-SQL, or internal paths. Log the full exception server-side with a correlation id and
-return that id in the response so support can find it.
+Her hata gövdesi aynı biçimdedir: `{"error": {"code": "invoice_not_found", "message":
+"insanca okunur", "details": {...}}}`. Kodlar, istemcilerin üzerine dallanabileceği
+kararlı snake_case tanımlayıcılardır; mesajlar değişebilir. Yığın izlerini, SQL'i ya da iç
+yolları asla dışarı sızdırma. İstisnanın tamamını sunucu tarafında bir korelasyon
+kimliğiyle logla ve o kimliği yanıtta dön ki destek onu bulabilsin.
 
-## Pagination and filtering
+## Sayfalama ve süzme
 
-List endpoints paginate by default (page size 50, maximum 200) using cursor pagination
-for anything that can grow past a few thousand rows; offset pagination is acceptable
-only for small, admin-only lists. Filters are query parameters named after the field
-(`?status=open&customer_id=…`); sorting is `?sort=-created_at`. Responses carry
-`next_cursor` (or `null`) so clients never guess.
+Liste uç noktaları varsayılan olarak sayfalar (sayfa boyu 50, en çok 200); birkaç bini
+geçebilecek her şey için imleç (cursor) sayfalaması kullanılır, offset sayfalaması
+yalnızca küçük ve yönetici listeleri için kabul edilir. Süzgeçler alan adını taşıyan
+sorgu parametreleridir (`?status=open&customer_id=…`); sıralama `?sort=-created_at`
+biçimindedir. Yanıtlar `next_cursor` (ya da `null`) taşır ki istemciler tahmin yürütmesin.
 
-## Versioning and compatibility
+## Sürümleme ve uyumluluk
 
-Add fields freely; never remove or rename a field, change its type, or change the
-meaning of an existing status without a version bump. Version in the path (`/v2/`) only
-when a breaking change is unavoidable, and keep the old version running until every
-client is migrated. Deprecations are announced in the response (`Deprecation` header)
-and in the changelog before removal.
+Alan eklemek serbesttir; bir alanı kaldırmak, yeniden adlandırmak, tipini ya da var olan
+bir durumun anlamını değiştirmek sürüm artırmadan yapılmaz. Yola sürüm (`/v2/`) yalnızca
+kırıcı bir değişiklik kaçınılmazsa eklenir ve her istemci taşınana dek eski sürüm
+çalışmaya devam eder. Kullanımdan kaldırmalar, silinmeden önce yanıtta (`Deprecation`
+başlığı) ve değişiklik günlüğünde duyurulur.
 
-## Idempotency and retries
+## Idempotency ve yeniden denemeler
 
-Any POST that creates money movement, messages or external side effects accepts an
-`Idempotency-Key` header and returns the original result for a repeated key. Outbound
-calls to other services use timeouts (connect 2 s, read 10 s unless documented) and
-bounded retries with exponential backoff and jitter; retry only idempotent operations
-and only on transient failures (timeouts, 502/503/504, connection reset).
+Para hareketi, mesaj ya da dış yan etki yaratan her POST bir `Idempotency-Key` başlığı
+kabul eder ve aynı anahtar tekrar geldiğinde ilk sonucu döner. Başka servislere giden
+çağrılar zaman aşımı kullanır (bağlanma 2 sn, okuma 10 sn — belgelenmiş bir istisna
+yoksa) ve üstel backoff ile jitter'lı, sınırlı sayıda yeniden dener; yalnızca idempotent
+işlemler ve yalnızca geçici hatalarda (zaman aşımı, 502/503/504, bağlantı kopması).

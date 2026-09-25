@@ -1,10 +1,10 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { describeError, type Job } from "../api/client";
-import { useOverview, useProjects, useJob, useUndoAutoApproval } from "../api/hooks";
+import { useMyTeam, useOverview, useProjects, useJob, useUndoAutoApproval } from "../api/hooks";
+import { mayActAt } from "../api/gates";
 import { useToast } from "../components/Toast";
 import { BulkBar } from "../components/BulkBar";
-import { Crumbs } from "../components/Crumbs";
 import { GateActions, Recommendation } from "../components/GateActions";
 import {
   IconActivity,
@@ -25,20 +25,33 @@ import {
   PageHead,
   ProgressBar,
   StatTile,
+  sentence,
   timeAgo,
 } from "../components/ui";
-import { useT } from "../i18n";
+import { sentenceCase, useT } from "../i18n";
+import { SayProvider } from "../i18n/said";
+import { OnboardingChecklist } from "../components/Onboarding";
+
+/** A project's name for the feed, or nothing when the project is not in the list yet. */
+function named(name: string | undefined): string | undefined {
+  return name === undefined ? undefined : sentenceCase(name);
+}
 
 export function DashboardPage() {
   const tx = useT();
   const overview = useOverview();
   const projects = useProjects();
+  const team = useMyTeam();
   const byId = new Map((projects.data ?? []).map((p) => [p.id, p]));
   const [chosen, setSelected] = useState<string[]>([]);
-  const waitingIds = useMemo(
-    () => new Set((overview.data?.waiting ?? []).map((w) => w.job_id)),
-    [overview.data],
+  // somebody who holds one agent is shown the gates of that agent. The others are the
+  // owner's or another member's: they are still visible on the project, but "what waits
+  // for you" has to mean what waits for *you*.
+  const waiting = useMemo(
+    () => (overview.data?.waiting ?? []).filter((w) => mayActAt(w.state, team.data)),
+    [overview.data, team.data],
   );
+  const waitingIds = useMemo(() => new Set(waiting.map((w) => w.job_id)), [waiting]);
   // a job that moved on drops out of the selection by itself
   const selected = useMemo(() => chosen.filter((id) => waitingIds.has(id)), [chosen, waitingIds]);
 
@@ -47,8 +60,9 @@ export function DashboardPage() {
   const o = overview.data!;
 
   return (
-    <div>
-      <Crumbs items={[{ label: "Dashboard" }]} />
+    // the feed here spans every project, so the bridge is asked for across all of them
+    <SayProvider projectId={null}>
+      <OnboardingChecklist />
       <PageHead
         title={tx("Dashboard")}
         subtitle={tx("What the agents are doing right now, and what waits for you.")}
@@ -63,24 +77,28 @@ export function DashboardPage() {
         <StatTile
           label={tx("Projects")}
           icon={<IconFolder />}
+          tone="neutral"
           value={o.projects}
           sub={tx("{n} development(s) in total", { n: o.jobs_total })}
         />
         <StatTile
           label={tx("Running")}
           icon={<IconPlay />}
+          tone="run"
           value={o.jobs_running}
           sub={tx("agents working now")}
         />
         <StatTile
           label={tx("Waiting for you")}
           icon={<IconInbox />}
+          tone="wait"
           value={o.pending_approvals}
           sub={o.pending_approvals ? tx("approvals pending") : tx("nothing pending")}
         />
         <StatTile
           label={tx("Tasks done")}
           icon={<IconLayers />}
+          tone="done"
           value={
             <span>
               {o.tasks_done}
@@ -95,6 +113,7 @@ export function DashboardPage() {
         <StatTile
           label={tx("Outcomes")}
           icon={<IconCheck />}
+          tone="done"
           value={
             <span className="outcomes">
               <span>
@@ -126,23 +145,25 @@ export function DashboardPage() {
         <div className="card flush">
           <div className="card-head">
             <h3>
-              <IconAlert style={{ width: 14, height: 14, verticalAlign: -2, marginRight: 6 }} />
+              <span className="head-mark" data-tone="wait">
+                <IconAlert />
+              </span>
               {tx("Pending approvals")}
             </h3>
             <span className="row" style={{ gap: 8 }}>
-              {o.waiting.length > 1 && (
+              {waiting.length > 1 && (
                 <button
                   className="btn ghost small"
-                  disabled={selected.length === o.waiting.length}
-                  onClick={() => setSelected(o.waiting.map((w) => w.job_id))}
+                  disabled={selected.length === waiting.length}
+                  onClick={() => setSelected(waiting.map((w) => w.job_id))}
                 >
                   {tx("Select all")}
                 </button>
               )}
-              <span className="badge wait plain">{o.waiting.length}</span>
+              <span className="badge wait plain">{waiting.length}</span>
             </span>
           </div>
-          {o.waiting.length === 0 ? (
+          {waiting.length === 0 ? (
             <div className="empty" style={{ padding: 28 }}>
               <div className="glyph">
                 <IconCheck />
@@ -152,12 +173,12 @@ export function DashboardPage() {
           ) : (
             <table>
               <tbody>
-                {o.waiting.map((w) => (
+                {waiting.map((w) => (
                   <WaitingRow
                     key={w.job_id}
                     jobId={w.job_id}
                     request={w.request}
-                    projectName={byId.get(w.project_id ?? "")?.name}
+                    projectName={named(byId.get(w.project_id ?? "")?.name)}
                     projectId={w.project_id ?? undefined}
                     pending={w.pending_approval ?? ""}
                     at={w.last_activity}
@@ -177,7 +198,9 @@ export function DashboardPage() {
         <div className="card flush">
           <div className="card-head">
             <h3>
-              <IconActivity style={{ width: 14, height: 14, verticalAlign: -2, marginRight: 6 }} />
+              <span className="head-mark" data-tone="neutral">
+                <IconActivity />
+              </span>
               {tx("Recent activity")}
             </h3>
           </div>
@@ -200,7 +223,7 @@ export function DashboardPage() {
                   key={`${item.job_id}:${item.index}`}
                   item={item}
                   projectId={item.project_id ?? ""}
-                  projectName={byId.get(item.project_id ?? "")?.name}
+                  projectName={named(byId.get(item.project_id ?? "")?.name)}
                   compact
                 />
               ))}
@@ -212,7 +235,7 @@ export function DashboardPage() {
       <BulkBar
         selected={selected}
         onClear={() => setSelected([])}
-        labelOf={(id) => o.waiting.find((w) => w.job_id === id)?.request ?? id}
+        labelOf={(id) => waiting.find((w) => w.job_id === id)?.request ?? id}
       />
 
       {o.auto_approved.length > 0 && (
@@ -229,7 +252,7 @@ export function DashboardPage() {
                   jobId={w.job_id}
                   request={w.request}
                   projectId={w.project_id ?? ""}
-                  projectName={byId.get(w.project_id ?? "")?.name}
+                  projectName={named(byId.get(w.project_id ?? "")?.name)}
                   phase={w.current_phase}
                 />
               ))}
@@ -254,7 +277,7 @@ export function DashboardPage() {
           </Empty>
         </div>
       )}
-    </div>
+    </SayProvider>
   );
 }
 
@@ -281,7 +304,7 @@ function AutoApprovedRow({
     <tr>
       <td style={{ width: "100%" }}>
         <Link to={`/projects/${projectId}/jobs/${jobId}`}>
-          <strong>{request}</strong>
+          <strong>{sentence(request)}</strong>
         </Link>
         <div className="faint tiny">
           {projectName ? `${projectName} · ` : ""}
@@ -361,7 +384,7 @@ function WaitingRow({
       </td>
       <td style={{ width: "100%" }}>
         <Link to={`/projects/${projectId ?? j?.project_id ?? ""}/jobs/${jobId}`}>
-          <strong>{request}</strong>
+          <strong>{sentence(request)}</strong>
         </Link>
         <div className="faint tiny">
           {projectName ? `${projectName} · ` : ""}needs <strong>{pending}</strong> approval ·{" "}

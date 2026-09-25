@@ -3,6 +3,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 
 from slipwright.schemas.job import Job, JobState, Transition, utcnow
 from slipwright.schemas.profile import load_profile
@@ -47,7 +48,9 @@ def test_get_unknown_raises(store: JobStore) -> None:
 
 def test_duplicate_id_rejected(store: JobStore) -> None:
     job = store.create(_job())
-    with pytest.raises(sqlite3.IntegrityError):
+    # IntegrityError, not sqlite3's: the store speaks SQLAlchemy, so the same assertion
+    # holds whichever database is underneath
+    with pytest.raises(IntegrityError):
         store.create(_job(id=job.id))
 
 
@@ -151,7 +154,7 @@ def test_failed_transaction_leaves_no_partial_history(store: JobStore, db_path: 
     job = store.create(_job())
     # Force a failure after the history insert by violating the FK on a phantom job id
     # within the same transaction primitive the store uses.
-    with pytest.raises(sqlite3.IntegrityError), store._tx() as conn:
+    with pytest.raises(IntegrityError), store.db.begin() as conn:
         store._insert_transition(
             conn,
             job.id,

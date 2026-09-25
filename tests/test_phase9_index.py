@@ -43,16 +43,16 @@ def test_keyword_search_finds_the_retry_section(tmp_path: Path) -> None:
     index = _index(tmp_path)
     result = index.reindex(load_corpus())
     assert result["added"] > 40 and result["removed"] == 0
-    hits = index.search("Kafka consumer yaz, retry ve dead letter", "backend", k=3)
-    assert hits and "Kafka consumers and retries" in hits[0].chunk.heading
+    hits = index.search("Kafka tüketicisi yaz, yeniden deneme ve dead letter", "backend", k=3)
+    assert hits and "Kafka tüketicileri ve yeniden denemeler" in hits[0].chunk.heading
     assert hits[0].chunk.domain == "backend" and hits[0].semantic == 0.0
     # domain filter: a web query never returns backend chunks
-    for hit in index.search("accessibility of forms and buttons", "web"):
+    for hit in index.search("formların ve düğmelerin erişilebilirliği", "web"):
         assert hit.chunk.domain == "web"
-    assert index.search("offline sync", "mobile", k=2)[0].chunk.domain == "mobile"
+    assert index.search("çevrimdışı senkron", "mobile", k=2)[0].chunk.domain == "mobile"
     assert index.search("   ", "backend") == []
     assert index.search("zzzz qqqq", "backend") == []  # nothing matches: no hits, no crash
-    everything = index.search("retry backoff", "*", k=6)
+    everything = index.search("yeniden deneme backoff", "*", k=6)
     assert {h.chunk.domain for h in everything} >= {"backend"}
     stats = index.stats()
     assert stats["embedder"] == "none" and stats["embedded"] == 0
@@ -65,7 +65,7 @@ def test_hybrid_search_with_embeddings_and_incremental_reindex(tmp_path: Path) -
     first = index.reindex(pages)
     assert first["added"] == first["total"]
     assert index.stats()["embedded"] == first["total"]
-    hits = index.search("retry policy for message consumers", "backend", k=2)
+    hits = index.search("mesaj tüketicileri için yeniden deneme politikası", "backend", k=2)
     assert hits[0].semantic > 0 and hits[0].keyword > 0
     assert "Kafka" in hits[0].chunk.heading
     # nothing changed: nothing re-embedded

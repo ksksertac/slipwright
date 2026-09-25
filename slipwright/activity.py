@@ -26,6 +26,7 @@ from slipwright.schemas.job import (
     utcnow,
 )
 from slipwright.schemas.profile import Profile, RoleConfig, RoleName
+from slipwright.teams import agent_for_gate
 
 
 class ActivityKind(StrEnum):
@@ -66,6 +67,9 @@ class JobProgress(BaseModel):
     request: str
     state: JobState
     pending_approval: str | None
+    #: which agent the gate belongs to, so a page knows whose approval it is waiting for
+    #: and whether the person reading it holds that agent
+    agent: RoleName | None = None
     current_phase: str
     tasks_done: int
     tasks_total: int
@@ -139,6 +143,15 @@ class AgentSummary(BaseModel):
     assigned_model: str | None = None
     thinking_depth: str
     permissions: list[str]
+    #: how many people are on this agent (invitations included), and whether the person
+    #: reading the card is one of them -- what the card shows as the team
+    people: int = 0
+    mine: bool = False
+    #: what to call them, in the order they were put on it. The card shows these rather
+    #: than only a count, because a page of counts does not say that an agent can be held
+    #: by somebody at all -- and that is the first thing a person looking for where to add
+    #: one needs to know.
+    holders: list[str] = Field(default_factory=list)
 
 
 Router = Callable[[RoleConfig, RoleName], tuple[str, str]]
@@ -151,11 +164,14 @@ def agent_summaries(
     *,
     route: Router | None = None,
     assigned: Assignment | None = None,
+    people: dict[RoleName, int] | None = None,
+    mine: set[RoleName] | None = None,
+    holders: dict[RoleName, list[str]] | None = None,
 ) -> list[AgentSummary]:
     items = [i for job in jobs for i in job_activity(job) if i.kind is ActivityKind.ROLE]
     out: list[AgentSummary] = []
     for role in RoleName:
-        mine = [i for i in items if i.role is role]
+        worked = [i for i in items if i.role is role]
         cfg = seed.roles[role]
         provider, model = route(cfg, role) if route else (cfg.provider or "anthropic", cfg.model)
         pin = assigned(role.value) if assigned else None
@@ -165,8 +181,8 @@ def agent_summaries(
                 label=LABEL[role],
                 scope=SCOPE[role],
                 standards_domain=STANDARDS_DOMAIN[role],
-                invocations=len(mine),
-                last_used=max((i.at for i in mine), default=None),
+                invocations=len(worked),
+                last_used=max((i.at for i in worked), default=None),
                 model=cfg.model,
                 provider=cfg.provider,
                 effective_provider=provider,
@@ -175,6 +191,9 @@ def agent_summaries(
                 assigned_model=pin[1] if pin else None,
                 thinking_depth=cfg.thinking_depth.value,
                 permissions=[p.value for p in cfg.permissions],
+                people=(people or {}).get(role, 0),
+                mine=role in (mine or set()),
+                holders=(holders or {}).get(role, []),
             )
         )
     return out
@@ -205,12 +224,16 @@ def pending_approval(job: Job) -> str | None:
         return "backlog"
     if job.state is JobState.AWAITING_ARCHITECTURE_APPROVAL:
         return "architecture"
+    if job.state is JobState.AWAITING_DESIGN_APPROVAL:
+        return "design"
     if job.state is JobState.AWAITING_REVIEW_APPROVAL:
         return "review"
     if job.state is JobState.AWAITING_DECISION:
         return "decision"
     if job.state is JobState.AWAITING_TEST_APPROVAL:
         return "test cases" if job.data.qa_stage == 1 else "written tests"
+    if job.state is JobState.AWAITING_DEPLOY_APPROVAL:
+        return "deployment"
     return None
 
 
@@ -224,8 +247,13 @@ def current_phase(job: Job) -> str:
         return f"review of phase {i + 1}/{len(phases)}: {phases[i].get('goal', '')}"
     if job.state is JobState.QA or job.state is JobState.AWAITING_TEST_APPROVAL:
         return f"qa stage {job.data.qa_stage}"
+    if job.state is JobState.AWAITING_DEPLOY_APPROVAL:
+        target = (job.data.deploy or {}).get("target", "")
+        return f"deployment to {target}" if target else "deployment"
     if job.state is JobState.DEVOPS and job.data.pr_url:
         return f"CI on {job.data.pr_url}"
+    if job.state is JobState.DEVOPS and job.data.devops_stage == 1:
+        return "how this is deployed"
     if job.history:
         return job.history[-1].note or job.state.value
     return job.state.value
@@ -243,6 +271,7 @@ def job_progress(job: Job) -> JobProgress:
         request=job.request,
         state=job.state,
         pending_approval=pending_approval(job),
+        agent=agent_for_gate(job.state),
         current_phase=current_phase(job),
         tasks_done=sum(1 for t in tasks if t.status is TaskStatus.DONE),
         tasks_total=len(tasks),

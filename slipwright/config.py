@@ -36,14 +36,42 @@ class Settings:
     dev: bool = False
     # a folder whose sub-folders the UI offers as local checkouts (Docker mounts /repos)
     local_repos: Path | None = None
+    # Where everything is kept. Empty means the SQLite file under ``state_dir``, which is
+    # what a local install wants; a hosted one points this at its server, e.g.
+    # ``postgresql+psycopg://slipwright:…@db/slipwright``.
+    database_url: str | None = None
+    # Where a job's own commands work: checkouts, clones, logs. Kept apart from the
+    # state directory on purpose -- see `work_dir`.
+    work_root: Path | None = None
 
     @property
     def db_path(self) -> Path:
         return self.state_dir / "jobs.sqlite3"
 
     @property
+    def database(self) -> str | Path:
+        """What the store opens: the configured URL, else the local SQLite file."""
+        return self.database_url or self.db_path
+
+    @property
     def worktrees_root(self) -> Path:
-        return self.state_dir / "worktrees"
+        """Where a job's checkout lives while it is being worked on.
+
+        Deliberately *outside* the state directory. A job's commands run with this as
+        their working directory, and those commands are written by a model: while the
+        worktrees sat under ``state_dir`` they were one ``../..`` away from
+        ``secret.key`` -- the key that decrypts every stored credential -- and from the
+        job database beside it. Moving them out does not make the commands safe, but it
+        means the one thing that must never be read is not within reach of a relative
+        path.
+        """
+        return self.work_dir / "worktrees"
+
+    @property
+    def work_dir(self) -> Path:
+        """The tree a job's own commands may touch: checkouts, clones, run logs. Never
+        the state directory, which holds the database and the encryption key."""
+        return self.work_root or (self.state_dir.parent / f"{self.state_dir.name}-work")
 
     @property
     def url(self) -> str:
@@ -67,6 +95,9 @@ class Settings:
         if "SLIPWRIGHT_AUTH" in env:
             settings.require_auth = env["SLIPWRIGHT_AUTH"].strip().lower() not in _OFF
         settings.token = env.get("SLIPWRIGHT_TOKEN") or None
+        settings.database_url = env.get("SLIPWRIGHT_DATABASE_URL") or None
+        if env.get("SLIPWRIGHT_WORK_DIR"):
+            settings.work_root = Path(env["SLIPWRIGHT_WORK_DIR"])
         if env.get("SLIPWRIGHT_LOCAL_REPOS"):
             settings.local_repos = Path(env["SLIPWRIGHT_LOCAL_REPOS"])
         settings.dev = env.get("SLIPWRIGHT_DEV", "").strip().lower() not in ("", *_OFF)
@@ -87,10 +118,13 @@ def build_provider(name: str, seed: Profile) -> ModelProvider | None:
 
 def build_engine(settings: Settings) -> Engine:
     settings.state_dir.mkdir(parents=True, exist_ok=True)
+    settings.work_dir.mkdir(parents=True, exist_ok=True)
     seed = load_profile(settings.profile_path)
     lo, hi = settings.port_range
+    # the key still lives beside the state directory even when the database is elsewhere:
+    # a server sets SLIPWRIGHT_SECRET_KEY instead and `load_or_create_key` returns it
     engine = Engine(
-        JobStore(settings.db_path, secret_key=load_or_create_key(settings.state_dir)),
+        JobStore(settings.database, secret_key=load_or_create_key(settings.state_dir)),
         Workspace(settings.worktrees_root, PortAllocator(start=lo, end=hi)),
         seed_profile=seed,
         provider=build_provider(settings.provider, seed),

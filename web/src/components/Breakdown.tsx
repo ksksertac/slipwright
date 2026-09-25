@@ -1,7 +1,9 @@
 // The backlog as people read it: epics -> stories -> tasks, with the plan phase each task
 // became when the Architect has already mapped it. Shared by the approval gates and by the
 // history detail, so a backlog looks the same wherever it is shown.
+import type { StackChoice } from "../api/client";
 import { DomainBadge } from "./agents";
+import { useSay } from "../i18n/said";
 
 export interface BreakdownShape {
   epics: {
@@ -19,18 +21,21 @@ export interface BreakdownShape {
 
 export interface PlanShape {
   summary?: string;
+  /** One entry per part of the product: which language and framework (T11.5). */
+  stack?: StackChoice[];
   decisions?: string[];
   phases: { goal: string; files?: string[]; domain?: string; task_id?: string | null }[];
   breakdown?: BreakdownShape;
 }
 
 export function BreakdownTree({ plan }: { plan: PlanShape }) {
+  const say = useSay();
   if (!plan.breakdown) {
     return (
       <ol>
         {plan.phases.map((p, i) => (
           <li key={i}>
-            {p.goal}{" "}
+            {say(p.goal)}{" "}
             {p.files && p.files.length > 0 && (
               <span className="muted small mono">— {p.files.join(", ")}</span>
             )}
@@ -46,8 +51,8 @@ export function BreakdownTree({ plan }: { plan: PlanShape }) {
           <div className="node">
             <span className="kind">epic</span>
             <span className="title">
-              <strong>{epic.title}</strong>
-              {epic.description && <div className="muted small">{epic.description}</div>}
+              <strong>{say(epic.title)}</strong>
+              {epic.description && <div className="muted small">{say(epic.description)}</div>}
             </span>
           </div>
           <ul className="tree">
@@ -56,8 +61,10 @@ export function BreakdownTree({ plan }: { plan: PlanShape }) {
                 <div className="node">
                   <span className="kind">story</span>
                   <span className="title">
-                    {story.title}
-                    {story.description && <div className="muted small">{story.description}</div>}
+                    {say(story.title)}
+                    {story.description && (
+                      <div className="muted small">{say(story.description)}</div>
+                    )}
                   </span>
                 </div>
                 <ul className="tree">
@@ -68,13 +75,13 @@ export function BreakdownTree({ plan }: { plan: PlanShape }) {
                         <div className="node">
                           <span className="kind">task</span>
                           <span className="title">
-                            {task.title}
+                            {say(task.title)}
                             {task.description && (
-                              <div className="muted small">{task.description}</div>
+                              <div className="muted small">{say(task.description)}</div>
                             )}
                             {phase && (
                               <div className="muted small">
-                                phase {task.phase}: {phase.goal}{" "}
+                                phase {task.phase}: {say(phase.goal)}{" "}
                                 <DomainBadge domain={phase.domain} />
                                 {phase.files && phase.files.length > 0 && (
                                   <span className="mono"> — {phase.files.join(", ")}</span>

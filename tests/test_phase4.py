@@ -272,7 +272,9 @@ def test_devops_opens_pr_and_finishes_on_green_ci(
     assert title == "Slipwright change" and body == "Automated change."
     assert job.history[-1].note == f"PR {job.data.pr_url} (success)"
 
-    (req,) = _requests(provider, RoleName.DEVOPS)
+    # DevOps is asked twice now: how this is deployed (T11.6), then the pull request
+    proposal, req = _requests(provider, RoleName.DEVOPS)
+    assert '"deployment_folder": "deployment"' in proposal.prompt
     assert '"draft":' in req.prompt and "write OK" in req.prompt
     # the small model named in the example profile is what got called - no fallback
     assert req.model == seed.roles[RoleName.DEVOPS].model
@@ -380,7 +382,8 @@ def test_restart_during_devops_does_not_open_a_second_pr(
 
     assert job.state is JobState.DONE
     assert len(host.prs) == 1
-    assert len(_requests(provider, RoleName.DEVOPS)) == 1
+    # the deployment proposal and the pull request; the restart repeats neither
+    assert len(_requests(provider, RoleName.DEVOPS)) == 2
 
 
 def test_devops_without_push_permission_fails(

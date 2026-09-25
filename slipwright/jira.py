@@ -9,12 +9,21 @@ Format are built from plain text here so callers only deal with strings. Tests p
 from __future__ import annotations
 
 import contextlib
+import re
 from typing import Any
 
 import httpx
 from pydantic import BaseModel, ConfigDict, Field
 
+from slipwright import net
+
 DEFAULT_ISSUE_TYPES = {"epic": "Epic", "story": "Story", "task": "Subtask", "bug": "Bug"}
+
+# Jira's own name for the Scrum board template; a software project made with it comes
+# with the backlog and sprints the mirror writes into.
+SCRUM_TEMPLATE = "com.pyxis.greenhopper.jira:gh-simplified-agility-scrum"
+# a key is 2-10 characters, starts with a letter, letters and digits only (Jira's rule)
+_PROJECT_KEY = re.compile(r"^[A-Z][A-Z0-9]{1,9}$")
 
 
 class JiraError(RuntimeError):
@@ -117,6 +126,30 @@ class JiraClient:
             JiraProject(key=p["key"], name=p.get("name", p["key"]), id=str(p.get("id") or ""))
             for p in data.get("values", [])
         ]
+
+    def create_project(self, key: str, name: str) -> JiraProject:
+        """Open a Scrum software project, led by the account this client authenticates as.
+
+        Jira derives everything else from the template: a board, a backlog and the sprint
+        machinery the mirror already expects. The key is what every issue is named after
+        and cannot be changed afterwards, so it is validated before the call rather than
+        after Jira refuses it."""
+        key = key.strip().upper()
+        if not _PROJECT_KEY.match(key):
+            raise JiraError(
+                f"{key!r} is not a usable Jira project key: 2 to 10 letters or digits, "
+                "starting with a letter"
+            )
+        body = {
+            "key": key,
+            "name": name.strip() or key,
+            "projectTypeKey": "software",
+            "projectTemplateKey": SCRUM_TEMPLATE,
+            "leadAccountId": self.myself().account_id,
+            "assigneeType": "PROJECT_LEAD",
+        }
+        data = self._request("POST", "/rest/api/3/project", json=body).json()
+        return JiraProject(key=data.get("key", key), name=name, id=str(data.get("id") or ""))
 
     # -- issues ----------------------------------------------------------------------------
 
@@ -271,7 +304,7 @@ class JiraClient:
 
     def _request(self, method: str, path: str, **kw: Any) -> httpx.Response:
         try:
-            resp = self._client.request(method, path, **kw)
+            resp = net.request(self._client, method, path, **kw)
         except httpx.HTTPError as exc:
             raise JiraError(f"Jira request failed: {exc}") from exc
         if resp.status_code == 401:

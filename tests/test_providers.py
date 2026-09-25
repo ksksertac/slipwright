@@ -148,6 +148,72 @@ def test_openai_compat_errors_are_typed() -> None:
         ).complete(_request())
 
 
+def test_a_vendor_that_refuses_the_account_ends_the_step_at_once() -> None:
+    """No balance, a bad key: the second call is refused for the same reason as the first.
+
+    So it is not a retryable failure. Spending the role's retries on it wastes the wait
+    and tells the person `provider_error after 3 attempts` when what happened was that
+    the account has nothing left to spend.
+    """
+    from slipwright.invoke import RETRYABLE, InvokeErrorKind
+    from slipwright.providers import ProviderRejectedError
+
+    def broke(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(402, json={"error": {"message": "Insufficient Balance"}})
+
+    provider = OpenAICompatProvider(
+        "sk-test", "https://x.test", transport=httpx.MockTransport(broke)
+    )
+    with pytest.raises(ProviderRejectedError, match="Insufficient Balance"):
+        provider.complete(_request())
+    assert InvokeErrorKind.PROVIDER_REJECTED not in RETRYABLE
+
+    # a 500 is the vendor having a bad minute, and that is worth asking again
+    def wobble(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(500, json={"error": {"message": "upstream"}})
+
+    with pytest.raises(ProviderError, match="500"):
+        OpenAICompatProvider(
+            "sk-test", "https://x.test", transport=httpx.MockTransport(wobble)
+        ).complete(_request())
+
+
+def test_a_model_call_that_never_left_is_made_again(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A dropped handshake costs a development its step, and nothing was charged for it.
+
+    The connection never opened, so the vendor has no call to bill and none to answer;
+    sending it again is the difference between a step that fails and one that runs. A read
+    that dies half way through is a different thing and stays a failure: something was
+    sent, and asking again would pay for the same answer twice.
+    """
+    from slipwright import net
+
+    monkeypatch.setattr(net.time, "sleep", lambda _s: None)
+    vendor = FakeVendor("sk-test", [])
+    tries = 0
+
+    def flaky(request: httpx.Request) -> httpx.Response:
+        nonlocal tries
+        tries += 1
+        if tries < 3:
+            raise httpx.ConnectError("[SSL: UNEXPECTED_EOF_WHILE_READING]", request=request)
+        return vendor.handler(request)
+
+    provider = OpenAICompatProvider(
+        "sk-test", "https://x.test", transport=httpx.MockTransport(flaky)
+    )
+    assert provider.complete(_request()).text  # the third try is the one that arrives
+    assert tries == 3
+
+    def cut(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadError("the answer stopped half way")
+
+    with pytest.raises(ProviderError, match="connection error"):
+        OpenAICompatProvider(
+            "sk-test", "https://x.test", transport=httpx.MockTransport(cut)
+        ).complete(_request())
+
+
 # --- routing ---------------------------------------------------------------------------------
 
 
@@ -326,14 +392,28 @@ def test_provider_settings_endpoints(
     assert client.post("/api/settings/providers/deepseek/test").status_code == 502
 
 
-def test_provider_settings_are_admin_only(engine: Engine) -> None:
-    engine.store.create_user("ada", "pw")
+def test_a_model_key_belongs_to_the_account_that_entered_it(engine: Engine) -> None:
+    """Everybody brings their own key, so everybody may enter one -- and sees only theirs."""
+    engine.store.create_user("ada", "pw")  # admin
     engine.store.create_user("bob", "pw")
-    with TestClient(create_app(engine, resume_on_startup=False)) as c:
-        c.post("/api/auth/login", json={"username": "bob", "password": "pw"})
-        assert c.get("/api/settings/providers").status_code == 200
-        assert c.put("/api/settings/providers/openai", json={"api_key": "x"}).status_code == 403
-        assert c.post("/api/settings/providers/openai/test").status_code == 403
+    app = create_app(engine, resume_on_startup=False)
+
+    def openai_row(person: TestClient) -> dict[str, object]:
+        rows = person.get("/api/settings/providers").json()
+        return next(r for r in rows if r["name"] == "openai")
+
+    with TestClient(app) as bob, TestClient(app) as ada:
+        bob.post("/api/auth/login", json={"username": "bob", "password": "pw"})
+        ada.post("/api/auth/login", json={"username": "ada", "password": "pw"})
+
+        assert bob.get("/api/settings/providers").status_code == 200
+        saved = bob.put("/api/settings/providers/openai", json={"api_key": "sk-bob-9876"})
+        assert saved.status_code == 200, saved.text
+
+        mine = openai_row(bob)
+        assert mine["key_set"] is True and mine["key_hint"] == "…9876"
+        assert "sk-bob-9876" not in bob.get("/api/settings/providers").text
+        assert openai_row(ada)["key_set"] is False, "the admin must not inherit bob's key"
 
 
 def test_serve_provider_names(tmp_path: Path) -> None:

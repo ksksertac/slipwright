@@ -11,7 +11,6 @@ import {
 } from "../../api/hooks";
 import { useAuth } from "../../auth/AuthProvider";
 import { ErrorBox, Loading, PageHead, formatTime } from "../../components/ui";
-import { Crumbs } from "../../components/Crumbs";
 import { useT } from "../../i18n";
 
 export function UsersSettingsPage() {
@@ -45,7 +44,6 @@ export function UsersSettingsPage() {
 
   return (
     <div>
-      <Crumbs items={[{ label: "Settings" }, { label: "Users" }]} />
       <PageHead title={tx("Users")} subtitle={tx("Logins and API tokens.")} />
       <div className="card" style={{ padding: 0 }}>
         <table>

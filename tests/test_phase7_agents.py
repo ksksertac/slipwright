@@ -67,7 +67,7 @@ def test_example_profile_grants_jira_to_the_right_roles(seed: Profile) -> None:
         RoleName.PO,
         RoleName.ARCHITECT,
         RoleName.BACKEND,
-        RoleName.BACKEND,
+        RoleName.DESIGNER,
         RoleName.WEB_UI,
         RoleName.MOBILE_UI,
         RoleName.QA,

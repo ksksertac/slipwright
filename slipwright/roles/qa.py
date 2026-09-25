@@ -1,8 +1,13 @@
-"""QA in two stages.
+"""QA in two stages, and one question asked outside them.
 
 Stage one proposes test cases for the change on the branch and stops for human review;
 the human may add and remove cases. Stage two writes tests for the approved list only.
 Both stages see the branch diff so they test what was actually built.
+
+``triage`` is the third job and belongs to no stage: when a build gate fails, QA reads the
+failure before anyone starts fixing code and says which side was wrong. A test that
+asserts something nobody agreed to is QA's own mistake to correct; anything else is the
+code's fault, and QA hands the specialist a diagnosis instead of a patch.
 """
 
 from __future__ import annotations
@@ -47,6 +52,26 @@ If a `jira` section is present, open a Bug issue (parent: the story's key) for e
 you find in the change, and close it with a comment once the fix passes.
 If a `standards` section is present its sections are binding unless they contradict
 the core rules; say in `summary` when one could not be followed and why."""
+
+
+GATE_TRIAGE = """\
+You are QA. A build gate failed on this branch and `build_failure` holds the tail of the
+run. Decide one thing only: was the failing test itself wrong, or was the code wrong?
+The test is wrong when it asserts something nobody agreed to — it contradicts `plan`,
+`current_phase` or `approved_test_cases`, it was written against an older shape of the
+code, it fixes an incidental detail (wording, ordering, formatting) that was never part of
+the contract, or it contradicts itself. The code is wrong in every other case, including
+when the test is ugly, slow or awkward but the behaviour it asserts is the agreed one.
+Never weaken, skip, delete or loosen a test to make it pass, and never change a test
+merely because the code disagrees with it: if two sides of the project disagree about a
+contract, the side the plan named is right and the other one is the defect.
+Return `gate_verdict`. With `test_is_wrong`, also return the complete corrected contents
+of the test files in `changes` — test files only, never production code — and say in
+`summary`, in one or two sentences, what the test asserted, what the agreed behaviour is
+and why the test was the side that was wrong. With `code_is_wrong`, return no `changes`
+and say in `summary` exactly what the code must do differently and where; the specialist
+who fixes it is given that sentence and nothing else of yours.
+Return no `test_cases` and no `violations` here."""
 
 
 def run(
@@ -104,6 +129,53 @@ def run(
     return invoke_role(RoleName.QA, profile, context, provider=provider, **kwargs)
 
 
+def triage(
+    job: Job,
+    profile: Profile,
+    *,
+    build_failure: str,
+    phase: dict[str, Any],
+    branch_diff: str,
+    provider: ModelProvider | None = None,
+    timeout_s: float | None = None,
+    jira: dict[str, Any] | None = None,
+    standards: dict[str, Any] | None = None,
+) -> RoleResult:
+    """Ask QA whose fault a failed build gate is, before a specialist spends a fix attempt."""
+    worktree = require_worktree(job)
+    tree = list_tree(worktree)
+    context = base_context(job, instructions=GATE_TRIAGE, jira=jira, standards=standards)
+    context["project"] = project_facts(profile)
+    context["plan"] = plan_outline(job.data.plan)
+    context["current_phase"] = phase
+    context["build_failure"] = build_failure
+    context["branch_diff"] = branch_diff
+    context["tree"] = tree
+    context["existing_tests"] = read_files(worktree, _test_like(tree))
+    if job.data.test_cases:
+        context["approved_test_cases"] = job.data.test_cases
+
+    kwargs = {} if timeout_s is None else {"timeout_s": timeout_s}
+    return invoke_role(RoleName.QA, profile, context, provider=provider, **kwargs)
+
+
+def is_test_path(path: str) -> bool:
+    """Whether a path is somewhere QA may write while triaging a gate.
+
+    Deliberately narrow: a triage fix that lands anywhere else is refused, so "the test
+    was wrong" can never become a licence to edit the code under test.
+    """
+    parts = path.replace("\\", "/").split("/")
+    name = parts[-1]
+    return (
+        any(part in ("test", "tests", "spec", "specs", "__tests__", "e2e") for part in parts[:-1])
+        or name.startswith("test_")
+        or name.endswith(("_test.py", "_test.go", "_test.ts", "_test.tsx", "Test.kt", "Tests.kt"))
+        or ".test." in name
+        or ".spec." in name
+    )
+
+
 def _test_like(tree: list[str], limit: int = 12) -> list[str]:
     hits = [
         p
@@ -127,4 +199,12 @@ def normalise_cases(cases: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return out
 
 
-__all__ = ["STAGE_ONE", "STAGE_TWO", "normalise_cases", "run"]
+__all__ = [
+    "GATE_TRIAGE",
+    "STAGE_ONE",
+    "STAGE_TWO",
+    "is_test_path",
+    "normalise_cases",
+    "run",
+    "triage",
+]

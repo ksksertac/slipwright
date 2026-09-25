@@ -26,10 +26,12 @@ from pathlib import Path
 
 from slipwright.standards import (
     DOMAINS,
+    GLOBAL_DIR,
     PROJECT_SUBDIR,
     StandardsError,
     lint,
     load_page,
+    parse_page,
     split_sections,
 )
 from slipwright.workspace import git as g
@@ -306,6 +308,36 @@ class StandardsEditor:
         # the linter only sees duplicates across pages; within one page it is on us
         if heading.lower() in {h.lower() for h in others}:
             raise PageError(f"a rule titled {heading!r} already exists on this page")
+
+    def check_text(self, text: str, *, domain: str) -> None:
+        """Lint a page that is not going to be a file.
+
+        An account's rewritten pages are rows, not files, so there is no directory to
+        lint them against; the shipped pages of the same domain stand in as siblings,
+        which is where duplicate headings would come from anyway.
+        """
+        siblings = GLOBAL_DIR / domain
+        self._raise_if_bad(siblings / "candidate.md", text, None)
+
+    def describe(self, path: str, text: str, *, scope: str = "user") -> PageInfo:
+        """What a page is, from its text alone: for pages that have no file behind them."""
+        rel = check_path(path)
+        page = parse_page(text, GLOBAL_DIR / rel, scope=scope, domain=rel.split("/")[0])
+        sections = split_sections(page.body)
+        return PageInfo(
+            path=rel,
+            domain=page.domain,
+            title=page.title,
+            scope=scope,
+            sections=len(sections),
+            words=sum(len(t.split()) for _, t in sections),
+            modified_at=datetime.now(tz=UTC),
+        )
+
+    def _raise_if_bad(self, file: Path, text: str, project_repo: Path | None) -> None:
+        problems = self._problems(file, text, project_repo)
+        if problems:
+            raise PageError("; ".join(problems))
 
     def _problems(self, file: Path, text: str, project_repo: Path | None) -> list[str]:
         """Lint the candidate page together with its siblings (duplicate headings)."""

@@ -16,6 +16,7 @@ from slipwright.providers import (
     ProviderError,
     ProviderRefusalError,
     ProviderTimeoutError,
+    ProviderTruncatedError,
 )
 from slipwright.roles.results import RESULT_SCHEMAS, ArchitectResult, POResult
 from slipwright.schemas.profile import Profile, RoleName, ThinkingDepth, load_profile
@@ -250,3 +251,45 @@ def test_default_provider_is_used_when_none_given(profile: Profile) -> None:
     result = invoke_role(RoleName.ARCHITECT, profile, {})
     assert result.ok
     assert len(provider.requests) == 1
+
+
+# --- what a failed call cost ---------------------------------------------------------------
+#
+# The expensive calls were the ones that looked free. A failure came back with no usage at
+# all, so an answer stopped at the output limit -- generated in full, billed in full --
+# was written into the cost panel as nothing, and so was an answer that arrived and could
+# not be parsed. These pin the three cases apart: billed and known, billed and known
+# although unusable, and genuinely not known.
+
+
+def test_a_cut_off_answer_carries_the_tokens_it_burned(profile: Profile) -> None:
+    provider = FakeProvider(
+        raises=ProviderTruncatedError(
+            "response truncated at max_tokens=8192", input_tokens=900, output_tokens=8192
+        )
+    )
+    result = invoke_role(RoleName.ARCHITECT, profile, {}, provider=provider)
+
+    assert result.error is not None and result.error.kind is InvokeErrorKind.TRUNCATED
+    assert result.usage is not None
+    assert (result.usage.input_tokens, result.usage.output_tokens) == (900, 8192)
+
+
+def test_an_unusable_answer_is_still_paid_for(profile: Profile) -> None:
+    """The vendor answered and charged for it; that the answer was unusable is our
+    problem, not a discount."""
+    provider = FakeProvider(text="not json, and not a fenced block either")
+    result = invoke_role(RoleName.ARCHITECT, profile, {}, provider=provider)
+
+    assert result.error is not None and result.error.kind is InvokeErrorKind.MALFORMED_OUTPUT
+    assert result.usage is not None
+    assert (result.usage.input_tokens, result.usage.output_tokens) == (10, 5)
+
+
+def test_a_failure_the_vendor_said_nothing_about_stays_unknown(profile: Profile) -> None:
+    """A connection that never opened is not a bill of zero -- it is a bill nobody knows,
+    and the cost panel keeps "cost nothing" and "we do not know" apart."""
+    provider = FakeProvider(raises=ProviderError("connection error"))
+    result = invoke_role(RoleName.ARCHITECT, profile, {}, provider=provider)
+
+    assert result.error is not None and result.usage is None

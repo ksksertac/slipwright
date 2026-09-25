@@ -18,6 +18,8 @@ import {
 } from "./icons";
 import { Loading, formatTime } from "./ui";
 import { useT } from "../i18n";
+import { noteText } from "../i18n/notes";
+import { useSay } from "../i18n/said";
 
 const KIND: Record<ActivityItem["kind"], { label: string; cls: string; icon: React.ReactNode }> = {
   started: { label: "started", cls: "", icon: <IconPlay /> },
@@ -54,16 +56,18 @@ export function ActivityRow({
   compact?: boolean;
 }) {
   const tx = useT();
+  const say = useSay();
   const [open, setOpen] = useState(false);
   const [full, setFull] = useState(false);
   const detail = useTransition(item.job_id, open ? item.index : null);
   const kind = KIND[item.kind];
   const who = item.role ? tx(ROLE_LABEL[item.role] ?? item.role) : tx(kind.label);
-  // notes are written "<role>: ..."; the badge already names the role
+  // the engine writes its notes in English; they are read back in the platform's language,
+  // and a note it does not recognise still carries its "<role>: " prefix, which the badge
+  // beside it already says
+  const said = noteText(tx, item.title, say);
   const title =
-    item.role && item.title.startsWith(`${item.role}:`)
-      ? item.title.slice(item.role.length + 1).trim()
-      : item.title;
+    item.role && said.startsWith(`${item.role}:`) ? said.slice(item.role.length + 1).trim() : said;
   const gateFailed = item.kind === "gate" && item.title.includes("failed");
   const long = title.length > LONG_NOTE;
   return (
@@ -89,7 +93,7 @@ export function ActivityRow({
         )}
         {item.has_detail && !compact && (
           <details onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
-            <summary>detail</summary>
+            <summary>{tx("detail")}</summary>
             {detail.isLoading && <Loading rows={2} />}
             {detail.data && <Detail text={detail.data.detail} />}
           </details>

@@ -18,7 +18,7 @@ from slipwright.schemas.profile import Profile, RoleName
 from slipwright.schemas.project import Project
 from slipwright.store import JobStore
 from tests.fakes import FakeJira
-from tests.pipeline import full_engine, full_provider, set_plan
+from tests.pipeline import full_engine, full_provider, past_design, set_plan
 
 HUMAN = "ada@example.com"
 WEB = Path(__file__).resolve().parent.parent / "web"
@@ -89,7 +89,9 @@ def _start(engine: Engine, repo: Path, *, review: str = "advisory") -> Any:
     project = engine.create_project(Project(name="demo", repo_path=repo, review=review))  # type: ignore[arg-type]
     job = engine.start(engine.create_job("kafka", project_id=project.id).id)
     job = engine.approve(job.id)  # backlog
-    return engine.approve(job.id)  # architecture -> develop
+    job = engine.approve(job.id)  # architecture -> develop
+    # a plan with a web phase stops for the screens; the review is what these tests are about
+    return past_design(engine, job)
 
 
 def test_reviewer_sees_the_phase_diff_and_the_specialists_standards(
@@ -176,13 +178,19 @@ def test_blocking_project_sends_the_phase_back_twice_then_asks_the_human(
     gate = cards["review_gate:1"]
     assert gate.status is StepStatus.WAITING and gate.pending == "review" and gate.gate
     assert lane_for(job).pending_approval == "review"
-    assert [c.key for c in lane_for(job).steps][4:7] == ["phase:1", "review_gate:1", "phase:2"]
+    # the review gate sits between the phase it judges and the next one; read by position
+    # relative to that phase rather than by a fixed index, which the Designer's card moved.
+    # Phase 2 is the web one, so the design gate sits in front of it: the screens are signed
+    # off after the backend phase and before the phase that builds against them.
+    keys = [c.key for c in lane_for(job).steps]
+    first = keys.index("phase:1")
+    assert keys[first : first + 4] == ["phase:1", "review_gate:1", "design_gate", "phase:2"]
     board = project_board(job.project_id or "", [job])
     tasks = [t for e in board.epics for s in e.stories for t in s.tasks]
     assert tasks[0].status.value == "in_progress" and tasks[0].blocking == 1
 
-    # accepting the violations continues with phase 2
-    job = engine.approve(job.id)
+    # accepting the violations continues with phase 2 -- through the screens it needs
+    job = past_design(engine, engine.approve(job.id))
     assert job.state is JobState.AWAITING_TEST_APPROVAL
     assert job.data.review_violations == [] and job.data.review_rounds == 0
     assert "approved phase 1 despite the review" in [t.note for t in job.history]
@@ -203,6 +211,7 @@ def test_rejecting_at_the_review_gate_reworks_the_phase(
     assert len(backend) == 4
     ctx = _context(backend[3])["standards_review"]
     assert ctx["feedback"] == "actually fix the offset commit" and ctx["round"] == 0
+    job = past_design(engine, job)  # phase 2 is the web one, so it waits for the screens
     assert job.state is JobState.AWAITING_TEST_APPROVAL
     assert [r["phase"] for r in job.data.reviews] == [1, 1, 1, 1, 2]
     cards = {c.key: c for c in lane_for(job).steps}
@@ -235,7 +244,7 @@ def test_blocking_findings_are_commented_on_the_jira_task(
     )
     job = engine.start(engine.create_job("kafka", project_id=project.id).id)
     job = engine.approve(job.id)
-    job = engine.approve(job.id)
+    job = past_design(engine, engine.approve(job.id))
     assert job.state is JobState.AWAITING_TEST_APPROVAL  # round 1 blocked, round 2 clean
     assert job.data.jira_last_error is None, job.data.jira_last_error
     task_key = job.data.jira_keys["t1"]

@@ -29,7 +29,7 @@ def test_global_corpus_covers_every_domain_and_lints_clean() -> None:
     # every chunk is self-describing: title and heading travel with the text
     backend = [c for c in chunks if c.domain == "backend"]
     kafka = next(c for c in backend if "Kafka" in c.heading)
-    assert kafka.document.startswith("Data, messaging and observability — Kafka consumers")
+    assert kafka.document.startswith("Veri, mesajlaşma ve gözlemlenebilirlik — Kafka tüketicileri")
     assert "dlq" in kafka.text and "backoff" in kafka.text
     assert kafka.page == "backend/data-and-messaging.md" and kafka.scope == "global"
     assert len(kafka.id) == 24
@@ -51,14 +51,15 @@ def test_project_overrides_and_lint_problems(tmp_path: Path) -> None:
     override.mkdir(parents=True)
     (override / "team.md").write_text(
         "---\ndomain: backend\ntags: [team]\napplies_to: [python]\n---\n# Team rules\n\n"
-        "## Kafka consumers and retries\n\nWe retry three times, then DLQ.\n",
+        "## Kafka tüketicileri ve yeniden denemeler\n\nÜç kez deneriz, sonra DLQ.\n",
         encoding="utf-8",
     )
     pages = load_corpus(project_repo=repo)
     project = [p for p in pages if p.scope == "project"]
     assert len(project) == 1 and project[0].relpath == "backend/team.md"
     chunks = chunk_page(project[0])
-    assert chunks[0].scope == "project" and chunks[0].heading == "Kafka consumers and retries"
+    assert chunks[0].scope == "project"
+    assert chunks[0].heading == "Kafka tüketicileri ve yeniden denemeler"
     # the same heading in the same domain as a global page is flagged
     problems = lint(pages)
     assert any("duplicates" in p and "team.md" in p for p in problems)

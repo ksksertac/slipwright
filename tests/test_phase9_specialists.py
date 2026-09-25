@@ -13,7 +13,7 @@ from slipwright.roles.specialists import DEVELOPER_ROLES, Domain, specialist_for
 from slipwright.schemas.job import JobState
 from slipwright.schemas.profile import Profile, RoleName
 from slipwright.store import JobStore
-from tests.pipeline import full_engine, full_provider, set_plan
+from tests.pipeline import full_engine, full_provider, past_design, set_plan
 
 # --- T9.1 specialist agents ---------------------------------------------------------------
 
@@ -75,7 +75,9 @@ def test_each_phase_runs_on_its_specialist_with_the_profile_model(
 
     job = engine.start(engine.create_job("health everywhere", repo).id)
     job = engine.approve(job.id)
-    job = engine.approve(job.id)
+    # the web and mobile phases wait for the screens; which model each one runs on is what
+    # this test is about, so they are approved and the run carries on
+    job = past_design(engine, engine.approve(job.id))
     assert job.state is JobState.AWAITING_TEST_APPROVAL
 
     for role, model in (
@@ -120,7 +122,7 @@ def test_ci_fix_goes_to_the_specialist_of_the_last_phase(
     provider = _three_domain_provider(seed)
     engine = full_engine(store, worktrees_root, seed, provider, git_host=RedOnceHost())
     job = engine.start(engine.create_job("x", repo).id)
-    for _ in range(4):
+    for _ in range(5):  # backlog, plan, the screens, the tests, the pull request
         job = engine.approve(job.id)
     assert job.state is JobState.DONE
     mobile = _requests(provider, RoleName.MOBILE_UI)
@@ -134,12 +136,12 @@ def test_agents_endpoint_and_activity_filter(
     engine = full_engine(store, worktrees_root, seed, _three_domain_provider(seed))
     job = engine.start(engine.create_job("x", repo).id)
     job = engine.approve(job.id)
-    engine.approve(job.id)
+    past_design(engine, engine.approve(job.id))
     with TestClient(create_app(engine, resume_on_startup=False, require_auth=False)) as client:
         agents = client.get("/api/agents").json()
         assert [a["role"] for a in agents] == [r.value for r in RoleName]
         by_role = {a["role"]: a for a in agents}
-        assert by_role["backend"]["label"] == "Backend"
+        assert by_role["backend"]["label"] == "Backend Developer"
         assert by_role["backend"]["invocations"] == 1 and by_role["backend"]["last_used"]
         assert by_role["qa"]["label"] == "QA" and by_role["qa"]["standards_domain"] == "testing"
         assert by_role["architect"]["standards_domain"] == "architecture"
@@ -172,10 +174,13 @@ def test_agents_ui_has_cards_and_detail_tabs() -> None:
     assert "default_model" in models_page and "useProviderModels" in models_page
     detail = (web / "pages" / "AgentDetailPage.tsx").read_text(encoding="utf-8")
     for expected in (
-        '["setup", "standards", "activity"]',
+        # T12 put the agent's people between its setup and its standards
+        '["about", "setup", "team", "standards", "activity"]',
+        "AgentTeamTab",
         "usePatchProject",
         "useActivity_all",
         "AgentStandardsTab",
+        "AgentAboutTab",
     ):
         assert expected in detail, expected
     job_page = (web / "pages" / "JobPage.tsx").read_text(encoding="utf-8")
@@ -209,7 +214,9 @@ def test_devops_implements_infra_phases_with_file_changes(
     assert any((t.note or "").startswith("devops phase 1/1") for t in job.history)
     job = engine.approve(engine.approve(job.id).id)  # tests, then the PR: the usual schema
     assert job.state is JobState.DONE
+    # the infra phase, the deployment proposal (T11.6), then the pull request
     assert [r.output_schema["title"] for r in provider.requests if r.role is RoleName.DEVOPS] == [
         "DeveloperResult",
+        "DeployPlan",
         "DevOpsResult",
     ]

@@ -148,7 +148,10 @@ def test_settings_from_env(tmp_path: Path) -> None:
         }
     )
     assert settings.db_path == tmp_path / "st" / "jobs.sqlite3"
-    assert settings.worktrees_root == tmp_path / "st" / "worktrees"
+    # checkouts live outside the state directory: a job's own commands run in one of them
+    # and must not be able to reach the key that decrypts every stored credential
+    assert settings.worktrees_root == tmp_path / "st-work" / "worktrees"
+    assert not settings.work_dir.is_relative_to(settings.state_dir)
     assert settings.provider == "scripted"
     assert settings.url == "http://127.0.0.1:9000"
     assert settings.port_range == (9100, 9200)

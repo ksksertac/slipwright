@@ -46,7 +46,9 @@ any point and restart it: in-flight jobs resume, jobs waiting on you keep waitin
   **Standards** tab edits its domain's pages (globally or per project under
   `<repo>/.slipwright/standards`), tries a search the way retrieval does, and holds the
   index settings; edits are linted, reindexed at once and committed on a
-  `slipwright/standards` branch.
+  `slipwright/standards` branch. The pages that ship with Slipwright are written in
+  Turkish — the language the UI defaults to; a rule may be written in any language,
+  retrieval and the models read it either way.
 - **Standards review**: after a phase passes the build gate, QA checks the diff against
   the sections its specialist was given. Per project: `off`, `advisory` (findings are
   recorded and shown) or `blocking` (blocking findings go back to the specialist for two
@@ -63,6 +65,14 @@ any point and restart it: in-flight jobs resume, jobs waiting on you keep waitin
 - **Pipeline**: the project's default tab shows every development as a lane of step cards;
   gates waiting for you carry checkboxes for bulk approval, and editable gates (backlog,
   plan, profile, test cases) are edited in place with *Save & approve*.
+- **Teams**: each agent card has a **Who holds it** tab. Put a work address on an agent
+  and that person is mailed an invitation; accepting it (they choose a password) lets them
+  see your projects, approve at *that agent's* gates and edit what it proposes — the
+  backlog is the Product Owner's, the plan the Architect's, the test list QA's — and
+  nothing else: no settings, no new developments, no other agent. Work arriving at a gate
+  is mailed to whoever holds it. An invited address belongs to the team and cannot open an
+  account of its own. Either side can end it: they decline or step off, you take the agent
+  back; whoever is left holding none is signed out and told why.
 
 ## Getting started
 

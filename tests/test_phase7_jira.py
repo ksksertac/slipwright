@@ -71,6 +71,42 @@ def test_jira_client_against_fake() -> None:
         client.myself()
 
 
+def test_a_connection_that_never_reached_jira_is_tried_again(monkeypatch: object) -> None:
+    """A TLS handshake cut short between here and Atlassian is not an answer.
+
+    Something in the middle of an ordinary internet connection drops one now and then;
+    the request never arrived, so it is asked again rather than surfacing to the person
+    as a failed sync. What Jira itself says -- including an error -- is left alone.
+    """
+    import httpx
+
+    from slipwright import jira as jira_module
+
+    monkeypatch.setattr(jira_module.net.time, "sleep", lambda _s: None)  # type: ignore[attr-defined]
+
+    tries = 0
+
+    def flaky(request: httpx.Request) -> httpx.Response:
+        nonlocal tries
+        tries += 1
+        if tries < 3:
+            raise httpx.ConnectError("[SSL: UNEXPECTED_EOF_WHILE_READING]", request=request)
+        return httpx.Response(200, json={"accountId": "1", "displayName": "Ada"})
+
+    client = JiraClient(
+        "https://acme.atlassian.net", HUMAN, "t", transport=httpx.MockTransport(flaky)
+    )
+    assert client.myself().display_name == "Ada"
+    assert tries == 3  # two that never left, then the one that did
+
+    # and it does give up rather than hammering: the third failure is the answer
+    always = httpx.MockTransport(
+        lambda request: (_ for _ in ()).throw(httpx.ConnectError("down", request=request))
+    )
+    with pytest.raises(JiraError, match="request failed"):
+        JiraClient("https://acme.atlassian.net", HUMAN, "t", transport=always).myself()
+
+
 def _project(engine: Engine, repo: Path, **kw: object) -> Project:
     return engine.create_project(Project(name="demo", repo_path=repo, jira_project_key="DEM", **kw))
 

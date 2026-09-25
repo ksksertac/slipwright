@@ -1,5 +1,5 @@
 // Jira setup as five tabs: connect, choose who the agents write as, name the issue types,
-// map each project, then the round that keeps it all true. Each tab carries a dot for its
+// map each project, then the hourly sync that keeps it all true. Each tab carries a dot for its
 // state, so what is still missing shows without opening it, and only one form is on screen.
 import { useState, type FormEvent, type ReactNode } from "react";
 import { NavLink, useParams } from "react-router-dom";
@@ -12,7 +12,6 @@ import {
   useTestJira,
 } from "../../api/hooks";
 import { useAuth } from "../../auth/AuthProvider";
-import { Crumbs } from "../../components/Crumbs";
 import { JiraAgentAccount, ProjectJiraSetup } from "../../components/JiraAgentSetup";
 import { ErrorBox, Loading, PageHead, timeAgo } from "../../components/ui";
 import { useT } from "../../i18n";
@@ -80,12 +79,11 @@ export function JiraSettingsPage() {
     agent: tx("Agent account"),
     types: tx("Issue types"),
     projects: tx("Projects"),
-    sweep: tx("The round"),
+    sweep: tx("Automatic sync"),
   };
 
   return (
     <div className="settings-flow">
-      <Crumbs items={[{ label: "Settings" }, { label: "Jira" }]} />
       <PageHead
         title={tx("Jira")}
         subtitle={tx("Mirror epics, stories and tasks into your tracker.")}
@@ -335,7 +333,7 @@ function IssueTypesForm({ admin }: { admin: boolean }) {
   );
 }
 
-/** The round tab: what the hourly sweep did last, and a button to run it now. */
+/** The automatic-sync tab: what the hourly sweep did last, and a button to run it now. */
 function SweepPanel({ admin, state }: { admin: boolean; state: StepState }) {
   const tx = useT();
   const last = useJiraSweep();
@@ -343,7 +341,7 @@ function SweepPanel({ admin, state }: { admin: boolean; state: StepState }) {
   const s = last.data;
   return (
     <Panel
-      title={tx("The Product Owner's round")}
+      title={tx("The Product Owner's automatic sync")}
       why={tx(
         "Runs by itself at startup and every hour: missing epics, stories and sub-tasks are created, stories join the sprint (one is started when none is running), statuses catch up. Nothing to set — this is how a half-mirrored plan repairs itself.",
       )}
@@ -353,10 +351,10 @@ function SweepPanel({ admin, state }: { admin: boolean; state: StepState }) {
       <div className="small">
         {s
           ? tx(
-              "Last round {when}: {jobs} development(s) checked, {updated} updated, {errors} with Jira errors.",
+              "Last sync {when}: {jobs} development(s) checked, {updated} updated, {errors} with Jira errors.",
               { when: timeAgo(s.at), jobs: s.jobs, updated: s.updated, errors: s.errors },
             )
-          : tx("No round has run yet.")}
+          : tx("No sync has run yet.")}
       </div>
       {admin && (
         <div className="row" style={{ marginTop: 10 }}>

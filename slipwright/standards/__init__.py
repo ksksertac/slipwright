@@ -22,6 +22,7 @@ DOMAINS = (
     "core",
     "product",
     "architecture",
+    "design",
     "backend",
     "web",
     "mobile",
@@ -92,7 +93,15 @@ def parse_front_matter(text: str) -> tuple[dict[str, Any], str]:
 
 
 def load_page(path: Path, *, scope: str = "global", domain: str | None = None) -> Page:
-    meta, body = parse_front_matter(path.read_text(encoding="utf-8"))
+    return parse_page(path.read_text(encoding="utf-8"), path, scope=scope, domain=domain)
+
+
+def parse_page(
+    text: str, path: Path, *, scope: str = "global", domain: str | None = None
+) -> Page:
+    """A page from its text. ``path`` names it -- chunk ids, headings and retrieval all
+    read it -- and need not exist: an account's rewritten pages live in the database."""
+    meta, body = parse_front_matter(text)
     dom = str(meta.get("domain") or domain or path.parent.name)
     h1 = _H1.search(body)
     title = h1.group(1).strip() if h1 else path.stem.replace("-", " ").title()
@@ -107,6 +116,16 @@ def load_page(path: Path, *, scope: str = "global", domain: str | None = None) -
         body=body,
         scope=scope,
     )
+
+
+def page_from_text(domain: str, name: str, text: str, *, scope: str = "user") -> Page:
+    """A page an account rewrote, indexed exactly as the shipped one would be.
+
+    It is given the path the shipped page has, so a rewritten ``backend/services-and-apis``
+    shadows the original rather than sitting beside it.
+    """
+    stem = name[:-3] if name.endswith(".md") else name
+    return parse_page(text, GLOBAL_DIR / domain / f"{stem}.md", scope=scope, domain=domain)
 
 
 def load_corpus(global_dir: Path | None = None, project_repo: Path | None = None) -> list[Page]:
@@ -213,6 +232,8 @@ __all__ = [
     "lint",
     "load_corpus",
     "load_page",
+    "page_from_text",
     "parse_front_matter",
+    "parse_page",
     "split_sections",
 ]

@@ -25,6 +25,7 @@ from slipwright.providers import (
     ModelResponse,
     ProviderError,
     ProviderRefusalError,
+    ProviderRejectedError,
     ProviderTimeoutError,
     ProviderTruncatedError,
     ProviderUnavailableError,
@@ -45,9 +46,11 @@ class InvokeErrorKind(StrEnum):
     BUDGET = "budget"  # the job's budget is exhausted (T9.7)
     LOOP = "loop"  # the role produced the same output twice in a row (T9.7)
     TRUNCATED = "truncated"  # the answer hit the output limit; ask for a smaller part
+    PROVIDER_REJECTED = "provider_rejected"  # no balance, bad key: asking again cannot mend it
 
 
-# provider errors worth another attempt; refusals and missing providers are not
+# provider errors worth another attempt; refusals, a rejected account and missing providers
+# are not -- the second call is refused for the same reason as the first
 RETRYABLE: frozenset[InvokeErrorKind] = frozenset(
     {InvokeErrorKind.TIMEOUT, InvokeErrorKind.PROVIDER_ERROR, InvokeErrorKind.MALFORMED_OUTPUT}
 )
@@ -75,6 +78,7 @@ class RoleResult(BaseModel):
 
     role: RoleName
     model: str
+    provider: str | None = None  # which vendor answered, for pricing the call
     thinking_depth: ThinkingDepth
     output: SerializeAsAny[RoleOutput] | None = None
     error: InvokeError | None = None
@@ -146,21 +150,47 @@ def invoke_role(
         timeout_s=timeout_s,
     )
 
-    def fail(kind: InvokeErrorKind, message: str, *, raw_text: str | None = None) -> RoleResult:
+    # where this call was headed. A failed call never gets a response to read the routed
+    # model off, and recording the profile's name instead put spend and failures against
+    # a model nobody asked for: a profile can name one vendor while the installation runs
+    # another, and it is the routed one that was really called.
+    headed: list[tuple[str | None, str]] = [(role_cfg.provider, role_cfg.model)]
+
+    def fail(
+        kind: InvokeErrorKind,
+        message: str,
+        *,
+        raw_text: str | None = None,
+        usage: Usage | None = None,
+    ) -> RoleResult:
         return RoleResult(
             role=role,
-            model=role_cfg.model,
+            model=headed[0][1],
+            provider=headed[0][0],
             thinking_depth=role_cfg.thinking_depth,
             error=InvokeError(kind=kind, message=message, detail=raw_text),
             raw_text=raw_text,
+            usage=usage,
             prompt_chars=len(request.system) + len(request.prompt),
         )
+
+    def spent(exc: ProviderError) -> Usage | None:
+        """What a failed call burned, when the vendor said. Nothing said stays nothing
+        known: an empty ``Usage`` would read as "this one was free", which is a different
+        claim and a false one."""
+        if exc.input_tokens is None and exc.output_tokens is None:
+            return None
+        return Usage(input_tokens=exc.input_tokens, output_tokens=exc.output_tokens)
 
     if provider is None:
         try:
             provider = get_default_provider()
         except ProviderUnavailableError as exc:
             return fail(InvokeErrorKind.PROVIDER_UNAVAILABLE, str(exc))
+    # the router knows where the request goes; a plain provider is its own answer
+    route = getattr(provider, "route", None)
+    if callable(route):
+        headed[0] = route(role.value, role_cfg.provider, role_cfg.model)
 
     try:
         response = _call_with_timeout(lambda: provider.complete(request), timeout_s)
@@ -168,24 +198,34 @@ def invoke_role(
         why = f" ({exc})" if str(exc) else ""
         return fail(InvokeErrorKind.TIMEOUT, f"{role.value} timed out after {timeout_s:g}s{why}")
     except ProviderRefusalError as exc:
-        return fail(InvokeErrorKind.REFUSED, str(exc))
+        return fail(InvokeErrorKind.REFUSED, str(exc), usage=spent(exc))
     except ProviderTruncatedError as exc:
-        return fail(InvokeErrorKind.TRUNCATED, str(exc))
+        return fail(InvokeErrorKind.TRUNCATED, str(exc), usage=spent(exc))
     except ProviderUnavailableError as exc:
-        return fail(InvokeErrorKind.PROVIDER_UNAVAILABLE, str(exc))
+        return fail(InvokeErrorKind.PROVIDER_UNAVAILABLE, str(exc), usage=spent(exc))
+    except ProviderRejectedError as exc:
+        return fail(InvokeErrorKind.PROVIDER_REJECTED, str(exc), usage=spent(exc))
     except ProviderError as exc:
-        return fail(InvokeErrorKind.PROVIDER_ERROR, str(exc))
+        return fail(InvokeErrorKind.PROVIDER_ERROR, str(exc), usage=spent(exc))
     except Exception as exc:  # noqa: BLE001 - the contract is "never a raw exception upward"
         return fail(InvokeErrorKind.PROVIDER_ERROR, f"{type(exc).__name__}: {exc}")
 
     try:
         output = _parse_output(response.text, schema_cls)
     except _MalformedOutput as exc:
-        return fail(InvokeErrorKind.MALFORMED_OUTPUT, str(exc), raw_text=response.text)
+        # the vendor answered and billed for it; that the answer was unusable is our
+        # problem, not a discount
+        return fail(
+            InvokeErrorKind.MALFORMED_OUTPUT,
+            str(exc),
+            raw_text=response.text,
+            usage=Usage(input_tokens=response.input_tokens, output_tokens=response.output_tokens),
+        )
 
     return RoleResult(
         role=role,
         model=response.model or role_cfg.model,  # what answered (routing may differ)
+        provider=response.provider or role_cfg.provider,
         thinking_depth=role_cfg.thinking_depth,
         output=output,
         raw_text=response.text,

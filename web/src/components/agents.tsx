@@ -20,6 +20,8 @@ export function AgentIcon({ role }: { role: string }): ReactNode {
       return <IconLayers />;
     case "backend":
       return <IconCpu />;
+    case "designer":
+      return <IconLayout />;
     case "web_ui":
       return <IconMonitor />;
     case "mobile_ui":
@@ -33,6 +35,16 @@ export function AgentIcon({ role }: { role: string }): ReactNode {
     default:
       return <IconBot />;
   }
+}
+
+/** A frame split into regions: a screen decided, not yet built. */
+function IconLayout() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M3 9h18M9 9v11" />
+    </svg>
+  );
 }
 
 function IconMobile() {
@@ -55,9 +67,10 @@ function IconMobile() {
 export const ROLE_LABEL: Record<string, string> = {
   po: "Product Owner",
   architect: "Architect",
-  backend: "Backend",
-  web_ui: "Web UI",
-  mobile_ui: "Mobile UI",
+  backend: "Backend Developer",
+  designer: "Designer",
+  web_ui: "Web Developer",
+  mobile_ui: "Mobile Developer",
   qa: "QA",
   devops: "DevOps",
   supervisor: "Supervisor",

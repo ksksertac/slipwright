@@ -4,52 +4,52 @@ tags: [profile, build, test, run, phases, decisions, contracts, repository]
 applies_to: [all]
 ---
 
-# Architecture and planning
+# Mimari ve planlama
 
-## Reading a repository
+## Bir depoyu okumak
 
-Start from the manifest (`pyproject.toml`, `package.json`, `go.mod`, `pom.xml`, …),
-the lockfile, the CI configuration and the README; they say more than the tree. Detect
-the package manager from the lockfile that exists (`uv.lock`, `package-lock.json`,
-`pnpm-lock.yaml`), not from habit. Note monorepos (several manifests) and name the
-package the request concerns.
+Manifestten (`pyproject.toml`, `package.json`, `go.mod`, `pom.xml`, …), lock dosyasından,
+CI yapılandırmasından ve README'den başla; bunlar dosya ağacından çok daha fazlasını
+söyler. Paket yöneticisini alışkanlıkla değil, var olan lock dosyasından belirle
+(`uv.lock`, `package-lock.json`, `pnpm-lock.yaml`). Monorepo'ları (birden çok manifest)
+not et ve isteğin ilgilendirdiği paketi adıyla söyle.
 
-## Choosing build, test and run commands
+## Build, test ve çalıştırma komutlarını seçmek
 
-Prefer the commands CI already runs; they are known to work. The build command must
-include the linters and type checks the project uses; the test command runs the whole
-suite non-interactively with quiet output. The run command starts the service on the
-literal `{port}` placeholder and must not daemonise. Never invent a command the
-repository does not support — say what is missing instead.
+CI'ın zaten çalıştırdığı komutları yeğle; onların çalıştığı bilinir. Build komutu
+projenin kullandığı linter'ları ve tip kontrollerini içermelidir; test komutu tüm takımı
+etkileşimsiz ve sessiz çıktıyla koşar. Çalıştırma komutu servisi düz `{port}` yer
+tutucusu üzerinde başlatır ve arka plana düşmez. Deponun desteklemediği bir komutu asla
+uydurma — bunun yerine neyin eksik olduğunu söyle.
 
-## Writing the phases
+## Fazları yazmak
 
-Phases are small, ordered and independently verifiable: each one can pass the build
-gate on its own and implements exactly one backlog task. Backend contracts come before
-the front-ends that consume them. One domain per phase (backend, web, mobile, infra,
-docs). Name the files each phase will touch — it is how the specialist's context is
-chosen. If a task cannot be one phase in one domain, say so in `summary` so the backlog
-is split, instead of mixing domains.
+Fazlar küçük, sıralı ve tek başına doğrulanabilir olur: her biri build kapısını kendi
+başına geçebilir ve tam olarak bir backlog task'ını uygular. Backend sözleşmeleri, onları
+tüketen arayüzlerden önce gelir. Faz başına tek alan (backend, web, mobil, altyapı,
+doküman). Her fazın dokunacağı dosyaları adıyla yaz — uzmanın bağlamı böyle seçilir. Bir
+task tek alanda tek faz olamıyorsa, alanları karıştırmak yerine bunu `summary` içinde
+söyle ki backlog bölünsün.
 
-## Decisions worth recording
+## Yazmaya değer kararlar
 
-Write a decision when a reviewer would otherwise ask "why this way": a new component or
-dependency, a data model change and its migration, a contract between backend and a
-front-end (endpoint, payload, error codes), a trade-off taken (consistency over
-latency, …), anything that constrains later phases. One sentence each, stating the
-choice and the reason. Skip decisions that only restate the request.
+Bir inceleyicinin "neden böyle?" diye soracağı her yerde karar yaz: yeni bir bileşen ya
+da bağımlılık, bir veri modeli değişikliği ve migration'ı, backend ile bir arayüz
+arasındaki sözleşme (uç nokta, gövde, hata kodları), verilen bir ödünleşim (gecikme
+yerine tutarlılık, …), sonraki fazları kısıtlayan her şey. Her biri tek cümle: seçimi ve
+nedenini söyler. Yalnızca isteği tekrarlayan kararları yazma.
 
-## Contracts between domains
+## Alanlar arası sözleşmeler
 
-When backend and front-end phases share a contract, the backend phase defines it
-explicitly (paths, methods, request and response shapes, error codes, pagination) and the
-front-end phase consumes exactly that. Put the contract in the decisions so both
-specialists see the same text. Prefer extending an existing endpoint over adding a
-near-duplicate.
+Backend ve arayüz fazları bir sözleşmeyi paylaştığında, sözleşmeyi backend fazı açıkça
+tanımlar (yollar, metotlar, istek ve yanıt biçimleri, hata kodları, sayfalama) ve arayüz
+fazı tam olarak onu tüketir. Sözleşmeyi kararların içine koy ki iki uzman da aynı metni
+görsün. Neredeyse aynısı olan yeni bir uç nokta eklemek yerine var olanı genişletmeyi
+yeğle.
 
-## When to stop and ask
+## Ne zaman durup sormalı
 
-If the backlog is ambiguous in a way that changes the design (two plausible readings
-lead to different phases), if it requires a dependency or service the repository does
-not have, or if it conflicts with a core rule, do not guess: describe the ambiguity in
-`summary` so the human can decide at the gate.
+Backlog, tasarımı değiştirecek biçimde belirsizse (iki makul okuma farklı fazlara
+götürüyorsa), deponun sahip olmadığı bir bağımlılık ya da servis gerekiyorsa, ya da bir
+ortak kuralla çelişiyorsa tahmin yürütme: belirsizliği `summary` içinde anlat ki insan
+kapıda karar versin.

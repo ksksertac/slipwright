@@ -558,6 +558,9 @@ def test_max_output_tokens_override_reaches_the_vendor(
 
     for spec in PROVIDERS.values():
         monkeypatch.delenv(spec.env_var, raising=False)
+    # a vendor that caps its answers lower than the rest, picked by name: the provider
+    # table grows and reorders, and an index would make this test break for no reason
+    capped = next(s for s in PROVIDERS.values() if s.max_tokens < 32_000)
     vendor = FakeVendor("sk-d", ["deep-model"])
     from tests.pipeline import default_backlog
 
@@ -566,16 +569,20 @@ def test_max_output_tokens_override_reaches_the_vendor(
         store, worktrees_root, seed, None, http_transport=httpx.MockTransport(vendor.handler)
     )
     engine.update_provider_settings(
-        "deepseek", api_key="sk-d", make_default=True, default_model="deep-model"
+        capped.name, api_key="sk-d", make_default=True, default_model="deep-model"
     )
-    assert engine.provider_settings()[2]["default_max_tokens"] == 8_192
+
+    def settings_for(name: str) -> dict[str, object]:
+        return next(row for row in engine.provider_settings() if row["name"] == name)
+
+    assert settings_for(capped.name)["default_max_tokens"] == capped.max_tokens
     engine.start(engine.create_job("x", repo).id)
-    assert vendor.requests[-1]["max_tokens"] == 8_192  # the vendor default
-    engine.update_provider_settings("deepseek", max_tokens=32_000)
+    assert vendor.requests[-1]["max_tokens"] == capped.max_tokens  # the vendor default
+    engine.update_provider_settings(capped.name, max_tokens=32_000)
     engine.start(engine.create_job("y", repo).id)
     assert vendor.requests[-1]["max_tokens"] == 32_000
-    engine.update_provider_settings("deepseek", max_tokens=0)  # back to the default
-    assert engine.provider_settings()[2]["max_tokens"] is None
+    engine.update_provider_settings(capped.name, max_tokens=0)  # back to the default
+    assert settings_for(capped.name)["max_tokens"] is None
 
 
 def test_malformed_answer_is_retried_with_the_validation_error(

@@ -2,6 +2,13 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { RequireAuth } from "./auth/AuthProvider";
 import { Layout } from "./components/Layout";
 import { LoginPage } from "./pages/LoginPage";
+import {
+  ForgotPasswordPage,
+  InvitationPage,
+  ResetPasswordPage,
+  SignupPage,
+  VerifyEmailPage,
+} from "./pages/AccountPages";
 import { DashboardPage } from "./pages/DashboardPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
 import { NewProjectPage } from "./pages/NewProjectPage";
@@ -13,12 +20,20 @@ import { JiraSettingsPage } from "./pages/settings/JiraSettingsPage";
 import { AgentsPage } from "./pages/AgentsPage";
 import { AgentDetailPage } from "./pages/AgentDetailPage";
 import { UsersSettingsPage } from "./pages/settings/UsersSettingsPage";
+import { EmailSettingsPage } from "./pages/settings/EmailSettingsPage";
+import { SupportPage } from "./pages/SupportPage";
 import { useT } from "./i18n";
 
 export function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      {/* reached before there is a session, or from a link in a letter */}
+      <Route path="/signup" element={<SignupPage />} />
+      <Route path="/verify" element={<VerifyEmailPage />} />
+      <Route path="/invitation" element={<InvitationPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset" element={<ResetPasswordPage />} />
       <Route
         element={
           <RequireAuth>
@@ -44,6 +59,9 @@ export function App() {
         <Route path="/agents/:role" element={<AgentDetailPage />} />
         <Route path="/agents/:role/:tab" element={<AgentDetailPage />} />
         <Route path="/settings/users" element={<UsersSettingsPage />} />
+        <Route path="/settings/email" element={<EmailSettingsPage />} />
+        <Route path="/settings/email/:tab" element={<EmailSettingsPage />} />
+        <Route path="/support" element={<SupportPage />} />
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>

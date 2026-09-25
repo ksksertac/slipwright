@@ -138,9 +138,23 @@ def test_login_and_projects_pages_use_the_api() -> None:
 # --- T8.3 project page --------------------------------------------------------------------
 
 
-def test_project_page_has_the_six_tabs_and_lives_on_events() -> None:
+def test_project_page_has_its_tabs_and_lives_on_events() -> None:
     page = _src("pages/ProjectPage.tsx")
-    assert '["pipeline", "overview", "board", "developments", "tests", "activity"]' in page
+    # "brief" is what the agents are told the project is (T11.1). The list is read out of
+    # the source, so prettier may have wrapped it over several lines.
+    tabs = page.split("const TABS = [", 1)[1].split("]", 1)[0]
+    assert [t.strip().strip('"') for t in tabs.split(",") if t.strip()] == [
+        "pipeline",
+        "overview",
+        "brief",
+        "board",
+        "developments",
+        "tests",
+        "costs",
+        "activity",
+        # the project's own settings: the sections it was created through, as tabs
+        "settings",
+    ]
     for expected in (
         "useBoard",
         "useProgress",
@@ -212,7 +226,9 @@ def test_job_page_covers_every_gate_and_the_parity_list() -> None:
         "useSetTestCases",
         "WrittenTestsGate",
         "Phases",
-        "phase-${g.number}",
+        # each phase is anchored, so the board can link a task straight at it; what the
+        # loop calls its phase is the page's business, the anchor is the contract
+        "id={`phase-${",
         "build gate",
         "Steering",
         "useSendMessage",
@@ -235,11 +251,14 @@ def test_tests_tab_lists_runs_and_scrolls_to_the_failure() -> None:
     for expected in (
         "useTestRuns",
         "useStartTestRun",
-        "on the main checkout",  # run target: main checkout or a job's worktree
+        "on the main branch",  # run target: the project's own branch, or a development's
         "worktree_path",
         "build gate",  # gate runs are listed alongside manual ones
         "any status",  # filters
-        "any job",
+        "any development",
+        "byDay",  # the runs read as "what happened, and when"
+        "Why this ran",  # a row opens into what the run was for and what was expected
+        "What was expected",
         "useTestRunOutput",
         "scrollIntoView",  # failing section scrolled into view
         "still running",

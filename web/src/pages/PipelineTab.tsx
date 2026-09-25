@@ -1,10 +1,10 @@
-// The project's pipeline: one lane per development. A lane opens with what was asked --
-// a short headline over the brief -- and then reads left to right as a flow: the steps
-// grouped into the four stages every development goes through, linked by arrows, each
-// card coloured by state. Cards waiting for the human carry a checkbox for bulk approval;
-// clicking any card opens a side panel with that step's output, and editable gates edit
-// in place.
-import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
+// The project's pipeline: one lane per development. A lane is a single line -- what was
+// asked, where it got to, how far along -- with "Details" on the right; ten developments
+// are ten lines instead of ten walls of step cards. Opening one unfolds the development's
+// own detail in place: the four stages, whatever needs a decision, and the tabs, the same
+// view its page shows. The step-by-step flow -- the cards grouped into stages and linked
+// by arrows, with a side panel per step -- is the first of those tabs.
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { describeError, type Job, type Lane, type Profile, type StepCard } from "../api/client";
 import {
@@ -22,6 +22,7 @@ import {
 import { AgentIcon, DomainBadge, ROLE_LABEL } from "../components/agents";
 import { BulkBar } from "../components/BulkBar";
 import { RetryActions } from "../components/GateActions";
+import { DesignGate } from "../components/DesignGate";
 import { Detail } from "../components/Detail";
 import { ReviewDetail } from "../components/Review";
 import {
@@ -32,26 +33,51 @@ import {
   type PlanShape,
   type TestCaseShape,
 } from "../components/GateEditors";
-import {
-  IconCheck,
-  IconCpu,
-  IconFlask,
-  IconGit,
-  IconLayers,
-  IconUsers,
-  IconX,
-} from "../components/icons";
+import { IconCheck, IconChevron, IconLayers, IconUsers, IconX } from "../components/icons";
 import { ProfileForm } from "../components/ProfileForm";
+import {
+  STAGE_ICON,
+  STAGE_LABEL,
+  STAGE_NOTE,
+  stageAgent,
+  stageStatus,
+  stages,
+  type Stage,
+} from "../components/stages";
+import { StepDetailView } from "../components/StepDetail";
 import { useToast } from "../components/Toast";
-import { Empty, ErrorBox, Loading, ProgressBar, StateBadge, timeAgo } from "../components/ui";
+import {
+  Empty,
+  ErrorBox,
+  Loading,
+  Pager,
+  ProgressBar,
+  StateBadge,
+  sentence,
+  timeAgo,
+} from "../components/ui";
 import { useT, type T } from "../i18n";
+import { useSay } from "../i18n/said";
+import { JobDetail } from "./JobPage";
+
+/** How many developments a page of the pipeline shows: the ten most recent, newest first. */
+const PAGE_SIZE = 10;
 
 export function PipelineTab({ projectId }: { projectId: string }) {
   const tx = useT();
   const pipeline = usePipeline(projectId);
   const [chosen, setSelected] = useState<string[]>([]);
   const [open, setOpen] = useState<{ jobId: string; key: string } | null>(null);
+  const [wanted, setPage] = useState(0);
   const lanes = useMemo(() => pipeline.data?.lanes ?? [], [pipeline.data]);
+  // a development finishing can empty the page you are standing on, so the page is clamped
+  // here rather than corrected afterwards: the last page always has something on it
+  const page = Math.min(wanted, Math.max(0, Math.ceil(lanes.length / PAGE_SIZE) - 1));
+  // the page the list actually shows; the selection and the counts above still read every lane
+  const shown = useMemo(
+    () => lanes.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE),
+    [lanes, page],
+  );
 
   // a job that moved on is no longer selectable: the selection is read through the lanes
   const waiting = useMemo(
@@ -120,7 +146,7 @@ export function PipelineTab({ projectId }: { projectId: string }) {
           )}
         </div>
       </div>
-      {lanes.map((lane) => (
+      {shown.map((lane) => (
         <LaneRow
           key={lane.job_id}
           lane={lane}
@@ -131,6 +157,15 @@ export function PipelineTab({ projectId }: { projectId: string }) {
           openKey={open?.jobId === lane.job_id ? open.key : null}
         />
       ))}
+      <Pager
+        page={page}
+        pageSize={PAGE_SIZE}
+        total={lanes.length}
+        onPage={(n) => {
+          setOpen(null);
+          setPage(n);
+        }}
+      />
       <BulkBar
         selected={selected}
         onClear={() => setSelected([])}
@@ -148,72 +183,11 @@ export function PipelineTab({ projectId }: { projectId: string }) {
   );
 }
 
-/** The four stages every development goes through. Grouping the cards under them is what
- * turns a long row into something you can read: you see where the work is, not twenty
- * equal boxes. A card whose key is not one of the fixed ones (the decision gate, which is
- * inserted wherever it interrupted) stays in the stage it was inserted into. */
-const STAGE_LABEL: Record<string, string> = {
-  plan: "Planning",
-  build: "Building",
-  test: "Testing",
-  ship: "Delivery",
-};
-/** What each stage is for, and the icon that says it at a glance. */
-const STAGE_NOTE: Record<string, string> = {
-  plan: "What to build, and how it will be built and tested",
-  build: "One phase per task, each behind the build gate",
-  test: "The cases you approve, then the tests that cover them",
-  ship: "The branch, the pull request and its checks",
-};
-
-const STAGE_ICON: Record<string, ComponentType<{ className?: string }>> = {
-  plan: IconLayers,
-  build: IconCpu,
-  test: IconFlask,
-  ship: IconGit,
-};
-
-type Stage = { key: string; steps: StepCard[] };
-
-function stageOf(step: StepCard): string | null {
-  switch (step.key.split(":")[0]) {
-    case "backlog":
-    case "backlog_gate":
-    case "architecture":
-    case "architecture_gate":
-      return "plan";
-    case "develop":
-    case "phase":
-    case "review_gate":
-      return "build";
-    case "qa":
-    case "test_gate":
-      return "test";
-    case "devops":
-    case "done":
-      return "ship";
-    default:
-      return null;
-  }
-}
-
-function stages(steps: StepCard[]): Stage[] {
-  const out: Stage[] = [];
-  let current = "plan";
-  for (const step of steps) {
-    current = stageOf(step) ?? current;
-    if (out.length === 0 || out[out.length - 1]!.key !== current)
-      out.push({ key: current, steps: [] });
-    out[out.length - 1]!.steps.push(step);
-  }
-  return out;
-}
-
-function stageStatus(steps: StepCard[]): string {
-  if (steps.some((s) => s.status === "waiting")) return "waiting";
-  if (steps.some((s) => s.status === "failed")) return "failed";
-  if (steps.some((s) => s.status === "running")) return "running";
-  return steps.every((s) => s.status === "done") ? "done" : "pending";
+/** The colour of the arrow into a step: the state of the step it comes from. */
+function linkState(previous: StepCard | undefined): string {
+  if (previous?.status === "done") return "done";
+  if (previous?.status === "running") return "running";
+  return "";
 }
 
 /** A one-line title for a development whose request is a paragraph: the first sentence,
@@ -221,9 +195,12 @@ function stageStatus(steps: StepCard[]): string {
 function headline(request: string): string {
   const first = request.trim().split(/\r?\n/, 1)[0]!.trim();
   const stop = first.search(/[;:.!?](\s|$)/);
-  const title = stop > 12 ? first.slice(0, stop) : first;
+  const title = sentence(stop > 12 ? first.slice(0, stop) : first);
   return title.length > 76 ? `${title.slice(0, 73).trimEnd()}…` : title;
 }
+
+/** Keeps a click on a control inside the head from also folding the lane. */
+const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
 
 function LaneRow({
   lane,
@@ -241,27 +218,40 @@ function LaneRow({
   openKey: string | null;
 }) {
   const tx = useT();
-  const groups = useMemo(() => stages(lane.steps), [lane.steps]);
   const done = lane.steps.filter((s) => s.status === "done").length;
-  let place = 0; // the step's place in the whole flow, so the cards read as an order
+  // closed is the resting state: the tab is a list of developments until you ask for one
+  const [open, setOpen] = useState(false);
 
   return (
-    <section className={`lane ${lane.pending_approval ? "waiting" : ""}`}>
-      <div className="lane-head">
+    <section className={`lane ${lane.pending_approval ? "waiting" : ""} ${open ? "open" : ""}`}>
+      {/* the whole head is the target: the title used to be a link to the development's own
+          page, which is a second way to say "detail" right next to the button that says it */}
+      <div className="lane-head" onClick={() => setOpen(!open)}>
         {lane.pending_approval && (
           <input
             type="checkbox"
             checked={selected}
             onChange={(e) => onSelect(e.target.checked)}
+            onClick={stop}
             aria-label={`select ${headline(lane.request)}`}
           />
         )}
         <div className="lane-id">
-          <Link to={`/projects/${projectId}/jobs/${lane.job_id}`} className="lane-title">
-            {headline(lane.request)}
-          </Link>
+          <span className="lane-title">{headline(lane.request)}</span>
           <div className="lane-sub">
             <StateBadge state={lane.state} />
+            {/* the badge says what kind of work is happening; this says whose, which is
+                the question "build gate" on its own never answered */}
+            {lane.running_label && (
+              <span className="lane-running" data-agent={lane.running_role ?? undefined}>
+                {lane.running_role && (
+                  <span className="role-ink">
+                    <AgentIcon role={lane.running_role} />
+                  </span>
+                )}
+                <span className="truncate">{stepTitle(tx, lane.running_label)}</span>
+              </span>
+            )}
             <span className="faint tiny">
               {tx("started {ago}", { ago: timeAgo(lane.created_at) })}
             </span>
@@ -273,32 +263,100 @@ function LaneRow({
             {tx("{done} of {total} steps", { done, total: lane.steps.length })}
           </span>
         </div>
-        {lane.state === "failed" && <LaneRetry jobId={lane.job_id} />}
+        {/* the failure is spelled out inside the detail, so the shortcut is for the
+            closed lane, where nothing else offers it */}
+        {lane.state === "failed" && !open && (
+          <span onClick={stop}>
+            <LaneRetry jobId={lane.job_id} />
+          </span>
+        )}
+        {/* the button is what a keyboard reaches; the click on the head is the mouse's */}
+        <button type="button" className="lane-toggle" aria-expanded={open}>
+          {tx("Details")}
+          <IconChevron />
+        </button>
       </div>
 
-      <LaneBrief request={lane.request} summary={lane.summary} />
-
-      <div className="lane-flow">
-        {groups.map((group) => (
-          <div key={group.key} className={`flow-stage ${stageStatus(group.steps)}`}>
-            <StageHead stage={group} />
-            <ol className="flow-rail">
-              {group.steps.map((step, i) => (
-                <li key={step.key} className="flow-node">
-                  <span className={`flow-link ${i === 0 ? "first" : ""}`} aria-hidden="true" />
-                  <StepCardView
-                    step={step}
-                    place={++place}
-                    active={openKey === step.key}
-                    onOpen={() => onOpen(step.key)}
-                  />
-                </li>
-              ))}
-            </ol>
-          </div>
-        ))}
-      </div>
+      {open && (
+        <div className="lane-detail">
+          <LaneBrief request={lane.request} summary={lane.summary} />
+          <LaneDetail lane={lane} projectId={projectId} onOpen={onOpen} openKey={openKey} />
+        </div>
+      )}
     </section>
+  );
+}
+
+/** The development's own detail, drawn inside the lane: the same four stages, gate and tabs
+ * its page shows. The job is only fetched once the lane is opened -- a project with twenty
+ * developments would otherwise fetch twenty of them to draw a list. */
+function LaneDetail({
+  lane,
+  projectId,
+  onOpen,
+  openKey,
+}: {
+  lane: Lane;
+  projectId: string;
+  onOpen: (key: string) => void;
+  openKey: string | null;
+}) {
+  const job = useJob(lane.job_id);
+  if (job.isLoading) return <Loading rows={3} />;
+  if (job.error) return <ErrorBox error={job.error} />;
+  if (!job.data) return null;
+  return (
+    <JobDetail
+      job={job.data}
+      projectId={projectId}
+      flow={<LaneFlow lane={lane} onOpen={onOpen} openKey={openKey} />}
+    />
+  );
+}
+
+/** The flow itself: the steps under the stage they belong to, linked left to right, each
+ * card coloured by state and opening a side panel with that step's output. */
+function LaneFlow({
+  lane,
+  onOpen,
+  openKey,
+}: {
+  lane: Lane;
+  onOpen: (key: string) => void;
+  openKey: string | null;
+}) {
+  const groups = useMemo(() => stages(lane.steps), [lane.steps]);
+  let place = 0; // the step's place in the whole flow, so the cards read as an order
+  return (
+    <div className="lane-flow">
+      {groups.map((group) => (
+        <div
+          key={group.key}
+          className={`flow-stage ${stageStatus(group.steps)}`}
+          data-agent={stageAgent(group.steps)}
+        >
+          <StageHead stage={group} />
+          <ol className="flow-rail">
+            {group.steps.map((step, i) => (
+              <li key={step.key} className="flow-node">
+                {/* the arrow carries the state of the step it comes from, so the flow is
+                    green up to the card the work is sitting on */}
+                <span
+                  className={`flow-link ${i === 0 ? "first" : linkState(group.steps[i - 1])}`}
+                  aria-hidden="true"
+                />
+                <StepCardView
+                  step={step}
+                  place={++place}
+                  active={openKey === step.key}
+                  onOpen={() => onOpen(step.key)}
+                />
+              </li>
+            ))}
+          </ol>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -308,11 +366,10 @@ function StageHead({ stage }: { stage: Stage }) {
   const tx = useT();
   const done = stage.steps.filter((s) => s.status === "done").length;
   const Icon = STAGE_ICON[stage.key] ?? IconLayers;
+  const agent = stageAgent(stage.steps);
   return (
     <div className="flow-stage-head">
-      <span className="flow-stage-icon">
-        <Icon />
-      </span>
+      <span className="flow-stage-icon">{agent ? <AgentIcon role={agent} /> : <Icon />}</span>
       <span className="flow-stage-id">
         <span className="flow-stage-title">{tx(STAGE_LABEL[stage.key] ?? stage.key)}</span>
         <span className="flow-stage-note">{tx(STAGE_NOTE[stage.key] ?? "")}</span>
@@ -332,19 +389,41 @@ function StageHead({ stage }: { stage: Stage }) {
   );
 }
 
-/** What this development is, in the space above the flow: the request as it was written,
- * two lines with the rest a click away, and under it the one line the architect settled
- * on once there is a plan. A wall of prompt as the lane's title is what made this
- * unreadable. */
+/** What this development is, in the space above the flow: the request as it was written
+ * and, once there is a plan, the one the architect settled on -- each labelled, two lines,
+ * the rest a click away. A wall of prompt as the lane's title is what made this
+ * unreadable, and the plan squeezed onto a single clipped line said just as little. */
 function LaneBrief({ request, summary }: { request: string; summary?: string | null }) {
+  const tx = useT();
+  const say = useSay();
+  const asked = request.trim(); // the person's own words, shown as they typed them
+  const plan = say(summary ?? "").trim();
+  if (!asked && !plan) return null;
+  return (
+    <div className="lane-brief">
+      {asked && <BriefPart label={tx("What was asked")} text={asked} />}
+      {plan && <BriefPart label={tx("The plan")} text={plan} className="lane-brief-plan" />}
+    </div>
+  );
+}
+
+/** One labelled piece of the brief: two lines, and an unfold button that only earns its
+ * place when two lines really do cut the text off -- which depends on how wide the lane
+ * is drawn and on how long the same sentence runs in the language it was written in, so
+ * it is measured, not guessed. */
+function BriefPart({
+  label,
+  text,
+  className,
+}: {
+  label: string;
+  text: string;
+  className?: string;
+}) {
   const tx = useT();
   const [open, setOpen] = useState(false);
   const [clipped, setClipped] = useState(false);
   const para = useRef<HTMLParagraphElement>(null);
-  const asked = request.trim();
-  const plan = (summary ?? "").trim();
-  // the unfold button only earns its place when two lines really do cut the request off,
-  // which depends on how wide the lane is drawn -- so it is measured, not guessed
   useEffect(() => {
     const el = para.current;
     if (!el || open) return;
@@ -353,28 +432,17 @@ function LaneBrief({ request, summary }: { request: string; summary?: string | n
     const observer = new ResizeObserver(measure);
     observer.observe(el);
     return () => observer.disconnect();
-  }, [asked, open]);
-  if (!asked && !plan) return null;
+  }, [text, open]);
   return (
-    <div className="lane-brief">
-      {asked && (
-        <>
-          <div className="lane-brief-label">{tx("What was asked")}</div>
-          <p ref={para} className={open ? "" : "clamp-2"}>
-            {asked}
-          </p>
-          {clipped && (
-            <button type="button" className="text-btn tiny" onClick={() => setOpen(!open)}>
-              {open ? tx("show less") : tx("show more")}
-            </button>
-          )}
-        </>
-      )}
-      {plan && (
-        <div className="lane-brief-plan">
-          <span className="lane-brief-label">{tx("The plan")}</span>
-          <span className="truncate">{plan}</span>
-        </div>
+    <div className={className}>
+      <div className="lane-brief-label">{label}</div>
+      <p ref={para} className={open ? "" : "clamp-2"}>
+        {text}
+      </p>
+      {clipped && (
+        <button type="button" className="text-btn tiny" onClick={() => setOpen(!open)}>
+          {open ? tx("show less") : tx("show more")}
+        </button>
       )}
     </div>
   );
@@ -382,7 +450,7 @@ function LaneBrief({ request, summary }: { request: string; summary?: string | n
 
 function LaneRetry({ jobId }: { jobId: string }) {
   const job = useJob(jobId);
-  return job.data ? <RetryActions job={job.data} compact /> : null;
+  return job.data ? <RetryActions job={job.data} /> : null;
 }
 
 /** Card labels come from the server in English; the fixed ones translate, a phase
@@ -393,6 +461,16 @@ function stepLabel(tx: T, step: StepCard): string {
   const gate = /^Review approval: phase (\d+)$/.exec(step.label);
   if (gate) return tx("Review approval: phase {n}", { n: gate[1]! });
   return tx(step.label);
+}
+
+/** A running step's label in the lane header: the agent translated, its goal clipped.
+ *  "Backend Developer: add the endpoint" is the whole card's title; here there is room
+ *  for who and roughly what, not the sentence. */
+function stepTitle(tx: T, label: string): string {
+  const m = /^([^:]+): (.*)$/.exec(label);
+  if (!m) return tx(label);
+  const goal = m[2]!.trim();
+  return `${tx(m[1]!)} · ${goal.length > 48 ? `${goal.slice(0, 48)}…` : goal}`;
 }
 
 function elapsed(s: number | null | undefined): string {
@@ -414,6 +492,7 @@ function StepCardView({
   onOpen: () => void;
 }) {
   const tx = useT();
+  const say = useSay();
   const who = step.role ? tx(ROLE_LABEL[step.role] ?? step.role) : step.gate ? tx("you") : "";
   return (
     <button
@@ -435,7 +514,7 @@ function StepCardView({
         <span className="step-no">{place}</span>
       </div>
       <div className="label">{stepLabel(tx, step)}</div>
-      {step.task_title && <div className="task truncate">{step.task_title}</div>}
+      {step.task_title && <div className="task truncate">{say(step.task_title)}</div>}
       {step.recommendation && (
         <div
           className={`chip ${step.recommendation === "approve" ? (step.risk === "low" ? "ok" : "work") : "bad"}`}
@@ -496,7 +575,7 @@ function StepPanel({
     <aside className="drawer" role="dialog" aria-label={step?.label ?? "step"}>
       <div className="drawer-head">
         <div style={{ minWidth: 0 }}>
-          <div className="faint tiny truncate">{lane?.request}</div>
+          <div className="faint tiny truncate">{lane && sentence(lane.request)}</div>
           <h3 className="truncate">{step ? stepLabel(tx, step) : "…"}</h3>
         </div>
         <button className="btn ghost icon" onClick={onClose} aria-label={tx("Close")}>
@@ -509,7 +588,7 @@ function StepPanel({
         ) : (
           <>
             <div className="row" style={{ marginBottom: 12 }}>
-              <span className={`badge ${STATUS_CLASS[step.status]}`}>{step.status}</span>
+              <span className={`badge ${STATUS_CLASS[step.status]}`}>{tx(step.status)}</span>
               {step.role && (
                 <span className="muted small">
                   {tx(ROLE_LABEL[step.role] ?? step.role)}
@@ -523,17 +602,30 @@ function StepPanel({
               </Link>
             </div>
             {step.status === "waiting" && <GateEditor job={job.data} step={step} />}
+            {/* the screens are worth seeing after they are signed off too */}
+            {step.key === "design" && <DesignGate jobId={jobId} readOnly />}
+            {step.status === "failed" && (
+              <div className="gate" style={{ marginBottom: 12 }}>
+                <div className="muted small" style={{ marginBottom: 8 }}>
+                  {tx("Retry continues from the step that failed")}
+                </div>
+                <RetryActions job={job.data} />
+              </div>
+            )}
             <RerunStep
               jobId={jobId}
               projectId={projectId}
-              role={step.role}
+              stepKey={step.key}
               laneState={lane?.state}
             />
-            {step.outputs.map((index) => (
-              <Output key={index} jobId={jobId} index={index} />
-            ))}
-            {step.outputs.length === 0 && step.status !== "waiting" && (
-              <div className="muted small">{tx("Nothing recorded for this step yet.")}</div>
+            <StepDetailView jobId={jobId} stepKey={step.key} />
+            {step.outputs.length > 0 && (
+              <details className="step-raw">
+                <summary>{tx("The agent's record, as it was written")}</summary>
+                {step.outputs.map((index) => (
+                  <Output key={index} jobId={jobId} index={index} />
+                ))}
+              </details>
             )}
           </>
         )}
@@ -549,39 +641,56 @@ function StepPanel({
  * request again — the way a development that finished with nowhere to push reaches GitHub
  * once the project names a repository.
  */
+/** What re-running this card actually does. The two QA cards are different steps and used
+ * to share one button: on "QA: test cases" it said it would run the tests again and then
+ * ran the test command, which can never produce the scenarios that card is about. Each
+ * card now offers its own step, or none. */
+const RERUN: Record<
+  string,
+  { step: "test_cases" | "tests" | "devops"; label: string; hint: string }
+> = {
+  "qa:1": {
+    step: "test_cases",
+    label: "Propose the test cases again",
+    hint: "Asks QA for the list of scenarios again, from the top.",
+  },
+  "qa:2": {
+    step: "tests",
+    label: "Run the tests again",
+    hint: "Runs the test command over this development's worktree.",
+  },
+  devops: {
+    step: "devops",
+    label: "Run DevOps again",
+    hint: "Writes the pull request again, pushes the branch and opens it.",
+  },
+};
+
 function RerunStep({
   jobId,
   projectId,
-  role,
+  stepKey,
   laneState,
 }: {
   jobId: string;
   projectId: string;
-  role: string | null | undefined;
+  stepKey: string;
   laneState: string | undefined;
 }) {
   const tx = useT();
   const rerun = useRerunStep(jobId, projectId);
-  const step = role === "qa" ? "tests" : role === "devops" ? "devops" : null;
+  const action = RERUN[stepKey];
   // only a development that has stopped: a running one is left alone
-  if (!step || (laneState !== "done" && laneState !== "failed")) return null;
+  if (!action || (laneState !== "done" && laneState !== "failed")) return null;
   return (
     <div className="row spread" style={{ marginBottom: 12, gap: 8 }}>
       <button
         className="btn"
         disabled={rerun.isPending}
-        onClick={() => rerun.mutate(step)}
-        title={
-          step === "tests"
-            ? tx("Runs the test command over this development's worktree.")
-            : tx("Writes the pull request again, pushes the branch and opens it.")
-        }
+        onClick={() => rerun.mutate(action.step)}
+        title={tx(action.hint)}
       >
-        {rerun.isPending
-          ? tx("Starting…")
-          : step === "tests"
-            ? tx("Run the tests again")
-            : tx("Run DevOps again")}
+        {rerun.isPending ? tx("Starting…") : tx(action.label)}
       </button>
       {rerun.error && <span className="small bad-text">{describeError(rerun.error)}</span>}
     </div>
@@ -622,6 +731,7 @@ function GateEditor({ job, step }: { job: Job; step: StepCard }) {
       </div>
       {step.key === "backlog_gate" && <BacklogGateEditor job={job} />}
       {step.key === "architecture_gate" && <ArchitectureGateEditor job={job} />}
+      {step.key === "design_gate" && <DesignGate jobId={job.id} />}
       {step.key === "test_gate:1" && <TestCasesGateEditor job={job} />}
       {!step.editable && (
         <div className="row">
@@ -776,6 +886,10 @@ function BacklogGateEditor({ job }: { job: Job }) {
 }
 
 function ArchitectureGateEditor({ job }: { job: Job }) {
+  // the summary and the decisions are read here, so they follow the platform's language;
+  // the phase goals below are edited and saved, so the editor keeps the project's words
+  const tx = useT();
+  const say = useSay();
   const serverPlan = job.data.plan as PlanShape | null;
   const serverProfile = job.profile;
   const savePlan = useSetPlan(job.id);
@@ -829,20 +943,22 @@ function ArchitectureGateEditor({ job }: { job: Job }) {
 
   return (
     <>
-      {plan.summary && <p className="small">{plan.summary}</p>}
+      {plan.summary && <p className="small">{say(plan.summary)}</p>}
       {plan.decisions && plan.decisions.length > 0 && (
         <ul className="small" style={{ margin: "4px 0 10px 18px" }}>
           {plan.decisions.map((d, i) => (
-            <li key={i}>{d}</li>
+            <li key={i}>{say(d)}</li>
           ))}
         </ul>
       )}
       <nav className="tabs small" style={{ marginBottom: 10 }}>
         <a className={tab === "plan" ? "active" : ""} onClick={() => setTab("plan")}>
-          Phases{dirtyPlan ? " •" : ""}
+          {tx("Phases")}
+          {dirtyPlan ? " •" : ""}
         </a>
         <a className={tab === "profile" ? "active" : ""} onClick={() => setTab("profile")}>
-          Profile{dirtyProfile ? " •" : ""}
+          {tx("Preferences")}
+          {dirtyProfile ? " •" : ""}
         </a>
       </nav>
       {tab === "plan" && (

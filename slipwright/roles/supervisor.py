@@ -40,6 +40,7 @@ GATE_LABELS = {
     JobState.AWAITING_ARCHITECTURE_APPROVAL: "architecture",
     JobState.AWAITING_REVIEW_APPROVAL: "review",
     JobState.AWAITING_TEST_APPROVAL: "tests",
+    JobState.AWAITING_DEPLOY_APPROVAL: "deployment",
 }
 
 
@@ -68,6 +69,8 @@ def material(job: Job, *, written_tests: str | None = None) -> dict[str, Any]:
                 "plan_summary": (job.data.plan or {}).get("summary"),
             }
         return {"test_cases": job.data.test_cases, "written_tests": written_tests or ""}
+    if job.state is JobState.AWAITING_DEPLOY_APPROVAL:
+        return {"deployment": job.data.deploy, "stack": (job.data.plan or {}).get("stack", [])}
     return {}
 
 

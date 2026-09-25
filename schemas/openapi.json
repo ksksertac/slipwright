@@ -1,6 +1,32 @@
 {
   "components": {
     "schemas": {
+      "AcceptInvitation": {
+        "properties": {
+          "name": {
+            "default": "",
+            "maxLength": 64,
+            "title": "Name",
+            "type": "string"
+          },
+          "password": {
+            "minLength": 1,
+            "title": "Password",
+            "type": "string"
+          },
+          "token": {
+            "minLength": 1,
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "password"
+        ],
+        "title": "AcceptInvitation",
+        "type": "object"
+      },
       "ActivityItem": {
         "additionalProperties": false,
         "properties": {
@@ -156,6 +182,13 @@
             "title": "Effective Provider",
             "type": "string"
           },
+          "holders": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Holders",
+            "type": "array"
+          },
           "invocations": {
             "title": "Invocations",
             "type": "integer"
@@ -176,9 +209,19 @@
             ],
             "title": "Last Used"
           },
+          "mine": {
+            "default": false,
+            "title": "Mine",
+            "type": "boolean"
+          },
           "model": {
             "title": "Model",
             "type": "string"
+          },
+          "people": {
+            "default": 0,
+            "title": "People",
+            "type": "integer"
           },
           "permissions": {
             "items": {
@@ -219,10 +262,13 @@
           "assigned_provider",
           "effective_model",
           "effective_provider",
+          "holders",
           "invocations",
           "label",
           "last_used",
+          "mine",
           "model",
+          "people",
           "permissions",
           "provider",
           "role",
@@ -303,6 +349,34 @@
           "breakdown"
         ],
         "title": "BacklogEdit",
+        "type": "object"
+      },
+      "Badge": {
+        "additionalProperties": false,
+        "description": "A short mark on an item: a Jira key, a domain, a file count. ``label`` is a fixed\nEnglish string the UI translates; ``value`` is content and is shown as it is.",
+        "properties": {
+          "label": {
+            "default": "",
+            "title": "Label",
+            "type": "string"
+          },
+          "tone": {
+            "default": "idle",
+            "title": "Tone",
+            "type": "string"
+          },
+          "value": {
+            "default": "",
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "tone",
+          "value"
+        ],
+        "title": "Badge",
         "type": "object"
       },
       "Batch": {
@@ -440,6 +514,114 @@
         "title": "Board",
         "type": "object"
       },
+      "BriefEdit": {
+        "additionalProperties": false,
+        "description": "What a person may change: the items themselves, nothing about how they were found.",
+        "properties": {
+          "approve": {
+            "default": true,
+            "description": "Mark the brief ready for the agents (the usual case).",
+            "title": "Approve",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BriefItem"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "BriefEdit",
+        "type": "object"
+      },
+      "BriefItem": {
+        "additionalProperties": false,
+        "description": "One fact about the project. Short enough to judge at a glance and delete if wrong.",
+        "properties": {
+          "category": {
+            "default": "architecture",
+            "enum": [
+              "product",
+              "stack",
+              "architecture",
+              "modules",
+              "conventions",
+              "testing",
+              "deployment",
+              "risks"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
+          "detail": {
+            "default": "",
+            "title": "Detail",
+            "type": "string"
+          },
+          "id": {
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "source": {
+            "default": "analysis",
+            "enum": [
+              "analysis",
+              "intake",
+              "human"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "title": {
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "title": "BriefItem",
+        "type": "object"
+      },
+      "BriefState": {
+        "enum": [
+          "empty",
+          "running",
+          "proposed",
+          "ready",
+          "failed"
+        ],
+        "title": "BriefState",
+        "type": "string"
+      },
+      "BriefView": {
+        "description": "The project brief plus the one thing the UI cannot work out for itself: whether\nthis project is read (``analysis``) or asked about (``intake``).",
+        "properties": {
+          "brief": {
+            "$ref": "#/components/schemas/ProjectBrief"
+          },
+          "kind": {
+            "enum": [
+              "analysis",
+              "intake"
+            ],
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "brief",
+          "kind"
+        ],
+        "title": "BriefView",
+        "type": "object"
+      },
       "BudgetSettings": {
         "additionalProperties": false,
         "description": "Per-job limits (T9.7); None means unlimited. Exceeding one fails the job with the\nreason in its history.",
@@ -529,6 +711,7 @@
         "type": "object"
       },
       "Credentials": {
+        "description": "``username`` is the login identity: an email address, or for an account made\nbefore signup existed, the name it was created with.",
         "properties": {
           "password": {
             "minLength": 1,
@@ -571,6 +754,191 @@
           "finished"
         ],
         "title": "DayActivity",
+        "type": "object"
+      },
+      "DeployEdit": {
+        "description": "The deployment proposal as a person may rewrite it at the gate (T11.6).",
+        "properties": {
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "scripts": {
+            "items": {
+              "$ref": "#/components/schemas/DeployScriptIn"
+            },
+            "title": "Scripts",
+            "type": "array"
+          },
+          "services": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Services",
+            "type": "array"
+          },
+          "summary": {
+            "default": "",
+            "title": "Summary",
+            "type": "string"
+          },
+          "target": {
+            "enum": [
+              "aws",
+              "azure",
+              "none"
+            ],
+            "title": "Target",
+            "type": "string"
+          }
+        },
+        "required": [
+          "target"
+        ],
+        "title": "DeployEdit",
+        "type": "object"
+      },
+      "DeployScriptIn": {
+        "properties": {
+          "path": {
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          },
+          "purpose": {
+            "minLength": 1,
+            "title": "Purpose",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "purpose"
+        ],
+        "title": "DeployScriptIn",
+        "type": "object"
+      },
+      "DesignReview": {
+        "properties": {
+          "principles": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Principles",
+            "type": "array"
+          },
+          "screens": {
+            "items": {
+              "$ref": "#/components/schemas/DesignScreen"
+            },
+            "title": "Screens",
+            "type": "array"
+          },
+          "waiting": {
+            "default": false,
+            "description": "Whether the development is stopped at this gate now.",
+            "title": "Waiting",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "principles",
+          "screens",
+          "waiting"
+        ],
+        "title": "DesignReview",
+        "type": "object"
+      },
+      "DesignScreen": {
+        "description": "A screen as the approval panel needs it: enough to name and judge it, without the\nmock itself \u2014 that is a document of its own, fetched only for the ones on screen.",
+        "properties": {
+          "approved": {
+            "default": false,
+            "title": "Approved",
+            "type": "boolean"
+          },
+          "feedback": {
+            "default": "",
+            "title": "Feedback",
+            "type": "string"
+          },
+          "has_mock": {
+            "default": false,
+            "title": "Has Mock",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "platform": {
+            "default": "both",
+            "title": "Platform",
+            "type": "string"
+          },
+          "purpose": {
+            "default": "",
+            "title": "Purpose",
+            "type": "string"
+          },
+          "surfaces": {
+            "description": "The surfaces this screen was drawn for -- `web`, `mobile`, or both. Empty when the screen has a single drawing, which is what a screen on one platform and every screen drawn before surfaces existed has.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Surfaces",
+            "type": "array"
+          }
+        },
+        "required": [
+          "approved",
+          "feedback",
+          "has_mock",
+          "id",
+          "name",
+          "platform",
+          "purpose",
+          "surfaces"
+        ],
+        "title": "DesignScreen",
+        "type": "object"
+      },
+      "Dismiss": {
+        "properties": {
+          "dismissed": {
+            "default": true,
+            "title": "Dismissed",
+            "type": "boolean"
+          }
+        },
+        "title": "Dismiss",
+        "type": "object"
+      },
+      "EmailOnly": {
+        "properties": {
+          "email": {
+            "maxLength": 320,
+            "minLength": 3,
+            "title": "Email",
+            "type": "string"
+          },
+          "lang": {
+            "default": "tr",
+            "title": "Lang",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "title": "EmailOnly",
         "type": "object"
       },
       "EpicView": {
@@ -634,6 +1002,52 @@
           "title"
         ],
         "title": "EpicView",
+        "type": "object"
+      },
+      "Expectation": {
+        "additionalProperties": false,
+        "description": "What one role was expected to cost, and what it is based on.",
+        "properties": {
+          "basis_calls": {
+            "default": 0,
+            "description": "How many past calls the per-call average came from.",
+            "title": "Basis Calls",
+            "type": "integer"
+          },
+          "calls": {
+            "default": 0,
+            "title": "Calls",
+            "type": "integer"
+          },
+          "model": {
+            "default": "",
+            "title": "Model",
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/RoleName"
+          },
+          "usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "None when there is no history to base it on.",
+            "title": "Usd"
+          }
+        },
+        "required": [
+          "basis_calls",
+          "calls",
+          "model",
+          "role",
+          "usd"
+        ],
+        "title": "Expectation",
         "type": "object"
       },
       "GitHubIdentity": {
@@ -942,6 +1356,193 @@
         "title": "InboxMessage",
         "type": "object"
       },
+      "Intake": {
+        "additionalProperties": false,
+        "description": "The conversation that turns an empty repository into a first development.\n\nThe Product Owner asks a round of questions, reads the answers, and either asks\nanother round or declares itself ready and writes ``story`` \u2014 the request the first\ndevelopment starts from.",
+        "properties": {
+          "done": {
+            "default": false,
+            "title": "Done",
+            "type": "boolean"
+          },
+          "max_rounds": {
+            "default": 3,
+            "description": "Rounds before the PO must finish.",
+            "minimum": 1.0,
+            "title": "Max Rounds",
+            "type": "integer"
+          },
+          "rounds": {
+            "items": {
+              "$ref": "#/components/schemas/IntakeRound"
+            },
+            "title": "Rounds",
+            "type": "array"
+          },
+          "story": {
+            "default": "",
+            "description": "The first development's request, once ready.",
+            "title": "Story",
+            "type": "string"
+          }
+        },
+        "required": [
+          "done",
+          "max_rounds",
+          "rounds",
+          "story"
+        ],
+        "title": "Intake",
+        "type": "object"
+      },
+      "IntakeAnswers": {
+        "description": "Answers to the round of questions on the table, by question id.",
+        "properties": {
+          "answers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Answers",
+            "type": "object"
+          }
+        },
+        "title": "IntakeAnswers",
+        "type": "object"
+      },
+      "IntakeQuestion": {
+        "additionalProperties": false,
+        "description": "One question the Product Owner asked, and the person's answer to it.",
+        "properties": {
+          "answer": {
+            "default": "",
+            "title": "Answer",
+            "type": "string"
+          },
+          "hint": {
+            "default": "",
+            "description": "An example answer, shown as a placeholder.",
+            "title": "Hint",
+            "type": "string"
+          },
+          "id": {
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "question": {
+            "minLength": 1,
+            "title": "Question",
+            "type": "string"
+          },
+          "why": {
+            "default": "",
+            "description": "Why the answer matters, for the person.",
+            "title": "Why",
+            "type": "string"
+          }
+        },
+        "required": [
+          "answer",
+          "hint",
+          "id",
+          "question",
+          "why"
+        ],
+        "title": "IntakeQuestion",
+        "type": "object"
+      },
+      "IntakeRound": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "number": {
+            "minimum": 1.0,
+            "title": "Number",
+            "type": "integer"
+          },
+          "questions": {
+            "items": {
+              "$ref": "#/components/schemas/IntakeQuestion"
+            },
+            "title": "Questions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "at",
+          "number",
+          "questions"
+        ],
+        "title": "IntakeRound",
+        "type": "object"
+      },
+      "InvitationView": {
+        "additionalProperties": false,
+        "description": "What the page behind a link shows before anybody types anything.",
+        "properties": {
+          "agents": {
+            "description": "The agents this link puts them on.",
+            "items": {
+              "$ref": "#/components/schemas/RoleName"
+            },
+            "title": "Agents",
+            "type": "array"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "inviter": {
+            "description": "Who sent it, by display name.",
+            "title": "Inviter",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "agents",
+          "email",
+          "inviter",
+          "name"
+        ],
+        "title": "InvitationView",
+        "type": "object"
+      },
+      "Invite": {
+        "properties": {
+          "email": {
+            "maxLength": 320,
+            "minLength": 3,
+            "title": "Email",
+            "type": "string"
+          },
+          "lang": {
+            "default": "tr",
+            "description": "Which language to write the letter in.",
+            "title": "Lang",
+            "type": "string"
+          },
+          "name": {
+            "default": "",
+            "description": "What to call them in the list.",
+            "maxLength": 64,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "title": "Invite",
+        "type": "object"
+      },
       "IssuedToken": {
         "properties": {
           "secret": {
@@ -958,6 +1559,17 @@
         ],
         "title": "IssuedToken",
         "type": "object"
+      },
+      "ItemStatus": {
+        "enum": [
+          "todo",
+          "in_progress",
+          "done",
+          "failed",
+          "skipped"
+        ],
+        "title": "ItemStatus",
+        "type": "string"
       },
       "JiraAccount": {
         "additionalProperties": false,
@@ -1282,6 +1894,18 @@
             "title": "Id",
             "type": "string"
           },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Copied from the project when the job is created. It decides who may see the job and, once it runs, whose model keys pay for it.",
+            "title": "Owner Id"
+          },
           "port": {
             "anyOf": [
               {
@@ -1350,6 +1974,7 @@
           "data",
           "history",
           "id",
+          "owner_id",
           "port",
           "profile",
           "project_id",
@@ -1359,6 +1984,105 @@
           "worktree_path"
         ],
         "title": "Job",
+        "type": "object"
+      },
+      "JobCost": {
+        "additionalProperties": false,
+        "description": "One development's money: spent, expected, and the gap.",
+        "properties": {
+          "by_model": {
+            "items": {
+              "$ref": "#/components/schemas/Spend"
+            },
+            "title": "By Model",
+            "type": "array"
+          },
+          "by_phase": {
+            "items": {
+              "$ref": "#/components/schemas/Spend"
+            },
+            "title": "By Phase",
+            "type": "array"
+          },
+          "by_role": {
+            "items": {
+              "$ref": "#/components/schemas/Spend"
+            },
+            "title": "By Role",
+            "type": "array"
+          },
+          "calls": {
+            "default": 0,
+            "title": "Calls",
+            "type": "integer"
+          },
+          "expectations": {
+            "items": {
+              "$ref": "#/components/schemas/Expectation"
+            },
+            "title": "Expectations",
+            "type": "array"
+          },
+          "expected_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Usd"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "request": {
+            "title": "Request",
+            "type": "string"
+          },
+          "spent_usd": {
+            "default": 0.0,
+            "title": "Spent Usd",
+            "type": "number"
+          },
+          "state": {
+            "$ref": "#/components/schemas/JobState"
+          },
+          "unpriced_calls": {
+            "default": 0,
+            "title": "Unpriced Calls",
+            "type": "integer"
+          },
+          "variance_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "spent - expected; None without a basis to compare to.",
+            "title": "Variance Usd"
+          }
+        },
+        "required": [
+          "by_model",
+          "by_phase",
+          "by_role",
+          "calls",
+          "expectations",
+          "expected_usd",
+          "job_id",
+          "request",
+          "spent_usd",
+          "state",
+          "unpriced_calls",
+          "variance_usd"
+        ],
+        "title": "JobCost",
         "type": "object"
       },
       "JobData": {
@@ -1397,6 +2121,15 @@
             "description": "Commit the job branched from.",
             "title": "Base Commit"
           },
+          "brief": {
+            "description": "The project brief as it stood when this job started: what the agents were told the project is (see slipwright/schemas/brief.py).",
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Brief",
+            "type": "array"
+          },
           "build_attempts": {
             "default": 0,
             "minimum": 0.0,
@@ -1407,6 +2140,71 @@
             "default": 0,
             "minimum": 0.0,
             "title": "Ci Attempts",
+            "type": "integer"
+          },
+          "cost_usd": {
+            "default": 0.0,
+            "description": "What the model calls have cost so far, in US dollars. Calls whose model has no stored price add nothing, and are listed as unpriced.",
+            "minimum": 0.0,
+            "title": "Cost Usd",
+            "type": "number"
+          },
+          "deploy": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The deployment proposal: target, services, scripts, notes. Approved (and possibly edited) by a person before anything is written.",
+            "title": "Deploy"
+          },
+          "deploy_written": {
+            "description": "Deployment files written into the branch.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Deploy Written",
+            "type": "array"
+          },
+          "design": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The Designer's screens and principles; the UI specialists build from it. None when the development has no screen in it.",
+            "title": "Design"
+          },
+          "design_approvals": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "description": "Screen id -> signed off by a person. The web and mobile phases wait until every screen is in here; the backend phases never do.",
+            "title": "Design Approvals",
+            "type": "object"
+          },
+          "design_feedback": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Screen id -> what the person asked to be different. The Designer draws those screens again and leaves the rest as they are.",
+            "title": "Design Feedback",
+            "type": "object"
+          },
+          "devops_stage": {
+            "default": 1,
+            "description": "1: DevOps proposes how this is deployed; 2: it writes the scripts and opens the pull request (T11.6).",
+            "maximum": 2.0,
+            "minimum": 1.0,
+            "title": "Devops Stage",
             "type": "integer"
           },
           "feedback": {
@@ -1526,6 +2324,14 @@
             ],
             "title": "Last Build Output"
           },
+          "notified": {
+            "description": "Gates whose agent's team has already been written to, as '<state>:<visit>'. Kept on the job so a restart does not write the letter again and a gate reached twice writes it twice.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Notified",
+            "type": "array"
+          },
           "output_hashes": {
             "additionalProperties": {
               "type": "string"
@@ -1582,6 +2388,25 @@
               }
             ],
             "title": "Pr Url"
+          },
+          "qa_diagnosis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "QA's reading of the last failed build gate when the code, not the test, was the side that was wrong. The specialist fixing it reads this.",
+            "title": "Qa Diagnosis"
+          },
+          "qa_gate_fixes": {
+            "default": 0,
+            "description": "Times QA judged the failing test itself wrong on this phase and corrected it. Bounded, so a test and a change cannot chase each other.",
+            "minimum": 0.0,
+            "title": "Qa Gate Fixes",
+            "type": "integer"
           },
           "qa_stage": {
             "default": 1,
@@ -1672,8 +2497,16 @@
           "auto_approvals",
           "backlog",
           "base_commit",
+          "brief",
           "build_attempts",
           "ci_attempts",
+          "cost_usd",
+          "deploy",
+          "deploy_written",
+          "design",
+          "design_approvals",
+          "design_feedback",
+          "devops_stage",
           "feedback",
           "inbox",
           "invocation_log",
@@ -1687,12 +2520,15 @@
           "jira_status",
           "language",
           "last_build_output",
+          "notified",
           "output_hashes",
           "phase_base_commit",
           "phase_index",
           "plan",
           "plan_gate",
           "pr_url",
+          "qa_diagnosis",
+          "qa_gate_fixes",
           "qa_stage",
           "reject_rounds",
           "rerun_only",
@@ -1710,6 +2546,16 @@
       "JobProgress": {
         "additionalProperties": false,
         "properties": {
+          "agent": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RoleName"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "auto_approved": {
             "default": false,
             "title": "Auto Approved",
@@ -1811,6 +2657,7 @@
           }
         },
         "required": [
+          "agent",
           "auto_approved",
           "confidence",
           "current_phase",
@@ -1945,6 +2792,8 @@
           "awaiting_backlog_approval",
           "architecture",
           "awaiting_architecture_approval",
+          "design",
+          "awaiting_design_approval",
           "developing",
           "build_gate",
           "review",
@@ -1952,6 +2801,7 @@
           "qa",
           "awaiting_test_approval",
           "devops",
+          "awaiting_deploy_approval",
           "awaiting_decision",
           "done",
           "failed"
@@ -1986,6 +2836,38 @@
             "title": "Request",
             "type": "string"
           },
+          "running_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Running Key"
+          },
+          "running_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Running Label"
+          },
+          "running_role": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RoleName"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "state": {
             "$ref": "#/components/schemas/JobState"
           },
@@ -2013,6 +2895,9 @@
           "job_id",
           "pending_approval",
           "request",
+          "running_key",
+          "running_label",
+          "running_role",
           "state",
           "steps",
           "summary"
@@ -2071,6 +2956,394 @@
         "title": "LocalRepos",
         "type": "object"
       },
+      "MailSettingsIn": {
+        "additionalProperties": false,
+        "properties": {
+          "base_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Url"
+          },
+          "clear_password": {
+            "default": false,
+            "title": "Clear Password",
+            "type": "boolean"
+          },
+          "from_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Address"
+          },
+          "from_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Name"
+          },
+          "host": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Host"
+          },
+          "password": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Omit to keep the stored one.",
+            "title": "Password"
+          },
+          "port": {
+            "anyOf": [
+              {
+                "maximum": 65535.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Port"
+          },
+          "security": {
+            "anyOf": [
+              {
+                "enum": [
+                  "starttls",
+                  "ssl",
+                  "none"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Security"
+          },
+          "support_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Support Email"
+          },
+          "transport": {
+            "anyOf": [
+              {
+                "enum": [
+                  "outbox",
+                  "smtp"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transport"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          }
+        },
+        "title": "MailSettingsIn",
+        "type": "object"
+      },
+      "MailSettingsView": {
+        "description": "What the email page shows. The SMTP password is never read back -- only whether\none is stored, and its last four characters.",
+        "properties": {
+          "base_url": {
+            "default": "",
+            "description": "What the links in the letters point at.",
+            "title": "Base Url",
+            "type": "string"
+          },
+          "configured": {
+            "description": "Whether letters go out over SMTP rather than to the outbox.",
+            "title": "Configured",
+            "type": "boolean"
+          },
+          "from_address": {
+            "default": "",
+            "title": "From Address",
+            "type": "string"
+          },
+          "from_name": {
+            "default": "Slipwright",
+            "title": "From Name",
+            "type": "string"
+          },
+          "host": {
+            "default": "",
+            "title": "Host",
+            "type": "string"
+          },
+          "password_hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password Hint"
+          },
+          "password_set": {
+            "default": false,
+            "title": "Password Set",
+            "type": "boolean"
+          },
+          "port": {
+            "default": 587,
+            "title": "Port",
+            "type": "integer"
+          },
+          "security": {
+            "default": "starttls",
+            "enum": [
+              "starttls",
+              "ssl",
+              "none"
+            ],
+            "title": "Security",
+            "type": "string"
+          },
+          "support_email": {
+            "default": "",
+            "description": "Where the support page writes. Empty means the administrators.",
+            "title": "Support Email",
+            "type": "string"
+          },
+          "support_recipients": {
+            "description": "Who a support request reaches as things stand.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Support Recipients",
+            "type": "array"
+          },
+          "transport": {
+            "enum": [
+              "outbox",
+              "smtp"
+            ],
+            "title": "Transport",
+            "type": "string"
+          },
+          "username": {
+            "default": "",
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "base_url",
+          "configured",
+          "from_address",
+          "from_name",
+          "host",
+          "password_hint",
+          "password_set",
+          "port",
+          "security",
+          "support_email",
+          "support_recipients",
+          "transport",
+          "username"
+        ],
+        "title": "MailSettingsView",
+        "type": "object"
+      },
+      "MailTestIn": {
+        "properties": {
+          "lang": {
+            "default": "tr",
+            "enum": [
+              "tr",
+              "en"
+            ],
+            "title": "Lang",
+            "type": "string"
+          },
+          "to": {
+            "maxLength": 320,
+            "minLength": 3,
+            "title": "To",
+            "type": "string"
+          }
+        },
+        "required": [
+          "to"
+        ],
+        "title": "MailTestIn",
+        "type": "object"
+      },
+      "MailTestResult": {
+        "properties": {
+          "sent_to": {
+            "title": "Sent To",
+            "type": "string"
+          },
+          "transport": {
+            "enum": [
+              "outbox",
+              "smtp"
+            ],
+            "title": "Transport",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sent_to",
+          "transport"
+        ],
+        "title": "MailTestResult",
+        "type": "object"
+      },
+      "MemberStatus": {
+        "enum": [
+          "invited",
+          "active",
+          "declined",
+          "left",
+          "removed"
+        ],
+        "title": "MemberStatus",
+        "type": "string"
+      },
+      "Membership": {
+        "additionalProperties": false,
+        "description": "One person on one agent of one account.",
+        "properties": {
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "ended_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ended At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "invited_at": {
+            "format": "date-time",
+            "title": "Invited At",
+            "type": "string"
+          },
+          "invited_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invited By"
+          },
+          "name": {
+            "default": "",
+            "description": "The person's display name, for the list.",
+            "title": "Name",
+            "type": "string"
+          },
+          "owner_id": {
+            "description": "The account whose agent this is.",
+            "title": "Owner Id",
+            "type": "string"
+          },
+          "responded_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Responded At"
+          },
+          "role": {
+            "$ref": "#/components/schemas/RoleName"
+          },
+          "status": {
+            "$ref": "#/components/schemas/MemberStatus",
+            "default": "invited"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "ended_at",
+          "id",
+          "invited_at",
+          "invited_by",
+          "name",
+          "owner_id",
+          "responded_at",
+          "role",
+          "status",
+          "user_id"
+        ],
+        "title": "Membership",
+        "type": "object"
+      },
       "Message": {
         "properties": {
           "text": {
@@ -2083,6 +3356,176 @@
           "text"
         ],
         "title": "Message",
+        "type": "object"
+      },
+      "ModelPrice": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "input_usd": {
+            "description": "US dollars per 1M input tokens.",
+            "title": "Input Usd",
+            "type": "number"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "output_usd": {
+            "description": "US dollars per 1M output tokens.",
+            "title": "Output Usd",
+            "type": "number"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "at",
+          "input_usd",
+          "model",
+          "output_usd",
+          "provider",
+          "source"
+        ],
+        "title": "ModelPrice",
+        "type": "object"
+      },
+      "ModelPriceIn": {
+        "properties": {
+          "input_usd": {
+            "minimum": 0.0,
+            "title": "Input Usd",
+            "type": "number"
+          },
+          "output_usd": {
+            "minimum": 0.0,
+            "title": "Output Usd",
+            "type": "number"
+          }
+        },
+        "required": [
+          "input_usd",
+          "output_usd"
+        ],
+        "title": "ModelPriceIn",
+        "type": "object"
+      },
+      "ModelPrices": {
+        "properties": {
+          "last_fetch": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Fetch"
+          },
+          "prices": {
+            "items": {
+              "$ref": "#/components/schemas/ModelPrice"
+            },
+            "title": "Prices",
+            "type": "array"
+          },
+          "rows": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Rows written by the last fetch.",
+            "title": "Rows"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url"
+          }
+        },
+        "required": [
+          "last_fetch",
+          "prices",
+          "rows",
+          "source_url"
+        ],
+        "title": "ModelPrices",
+        "type": "object"
+      },
+      "MyTeam": {
+        "additionalProperties": false,
+        "description": "What the signed-in person may do, as the application needs to know it.",
+        "properties": {
+          "agents": {
+            "description": "The agents this person acts as, now.",
+            "items": {
+              "$ref": "#/components/schemas/RoleName"
+            },
+            "title": "Agents",
+            "type": "array"
+          },
+          "is_member": {
+            "description": "On somebody else's team rather than owning one.",
+            "title": "Is Member",
+            "type": "boolean"
+          },
+          "memberships": {
+            "items": {
+              "$ref": "#/components/schemas/Membership"
+            },
+            "title": "Memberships",
+            "type": "array"
+          }
+        },
+        "required": [
+          "agents",
+          "is_member",
+          "memberships"
+        ],
+        "title": "MyTeam",
+        "type": "object"
+      },
+      "NewJiraProject": {
+        "description": "Open a Scrum project on the connected Jira rather than picking an existing one.",
+        "properties": {
+          "key": {
+            "maxLength": 10,
+            "minLength": 2,
+            "title": "Key",
+            "type": "string"
+          },
+          "name": {
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "name"
+        ],
+        "title": "NewJiraProject",
         "type": "object"
       },
       "NewJob": {
@@ -2298,6 +3741,17 @@
       },
       "NewUser": {
         "properties": {
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
           "is_admin": {
             "default": false,
             "title": "Is Admin",
@@ -2338,6 +3792,93 @@
           }
         },
         "title": "NotificationSettings",
+        "type": "object"
+      },
+      "Onboarding": {
+        "description": "What is still missing, and whether to keep saying so.\n\nDeliberately *derived* rather than stored: a stored checklist drifts from the truth\nthe moment somebody removes a key, and then the dashboard is lying. The only thing\nkept is whether the person has dismissed it.",
+        "properties": {
+          "dismissed": {
+            "title": "Dismissed",
+            "type": "boolean"
+          },
+          "done": {
+            "title": "Done",
+            "type": "boolean"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/OnboardingStep"
+            },
+            "title": "Steps",
+            "type": "array"
+          }
+        },
+        "required": [
+          "dismissed",
+          "done",
+          "steps"
+        ],
+        "title": "Onboarding",
+        "type": "object"
+      },
+      "OnboardingStep": {
+        "description": "One thing a new account has to do before an agent can run for them.",
+        "properties": {
+          "done": {
+            "title": "Done",
+            "type": "boolean"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "required": {
+            "default": true,
+            "title": "Required",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "done",
+          "key",
+          "required"
+        ],
+        "title": "OnboardingStep",
+        "type": "object"
+      },
+      "OutboxLetter": {
+        "description": "A letter that was never posted, for an installation whose SMTP is not set up.",
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "subject": {
+            "title": "Subject",
+            "type": "string"
+          },
+          "to_address": {
+            "title": "To Address",
+            "type": "string"
+          }
+        },
+        "required": [
+          "at",
+          "body",
+          "id",
+          "subject",
+          "to_address"
+        ],
+        "title": "OutboxLetter",
         "type": "object"
       },
       "Overview": {
@@ -2573,6 +4114,20 @@
             "title": "Phases",
             "type": "array"
           },
+          "stack": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/StackEdit"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stack"
+          },
           "summary": {
             "anyOf": [
               {
@@ -2695,6 +4250,12 @@
             "title": "Id",
             "type": "string"
           },
+          "is_demo": {
+            "default": false,
+            "description": "The worked example a new account starts with. It has no checkout and nothing runs in it: it is read-only, and deleting it is the point.",
+            "title": "Is Demo",
+            "type": "boolean"
+          },
           "jira_project_key": {
             "anyOf": [
               {
@@ -2739,6 +4300,18 @@
             "minLength": 1,
             "title": "Name",
             "type": "string"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The account this project belongs to. None on projects from before accounts owned anything: those belong to the installation.",
+            "title": "Owner Id"
           },
           "plan_gate": {
             "default": "separate",
@@ -2802,11 +4375,13 @@
           "description",
           "github_repo",
           "id",
+          "is_demo",
           "jira_project_key",
           "jira_sprint",
           "jira_transitions",
           "language",
           "name",
+          "owner_id",
           "plan_gate",
           "profile",
           "repo_path",
@@ -2815,6 +4390,133 @@
           "supervisor"
         ],
         "title": "Project",
+        "type": "object"
+      },
+      "ProjectBrief": {
+        "additionalProperties": false,
+        "description": "Everything Slipwright knows about a project, and how it came to know it.",
+        "properties": {
+          "approved_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved At"
+          },
+          "error": {
+            "default": "",
+            "description": "Why the last analysis or intake failed.",
+            "title": "Error",
+            "type": "string"
+          },
+          "intake": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Intake"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set for an empty repository: the questions and answers."
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BriefItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "project_id": {
+            "minLength": 1,
+            "title": "Project Id",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/BriefState",
+            "default": "empty"
+          },
+          "summary": {
+            "default": "",
+            "description": "The analysis write-up, in one paragraph.",
+            "title": "Summary",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "approved_at",
+          "error",
+          "intake",
+          "items",
+          "project_id",
+          "state",
+          "summary",
+          "updated_at"
+        ],
+        "title": "ProjectBrief",
+        "type": "object"
+      },
+      "ProjectCosts": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Usd"
+          },
+          "jobs": {
+            "items": {
+              "$ref": "#/components/schemas/JobCost"
+            },
+            "title": "Jobs",
+            "type": "array"
+          },
+          "priced_models": {
+            "default": 0,
+            "description": "Models with a stored price.",
+            "title": "Priced Models",
+            "type": "integer"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "spent_usd": {
+            "default": 0.0,
+            "title": "Spent Usd",
+            "type": "number"
+          },
+          "unpriced_calls": {
+            "default": 0,
+            "title": "Unpriced Calls",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "expected_usd",
+          "jobs",
+          "priced_models",
+          "project_id",
+          "spent_usd",
+          "unpriced_calls"
+        ],
+        "title": "ProjectCosts",
         "type": "object"
       },
       "ProjectPatch": {
@@ -3261,6 +4963,107 @@
         "title": "ProviderSettingsIn",
         "type": "object"
       },
+      "QuotaSettings": {
+        "description": "The limits in force. ``0`` means no limit, which is what a local install wants.",
+        "properties": {
+          "max_disk_mb": {
+            "description": "Checkouts and clones together.",
+            "minimum": 0.0,
+            "title": "Max Disk Mb",
+            "type": "integer"
+          },
+          "max_projects": {
+            "description": "Projects, not counting the example.",
+            "minimum": 0.0,
+            "title": "Max Projects",
+            "type": "integer"
+          },
+          "max_running_jobs": {
+            "description": "Developments running at once.",
+            "minimum": 0.0,
+            "title": "Max Running Jobs",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "max_disk_mb",
+          "max_projects",
+          "max_running_jobs"
+        ],
+        "title": "QuotaSettings",
+        "type": "object"
+      },
+      "QuotaSettingsIn": {
+        "additionalProperties": false,
+        "properties": {
+          "max_disk_mb": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Disk Mb"
+          },
+          "max_projects": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Projects"
+          },
+          "max_running_jobs": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Running Jobs"
+          }
+        },
+        "title": "QuotaSettingsIn",
+        "type": "object"
+      },
+      "QuotaUsage": {
+        "description": "What this account is using, and what it is allowed.",
+        "properties": {
+          "disk_mb": {
+            "title": "Disk Mb",
+            "type": "integer"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/QuotaSettings"
+          },
+          "projects": {
+            "title": "Projects",
+            "type": "integer"
+          },
+          "running_jobs": {
+            "title": "Running Jobs",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "disk_mb",
+          "limits",
+          "projects",
+          "running_jobs"
+        ],
+        "title": "QuotaUsage",
+        "type": "object"
+      },
       "Rejection": {
         "properties": {
           "feedback": {
@@ -3273,6 +5076,21 @@
           "feedback"
         ],
         "title": "Rejection",
+        "type": "object"
+      },
+      "Replan": {
+        "description": "What the person wants tried instead, when retrying the same step is pointless.",
+        "properties": {
+          "note": {
+            "minLength": 1,
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "note"
+        ],
+        "title": "Replan",
         "type": "object"
       },
       "Repo": {
@@ -3325,6 +5143,7 @@
         "properties": {
           "step": {
             "enum": [
+              "test_cases",
               "tests",
               "devops"
             ],
@@ -3336,6 +5155,26 @@
           "step"
         ],
         "title": "Rerun",
+        "type": "object"
+      },
+      "ResetPassword": {
+        "properties": {
+          "password": {
+            "minLength": 1,
+            "title": "Password",
+            "type": "string"
+          },
+          "token": {
+            "minLength": 1,
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "password"
+        ],
+        "title": "ResetPassword",
         "type": "object"
       },
       "Retry": {
@@ -3420,6 +5259,7 @@
           "po",
           "architect",
           "backend",
+          "designer",
           "web_ui",
           "mobile_ui",
           "qa",
@@ -3531,6 +5371,59 @@
           "text"
         ],
         "title": "RuleWrite",
+        "type": "object"
+      },
+      "ScreenVerdict": {
+        "description": "One screen at the design gate: a yes, or a no with what should be different.",
+        "properties": {
+          "feedback": {
+            "default": "",
+            "title": "Feedback",
+            "type": "string"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok"
+        ],
+        "title": "ScreenVerdict",
+        "type": "object"
+      },
+      "SignUp": {
+        "properties": {
+          "email": {
+            "maxLength": 320,
+            "minLength": 3,
+            "title": "Email",
+            "type": "string"
+          },
+          "lang": {
+            "default": "tr",
+            "description": "Which language to write the letter in.",
+            "title": "Lang",
+            "type": "string"
+          },
+          "name": {
+            "default": "",
+            "description": "Display name; the address if blank.",
+            "maxLength": 64,
+            "title": "Name",
+            "type": "string"
+          },
+          "password": {
+            "minLength": 1,
+            "title": "Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "SignUp",
         "type": "object"
       },
       "SourceSettings": {
@@ -3699,6 +5592,94 @@
           }
         },
         "title": "SourceSettingsIn",
+        "type": "object"
+      },
+      "Spend": {
+        "additionalProperties": false,
+        "description": "What was actually spent, by whatever the caller grouped on.",
+        "properties": {
+          "calls": {
+            "default": 0,
+            "title": "Calls",
+            "type": "integer"
+          },
+          "input_tokens": {
+            "default": 0,
+            "title": "Input Tokens",
+            "type": "integer"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "default": "",
+            "title": "Label",
+            "type": "string"
+          },
+          "output_tokens": {
+            "default": 0,
+            "title": "Output Tokens",
+            "type": "integer"
+          },
+          "unpriced_calls": {
+            "default": 0,
+            "description": "Calls whose model had no stored price; not in ``usd``.",
+            "title": "Unpriced Calls",
+            "type": "integer"
+          },
+          "usd": {
+            "default": 0.0,
+            "title": "Usd",
+            "type": "number"
+          }
+        },
+        "required": [
+          "calls",
+          "input_tokens",
+          "key",
+          "label",
+          "output_tokens",
+          "unpriced_calls",
+          "usd"
+        ],
+        "title": "Spend",
+        "type": "object"
+      },
+      "StackEdit": {
+        "description": "One part of the product and what it is written in (T11.5).",
+        "properties": {
+          "domain": {
+            "enum": [
+              "backend",
+              "web",
+              "mobile",
+              "infra"
+            ],
+            "title": "Domain",
+            "type": "string"
+          },
+          "framework": {
+            "default": "",
+            "title": "Framework",
+            "type": "string"
+          },
+          "language": {
+            "minLength": 1,
+            "title": "Language",
+            "type": "string"
+          },
+          "why": {
+            "default": "",
+            "title": "Why",
+            "type": "string"
+          }
+        },
+        "required": [
+          "domain",
+          "language"
+        ],
+        "title": "StackEdit",
         "type": "object"
       },
       "StandardsHit": {
@@ -4025,6 +6006,18 @@
         "title": "StandardsStatus",
         "type": "object"
       },
+      "StatusChange": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/UserStatus"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "StatusChange",
+        "type": "object"
+      },
       "StepCard": {
         "additionalProperties": false,
         "properties": {
@@ -4208,6 +6201,251 @@
         "title": "StepCard",
         "type": "object"
       },
+      "StepDetail": {
+        "additionalProperties": false,
+        "description": "One step of one development, with everything it produced.",
+        "properties": {
+          "approved_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved At"
+          },
+          "approved_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved By"
+          },
+          "elapsed_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Elapsed S"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "gate": {
+            "default": false,
+            "title": "Gate",
+            "type": "boolean"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/StepGroup"
+            },
+            "title": "Groups",
+            "type": "array"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "outputs": {
+            "description": "History indexes, as on the card.",
+            "items": {
+              "type": "integer"
+            },
+            "title": "Outputs",
+            "type": "array"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RoleName"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "$ref": "#/components/schemas/StepStatus"
+          },
+          "summary": {
+            "default": "",
+            "description": "The role's own account, as it wrote it.",
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "approved_at",
+          "approved_by",
+          "elapsed_s",
+          "finished_at",
+          "gate",
+          "groups",
+          "job_id",
+          "key",
+          "label",
+          "outputs",
+          "role",
+          "started_at",
+          "status",
+          "summary"
+        ],
+        "title": "StepDetail",
+        "type": "object"
+      },
+      "StepGroup": {
+        "additionalProperties": false,
+        "properties": {
+          "empty": {
+            "default": "",
+            "title": "Empty",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/StepItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "note": {
+            "default": "",
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "empty",
+          "items",
+          "key",
+          "label",
+          "note"
+        ],
+        "title": "StepGroup",
+        "type": "object"
+      },
+      "StepItem": {
+        "additionalProperties": false,
+        "properties": {
+          "approved_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved At"
+          },
+          "at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When this item was produced.",
+            "title": "At"
+          },
+          "badges": {
+            "items": {
+              "$ref": "#/components/schemas/Badge"
+            },
+            "title": "Badges",
+            "type": "array"
+          },
+          "children": {
+            "items": {
+              "$ref": "#/components/schemas/StepItem"
+            },
+            "title": "Children",
+            "type": "array"
+          },
+          "detail": {
+            "default": "",
+            "title": "Detail",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ItemStatus",
+            "default": "done"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "approved_at",
+          "at",
+          "badges",
+          "children",
+          "detail",
+          "kind",
+          "status",
+          "title"
+        ],
+        "title": "StepItem",
+        "type": "object"
+      },
       "StepStatus": {
         "enum": [
           "pending",
@@ -4313,6 +6551,187 @@
         "title": "SupervisorSettings",
         "type": "object"
       },
+      "SupportRequestIn": {
+        "additionalProperties": false,
+        "properties": {
+          "category": {
+            "default": "question",
+            "enum": [
+              "question",
+              "problem",
+              "billing",
+              "feature",
+              "other"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "maxLength": 320,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where to answer. Defaults to the address on the account.",
+            "title": "Email"
+          },
+          "lang": {
+            "default": "tr",
+            "enum": [
+              "tr",
+              "en"
+            ],
+            "title": "Lang",
+            "type": "string"
+          },
+          "message": {
+            "maxLength": 10000,
+            "minLength": 1,
+            "title": "Message",
+            "type": "string"
+          },
+          "subject": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Subject",
+            "type": "string"
+          }
+        },
+        "required": [
+          "subject",
+          "message"
+        ],
+        "title": "SupportRequestIn",
+        "type": "object"
+      },
+      "SupportRequestView": {
+        "properties": {
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "closed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed At"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "delivery": {
+            "description": "sent | outbox | failed \u2014 where the letter ended up.",
+            "title": "Delivery",
+            "type": "string"
+          },
+          "delivery_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delivery Error"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "name": {
+            "default": "",
+            "title": "Name",
+            "type": "string"
+          },
+          "sent_to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sent To"
+          },
+          "status": {
+            "default": "open",
+            "title": "Status",
+            "type": "string"
+          },
+          "subject": {
+            "title": "Subject",
+            "type": "string"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          }
+        },
+        "required": [
+          "category",
+          "closed_at",
+          "created_at",
+          "delivery",
+          "delivery_error",
+          "email",
+          "id",
+          "message",
+          "name",
+          "sent_to",
+          "status",
+          "subject",
+          "user_id"
+        ],
+        "title": "SupportRequestView",
+        "type": "object"
+      },
+      "SupportStatusIn": {
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "enum": [
+              "open",
+              "closed"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "SupportStatusIn",
+        "type": "object"
+      },
       "TaskStatus": {
         "enum": [
           "todo",
@@ -4413,6 +6832,44 @@
           "violations"
         ],
         "title": "TaskView",
+        "type": "object"
+      },
+      "TeamInvite": {
+        "properties": {
+          "email": {
+            "maxLength": 320,
+            "minLength": 3,
+            "title": "Email",
+            "type": "string"
+          },
+          "lang": {
+            "default": "tr",
+            "description": "Which language to write the letter in.",
+            "title": "Lang",
+            "type": "string"
+          },
+          "name": {
+            "default": "",
+            "description": "What to call them in the list.",
+            "maxLength": 64,
+            "title": "Name",
+            "type": "string"
+          },
+          "roles": {
+            "description": "Which agents to put them on.",
+            "items": {
+              "$ref": "#/components/schemas/RoleName"
+            },
+            "minItems": 1,
+            "title": "Roles",
+            "type": "array"
+          }
+        },
+        "required": [
+          "email",
+          "roles"
+        ],
+        "title": "TeamInvite",
         "type": "object"
       },
       "TestCaseIn": {
@@ -4526,6 +6983,18 @@
             ],
             "title": "Output Path"
           },
+          "phase": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The plan phase a build-gate run was for (1-based).",
+            "title": "Phase"
+          },
           "project_id": {
             "title": "Project Id",
             "type": "string"
@@ -4553,6 +7022,7 @@
           "job_id",
           "note",
           "output_path",
+          "phase",
           "project_id",
           "source",
           "started_at",
@@ -4589,6 +7059,20 @@
         ],
         "title": "ThinkingDepth",
         "type": "string"
+      },
+      "TokenOnly": {
+        "properties": {
+          "token": {
+            "minLength": 1,
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "title": "TokenOnly",
+        "type": "object"
       },
       "Transition": {
         "properties": {
@@ -4637,6 +7121,32 @@
         "title": "Transition",
         "type": "object"
       },
+      "Translations": {
+        "description": "Agent-written prose in the platform's language, keyed by what the agent wrote.",
+        "properties": {
+          "lang": {
+            "enum": [
+              "tr",
+              "en"
+            ],
+            "title": "Lang",
+            "type": "string"
+          },
+          "texts": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Texts",
+            "type": "object"
+          }
+        },
+        "required": [
+          "lang",
+          "texts"
+        ],
+        "title": "Translations",
+        "type": "object"
+      },
       "User": {
         "additionalProperties": false,
         "properties": {
@@ -4644,6 +7154,31 @@
             "format": "date-time",
             "title": "Created At",
             "type": "string"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Login identity. Absent only on accounts made before signup existed.",
+            "title": "Email"
+          },
+          "email_verified_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the address was proved; until then, work is refused.",
+            "title": "Email Verified At"
           },
           "id": {
             "title": "Id",
@@ -4654,7 +7189,24 @@
             "title": "Is Admin",
             "type": "boolean"
           },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The account this person belongs to: set on somebody an administrator invited onto an agent, null on an account that is its own. It is what makes a member see the administrator's projects rather than an empty installation.",
+            "title": "Owner Id"
+          },
+          "status": {
+            "$ref": "#/components/schemas/UserStatus",
+            "default": "active"
+          },
           "username": {
+            "description": "Display name.",
             "maxLength": 64,
             "minLength": 1,
             "title": "Username",
@@ -4663,12 +7215,26 @@
         },
         "required": [
           "created_at",
+          "email",
+          "email_verified_at",
           "id",
           "is_admin",
+          "owner_id",
+          "status",
           "username"
         ],
         "title": "User",
         "type": "object"
+      },
+      "UserStatus": {
+        "enum": [
+          "active",
+          "suspended",
+          "invited",
+          "removed"
+        ],
+        "title": "UserStatus",
+        "type": "string"
       },
       "ValidationError": {
         "properties": {
@@ -4980,6 +7546,153 @@
         "summary": "Get Agents"
       }
     },
+    "/api/agents/{role}/members": {
+      "get": {
+        "description": "Who is on this agent, including the invitations nobody has answered yet.",
+        "operationId": "list_agent_members_api_agents__role__members_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "role",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/RoleName"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Membership"
+                  },
+                  "title": "Response List Agent Members Api Agents  Role  Members Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Agent Members",
+        "tags": [
+          "teams"
+        ]
+      },
+      "post": {
+        "description": "Put somebody on this agent and mail them the invitation.",
+        "operationId": "invite_to_agent_api_agents__role__members_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "role",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/RoleName"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Invite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Membership"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Invite To Agent",
+        "tags": [
+          "teams"
+        ]
+      }
+    },
+    "/api/agents/{role}/members/{member_id}": {
+      "delete": {
+        "description": "Take somebody off an agent, or -- asked by that person -- step off it yourself.\n\nEither way it is the same row ending; only the word for it differs, and only the\nperson taken off is written to. Whoever is left with no agent at all is signed out:\nthe next thing their browser asks for says so.",
+        "operationId": "end_membership_api_agents__role__members__member_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "role",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/RoleName"
+            }
+          },
+          {
+            "in": "path",
+            "name": "member_id",
+            "required": true,
+            "schema": {
+              "title": "Member Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Membership"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "End Membership",
+        "tags": [
+          "teams"
+        ]
+      }
+    },
     "/api/agents/{role}/routing": {
       "put": {
         "description": "Pin an agent to a provider and model. 400 when the provider is unknown, has no\nkey, or no model was named -- the job would only fail at its first call.",
@@ -5027,6 +7740,171 @@
           }
         },
         "summary": "Put Agent Routing"
+      }
+    },
+    "/api/auth/accept-invitation": {
+      "post": {
+        "description": "Take it: set a password, prove the address and start working, in one call.",
+        "operationId": "accept_invitation_api_auth_accept_invitation_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptInvitation"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Accept Invitation",
+        "tags": [
+          "teams"
+        ]
+      }
+    },
+    "/api/auth/decline-invitation": {
+      "post": {
+        "description": "Answer \"no\". The link is spent either way, so nobody can change their mind for\nthem afterwards; the owner can always invite again.",
+        "operationId": "decline_invitation_api_auth_decline_invitation_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenOnly"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Decline Invitation",
+        "tags": [
+          "teams"
+        ]
+      }
+    },
+    "/api/auth/forgot-password": {
+      "post": {
+        "description": "Ask for a reset link. Always the same answer: this must not reveal who has an\naccount here.",
+        "operationId": "forgot_password_api_auth_forgot_password_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailOnly"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Forgot Password Api Auth Forgot Password Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Forgot Password",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/invitation": {
+      "post": {
+        "description": "Open a link without spending it. 400 once it has been answered or has expired.",
+        "operationId": "read_invitation_api_auth_invitation_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenOnly"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read Invitation",
+        "tags": [
+          "teams"
+        ]
       }
     },
     "/api/auth/login": {
@@ -5100,6 +7978,178 @@
           }
         },
         "summary": "Me",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/resend-verification": {
+      "post": {
+        "description": "Send the verification letter again. Says the same thing whoever asks.",
+        "operationId": "resend_verification_api_auth_resend_verification_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailOnly"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Resend Verification Api Auth Resend Verification Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Resend Verification",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/reset-password": {
+      "post": {
+        "description": "Set a new password from a reset link, then sign in with it.\n\nEvery other session and bearer token of that account is dropped by ``set_password``,\nwhich is the point: somebody who has lost control of the account gets it back.",
+        "operationId": "reset_password_api_auth_reset_password_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetPassword"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reset Password",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/signup": {
+      "post": {
+        "description": "Open an account and mail the link that proves the address.\n\nThe session starts straight away: an unverified user can look around while the letter\nis in flight, and only work is refused (see ``require_verified``).",
+        "operationId": "sign_up_api_auth_signup_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignUp"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sign Up",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/verify": {
+      "post": {
+        "description": "Redeem a verification link and sign the person in.",
+        "operationId": "verify_email_api_auth_verify_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenOnly"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Verify Email",
         "tags": [
           "auth"
         ]
@@ -5331,7 +8381,6 @@
     },
     "/api/jobs/{job_id}": {
       "delete": {
-        "description": "Delete a finished job (worktree, branch, port and rows). Running jobs: 409.",
         "operationId": "delete_job_api_jobs__job_id__delete",
         "parameters": [
           {
@@ -5486,6 +8535,220 @@
           }
         },
         "summary": "Set Backlog"
+      }
+    },
+    "/api/jobs/{job_id}/deploy": {
+      "put": {
+        "description": "Edit the deployment proposal while the job waits at the deployment gate.",
+        "operationId": "set_deploy_api_jobs__job_id__deploy_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeployEdit"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Deploy"
+      }
+    },
+    "/api/jobs/{job_id}/design": {
+      "get": {
+        "description": "The screens of this development, with where each one stands.",
+        "operationId": "design_review_api_jobs__job_id__design_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DesignReview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Design Review"
+      }
+    },
+    "/api/jobs/{job_id}/design/{screen_id}": {
+      "post": {
+        "description": "Sign off one screen, or send it back with what should be different.",
+        "operationId": "review_screen_api_jobs__job_id__design__screen_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "screen_id",
+            "required": true,
+            "schema": {
+              "title": "Screen Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScreenVerdict"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Review Screen"
+      }
+    },
+    "/api/jobs/{job_id}/design/{screen_id}/mock": {
+      "get": {
+        "description": "One screen's mock, as its own document so an iframe can draw it.\n\nA screen drawn for both surfaces has one document each; ``surface`` picks which,\nand anything else -- a screen on one platform, a screen drawn before surfaces\nexisted -- answers with its single drawing however it is asked for.\n\nThe document is written by a model, so it is served locked down and framed with no\nsame-origin access: the headers below forbid every script, every network request\nand every external asset, which leaves exactly what a mock is -- markup, inline\nstyles and inline images.",
+        "operationId": "design_mock_api_jobs__job_id__design__screen_id__mock_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "screen_id",
+            "required": true,
+            "schema": {
+              "title": "Screen Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "surface",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Surface"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Design Mock"
       }
     },
     "/api/jobs/{job_id}/history/{index}": {
@@ -5735,6 +8998,56 @@
         "summary": "Reject"
       }
     },
+    "/api/jobs/{job_id}/replan": {
+      "post": {
+        "description": "Send a failed job back to the plan with what should be tried instead.",
+        "operationId": "replan_api_jobs__job_id__replan_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Replan"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Replan"
+      }
+    },
     "/api/jobs/{job_id}/rerun": {
       "post": {
         "description": "Run the tests, or the DevOps step, again on a development that has stopped.",
@@ -5880,6 +9193,55 @@
           }
         },
         "summary": "Retry"
+      }
+    },
+    "/api/jobs/{job_id}/steps/{step_key}": {
+      "get": {
+        "description": "What one pipeline step produced: the backlog it wrote, the decisions it took,\nthe files it touched, the cases it proposed \u2014 each with when, and with whether it\nreached Jira. ``step_key`` is the key the lane card carries.",
+        "operationId": "get_step_detail_api_jobs__job_id__steps__step_key__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "step_key",
+            "required": true,
+            "schema": {
+              "title": "Step Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StepDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Step Detail"
       }
     },
     "/api/jobs/{job_id}/tests": {
@@ -6039,6 +9401,89 @@
           }
         },
         "summary": "Local Repos"
+      }
+    },
+    "/api/me/team": {
+      "get": {
+        "operationId": "my_team_api_me_team_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyTeam"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "My Team",
+        "tags": [
+          "teams"
+        ]
+      }
+    },
+    "/api/onboarding": {
+      "get": {
+        "description": "What this account still has to connect before it can start work.",
+        "operationId": "get_onboarding_api_onboarding_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Onboarding"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Onboarding",
+        "tags": [
+          "settings"
+        ]
+      },
+      "put": {
+        "description": "Stop showing the checklist -- or show it again.",
+        "operationId": "put_onboarding_api_onboarding_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Dismiss"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Onboarding"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Onboarding",
+        "tags": [
+          "settings"
+        ]
       }
     },
     "/api/overview": {
@@ -6356,6 +9801,223 @@
         "summary": "Get Board"
       }
     },
+    "/api/projects/{project_id}/brief": {
+      "get": {
+        "description": "What Slipwright knows about the project, and how it came to know it.",
+        "operationId": "get_brief_api_projects__project_id__brief_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BriefView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Brief"
+      },
+      "put": {
+        "operationId": "save_brief_api_projects__project_id__brief_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BriefEdit"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BriefView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Save Brief"
+      }
+    },
+    "/api/projects/{project_id}/brief/analysis": {
+      "post": {
+        "description": "Read the checkout and propose the brief; the answer comes back on the brief.",
+        "operationId": "start_analysis_api_projects__project_id__brief_analysis_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BriefView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Start Analysis"
+      }
+    },
+    "/api/projects/{project_id}/brief/intake": {
+      "post": {
+        "description": "Answer the questions on the table (if any) and ask for the next round.",
+        "operationId": "start_intake_api_projects__project_id__brief_intake_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IntakeAnswers"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BriefView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Start Intake"
+      }
+    },
+    "/api/projects/{project_id}/costs": {
+      "get": {
+        "description": "What this project's developments cost, what they were expected to cost, and\nthe gap. Spend is read from the per-call log; the expectation is arithmetic over\nwhat the roles have actually used here, so it sharpens as the project is used.",
+        "operationId": "get_costs_api_projects__project_id__costs_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectCosts"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Costs"
+      }
+    },
     "/api/projects/{project_id}/jobs": {
       "get": {
         "operationId": "list_project_jobs_api_projects__project_id__jobs_get",
@@ -6632,6 +10294,81 @@
         "summary": "Start Test Run"
       }
     },
+    "/api/projects/{project_id}/translations": {
+      "get": {
+        "description": "What this project's agents wrote, in ``lang``.\n\nThe agents write in the project's language; the page is read in the platform's.\nWhen they differ this is the bridge -- keyed by the source text, so the page looks\nup whatever string it is about to render and falls back to it when there is no\nentry yet. A development already written in ``lang`` contributes nothing.",
+        "operationId": "get_translations_api_projects__project_id__translations_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "lang",
+            "required": true,
+            "schema": {
+              "enum": [
+                "tr",
+                "en"
+              ],
+              "title": "Lang",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Translations"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Translations"
+      }
+    },
+    "/api/quota": {
+      "get": {
+        "description": "What you are using of the server, and where the line is.",
+        "operationId": "get_quota_api_quota_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuotaUsage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Quota",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
     "/api/settings/github": {
       "get": {
         "operationId": "get_github_api_settings_github_get",
@@ -6822,6 +10559,46 @@
         "tags": [
           "settings"
         ]
+      },
+      "post": {
+        "description": "Create the project the new-project page asked for, led by the connected account.",
+        "operationId": "create_jira_project_api_settings_jira_projects_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewJiraProject"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JiraProject"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Jira Project",
+        "tags": [
+          "settings"
+        ]
       }
     },
     "/api/settings/jira/sweep": {
@@ -6895,6 +10672,158 @@
         ]
       }
     },
+    "/api/settings/mail": {
+      "get": {
+        "description": "How mail leaves this installation, and where support requests land.",
+        "operationId": "get_mail_settings_api_settings_mail_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MailSettingsView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Mail Settings",
+        "tags": [
+          "settings"
+        ]
+      },
+      "put": {
+        "description": "Change what is given; an omitted password keeps the stored one.",
+        "operationId": "put_mail_settings_api_settings_mail_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MailSettingsIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MailSettingsView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Mail Settings",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/settings/mail/outbox": {
+      "get": {
+        "description": "The letters held back because no SMTP is configured. Contains live links, so it is\nadmin-only like the rest of this page.",
+        "operationId": "get_mail_outbox_api_settings_mail_outbox_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/OutboxLetter"
+                  },
+                  "title": "Response Get Mail Outbox Api Settings Mail Outbox Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Mail Outbox",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/settings/mail/test": {
+      "post": {
+        "description": "Post one message with the settings as they now stand, so a mistake is found here\nrather than by somebody who never got their verification link.",
+        "operationId": "test_mail_settings_api_settings_mail_test_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MailTestIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MailTestResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Test Mail Settings",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
     "/api/settings/notifications": {
       "get": {
         "operationId": "get_notifications_api_settings_notifications_get",
@@ -6950,6 +10879,183 @@
           }
         },
         "summary": "Put Notifications",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/settings/prices": {
+      "get": {
+        "description": "Every stored price, newest fetch first in the header.",
+        "operationId": "list_model_prices_api_settings_prices_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "provider",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Provider"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelPrices"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Model Prices",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/settings/prices/refresh": {
+      "post": {
+        "description": "Fetch the published table now instead of waiting for the daily run.",
+        "operationId": "refresh_model_prices_api_settings_prices_refresh_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelPrices"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Refresh Model Prices",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/settings/prices/{provider}/{model}": {
+      "delete": {
+        "description": "Drop a hand-entered rate; the next fetch puts the published one back.",
+        "operationId": "delete_model_price_api_settings_prices__provider___model__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider",
+            "required": true,
+            "schema": {
+              "title": "Provider",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "model",
+            "required": true,
+            "schema": {
+              "title": "Model",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Model Price",
+        "tags": [
+          "settings"
+        ]
+      },
+      "put": {
+        "description": "Enter a rate by hand. It is kept through every later fetch until it is deleted.",
+        "operationId": "set_model_price_api_settings_prices__provider___model__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider",
+            "required": true,
+            "schema": {
+              "title": "Provider",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "model",
+            "required": true,
+            "schema": {
+              "title": "Model",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelPriceIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelPrice"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Model Price",
         "tags": [
           "settings"
         ]
@@ -7139,6 +11245,48 @@
           }
         },
         "summary": "Test Provider",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/settings/quota": {
+      "put": {
+        "description": "Raise or lower the limits. The server's own decision, so administrators only.",
+        "operationId": "put_quota_api_settings_quota_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuotaSettingsIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuotaSettings"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Quota",
         "tags": [
           "settings"
         ]
@@ -7676,6 +11824,7 @@
     },
     "/api/standards/pages/{path}": {
       "delete": {
+        "description": "Drop your copy of a page: it goes back to the one Slipwright ships.\n\nDeleting is therefore never destructive -- the default is always underneath.",
         "operationId": "delete_standards_page_api_standards_pages__path__delete",
         "parameters": [
           {
@@ -7781,7 +11930,7 @@
         ]
       },
       "put": {
-        "description": "Save a page (linted first), commit it on the review branch, reindex.",
+        "description": "Save a page.\n\nOn a hosted installation this writes *your* copy: it shadows the page Slipwright\nships, for your agents only, and the shipped file is never touched. A project\noverride (``project_id``) still writes into that repository, because that is a\nproperty of the code rather than of a person. A local install with no accounts\nkeeps writing the files and committing them on the review branch, as before.",
         "operationId": "put_standards_page_api_standards_pages__path__put",
         "parameters": [
           {
@@ -8035,6 +12184,267 @@
         ]
       }
     },
+    "/api/support": {
+      "get": {
+        "description": "Every request anybody has written. Admin-only: they carry other people's words.",
+        "operationId": "list_support_requests_api_support_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SupportRequestView"
+                  },
+                  "title": "Response List Support Requests Api Support Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Support Requests",
+        "tags": [
+          "support"
+        ]
+      },
+      "post": {
+        "description": "Write a support request. It is saved first and posted second, so the answer is\nowed even when the mail server is down; ``delivery`` says which happened.",
+        "operationId": "create_support_request_api_support_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SupportRequestIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupportRequestView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Support Request",
+        "tags": [
+          "support"
+        ]
+      }
+    },
+    "/api/support/mine": {
+      "get": {
+        "description": "What this account has written, newest first.",
+        "operationId": "list_my_support_requests_api_support_mine_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SupportRequestView"
+                  },
+                  "title": "Response List My Support Requests Api Support Mine Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List My Support Requests",
+        "tags": [
+          "support"
+        ]
+      }
+    },
+    "/api/support/{request_id}/status": {
+      "put": {
+        "description": "Mark a request handled, or open it again. Nothing closes one on its own.",
+        "operationId": "set_support_status_api_support__request_id__status_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "title": "Request Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SupportStatusIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupportRequestView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Support Status",
+        "tags": [
+          "support"
+        ]
+      }
+    },
+    "/api/team": {
+      "get": {
+        "description": "Everybody on every agent of this account, for the owner's own list.",
+        "operationId": "list_team_api_team_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Membership"
+                  },
+                  "title": "Response List Team Api Team Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Team",
+        "tags": [
+          "teams"
+        ]
+      }
+    },
+    "/api/team/members": {
+      "post": {
+        "description": "Put somebody on several agents at once, with one letter between them all.\n\nThe same act as inviting them to one agent, said once: a person asked onto three\nagents should answer one invitation, not three.",
+        "operationId": "invite_to_agents_api_team_members_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeamInvite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Membership"
+                  },
+                  "title": "Response Invite To Agents Api Team Members Post",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Invite To Agents",
+        "tags": [
+          "teams"
+        ]
+      }
+    },
     "/api/test-runs/{run_id}": {
       "get": {
         "operationId": "get_test_run_api_test_runs__run_id__get",
@@ -8155,8 +12565,53 @@
         ]
       }
     },
+    "/api/translations": {
+      "get": {
+        "description": "The same bridge across every project, for the dashboard's feed.",
+        "operationId": "get_all_translations_api_translations_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "lang",
+            "required": true,
+            "schema": {
+              "enum": [
+                "tr",
+                "en"
+              ],
+              "title": "Lang",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Translations"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get All Translations"
+      }
+    },
     "/api/users": {
       "get": {
+        "description": "The accounts this administrator may see: their own, and the people on their team.\n\nAn installation whose administrator owns nothing (the first user of a local install)\nstill sees everybody, which is what it always did.",
         "operationId": "list_users_api_users_get",
         "responses": {
           "200": {
@@ -8221,6 +12676,7 @@
     },
     "/api/users/{user_id}": {
       "delete": {
+        "description": "Close an account and remove what it left behind.\n\nIts projects, developments, checkouts, clones, settings and rewritten standards pages\nall go. Somebody asking to be forgotten is owed that, and a server that only marks\naccounts inactive fills up with the work of people who have left.",
         "operationId": "delete_user_api_users__user_id__delete",
         "parameters": [
           {
@@ -8295,6 +12751,59 @@
           }
         },
         "summary": "Set Password",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/users/{user_id}/status": {
+      "put": {
+        "description": "Suspend an account or let it back in.\n\nSuspending drops its sessions at once rather than at the next login, and nothing is\ndeleted: it is the reversible half of closing an account.",
+        "operationId": "set_user_status_api_users__user_id__status_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StatusChange"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set User Status",
         "tags": [
           "auth"
         ]

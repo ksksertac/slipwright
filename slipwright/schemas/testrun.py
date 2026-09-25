@@ -42,6 +42,9 @@ class TestRun(BaseModel):
     exit_code: int | None = None
     output_path: Path | None = None
     note: str | None = Field(default=None, description="What the run was for, or why it errored.")
+    phase: int | None = Field(
+        default=None, description="The plan phase a build-gate run was for (1-based)."
+    )
 
     @property
     def duration_s(self) -> float | None:

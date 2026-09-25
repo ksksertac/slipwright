@@ -61,6 +61,10 @@ class Lane(BaseModel):
     state: JobState
     created_at: datetime
     pending_approval: str | None
+    # which step is being worked on right now: "build kapısı" alone never said who
+    running_key: str | None = None
+    running_label: str | None = None
+    running_role: RoleName | None = None
     steps: list[StepCard]
 
 
@@ -104,8 +108,25 @@ class _Reader:
         self.job = job
         self.history = job.history
         self.now = utcnow()
+        # the transition that *entered* failed, not the bookkeeping (a Jira sync, a
+        # retrieval) written onto the failed job afterwards -- reading history[-1] lets
+        # one late sync hide which step died, and the pipeline then shows a failed job
+        # whose steps are all still pending
+        self.failed_i: int | None = (
+            next(
+                (
+                    i
+                    for i in range(len(self.history) - 1, -1, -1)
+                    if self.history[i].to_state is JobState.FAILED
+                    and self.history[i].from_state is not JobState.FAILED
+                ),
+                None,
+            )
+            if job.state is JobState.FAILED
+            else None
+        )
         self.failed_from: JobState | None = (
-            self.history[-1].from_state if job.state is JobState.FAILED and self.history else None
+            self.history[self.failed_i].from_state if self.failed_i is not None else None
         )
         self.whole: Span = (0, len(self.history))
 
@@ -176,12 +197,13 @@ class _Reader:
         elif start_i is not None and self.job.state is state and current:
             status = StepStatus.RUNNING
         elif start_i is not None and self.failed_from is state and current:
-            status, end = StepStatus.FAILED, self.history[-1].at
+            assert self.failed_i is not None
+            status, end = StepStatus.FAILED, self.history[self.failed_i].at
         else:
             status, start = StepStatus.PENDING, None
         outputs = [out_i] if out_i is not None else []
-        if status is StepStatus.FAILED:
-            outputs.append(len(self.history) - 1)
+        if status is StepStatus.FAILED and self.failed_i is not None:
+            outputs.append(self.failed_i)
         return StepCard(
             key=key,
             label=label,
@@ -238,6 +260,38 @@ class _Reader:
         )
 
 
+def _deploy_cards(job: Job, r: _Reader) -> list[StepCard]:
+    """DevOps proposing how this is deployed, and the gate that follows it (T11.6).
+
+    The gate card appears only once there is something to approve: a project with
+    nothing to deploy never stops there, and a card that could only ever stay pending
+    would make a finished lane look unfinished.
+    """
+    cards = [
+        r.stage(
+            key="deploy",
+            label="DevOps: deployment plan",
+            state=JobState.DEVOPS,
+            role=RoleName.DEVOPS,
+            # with nothing to deploy there is no gate: the step is done when the job
+            # went straight on to the pull request
+            output_into=(JobState.AWAITING_DEPLOY_APPROVAL, JobState.DONE),
+            current=job.data.devops_stage == 1,
+        )
+    ]
+    if (job.data.deploy or {}).get("scripts"):
+        cards.append(
+            r.gate(
+                key="deploy_gate",
+                label="Deployment approval",
+                state=JobState.AWAITING_DEPLOY_APPROVAL,
+                pending="deployment",
+                editable=True,
+            )
+        )
+    return cards
+
+
 def _phase_cards(job: Job, r: _Reader) -> list[StepCard]:
     plan = job.data.plan or {}
     phases: list[dict[str, object]] = list(plan.get("phases", []))
@@ -251,8 +305,16 @@ def _phase_cards(job: Job, r: _Reader) -> list[StepCard]:
         JobState.DONE,
     )
     cards: list[StepCard] = []
+    ui_seen = False
     for index, phase in enumerate(phases):
         number = index + 1
+        # the screens are signed off where the wait actually starts: after the phases that
+        # do not need them (the backend ones) and before the first one that does
+        if not ui_seen and str(phase.get("domain")) in ("web", "mobile"):
+            ui_seen = True
+            design_gate = _design_gate(job, r)
+            if design_gate is not None:
+                cards.append(design_gate)
         role = specialist_for(str(phase.get("domain") or "general"))
         outputs = [
             i
@@ -285,25 +347,30 @@ def _phase_cards(job: Job, r: _Reader) -> list[StepCard]:
             if start is None:
                 visits = r.visits(JobState.DEVELOPING, r.whole)
                 start = r.history[visits[-1]].at if visits else None
-        elif passed or past_dev or job.data.phase_index > index:
-            status = StepStatus.DONE
-            end = passed[-1].at if passed else None
         elif in_dev and job.data.phase_index == index:
+            # the phase the job is on right now, even if an earlier attempt at it already
+            # passed the gate: a review that sends the phase back reopens it, and a card
+            # reading "done" while its specialist is working is how a lane stops saying
+            # where the work is
             status = StepStatus.RUNNING
             if start is None:
                 visits = r.visits(JobState.DEVELOPING, r.whole)
                 start = r.history[visits[-1]].at if visits else None
+        elif passed or past_dev or job.data.phase_index > index:
+            status = StepStatus.DONE
+            end = passed[-1].at if passed else None
         elif (
             job.state is JobState.FAILED
             and job.data.phase_index == index
             and r.failed_from in (JobState.DEVELOPING, JobState.BUILD_GATE)
         ):
+            assert r.failed_i is not None
             status = StepStatus.FAILED
-            end = r.history[-1].at
+            end = r.history[r.failed_i].at
             if start is None:
                 visits = r.visits(JobState.DEVELOPING, r.whole)
                 start = r.history[visits[-1]].at if visits else None
-            gate_logs.append(len(r.history) - 1)
+            gate_logs.append(r.failed_i)
         else:
             status, start = StepStatus.PENDING, None
         cards.append(
@@ -325,6 +392,20 @@ def _phase_cards(job: Job, r: _Reader) -> list[StepCard]:
         if gate is not None:
             cards.append(gate)
     return cards
+
+
+def _design_gate(job: Job, r: _Reader) -> StepCard | None:
+    """The "Design approval" card: one gate for all the screens, sitting in the flow where
+    the development actually stops. A development the Designer never visited has none."""
+    if not (job.data.design or {}).get("screens"):
+        return None
+    return r.gate(
+        key="design_gate",
+        label="Design approval",
+        state=JobState.AWAITING_DESIGN_APPROVAL,
+        pending="design",
+        editable=True,
+    )
 
 
 def _review_gate(job: Job, r: _Reader, number: int) -> StepCard | None:
@@ -464,6 +545,24 @@ def lane_for(job: Job) -> Lane:
             pending="architecture",
             editable=True,
         ),
+        *(
+            [
+                r.stage(
+                    key="design",
+                    # the card is named after who does it, the way the project speaks of
+                    # this step -- "the Designer", not "the design"
+                    label="Designer",
+                    state=JobState.DESIGN,
+                    role=RoleName.DESIGNER,
+                    output_into=JobState.DEVELOPING,
+                )
+            ]
+            # a development with no screen in it never visits the Designer, and a card
+            # that can never run reads as a step still to come
+            if any(t.to_state is JobState.DESIGN for t in job.history)
+            or job.state is JobState.DESIGN
+            else []
+        ),
         *_phase_cards(job, r),
         r.stage(
             key="qa:1",
@@ -501,12 +600,14 @@ def lane_for(job: Job) -> Lane:
             span=stage2,
             current=not in_stage1,
         ),
+        *_deploy_cards(job, r),
         r.stage(
             key="devops",
             label="DevOps",
             state=JobState.DEVOPS,
             role=RoleName.DEVOPS,
             output_into=JobState.DONE,
+            current=job.data.devops_stage == 2,
         ),
         StepCard(
             key="done",
@@ -517,6 +618,8 @@ def lane_for(job: Job) -> Lane:
     ]
     _insert_decision_gate(job, r, steps)
     _annotate_supervision(job, steps)
+    # the state badge says what kind of work is happening ("build gate"); this says whose
+    running = next((c for c in steps if c.status is StepStatus.RUNNING), None)
     return Lane(
         job_id=job.id,
         request=job.request,
@@ -524,6 +627,9 @@ def lane_for(job: Job) -> Lane:
         state=job.state,
         created_at=job.created_at,
         pending_approval=pending_approval(job),
+        running_key=running.key if running else None,
+        running_label=running.label if running else None,
+        running_role=running.role if running else None,
         steps=steps,
     )
 

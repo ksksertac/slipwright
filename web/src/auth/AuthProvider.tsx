@@ -3,14 +3,22 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Navigate, useLocation } from "react-router-dom";
 import { api, ApiError, UNAUTHORIZED_EVENT, type User } from "../api/client";
 import { keys } from "../api/hooks";
-import { useT } from "../i18n";
+import { currentLang, useT } from "../i18n";
 
 interface AuthState {
   user: User | null;
   loading: boolean;
   /** 503 from the API: no user exists yet; the page shows how to create one. */
   noUsers: boolean;
+  /** Signed in but the address is still unproved: the app is read-only until it is. */
+  unverified: boolean;
   login: (username: string, password: string) => Promise<User>;
+  signUp: (email: string, password: string, name: string) => Promise<User>;
+  /** Redeem a link from a letter. `verify` proves the address; `reset` sets a password. */
+  verifyEmail: (token: string) => Promise<User>;
+  resetPassword: (token: string, password: string) => Promise<User>;
+  /** Take an invitation onto an agent: the password is chosen here and now. */
+  acceptInvitation: (token: string, password: string, name: string) => Promise<User>;
   logout: () => Promise<void>;
 }
 
@@ -52,6 +60,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [qc],
   );
 
+  // signup, verification and reset all end with a session, so they land the same way
+  const arrive = useCallback(
+    async (path: string, body: Record<string, unknown>) => {
+      const user = await api.post<User>(path, { lang: currentLang(), ...body });
+      qc.setQueryData(keys.me, user);
+      await qc.invalidateQueries();
+      return user;
+    },
+    [qc],
+  );
+
+  const signUp = useCallback(
+    (email: string, password: string, name: string) =>
+      arrive("/api/auth/signup", { email, password, name }),
+    [arrive],
+  );
+
+  const verifyEmail = useCallback(
+    (token: string) => arrive("/api/auth/verify", { token }),
+    [arrive],
+  );
+
+  const resetPassword = useCallback(
+    (token: string, password: string) => arrive("/api/auth/reset-password", { token, password }),
+    [arrive],
+  );
+
+  const acceptInvitation = useCallback(
+    (token: string, password: string, name: string) =>
+      arrive("/api/auth/accept-invitation", { token, password, name }),
+    [arrive],
+  );
+
   const logout = useCallback(async () => {
     await api.post<void>("/api/auth/logout");
     qc.clear();
@@ -65,10 +106,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       loading: me.isLoading,
       noUsers: !!data && "status" in data && data.status === 503,
+      // an account with no address at all predates signup: there is nothing to prove
+      unverified: !!user && !!user.email && !user.email_verified_at,
       login,
+      signUp,
+      verifyEmail,
+      resetPassword,
+      acceptInvitation,
       logout,
     };
-  }, [me.data, me.isLoading, login, logout]);
+  }, [
+    me.data,
+    me.isLoading,
+    login,
+    signUp,
+    verifyEmail,
+    resetPassword,
+    acceptInvitation,
+    logout,
+  ]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

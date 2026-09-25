@@ -36,7 +36,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 
 ## Progress
 
-> **Resume here:** Phases 0–9 are complete (T9.0–T9.9). Next: whatever the user asks for; keep the invariants and the task-by-task rhythm.
+> **Resume here:** Phases 0–9, 11 and 12 are complete (T9.0–T9.9, T11.1–T11.6, T12.1–T12.4). Next: whatever the user asks for; keep the invariants and the task-by-task rhythm.
 > Design note for T1.3: `run_cmd` is executed as a subprocess in the worktree (Docker is used
 > only if the profile's `run_cmd` itself invokes it).
 > Design note for T2.2: `invoke_role` talks to a `ModelProvider` (`slipwright/providers/`);
@@ -84,7 +84,13 @@ These hold at every point in the build. If a task seems to require breaking one,
 > Design note for T8.7: `slipwright/api/ui.py` and its T5.3 test are gone; the React app at `/` is the dashboard (`web/PARITY.md`). `tests/test_phase8_e2e.py` is the Phase 6–8 definition of done driven through the API exactly as the browser does it, with fake GitHub/Jira and the scripted provider.
 > Design note for T9.1: `roles/specialists.py` maps `PlanPhase.domain` → role (`specialist_for`), holds the specialist instructions and the role→standards-domain map; `developer.run(as_role=...)` serves all four implementer roles; history notes are `<role> phase N/M`. `supervisor` is already in `RoleName` for T9.8. `/agents` cards come from `GET /api/agents` (`activity.agent_summaries`).
 > Design note for T9.2: `slipwright/standards/__init__.py` loads pages (front-matter: domain/tags/applies_to), splits them into `##` chunks whose ids are content hashes, and lints them (`scripts/check_standards.py`, also run by tests). Project overrides live in `<repo>/.slipwright/standards/`; the Docker image copies `standards/`.
+> Design note for T11.1: the brief (`slipwright/schemas/brief.py`) lives in Slipwright's own database (`project_briefs`, one JSON row per project), never in the user's repository: a project is one row, so a multi-tenant deployment is a database swap rather than a filesystem convention. A job snapshots the **approved** brief into `job.data.brief` when it is created, and `roles.common.base_context` hands it to every role as the `project` section — so one place gives every agent the same account of the project, and a half-written analysis can never reach one.
+> Design note for T11.2/T11.3: neither runs in the job state machine (there is no branch and nothing to build yet). `slipwright/roles/discovery.py` holds both: `analyse` (the Architect reads the checkout, `AnalysisResult`) and `interview` (the Product Owner asks rounds of questions, `IntakeResult`), each through `invoke_role(..., output_schema_cls=...)`. The engine's `start_*`/`execute_*` pair mirrors the test runs: the request marks the brief `running` and a background task does the work, so a failure is a state (`failed` plus the reason) and never a 500. `repository_is_empty` decides which of the two a project gets. The scripted provider answers these from `provider.discovery`, keyed by a marker in the instructions, so a test that overrides a role's usual reply keeps them.
+> Design note for T11.5: `ArchitectResult.stack` is one entry per part of the product (backend/web/mobile/infra) with the language and framework; it travels in the plan, is editable at the architecture gate (`PlanEdit.stack`) and reaches the specialists through `plan_outline`.
+> Design note for T11.6: DevOps runs in two stages like QA. Stage one proposes the deployment (`DeployPlan`: target aws/azure/none, services, scripts, notes) and stops at `AWAITING_DEPLOY_APPROVAL`; a project with nothing to deploy answers `target: none` and the gate is skipped entirely, so scripted end-to-end runs still walk through. Stage two writes the approved files, confined to `deployment/` (anything outside fails the job), commits them and then opens the pull request as before.
 > Design note for T9.3: `standards/index.py` keeps chunks in `<state>/standards.sqlite3` (FTS5 with the porter tokenizer, heading-weighted BM25) plus optional embeddings (`none` / `openai` / `local` / `hashing`); ranking is reciprocal rank fusion of the two lists with a small bonus for project-scope chunks. `Engine.reindex_standards` is incremental by chunk id and skipped when a corpus fingerprint (paths, sizes, mtimes) is unchanged; `ensure_standards_indexed` runs before every search and at API startup.
+
+> Design note for Phase 12: a membership is (account, agent, person) and nothing else — not per project, because an agent belongs to the account. `slipwright/teams.py` holds the one map from a waiting state to the agent whose gate it is, and approving, rejecting and editing the material all read it, so a member can never approve something they may not edit. Visibility needed no new query: `api/__init__._owner` returns `user.tenant_id`, so a member reads the owner's rows through the ownership filter that was already there. An invited address is taken by creating the account with the invitation (`UserStatus.INVITED`, a random password nobody knows), which is what stops it ever becoming an account of its own; losing the last agent sets `UserStatus.REMOVED` and **keeps** the session, because a refused request is what carries the reason (`X-Slipwright-Signed-Out`) back to the login page.
 
 | Phase | Task | Status |
 |-------|------|--------|
@@ -135,6 +141,16 @@ These hold at every point in the build. If a task seems to require breaking one,
 | 9 | T9.7 Orchestrator hardening: budgets, retries, supervisor decisions | [x] |
 | 9 | T9.8 Supervisor at the gates: manual / assisted / auto | [x] |
 | 9 | T9.9 Project pipeline view and bulk approvals | [x] |
+| 11 | T11.1 Project brief: what the agents are told the project is | [x] |
+| 11 | T11.2 Analysis of an existing checkout | [x] |
+| 11 | T11.3 Intake: the Product Owner interviews you about an empty one | [x] |
+| 11 | T11.4 The new-project flow ends in the brief, then the first development | [x] |
+| 11 | T11.5 The Architect names the stack; you change it at the gate | [x] |
+| 11 | T11.6 DevOps: the deployment gate and the `deployment/` folder | [x] |
+| 12 | T12.1 Membership: account, agent, person | [x] |
+| 12 | T12.2 The invitation and the address it takes | [x] |
+| 12 | T12.3 What a member may do | [x] |
+| 12 | T12.4 Told when work arrives, told when it ends | [x] |
 
 ---
 
@@ -1117,6 +1133,87 @@ in bulk.
   OpenAI and DeepSeek in `PROVIDERS`; each speaks the OpenAI protocol on its own host, so
   `build_client` needs no new code, and each appears on Settings → Models with its own key,
   base URL, default model and output limit, and can be pinned to an agent under Agents.
+
+## Phase 12 — Teams: the people an account puts on its agents
+
+Whoever signs up owns everything. A team is built one agent at a time: an address is put
+on the Architect, answers the letter, and from then on sees the owner's projects and
+approves at the Architect's gates — and nowhere else.
+
+### T12.1 — A membership is (account, agent, person)
+**Done when**
+- [x] `agent_members` holds one row per membership with how it started and how it ended
+  (`invited | active | declined | left | removed`); rows are never deleted
+- [x] `users.owner_id` says which account somebody belongs to; `User.tenant_id` is what
+  every ownership check reads, so a member sees the owner's projects and nothing else
+- [x] `slipwright/teams.py` owns the rules: the gate → agent map, who may act where, and
+  the letters; `store/members.py` only reads and writes rows
+- [x] A database written before any of this upgrades into one (alembic `0007_teams`), and
+  everybody who came before stays their own account
+
+### T12.2 — The invitation, and the address it takes
+**Done when**
+- [x] Inviting an address creates the account there and then (status `invited`, no usable
+  password), so the address is taken from that moment and can never open an account of
+  its own — the company-mail rule the owner asked for
+- [x] The letter's link opens a page that names the agent and the inviter **without**
+  spending the token; accepting sets a password, proves the address and starts a session;
+  declining ends the membership and leaves the address where it is
+- [x] Somebody already on the team is simply handed a second agent (a letter, no form):
+  they accepted this organisation once
+- [x] An address that belongs to another account is refused, not moved
+
+### T12.3 — What a member may do
+**Done when**
+- [x] Approve, reject and edit **only** where their own agent waits: the backlog is the
+  Product Owner's, the plan and the stack the Architect's, the test list QA's, the
+  deployment DevOps's, the screens the Designer's
+- [x] Their own agent's setup (model, depth, standards) is theirs to change; every other
+  agent answers 403
+- [x] Starting, retrying, replanning, re-running, deleting, steering and every setting
+  belong to the owner (`require_owner`)
+- [x] The dashboard's "waiting for you" is what waits for *them*, not for the team
+
+### T12.4 — Told when work arrives, told when it ends
+**Done when**
+- [x] A development that stops at a gate writes one letter to the people on that gate's
+  agent, recorded on the job (`data.notified`) so a restart writes none and QA's two
+  stages write two
+- [x] Being taken off an agent writes to the person; losing the last one marks the account
+  `removed`, and the browser that is open right now is answered 401 with
+  `X-Slipwright-Signed-Out: removed` — the login page says they were taken off the team
+  rather than that the password was wrong
+- [x] Being invited back turns the same account round again
+
+> Verified by `tests/test_phase12_teams.py`: the invitation (taken address, read without
+> spending, accept, decline), a member approving at their gate and refused at another's,
+> the owner-only endpoints, configuring one agent and not another, stepping off, being
+> taken off and the signed-out reason, and the letter that arrives with the gate.
+
+### T12.5 — A failed build gate goes to the tester first
+A red gate says two sides of the project disagree; it never says which one was wrong.
+Until now the code was always assumed to be the guilty side, so a test asserting something
+nobody agreed to sent the same specialist round the same loop until the attempts ran out.
+
+**Done when**
+- [x] Before any specialist is asked to fix a failed build gate, QA reads the failure and
+  says which side was wrong (`gate_verdict`)
+- [x] A test that asserts what nobody agreed to is QA's own to correct: it rewrites the
+  test files, the gate runs again, and no specialist fix attempt is spent on it — bounded
+  at `max_qa_gate_fixes` (2) per phase, so a test and the code it tests cannot chase each
+  other
+- [x] QA may touch nothing but test files while triaging; a correction that reaches into
+  the code under test is refused and the verdict falls back to the code being wrong
+- [x] When the code is the wrong side, the specialist is handed QA's reading of the
+  failure (`qa_diagnosis`) instead of a patch, and is told not to change the test it names
+- [x] Either way the reason is in the history in the platform's language — which side was
+  wrong and why, not only that something failed
+
+> Verified by `tests/test_phase12_gate_triage.py`: the corrected test with no fix attempt
+> spent, the diagnosis reaching the specialist's next prompt, the refused correction that
+> reached outside the tests, and the two-rewrite bound.
+
+---
 
 ## Phase 10 — Proposed (not started)
 

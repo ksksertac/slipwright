@@ -85,7 +85,7 @@ def test_editor_lists_reads_writes_and_commits_on_the_review_branch(
     pages = editor.list_pages(None, "backend")
     assert {p.domain for p in pages} == {"backend", "core"}  # core rides along
     assert all(p.sections > 0 and p.words > 0 for p in pages)
-    assert "# Core rules" in editor.read("core.md", None)
+    assert "# Ortak kurallar" in editor.read("core.md", None)
 
     info = editor.create("backend", "Queues", PAGE, None, author="ada")
     assert info.path == "backend/queues.md" and info.title == "Queues" and info.sections == 1
@@ -136,7 +136,7 @@ def test_linter_refuses_bad_pages(corpus: Path, tmp_path: Path) -> None:
     with pytest.raises(PageError, match="duplicates"):
         editor.write(
             "backend/x.md",
-            "---\ndomain: backend\n---\n\n# Dup\n\n## Idempotency and retries\n\ncopy\n",
+            "---\ndomain: backend\n---\n\n# Dup\n\n## Idempotency ve yeniden denemeler\n\ncopy\n",
             None,
             author="a",
         )
@@ -257,7 +257,7 @@ def test_rules_are_the_sections_and_edit_in_place(corpus: Path, tmp_path: Path) 
     editor = StandardsEditor(corpus, tmp_path / "branches")
     rules = editor.list_rules(None, "product")
     assert [r.id for r in rules] == [f"product/backlog.md:{n}" for n in range(4)]
-    assert rules[1].heading == "What a task must say" and rules[1].words > 20
+    assert rules[1].heading == "Bir task neyi söylemeli" and rules[1].words > 20
     assert all(r.domain == "product" for r in rules)  # core does not ride along here
     core = editor.list_rules(None, "core")
     assert core and all(r.path == "core.md" for r in core)
@@ -300,9 +300,9 @@ def test_rules_are_the_sections_and_edit_in_place(corpus: Path, tmp_path: Path) 
     assert head2 == head and [blocks2[i] for i in (0, 2, 3)] == [blocks[i] for i in (0, 2, 3)]
     assert blocks2[1] == "## Bir görev ne söylemeli\n\nKısa ve test edilebilir.\n\n"
     with pytest.raises(PageError, match="already exists"):
-        editor.update_rule("product/backlog.md:1", "When to stop and ask", "x", None, author="a")
+        editor.update_rule("product/backlog.md:1", "Ne zaman durup sormalı", "x", None, author="a")
     with pytest.raises(PageError, match="duplicates"):  # across pages: the linter
-        editor.update_rule("product/rules.md:0", "When to stop and ask", "x", None, author="a")
+        editor.update_rule("product/rules.md:0", "Ne zaman durup sormalı", "x", None, author="a")
     with pytest.raises(PageError, match="title"):
         editor.update_rule("product/backlog.md:1", "  ", "x", None, author="a")
     with pytest.raises(PageError, match="section"):

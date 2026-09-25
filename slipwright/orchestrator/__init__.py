@@ -16,8 +16,23 @@ LEGAL_TRANSITIONS: dict[JobState, tuple[JobState, ...]] = {
     ),
     JobState.AWAITING_BACKLOG_APPROVAL: (JobState.BACKLOG, JobState.ARCHITECTURE),
     JobState.ARCHITECTURE: (JobState.AWAITING_ARCHITECTURE_APPROVAL, JobState.FAILED),
-    JobState.AWAITING_ARCHITECTURE_APPROVAL: (JobState.ARCHITECTURE, JobState.DEVELOPING),
-    JobState.DEVELOPING: (JobState.BUILD_GATE, JobState.FAILED),
+    # the approved plan goes to the Designer when it has a screen in it, else straight
+    # to the first phase
+    JobState.AWAITING_ARCHITECTURE_APPROVAL: (
+        JobState.ARCHITECTURE,
+        JobState.DESIGN,
+        JobState.DEVELOPING,
+    ),
+    JobState.DESIGN: (JobState.DEVELOPING, JobState.FAILED),
+    # the screens are approved one at a time, and the wait happens where it costs nothing:
+    # the development builds its backend phases first and stops at the first web or mobile
+    # phase, which is the first one that would have to guess what the screen looks like
+    JobState.DEVELOPING: (
+        JobState.BUILD_GATE,
+        JobState.AWAITING_DESIGN_APPROVAL,
+        JobState.FAILED,
+    ),
+    JobState.AWAITING_DESIGN_APPROVAL: (JobState.DEVELOPING, JobState.DESIGN),
     JobState.BUILD_GATE: (JobState.DEVELOPING, JobState.REVIEW, JobState.QA, JobState.FAILED),
     JobState.REVIEW: (
         JobState.DEVELOPING,
@@ -28,7 +43,9 @@ LEGAL_TRANSITIONS: dict[JobState, tuple[JobState, ...]] = {
     JobState.AWAITING_REVIEW_APPROVAL: (JobState.DEVELOPING, JobState.QA),
     JobState.QA: (JobState.AWAITING_TEST_APPROVAL, JobState.FAILED),
     JobState.AWAITING_TEST_APPROVAL: (JobState.QA, JobState.DEVOPS),
-    JobState.DEVOPS: (JobState.DONE, JobState.FAILED),
+    # DevOps runs in two stages like QA: the deployment proposal is approved first
+    JobState.DEVOPS: (JobState.AWAITING_DEPLOY_APPROVAL, JobState.DONE, JobState.FAILED),
+    JobState.AWAITING_DEPLOY_APPROVAL: (JobState.DEVOPS,),
     JobState.DONE: (),
     JobState.FAILED: (),
 }
@@ -37,6 +54,7 @@ LEGAL_TRANSITIONS: dict[JobState, tuple[JobState, ...]] = {
 _WORKING = (
     JobState.BACKLOG,
     JobState.ARCHITECTURE,
+    JobState.DESIGN,
     JobState.DEVELOPING,
     JobState.BUILD_GATE,
     JobState.REVIEW,
@@ -48,8 +66,9 @@ for _state in _WORKING:
 LEGAL_TRANSITIONS[JobState.AWAITING_DECISION] = _WORKING
 # a failed job can be retried: it re-enters the working state it failed in
 LEGAL_TRANSITIONS[JobState.FAILED] = _WORKING
-# a finished development can be run again a step at a time: the tests, or the DevOps push
-LEGAL_TRANSITIONS[JobState.DONE] = (JobState.BUILD_GATE, JobState.DEVOPS)
+# a finished development can be run again a step at a time: the test cases, the tests, or
+# the DevOps push
+LEGAL_TRANSITIONS[JobState.DONE] = (JobState.BUILD_GATE, JobState.QA, JobState.DEVOPS)
 # a failed build gate may send the phase back to the architect (the supervisor's "replan")
 LEGAL_TRANSITIONS[JobState.BUILD_GATE] = (
     *LEGAL_TRANSITIONS[JobState.BUILD_GATE],

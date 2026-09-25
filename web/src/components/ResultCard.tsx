@@ -1,16 +1,38 @@
 // What a development produced: the branch, what changed on it, and how to get it. Read
 // from git on every visit, so it stays true after a restart and after a manual merge.
+//
+// There is nothing to read until the development finishes, so the git read is only asked
+// for once it has. On the job page this is a tab somebody clicked, and a tab that renders
+// nothing looks broken -- so it says why it is empty instead. In `compact` mode it is one
+// card among others on a page nobody opened for it, and there it stays out of the way.
 import { Link } from "react-router-dom";
 import type { Job } from "../api/client";
 import { useJobResult } from "../api/hooks";
 import { Copyable } from "./Copyable";
 import { Detail } from "./Detail";
-import { IconExternal } from "./icons";
+import { IconExternal, IconLayers } from "./icons";
+import { Empty, ErrorBox, Loading, STATE_LABEL } from "./ui";
 import { useT } from "../i18n";
 
 export function ResultCard({ job, compact = false }: { job: Job; compact?: boolean }) {
   const tx = useT();
-  const result = useJobResult(job.id, job.state === "done" || job.state === "failed");
+  const finished = job.state === "done" || job.state === "failed";
+  const result = useJobResult(job.id, finished);
+
+  if (!finished) {
+    if (compact) return null;
+    return (
+      <Empty title={tx("Nothing has come out yet.")} icon={<IconLayers />}>
+        {tx(
+          "This development is still running — it is {state}. What it produced, and how to take it into your working copy, appears here once it finishes.",
+          { state: tx(STATE_LABEL[job.state]) },
+        )}
+      </Empty>
+    );
+  }
+  if (result.isLoading) return compact ? null : <Loading rows={3} />;
+  if (result.error) return compact ? null : <ErrorBox error={result.error} />;
+
   const r = result.data;
   if (!r) return null;
   const files = [...r.files].sort((a, b) => b.added + b.removed - (a.added + a.removed));

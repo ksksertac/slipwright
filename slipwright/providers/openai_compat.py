@@ -14,11 +14,14 @@ from typing import Any
 
 import httpx
 
+from slipwright import net
 from slipwright.providers import (
+    REJECTED_STATUS,
     ModelRequest,
     ModelResponse,
     ProviderError,
     ProviderRefusalError,
+    ProviderRejectedError,
     ProviderTimeoutError,
     ProviderTruncatedError,
 )
@@ -79,13 +82,19 @@ class OpenAICompatProvider:
 
     def complete(self, request: ModelRequest) -> ModelResponse:
         try:
-            resp = self._client.post(
-                "/chat/completions", json=self.build_body(request), timeout=request.timeout_s
+            resp = net.request(
+                self._client,
+                "POST",
+                "/chat/completions",
+                json=self.build_body(request),
+                timeout=request.timeout_s,
             )
         except httpx.TimeoutException as exc:
             raise ProviderTimeoutError(str(exc)) from exc
         except httpx.HTTPError as exc:
             raise ProviderError(f"connection error: {exc}") from exc
+        if resp.status_code in REJECTED_STATUS:
+            raise ProviderRejectedError(f"API error {resp.status_code}: {_error_message(resp)}")
         if resp.status_code >= 400:
             raise ProviderError(f"API error {resp.status_code}: {_error_message(resp)}")
         data = resp.json()
@@ -94,17 +103,23 @@ class OpenAICompatProvider:
             raise ProviderError("API returned no choices")
         choice = choices[0]
         finish = choice.get("finish_reason")
+        # a refused or cut-off answer is billed like any other: the usage block is already
+        # here, so it goes out with the failure rather than being dropped on the floor
+        usage = data.get("usage") or {}
+        spent = {
+            "input_tokens": usage.get("prompt_tokens"),
+            "output_tokens": usage.get("completion_tokens"),
+        }
         if finish == "content_filter":
-            raise ProviderRefusalError("model refused (content_filter)")
+            raise ProviderRefusalError("model refused (content_filter)", **spent)
         if finish == "length":
             raise ProviderTruncatedError(
-                f"response truncated at {self.max_tokens_param}={self._max_tokens}"
+                f"response truncated at {self.max_tokens_param}={self._max_tokens}", **spent
             )
         message = choice.get("message") or {}
         text = message.get("content") or ""
         if isinstance(text, list):  # some vendors return content parts
             text = "".join(p.get("text", "") for p in text if isinstance(p, dict))
-        usage = data.get("usage") or {}
         return ModelResponse(
             text=text,
             model=data.get("model") or request.model,
@@ -115,7 +130,7 @@ class OpenAICompatProvider:
 
     def list_models(self) -> list[str]:
         try:
-            resp = self._client.get("/models", timeout=20.0)
+            resp = net.request(self._client, "GET", "/models", timeout=20.0)
         except httpx.HTTPError as exc:
             raise ProviderError(f"connection error: {exc}") from exc
         if resp.status_code >= 400:

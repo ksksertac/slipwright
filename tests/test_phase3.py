@@ -304,11 +304,45 @@ def test_project_commands_never_see_the_servers_python_environment(
     monkeypatch.setenv("VIRTUAL_ENV", "/opt/venv")
     monkeypatch.setenv("PATH", "/opt/venv/bin" + os.pathsep + "/usr/bin")
     monkeypatch.setenv("PYTHONPATH", "/app")
-    monkeypatch.setenv("KEEP_ME", "1")
     env = project_env({"PORT": "8123"})
     assert "UV_PROJECT_ENVIRONMENT" not in env and "VIRTUAL_ENV" not in env
-    assert "PYTHONPATH" not in env and env["KEEP_ME"] == "1" and env["PORT"] == "8123"
+    assert "PYTHONPATH" not in env and env["PORT"] == "8123"
     assert env["PATH"] == "/usr/bin"
     probe = "import os; print(os.environ.get('UV_PROJECT_ENVIRONMENT', 'unset'))"
     code, out = run_command(f'"{sys.executable}" -c "{probe}"', tmp_path)
     assert code == 0 and out.strip() == "unset"
+
+
+def test_a_projects_commands_see_nothing_that_was_not_named(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The environment is an allow list, not a deny list.
+
+    It used to be the other way round: everything the server had, minus six names. Every
+    secret nobody thought to add to that list came through -- the provider keys, the Git
+    token, and the key that decrypts every stored credential of every account. A
+    ``test_cmd`` of ``env | curl -d @-`` was the whole attack.
+    """
+    from slipwright.gates import project_env
+    from slipwright.gates.env import leaks
+
+    secrets = {
+        "ANTHROPIC_API_KEY": "sk-ant-secret",
+        "OPENAI_API_KEY": "sk-oai-secret",
+        "GH_TOKEN": "ghp_secret",
+        "GITHUB_TOKEN": "ghp_secret2",
+        "SLIPWRIGHT_SECRET_KEY": "fernet-secret",
+        "SLIPWRIGHT_TOKEN": "bearer-secret",
+        "SLIPWRIGHT_DATABASE_URL": "postgresql://user:pw@db/slipwright",
+        "AWS_SECRET_ACCESS_KEY": "aws-secret",
+        "SOMETHING_INVENTED_TOMORROW": "tomorrow-secret",
+    }
+    for name, value in secrets.items():
+        monkeypatch.setenv(name, value)
+
+    env = project_env()
+    assert leaks(env, list(secrets.values())) == [], "a secret reached a project's command"
+    for name in secrets:
+        assert name not in env, f"{name} must not be visible to a project's own commands"
+    # what a build genuinely needs is still there
+    assert "PATH" in env and env["CI"] == "1"

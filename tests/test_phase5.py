@@ -161,7 +161,9 @@ def test_message_queued_mid_plan_reaches_next_developer_once(
 def test_every_role_drains_the_inbox(
     store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
 ) -> None:
-    provider = _provider(seed, phases=1)
+    # three phases so the plan has a screen in it: without one the Designer never runs,
+    # and a role that never runs cannot drain anything
+    provider = _provider(seed, phases=3)
     engine = _engine(store, worktrees_root, seed, provider)
     job = engine.create_job("x", repo)
     seen: dict[str, str] = {}
@@ -174,9 +176,12 @@ def test_every_role_drains_the_inbox(
             if m.consumed_by:
                 seen[m.text] = m.consumed_by
     assert job.state is JobState.DONE
-    assert set(seen.values()) == {r.value for r in PIPELINE_ROLES if r not in DEVELOPER_ROLES} | {
-        "backend"
-    }
+    # Every role that ran drained what was pending when it ran. It is not one message per
+    # role: a gate releases one sweep, and the first role in that sweep takes what is
+    # waiting -- so assert against the roles that were actually invoked, not a fixed list.
+    ran = {entry["role"] for entry in store.get(job.id).data.invocation_log}
+    assert set(seen.values()) <= ran
+    assert {"po", "architect", "designer", "qa", "devops"} <= set(seen.values())
     assert all(not m.pending for m in store.get(job.id).data.inbox)
 
 
@@ -275,7 +280,8 @@ def test_two_jobs_run_concurrently_end_to_end_without_interference(
 def test_restart_at_every_phase_resumes_the_job(
     store: JobStore, repo: Path, worktrees_root: Path, seed: Profile, stop_at: JobState
 ) -> None:
-    provider = _provider(seed, phases=2)
+    # every domain, so the plan has a screen in it and the Designer's state is reachable
+    provider = _provider(seed, phases=len(DOMAINS))
     engine_a = _engine(store, worktrees_root, seed, provider)
     engine_a.handlers.pop(stop_at)  # process "dies" the moment the job enters this state
     job = _drive(engine_a, engine_a.start(engine_a.create_job("x", repo).id))
@@ -286,7 +292,7 @@ def test_restart_at_every_phase_resumes_the_job(
     job = _drive(engine_b, engine_b.resume(job.id))
 
     assert job.state is JobState.DONE
-    assert job.data.phase_index == 2
+    assert job.data.phase_index == len(DOMAINS)
     assert len(engine_b.git_host.prs) == 1  # type: ignore[attr-defined]
 
 

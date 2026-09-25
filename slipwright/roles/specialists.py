@@ -42,6 +42,7 @@ STANDARDS_DOMAIN: dict[RoleName, str] = {
     RoleName.PO: "product",
     RoleName.ARCHITECT: "architecture",
     RoleName.BACKEND: "backend",
+    RoleName.DESIGNER: "design",
     RoleName.WEB_UI: "web",
     RoleName.MOBILE_UI: "mobile",
     RoleName.QA: "testing",
@@ -53,9 +54,10 @@ STANDARDS_DOMAIN: dict[RoleName, str] = {
 LABEL: dict[RoleName, str] = {
     RoleName.PO: "Product Owner",
     RoleName.ARCHITECT: "Architect",
-    RoleName.BACKEND: "Backend",
-    RoleName.WEB_UI: "Web UI",
-    RoleName.MOBILE_UI: "Mobile UI",
+    RoleName.BACKEND: "Backend Developer",
+    RoleName.DESIGNER: "Designer",
+    RoleName.WEB_UI: "Web Developer",
+    RoleName.MOBILE_UI: "Mobile Developer",
     RoleName.QA: "QA",
     RoleName.DEVOPS: "DevOps",
     RoleName.SUPERVISOR: "Supervisor",
@@ -65,6 +67,8 @@ SCOPE: dict[RoleName, str] = {
     RoleName.PO: "Turns a request into epics, stories and tasks — the backlog that goes to Jira.",
     RoleName.ARCHITECT: "From backlog and repository: build/test/run profile, decisions, phases.",
     RoleName.BACKEND: "Services, APIs, data models, migrations, background jobs.",
+    RoleName.DESIGNER: "Designs the screens the two UI specialists build: purpose, "
+    "layout, states, interactions.",
     RoleName.WEB_UI: "Web front-end: pages, components, state, styling, accessibility.",
     RoleName.MOBILE_UI: "Mobile apps: screens, navigation, platform APIs, offline state.",
     RoleName.QA: "Proposes test cases; writes unit, integration and end-to-end tests.",
@@ -97,7 +101,11 @@ You are the WEB UI specialist: pages, components, client state, styling, accessi
 front-end tests. Do not add or change server endpoints. If the phase needs an endpoint that
 does not exist, build against the contract described in the plan, keep the call isolated
 in one client module, and say in `summary` exactly which endpoint is missing so the Architect
-can add a backend phase.""",
+can add a backend phase.
+If a `design` section is present it is the approved design for this phase's screens: build
+those screens, with the states and interactions it names, and follow its `principles`. It
+says what the screen is and does, never how to write it -- the code is yours. Where it is
+silent, decide and say so in `summary`; where you cannot build what it asks, say why.""",
     RoleName.DEVOPS: _SHARED
     + """
 You are the DEVOPS specialist for this phase: Dockerfiles, compose files, CI workflows,
@@ -109,7 +117,11 @@ person must do by hand (create a secret, open a port).""",
     + """
 You are the MOBILE UI specialist: screens, navigation, platform APIs, offline and sync
 state, mobile tests. Do not change server code. Prefer platform conventions over web
-patterns. Say in `summary` which backend contracts you relied on and which are missing.""",
+patterns. Say in `summary` which backend contracts you relied on and which are missing.
+If a `design` section is present it is the approved design for this phase's screens: build
+those screens, with the states and interactions it names, and follow its `principles`. It
+says what the screen is and does, never how to write it -- the code is yours. Where it is
+silent, decide and say so in `summary`; where you cannot build what it asks, say why.""",
 }
 
 

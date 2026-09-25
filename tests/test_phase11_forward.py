@@ -10,8 +10,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from sqlalchemy import select, update
+
 from slipwright.schemas.job import Job, JobData, JobState
 from slipwright.store import JobStore
+from slipwright.store.schema import jobs
 
 
 def test_unknown_fields_are_kept_rather_than_refused() -> None:
@@ -30,15 +33,17 @@ def test_a_job_row_from_a_newer_build_loads_and_keeps_its_fields(
 ) -> None:
     job = store.create(Job(request="x", repo_path=repo))
     # what a newer build would have written into this row, straight into the database
-    raw = store._conn.execute(  # noqa: SLF001 - the point is what a foreign writer left
-        "SELECT data_json FROM jobs WHERE id = ?", (job.id,)
-    ).fetchone()[0]
+    with store.db.connect() as conn:
+        raw = conn.execute(
+            select(jobs.c.data_json).where(jobs.c.id == job.id)
+        ).scalar_one()
     payload = json.loads(raw)
     payload["cost_usd"] = 0.42
     payload["a_field_from_the_future"] = {"kept": True}
-    store._conn.execute(  # noqa: SLF001
-        "UPDATE jobs SET data_json = ? WHERE id = ?", (json.dumps(payload), job.id)
-    )
+    with store.db.begin() as conn:
+        conn.execute(
+            update(jobs).where(jobs.c.id == job.id).values(data_json=json.dumps(payload))
+        )
 
     again = store.get(job.id)
     assert again.state is JobState.CREATED

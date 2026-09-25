@@ -4,7 +4,7 @@ import { describeError, type Project } from "../api/client";
 import { useDeleteProject, usePatchProject } from "../api/hooks";
 import { ConfirmModal, Modal } from "./Modal";
 import { useToast } from "./Toast";
-import { useT } from "../i18n";
+import { sentenceCase, useT } from "../i18n";
 
 /** Edit a project's name, description and Jira key. */
 export function EditProjectModal({ project, onClose }: { project: Project; onClose: () => void }) {
@@ -289,7 +289,7 @@ export function DeleteProjectModal({
       title={tx("Delete project")}
       body={
         <>
-          {tx("Delete")} <strong>{project.name}</strong>{" "}
+          {tx("Delete")} <strong>{sentenceCase(project.name)}</strong>{" "}
           {tx(
             "and its finished developments? The repository on disk is not touched. Projects with a running development cannot be deleted.",
           )}

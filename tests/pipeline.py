@@ -10,6 +10,7 @@ from slipwright.engine import Engine
 from slipwright.githost import CiState, CiStatus
 from slipwright.providers.scripted import ScriptedProvider, canned
 from slipwright.roles.specialists import DEVELOPER_ROLES
+from slipwright.schemas.job import Job, JobState
 from slipwright.schemas.profile import Profile, RoleName, load_profile
 from slipwright.store import JobStore
 from slipwright.workspace import PortAllocator, Workspace
@@ -138,6 +139,24 @@ def full_provider(
             "phase_complete": True,
             "changes": [{"path": "OK", "content": "yes\n"}],
         }
+    # a plan with a web or mobile phase now goes through the Designer first
+    p.replies[RoleName.DESIGNER] = lambda _req: {
+        "summary": "screens",
+        "principles": ["one column"],
+        "screens": [
+            {
+                "name": "List",
+                "platform": "both",
+                "purpose": "see the things",
+                "layout": "a list under a title",
+                "states": ["empty", "loading"],
+                "mock": (
+                    "<!doctype html><style>body{font:14px sans-serif}</style>"
+                    "<h1>List</h1><ul><li>one</li></ul>"
+                ),
+            }
+        ],
+    }
     p.replies[RoleName.QA] = lambda req: (
         {"summary": "cases", "test_cases": [{"name": "smoke", "description": "OK is yes"}]}
         if '"stage": 1' in req.prompt
@@ -160,3 +179,16 @@ def full_engine(
 def full_seed() -> Profile:
     """The example profile with build and test commands that always pass."""
     return load_profile(EXAMPLE).model_copy(update={"build_cmd": TRUE, "test_cmd": TRUE})
+
+
+def past_design(engine: Engine, job: Job) -> Job:
+    """Carry a development through the design gate, if it has one.
+
+    A development with a web or mobile phase stops before that phase until every screen the
+    Designer drew has a yes. A test that is about something else -- the standards review,
+    the retrieval, which specialist a phase runs on -- says yes to the screens and carries
+    on; the gate itself is tested where it belongs.
+    """
+    if job.state is JobState.AWAITING_DESIGN_APPROVAL:
+        return engine.approve(job.id)
+    return job

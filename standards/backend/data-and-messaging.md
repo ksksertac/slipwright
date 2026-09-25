@@ -4,62 +4,61 @@ tags: [database, migrations, transactions, kafka, events, retry, dead-letter, lo
 applies_to: [python, fastapi, sqlalchemy, postgres, kafka, any]
 ---
 
-# Data, messaging and observability
+# Veri, mesajlaşma ve gözlemlenebilirlik
 
-## Migrations
+## Migration'lar
 
-Every schema change is a migration file checked in with the code that needs it, written
-so it can run on a live system: add columns as nullable or with a default, backfill in a
-separate step, then tighten constraints. Never rename a column in place — add the new
-one, migrate data, drop the old one in a later release. Migrations have a down step or
-document why they cannot be reversed. Run them in CI against an empty database and
-against a snapshot with data.
+Her şema değişikliği, ona ihtiyaç duyan kodla birlikte commit'lenen bir migration
+dosyasıdır ve canlı sistemde koşabilecek biçimde yazılır: kolonları nullable ya da
+varsayılanlı ekle, veriyi ayrı bir adımda doldur, kısıtları sonra sıkılaştır. Bir kolonu
+yerinde asla yeniden adlandırma — yenisini ekle, veriyi taşı, eskisini sonraki bir sürümde
+düşür. Migration'ların bir geri alma adımı olur ya da neden geri alınamadığı yazılır.
+Bunları CI'da hem boş veritabanına hem de veri dolu bir kopyaya karşı çalıştır.
 
-## Transactions and consistency
+## İşlemler ve tutarlılık
 
-One request, one transaction, opened as late and closed as early as possible. Do not
-hold a transaction across a network call. Use `SELECT … FOR UPDATE` (or optimistic
-version columns) for read-modify-write on money or inventory. Unique constraints in the
-database are the source of truth for uniqueness; application checks are only for nicer
-errors.
+Bir istek, bir transaction; olabildiğince geç açılır ve olabildiğince erken kapanır. Bir
+transaction'ı ağ çağrısı boyunca açık tutma. Para ya da stok üzerinde oku-değiştir-yaz
+için `SELECT … FOR UPDATE` (ya da iyimser sürüm kolonları) kullan. Tekillikte doğrunun
+kaynağı veritabanındaki unique kısıtlardır; uygulama kontrolleri yalnızca daha güzel hata
+vermek içindir.
 
-## Kafka consumers and retries
+## Kafka tüketicileri ve yeniden denemeler
 
-Consumers are idempotent: processing the same message twice must be harmless (dedupe on
-the event id stored with the result). Commit offsets only after the side effect is
-durable. On a transient failure retry in-process with exponential backoff (base 1 s,
-factor 2, maximum 5 attempts, jitter); on a permanent failure (bad payload, business
-rule) do not retry — publish to `<topic>.dlq` with the error and the original headers,
-commit, and alert. Never block the partition indefinitely and never drop a message
-silently. Poison messages must not stop the consumer group.
+Tüketiciler idempotent olur: aynı mesajın iki kez işlenmesi zararsız olmalıdır (sonuçla
+birlikte saklanan olay kimliğiyle tekilleştir). Offset'leri ancak yan etki kalıcı
+olduktan sonra commit et. Geçici bir hatada süreç içinde üstel `backoff` ile yeniden dene
+(taban 1 sn, çarpan 2, en çok 5 deneme, jitter); kalıcı bir hatada (bozuk gövde, iş
+kuralı) yeniden deneme — hatayı ve özgün başlıkları `<topic>.dlq` konusuna yaz, commit et
+ve uyarı üret. Partition'ı süresiz bloklama ve bir mesajı sessizce asla düşürme. Zehirli
+mesajlar tüketici grubunu durdurmamalıdır.
 
-## Event contracts
+## Olay sözleşmeleri
 
-Events are versioned JSON with `event_id`, `event_type`, `occurred_at`, `producer` and
-`schema_version` in every envelope. Producers never remove or retype fields; consumers
-ignore unknown fields. Topic names are `<domain>.<entity>.<event>` in lowercase
-(`billing.invoice.paid`). Payloads carry ids and the facts that changed, not whole
-aggregates from other services.
+Olaylar sürümlü JSON'dur; her zarfta `event_id`, `event_type`, `occurred_at`, `producer`
+ve `schema_version` bulunur. Üreticiler alan kaldırmaz ya da tipini değiştirmez;
+tüketiciler bilmedikleri alanları yok sayar. Konu adları küçük harfle
+`<alan>.<varlık>.<olay>` biçimindedir (`billing.invoice.paid`). Gövdeler kimlikleri ve
+değişen olguları taşır, başka servislerin bütün nesnelerini değil.
 
-## Logging
+## Loglama
 
-Structured logs (JSON in production) with `level`, `message`, `correlation_id`,
-`service`, and the ids relevant to the request (`user_id`, `invoice_id`). Log at INFO
-for state changes and external calls, WARNING for handled anomalies, ERROR only when
-something needs a human. Never log secrets, tokens, full card numbers or personal data
-beyond ids. One log line per event — no multi-line dumps in production.
+Yapılandırılmış loglar (üretimde JSON): `level`, `message`, `correlation_id`, `service`
+ve isteğe ilişkin kimlikler (`user_id`, `invoice_id`). Durum değişiklikleri ve dış
+çağrılar için INFO, ele alınan sapmalar için WARNING, yalnızca bir insan gerektiğinde
+ERROR. Sırları, token'ları, tam kart numaralarını ya da kimlik dışındaki kişisel veriyi
+asla loglama. Olay başına tek satır — üretimde çok satırlı dökümler olmaz.
 
-## Metrics and tracing
+## Metrikler ve izleme
 
-Expose request count, latency histogram and error rate per endpoint, plus queue lag per
-consumer, in the format the project already uses (Prometheus, OpenTelemetry). Propagate
-the trace/correlation id across HTTP and message headers. Add a health endpoint that
-checks the database and the broker with short timeouts and reports each dependency
-separately.
+İstek sayısı, gecikme histogramı ve uç nokta başına hata oranını, ayrıca tüketici başına
+kuyruk gecikmesini projenin zaten kullandığı biçimde (Prometheus, OpenTelemetry) yayınla.
+İz/korelasyon kimliğini HTTP ve mesaj başlıkları boyunca taşı. Veritabanını ve broker'ı
+kısa zaman aşımlarıyla yoklayan, her bağımlılığı ayrı ayrı raporlayan bir sağlık uç
+noktası ekle.
 
-## Configuration
+## Yapılandırma
 
-Configuration comes from the environment (twelve-factor), validated at startup into a
-typed settings object; fail fast on missing or malformed values. No defaults for
-secrets, sensible defaults for everything else, and every setting documented in the
-README table.
+Yapılandırma ortamdan gelir (twelve-factor), açılışta tipli bir ayar nesnesine
+doğrulanarak okunur; eksik ya da bozuk değerde hemen dur. Sırlar için varsayılan olmaz,
+geri kalan her şey için makul varsayılanlar olur ve her ayar README'deki tabloda yazılır.

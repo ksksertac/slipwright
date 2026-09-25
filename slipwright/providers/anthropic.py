@@ -16,10 +16,12 @@ from __future__ import annotations
 from typing import Any
 
 from slipwright.providers import (
+    REJECTED_STATUS,
     ModelRequest,
     ModelResponse,
     ProviderError,
     ProviderRefusalError,
+    ProviderRejectedError,
     ProviderTimeoutError,
     ProviderTruncatedError,
     ProviderUnavailableError,
@@ -86,21 +88,31 @@ class AnthropicProvider:
         except anthropic.APITimeoutError as exc:
             raise ProviderTimeoutError(str(exc)) from exc
         except anthropic.APIStatusError as exc:
+            if exc.status_code in REJECTED_STATUS:
+                raise ProviderRejectedError(f"API error {exc.status_code}: {exc.message}") from exc
             raise ProviderError(f"API error {exc.status_code}: {exc.message}") from exc
         except anthropic.APIConnectionError as exc:
             raise ProviderError(f"connection error: {exc}") from exc
         except anthropic.AnthropicError as exc:
             raise ProviderError(str(exc)) from exc
 
+        # a refused or cut-off answer is billed like any other: the usage block is already
+        # here, so it goes out with the failure rather than being dropped on the floor
+        usage = message.usage
+        spent = {
+            "input_tokens": getattr(usage, "input_tokens", None),
+            "output_tokens": getattr(usage, "output_tokens", None),
+        }
         if message.stop_reason == "refusal":
             details = getattr(message, "stop_details", None)
             category = getattr(details, "category", None) if details is not None else None
-            raise ProviderRefusalError(f"model refused (category={category})")
+            raise ProviderRefusalError(f"model refused (category={category})", **spent)
         if message.stop_reason == "max_tokens":
-            raise ProviderTruncatedError(f"response truncated at max_tokens={self._max_tokens}")
+            raise ProviderTruncatedError(
+                f"response truncated at max_tokens={self._max_tokens}", **spent
+            )
 
         text = "".join(block.text for block in message.content if block.type == "text")
-        usage = message.usage
         return ModelResponse(
             text=text,
             model=message.model,

@@ -1,10 +1,13 @@
-"""Retrieval over the standards corpus (RAG), stored in SQLite.
+"""Retrieval over the standards corpus (RAG).
 
-Chunks live in ``standards.sqlite3`` with an FTS5 index for keyword (BM25) search and,
-when an embedder is configured, an embedding per chunk for semantic search; ``search``
-merges both. Indexing is incremental by chunk id (a content hash), so unchanged sections
-are never re-embedded. Chroma, pgvector or Qdrant can replace this class behind the
-same ``search`` / ``reindex`` surface if a corpus ever outgrows SQLite.
+Sections live in ``standards_chunks`` beside everything else Slipwright keeps, with a
+keyword index for BM25-style search and, when an embedder is configured, an embedding per
+section for semantic search; ``search`` merges both. Indexing is incremental by chunk id
+(a content hash), so unchanged sections are never re-embedded.
+
+The keyword half is the only thing that differs between SQLite and PostgreSQL, and it
+lives in ``standards/fts.py``. Chroma, pgvector or Qdrant can replace this class behind
+the same ``search`` / ``reindex`` surface if a corpus ever outgrows it.
 """
 
 from __future__ import annotations
@@ -12,20 +15,18 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-import re
-import sqlite3
 import struct
-import threading
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
 import httpx
+from sqlalchemy import Integer, case, delete, func, insert, select
 
-from slipwright.standards import Chunk, Page, chunk_corpus
-
-_TOKEN = re.compile(r"[\w][\w'-]{1,}", re.UNICODE)
-
+from slipwright.standards import Chunk, Page, chunk_corpus, fts
+from slipwright.store.db import Database, one, rows
+from slipwright.store.schema import standards_chunks, standards_fingerprints
 
 # -- embedders ---------------------------------------------------------------------------------
 
@@ -59,7 +60,7 @@ class HashingEmbedder:
         out: list[list[float]] = []
         for text in texts:
             vec = [0.0] * self.dim
-            for tok in _TOKEN.findall(text.lower()):
+            for tok in fts.words(text):
                 h = int(hashlib.blake2b(tok.encode(), digest_size=4).hexdigest(), 16)
                 vec[h % self.dim] += 1.0
             norm = math.sqrt(sum(v * v for v in vec)) or 1.0
@@ -151,31 +152,6 @@ class Hit:
         }
 
 
-_SCHEMA = """
-CREATE TABLE IF NOT EXISTS chunks (
-    id         TEXT PRIMARY KEY,
-    scope      TEXT NOT NULL,
-    project_id TEXT,
-    domain     TEXT NOT NULL,
-    page       TEXT NOT NULL,
-    title      TEXT NOT NULL,
-    heading    TEXT NOT NULL,
-    text       TEXT NOT NULL,
-    tags       TEXT NOT NULL,
-    embedder   TEXT NOT NULL,
-    embedding  BLOB
-);
-CREATE INDEX IF NOT EXISTS chunks_domain ON chunks(domain, scope, project_id);
-CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
-    id UNINDEXED, heading, text, tags, tokenize = 'porter unicode61'
-);
-CREATE TABLE IF NOT EXISTS fingerprints (
-    scope_key TEXT PRIMARY KEY,
-    value     TEXT NOT NULL
-);
-"""
-
-
 def _pack(vec: list[float]) -> bytes:
     return struct.pack(f"<{len(vec)}f", *vec)
 
@@ -194,12 +170,6 @@ def _cosine(a: list[float], b: list[float]) -> float:
     return dot / (na * nb)
 
 
-def _match_query(query: str) -> str:
-    """A safe FTS5 MATCH expression: quoted tokens joined with OR."""
-    tokens = [t.lower() for t in _TOKEN.findall(query)][:32]
-    return " OR ".join(f'"{t}"' for t in tokens)
-
-
 def corpus_fingerprint(paths: list[Path]) -> str:
     """Cheap change detector over the files of a corpus (names, sizes, mtimes)."""
     parts = []
@@ -210,103 +180,136 @@ def corpus_fingerprint(paths: list[Path]) -> str:
 
 
 class StandardsIndex:
-    def __init__(self, path: Path | str, embedder: Embedder | None = None) -> None:
-        self.path = Path(path)
+    """The corpus as the roles meet it: sections, scored against a question.
+
+    ``target`` is a ``Database`` (the installation's own, which is the normal case) or a
+    path, which opens a SQLite file of its own -- what the tests and a stand-alone index
+    do.
+    """
+
+    def __init__(self, target: Database | Path | str, embedder: Embedder | None = None) -> None:
+        self.db = target if isinstance(target, Database) else Database(target)
+        self.path = None if isinstance(target, Database) else Path(str(target))
         self.embedder: Embedder = embedder or NoEmbedder()
-        self._lock = threading.RLock()
-        self._conn = sqlite3.connect(self.path, check_same_thread=False, isolation_level=None)
-        self._conn.row_factory = sqlite3.Row
-        self._conn.execute("PRAGMA journal_mode=WAL")
-        self._conn.executescript(_SCHEMA)
+        self.db.create_all()
+        with self.db.begin() as conn:
+            fts.create(conn, self.db.dialect)
 
     def close(self) -> None:
-        with self._lock:
-            self._conn.close()
+        # a Database handed in from outside belongs to its owner
+        if self.path is not None:
+            self.db.dispose()
 
     # -- indexing ------------------------------------------------------------------------
 
-    def reindex(self, pages: list[Page], *, project_id: str | None = None) -> dict[str, int]:
-        """Index ``pages`` for one scope (global when ``project_id`` is None): insert new
-        chunks (embedding only those), drop chunks that no longer exist, keep the rest."""
+    def reindex(
+        self,
+        pages: list[Page],
+        *,
+        project_id: str | None = None,
+        owner_id: str | None = None,
+    ) -> dict[str, int]:
+        """Index ``pages`` for one layer, replacing whatever that layer held.
+
+        Three layers exist and exactly one is addressed per call: the pages that ship with
+        Slipwright (neither argument), the pages one account rewrote (``owner_id``), and a
+        project's own overrides (``project_id``). Insert what is new, embed only that, drop
+        what is gone, keep the rest.
+        """
         wanted = {c.id: c for c in chunk_corpus(pages)}
-        scope_sql, scope_args = self._scope_clause(project_id)
-        with self._lock:
-            rows = self._conn.execute(
-                f"SELECT id, embedder FROM chunks WHERE {scope_sql}", scope_args
-            ).fetchall()
-            existing = {r["id"]: r["embedder"] for r in rows}
-            stale = [cid for cid in existing if cid not in wanted]
-            # re-embed chunks indexed with a different embedder
-            new_ids = [
-                cid for cid in wanted if cid not in existing or existing[cid] != self.embedder.name
-            ]
-            new_chunks = [wanted[cid] for cid in new_ids]
-            vectors = self.embedder.embed([c.document for c in new_chunks])
-            self._conn.execute("BEGIN")
-            try:
-                for cid in stale + [c.id for c in new_chunks if c.id in existing]:
-                    self._conn.execute("DELETE FROM chunks WHERE id = ?", (cid,))
-                    self._conn.execute("DELETE FROM chunks_fts WHERE id = ?", (cid,))
-                for chunk, vec in zip(new_chunks, vectors, strict=True):
-                    self._conn.execute(
-                        "INSERT INTO chunks (id, scope, project_id, domain, page, title, heading, "
-                        "text, tags, embedder, embedding) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                        (
-                            chunk.id,
-                            chunk.scope,
-                            project_id,
-                            chunk.domain,
-                            chunk.page,
-                            chunk.title,
-                            chunk.heading,
-                            chunk.text,
-                            " ".join(chunk.tags),
-                            self.embedder.name,
-                            _pack(vec) if vec else None,
-                        ),
+        order = {cid: i for i, cid in enumerate(wanted)}
+        scope = self._scope_clause(project_id, owner_id)
+        with self.db.connect() as conn:
+            existing = {
+                r["id"]: r["embedder"]
+                for r in rows(
+                    conn.execute(
+                        select(standards_chunks.c.id, standards_chunks.c.embedder).where(*scope)
                     )
-                    self._conn.execute(
-                        "INSERT INTO chunks_fts (id, heading, text, tags) VALUES (?, ?, ?, ?)",
-                        (
-                            chunk.id,
-                            f"{chunk.title} {chunk.heading}",
-                            chunk.text,
-                            " ".join(chunk.tags),
-                        ),
+                )
+            }
+        stale = [cid for cid in existing if cid not in wanted]
+        # re-embed chunks indexed with a different embedder
+        new_ids = [
+            cid for cid in wanted if cid not in existing or existing[cid] != self.embedder.name
+        ]
+        new_chunks = [wanted[cid] for cid in new_ids]
+        vectors = self.embedder.embed([c.document for c in new_chunks])
+        with self.db.begin() as conn:
+            for cid in stale + [c.id for c in new_chunks if c.id in existing]:
+                conn.execute(delete(standards_chunks).where(standards_chunks.c.id == cid))
+                fts.drop_chunk(conn, self.db.dialect, cid)
+            for chunk, vec in zip(new_chunks, vectors, strict=True):
+                tags = " ".join(chunk.tags)
+                conn.execute(
+                    insert(standards_chunks).values(
+                        id=chunk.id,
+                        scope="user" if owner_id else chunk.scope,
+                        project_id=project_id,
+                        owner_id=owner_id,
+                        domain=chunk.domain,
+                        page=chunk.page,
+                        title=chunk.title,
+                        heading=chunk.heading,
+                        text=chunk.text,
+                        tags=tags,
+                        embedder=self.embedder.name,
+                        embedding=_pack(vec) if vec else None,
+                        seq=order[chunk.id],
                     )
-                self._conn.execute("COMMIT")
-            except BaseException:
-                self._conn.execute("ROLLBACK")
-                raise
+                )
+                fts.index_chunk(
+                    conn,
+                    self.db.dialect,
+                    chunk_id=chunk.id,
+                    heading=f"{chunk.title} {chunk.heading}",
+                    body=chunk.text,
+                    tags=tags,
+                )
         return {"added": len(new_chunks), "removed": len(stale), "total": len(wanted)}
 
     def fingerprint(self, project_id: str | None) -> str | None:
-        with self._lock:
-            row = self._conn.execute(
-                "SELECT value FROM fingerprints WHERE scope_key = ?", (project_id or "",)
-            ).fetchone()
+        with self.db.connect() as conn:
+            row = one(
+                conn.execute(
+                    select(standards_fingerprints.c.value).where(
+                        standards_fingerprints.c.scope_key == (project_id or "")
+                    )
+                )
+            )
         return None if row is None else str(row["value"])
 
     def set_fingerprint(self, project_id: str | None, value: str) -> None:
-        with self._lock:
-            self._conn.execute(
-                "INSERT INTO fingerprints (scope_key, value) VALUES (?, ?) "
-                "ON CONFLICT(scope_key) DO UPDATE SET value = excluded.value",
-                (project_id or "", value),
+        with self.db.begin() as conn:
+            conn.execute(
+                self.db.upsert(
+                    standards_fingerprints,
+                    {"scope_key": project_id or "", "value": value},
+                    key=["scope_key"],
+                    update=["value"],
+                )
             )
 
     def stats(self) -> dict[str, Any]:
-        with self._lock:
-            total = self._conn.execute("SELECT COUNT(*) AS n FROM chunks").fetchone()["n"]
+        with self.db.connect() as conn:
+            total = conn.execute(
+                select(func.count()).select_from(standards_chunks)
+            ).scalar_one()
             per_domain = {
                 r["domain"]: r["n"]
-                for r in self._conn.execute(
-                    "SELECT domain, COUNT(*) AS n FROM chunks GROUP BY domain ORDER BY domain"
+                for r in rows(
+                    conn.execute(
+                        select(standards_chunks.c.domain, func.count().label("n"))
+                        .group_by(standards_chunks.c.domain)
+                        .order_by(standards_chunks.c.domain)
+                    )
                 )
             }
-            embedded = self._conn.execute(
-                "SELECT COUNT(*) AS n FROM chunks WHERE embedding IS NOT NULL"
-            ).fetchone()["n"]
+            embedded = conn.execute(
+                select(func.count())
+                .select_from(standards_chunks)
+                .where(standards_chunks.c.embedding.is_not(None))
+            ).scalar_one()
         return {
             "chunks": int(total),
             "embedded": int(embedded),
@@ -317,35 +320,37 @@ class StandardsIndex:
     # -- search --------------------------------------------------------------------------
 
     def search(
-        self, query: str, domain: str | None = None, *, k: int = 4, project_id: str | None = None
+        self,
+        query: str,
+        domain: str | None = None,
+        *,
+        k: int = 4,
+        project_id: str | None = None,
+        owner_id: str | None = None,
     ) -> list[Hit]:
-        """Hybrid ranking: BM25 over FTS5 merged with cosine over embeddings (when the
-        query and the chunks are embedded). Project chunks win ties over global ones."""
+        """Hybrid ranking: keyword search merged with cosine over embeddings (when the
+        query and the sections are embedded). Project chunks win ties over global ones."""
         if not query.strip():
             return []
-        scope_sql = "(scope = 'global' OR project_id = ?)"
-        args: list[Any] = [project_id or ""]
-        if domain and domain != "*":
-            scope_sql += " AND domain = ?"
-            args.append(domain)
-        with self._lock:
-            rows = self._conn.execute(f"SELECT * FROM chunks WHERE {scope_sql}", args).fetchall()
-            if not rows:
+        with self.db.connect() as conn:
+            found = shadowed(
+                rows(
+                    conn.execute(
+                        select(standards_chunks).where(
+                            *self._visible(domain, project_id, owner_id)
+                        )
+                    )
+                )
+            )
+            if not found:
                 return []
-            keyword: dict[str, float] = {}
-            match = _match_query(query)
-            if match:
-                for r in self._conn.execute(
-                    # column weights: a heading hit is worth more than a body hit, tags least
-                    "SELECT id, bm25(chunks_fts, 4.0, 1.0, 0.3) AS rank FROM chunks_fts "
-                    "WHERE chunks_fts MATCH ?",
-                    (match,),
-                ):
-                    keyword[r["id"]] = -float(r["rank"])  # bm25() is negative: lower is better
+            keyword = fts.scores(
+                conn, self.db.dialect, query, ids=[r["id"] for r in found]
+            )
         semantic: dict[str, float] = {}
         if not isinstance(self.embedder, NoEmbedder):
             (qvec,) = self.embedder.embed([query])
-            for r in rows:
+            for r in found:
                 if r["embedding"] is not None:
                     semantic[r["id"]] = _cosine(qvec, _unpack(r["embedding"]))
         kw_n = _normalise(keyword)
@@ -353,55 +358,41 @@ class StandardsIndex:
         # reciprocal rank fusion: robust to the two signals living on different scales
         fused = _rrf(keyword, semantic)
         hits: list[Hit] = []
-        for r in rows:
-            kw, sem = kw_n.get(r["id"], 0.0), sem_n.get(r["id"], 0.0)
+        for r in found:
             if r["id"] not in keyword and r["id"] not in semantic:
                 continue
+            kw, sem = kw_n.get(r["id"], 0.0), sem_n.get(r["id"], 0.0)
             score = fused[r["id"]]
             if r["scope"] == "project":
                 score += 0.05
-            hits.append(
-                Hit(
-                    chunk=Chunk(
-                        id=r["id"],
-                        scope=r["scope"],
-                        domain=r["domain"],
-                        page=r["page"],
-                        title=r["title"],
-                        heading=r["heading"],
-                        text=r["text"],
-                        tags=tuple(r["tags"].split()) if r["tags"] else (),
-                    ),
-                    score=score,
-                    keyword=kw,
-                    semantic=sem,
-                )
-            )
+            hits.append(Hit(chunk=self._chunk(r), score=score, keyword=kw, semantic=sem))
         hits.sort(key=lambda h: (-h.score, h.chunk.page, h.chunk.heading))
         return hits[:k]
 
     def browse(
-        self, domain: str | None = None, *, k: int = 4, project_id: str | None = None
+        self,
+        domain: str | None = None,
+        *,
+        k: int = 4,
+        project_id: str | None = None,
+        owner_id: str | None = None,
     ) -> list[Hit]:
         """The first ``k`` sections of a domain in page order, project pages first: what
         a role reads when nothing in its domain matches the query."""
-        scope_sql = "(scope = 'global' OR project_id = ?)"
-        args: list[Any] = [project_id or ""]
-        if domain and domain != "*":
-            scope_sql += " AND domain = ?"
-            args.append(domain)
-        with self._lock:
-            rows = self._conn.execute(
-                f"SELECT * FROM chunks WHERE {scope_sql} "
-                "ORDER BY CASE scope WHEN 'project' THEN 0 ELSE 1 END, page, rowid LIMIT ?",
-                [*args, k],
-            ).fetchall()
-        return [Hit(chunk=self._chunk(r), score=0.0, keyword=0.0, semantic=0.0) for r in rows]
+        # project pages first, then global, then page order within each
+        query = (
+            select(standards_chunks)
+            .where(*self._visible(domain, project_id, owner_id))
+            .order_by(_LAYER_ORDER, standards_chunks.c.page, standards_chunks.c.seq)
+        )
+        with self.db.connect() as conn:
+            found = shadowed(rows(conn.execute(query)))[:k]
+        return [Hit(chunk=self._chunk(r), score=0.0, keyword=0.0, semantic=0.0) for r in found]
 
     # -- helpers -------------------------------------------------------------------------
 
     @staticmethod
-    def _chunk(r: sqlite3.Row) -> Chunk:
+    def _chunk(r: Mapping[str, Any]) -> Chunk:
         return Chunk(
             id=r["id"],
             scope=r["scope"],
@@ -414,10 +405,77 @@ class StandardsIndex:
         )
 
     @staticmethod
-    def _scope_clause(project_id: str | None) -> tuple[str, tuple[Any, ...]]:
+    def _visible(
+        domain: str | None, project_id: str | None, owner_id: str | None = None
+    ) -> list[Any]:
+        """The three layers a reader sees at once.
+
+        The pages Slipwright ships, plus the ones this account rewrote, plus this
+        project's own overrides. A rewritten page does not replace the shipped one here --
+        ``search`` and ``browse`` rank them, and ``shadowed`` drops the shipped copy of
+        anything the account has its own version of.
+        """
+        where: list[Any] = [
+            (standards_chunks.c.scope == "global")
+            | (
+                (standards_chunks.c.scope == "user")
+                & (standards_chunks.c.owner_id == (owner_id or ""))
+            )
+            | (
+                (standards_chunks.c.scope == "project")
+                & (standards_chunks.c.project_id == (project_id or ""))
+            )
+        ]
+        if domain and domain != "*":
+            where.append(standards_chunks.c.domain == domain)
+        return where
+
+    @staticmethod
+    def _scope_clause(project_id: str | None, owner_id: str | None = None) -> list[Any]:
+        """The one layer ``reindex`` replaces wholesale."""
+        if owner_id is not None:
+            return [
+                standards_chunks.c.scope == "user",
+                standards_chunks.c.owner_id == owner_id,
+            ]
         if project_id is None:
-            return "scope = 'global'", ()
-        return "scope = 'project' AND project_id = ?", (project_id,)
+            return [standards_chunks.c.scope == "global"]
+        return [
+            standards_chunks.c.scope == "project",
+            standards_chunks.c.project_id == project_id,
+        ]
+
+
+#: Most specific first. A project's own page outranks the account's, which outranks the
+#: one Slipwright ships -- the same order ``shadowed`` drops duplicates in.
+_LAYER_ORDER = case(
+    (standards_chunks.c.scope == "project", 0),
+    (standards_chunks.c.scope == "user", 1),
+    else_=2,
+).cast(Integer)
+
+
+def shadowed(found: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Keep the most specific version of each page and drop the rest.
+
+    Rewriting a page means replacing it, not adding a second opinion: an account that has
+    its own ``backend/services-and-apis`` must not have the shipped one read to its agents
+    as well, or the two would contradict each other inside one prompt.
+    """
+    rank = {"project": 0, "user": 1, "global": 2}
+    best: dict[tuple[str, str], dict[str, Any]] = {}
+    for row in found:
+        key = (str(row["domain"]), str(row["page"]))
+        winner = best.get(key)
+        if winner is None or rank.get(str(row["scope"]), 9) < rank.get(str(winner["scope"]), 9):
+            best[key] = dict(row)
+    keep = {(r["domain"], r["page"]) for r in best.values()}
+
+    def wins(row: Mapping[str, Any]) -> bool:
+        key = (row["domain"], row["page"])
+        return key in keep and row["scope"] == best[key]["scope"]
+
+    return [dict(r) for r in found if wins(r)]
 
 
 def _rrf(*rankings: dict[str, float], k: int = 60) -> dict[str, float]:

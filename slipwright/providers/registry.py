@@ -73,7 +73,9 @@ PROVIDERS: dict[str, ProviderSpec] = {
         supports_effort=False,
         max_tokens_param="max_tokens",
         docs_url="https://platform.deepseek.com/api_keys",
-        max_tokens=8_192,  # the chat model rejects anything larger
+        # measured against the live API (2026-09-24): 8k, 16k, 32k, 64k and 128k are
+        # all accepted. The old 8_192 here was a vendor limit that has since been
+        # raised, and it was quietly truncating any role asked for a long answer.
     ),
     # the rest speak the OpenAI protocol on their own host, so the same client serves
     # them; only Gemini's layer understands reasoning effort
@@ -234,7 +236,9 @@ class RoutingProvider:
             client = self.client_for(name)
         except ProviderError:
             raise
-        return client.complete(request)
+        response = client.complete(request)
+        # the vendor that answered is half of a price lookup; the model alone is not
+        return response if response.provider else response.model_copy(update={"provider": name})
 
 
 __all__ = [

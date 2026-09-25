@@ -1,0 +1,44 @@
+# The image a project's own build and test commands run in.
+#
+# Separate from the server image on purpose. This one is entered by commands a *model*
+# wrote, so it carries the toolchains a project needs and nothing that belongs to
+# Slipwright: no source, no state directory, no credentials, no `gh`, no ssh keys.
+#
+#   docker build -f Dockerfile.runner -t slipwright-runner:local .
+#
+# Point the server at it with SLIPWRIGHT_RUNNER=docker (and
+# SLIPWRIGHT_RUNNER_IMAGE if you have built your own). The container is started with no
+# network, no capabilities, a read-only root filesystem and one writable mount -- the
+# worktree -- so what is installed here is the whole of what a command can use.
+FROM debian:bookworm-slim
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    LANG=C.UTF-8 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1 \
+    # the worktree is mounted here and is the only writable place there is
+    HOME=/work
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        git \
+        make \
+        build-essential \
+        python3 \
+        python3-venv \
+        python3-pip \
+        nodejs \
+        npm \
+    && rm -rf /var/lib/apt/lists/*
+
+# uv, for projects whose profile builds with it
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+# The uid the server starts the container as. Files the command writes into the mounted
+# worktree are then owned by this uid on the host rather than by root.
+RUN useradd --uid 1000 --create-home --shell /bin/sh runner
+USER 1000:1000
+
+WORKDIR /work
+CMD ["sh"]

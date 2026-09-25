@@ -1,5 +1,6 @@
 // The standards review (T9.5) as people read it: a findings table, and the review
 import { useT } from "../i18n";
+import { useSay } from "../i18n/said";
 import { Copyable } from "./Copyable";
 // record a history entry carries as JSON rendered through it.
 export interface ReviewRecord {
@@ -22,6 +23,7 @@ export interface ReviewRecord {
 
 export function ViolationsTable({ violations }: { violations: ReviewRecord["violations"] }) {
   const tx = useT();
+  const say = useSay();
   if (violations.length === 0) return <div className="muted small">{tx("No findings.")}</div>;
   return (
     <table className="violations">
@@ -41,14 +43,14 @@ export function ViolationsTable({ violations }: { violations: ReviewRecord["viol
                 {v.severity}
               </span>
             </td>
-            <td>{v.section}</td>
+            <td>{say(v.section)}</td>
             <td className="mono small">
               {v.file}
               {v.line ? `:${v.line}` : ""}
             </td>
             <td>
-              {v.message}
-              {v.fix && <div className="muted small">fix: {v.fix}</div>}
+              {say(v.message)}
+              {v.fix && <div className="muted small">fix: {say(v.fix)}</div>}
             </td>
           </tr>
         ))}
@@ -59,6 +61,7 @@ export function ViolationsTable({ violations }: { violations: ReviewRecord["viol
 
 /** A review record (JSON in the history detail) as a findings table. */
 export function ReviewDetail({ text }: { text: string }) {
+  const say = useSay();
   let record: ReviewRecord | null = null;
   try {
     record = JSON.parse(text) as ReviewRecord;
@@ -73,7 +76,7 @@ export function ReviewDetail({ text }: { text: string }) {
     );
   return (
     <div>
-      {record.summary && <p className="small">{record.summary}</p>}
+      {record.summary && <p className="small">{say(record.summary)}</p>}
       <ViolationsTable violations={record.violations} />
     </div>
   );

@@ -45,15 +45,18 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 WORKDIR /app
 COPY pyproject.toml uv.lock README.md LICENSE ./
 # dependencies first so source edits do not invalidate this layer
+# `--extra postgres` brings psycopg: the image has to be able to reach a database server,
+# because a hosted installation keeps everything there rather than in /data
 RUN --mount=type=cache,target=/root/.cache/uv \
-    UV_PROJECT_ENVIRONMENT=/opt/venv uv sync --frozen --no-dev --no-install-project
+    UV_PROJECT_ENVIRONMENT=/opt/venv uv sync --frozen --no-dev --extra postgres \
+        --no-install-project
 COPY slipwright/ ./slipwright/
 COPY examples/ ./examples/
 COPY standards/ ./standards/
 COPY schemas/ ./schemas/
 COPY scripts/ ./scripts/
 RUN --mount=type=cache,target=/root/.cache/uv \
-    UV_PROJECT_ENVIRONMENT=/opt/venv uv sync --frozen --no-dev
+    UV_PROJECT_ENVIRONMENT=/opt/venv uv sync --frozen --no-dev --extra postgres
 COPY --from=web /src/slipwright/api/static ./slipwright/api/static
 
 # jobs commit on their branches; give git an identity so commits never fail
@@ -61,7 +64,24 @@ RUN git config --global user.name slipwright \
     && git config --global user.email slipwright@localhost \
     && git config --global --add safe.directory '*'
 
+# The server does not need to be root, and on a hosted installation it must not be: with
+# SLIPWRIGHT_RUNNER=local a job's own commands run as this user too, and the difference
+# between "a stranger's build script" and "a stranger's build script as root" is the
+# whole machine.
+#
+# /work is where checkouts live and /data holds the database and the key that decrypts
+# every stored credential. They are separate volumes so that a relative path out of a
+# worktree cannot reach the key -- see `Settings.work_dir`.
+RUN useradd --uid 1000 --create-home --shell /bin/sh slipwright \
+    && mkdir -p /data /work /repos \
+    && cp /root/.gitconfig /home/slipwright/.gitconfig \
+    && chown -R 1000:1000 /data /work /repos /app /home/slipwright
+USER 1000:1000
+ENV HOME=/home/slipwright \
+    SLIPWRIGHT_WORK_DIR=/work
+
 VOLUME ["/data"]
+VOLUME ["/work"]
 EXPOSE 8500
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
     CMD curl -fsS http://127.0.0.1:8500/healthz || exit 1

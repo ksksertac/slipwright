@@ -10,6 +10,8 @@ const STATE_CLASS: Record<JobState, string> = {
   awaiting_backlog_approval: "wait",
   architecture: "work",
   awaiting_architecture_approval: "wait",
+  design: "work",
+  awaiting_design_approval: "wait",
   developing: "work",
   build_gate: "work",
   review: "work",
@@ -17,6 +19,7 @@ const STATE_CLASS: Record<JobState, string> = {
   qa: "work",
   awaiting_test_approval: "wait",
   devops: "work",
+  awaiting_deploy_approval: "wait",
   awaiting_decision: "wait",
   done: "ok",
   failed: "bad",
@@ -28,6 +31,8 @@ export const STATE_LABEL: Record<JobState, string> = {
   awaiting_backlog_approval: "needs backlog approval",
   architecture: "designing",
   awaiting_architecture_approval: "needs architecture approval",
+  design: "designing the screens",
+  awaiting_design_approval: "needs design approval",
   developing: "developing",
   build_gate: "build gate",
   review: "standards review",
@@ -35,6 +40,7 @@ export const STATE_LABEL: Record<JobState, string> = {
   qa: "qa",
   awaiting_test_approval: "needs test approval",
   devops: "devops",
+  awaiting_deploy_approval: "needs deployment approval",
   awaiting_decision: "needs your decision",
   done: "done",
   failed: "failed",
@@ -100,15 +106,45 @@ export function timeAgo(iso: string | null | undefined): string {
   return `${Math.round(delta / 86400)} ${tr ? "gün önce" : "d ago"}`;
 }
 
+/** What somebody typed, shown as a title: the first letter raised, the rest left alone.
+ *
+ * Turkish decides the case of an i by its dot, so the raising is done in the language the
+ * page is in -- "istanbul" becomes "İstanbul" here and "Istanbul" on the English side.
+ * The rest of the line is left exactly as it was typed, because lowering it would spell
+ * "API" and "Jira" wrong. A line typed entirely in capitals is the one exception: there
+ * the shouting is not something anybody meant to keep, so it is brought back down. */
+export function sentence(text: string): string {
+  const s = text.trimStart();
+  if (!s) return text;
+  const locale = currentLang() === "tr" ? "tr-TR" : "en-GB";
+  const upper = s.toLocaleUpperCase(locale);
+  const shouted = s.length > 1 && s === upper && s !== s.toLocaleLowerCase(locale);
+  const rest = s.slice(1);
+  return s[0]!.toLocaleUpperCase(locale) + (shouted ? rest.toLocaleLowerCase(locale) : rest);
+}
+
+/** A moment a person can place at a glance: today and yesterday are said in words, the
+ * rest carries its date, and the year only appears once it is not this one. The browser's
+ * own locale is not asked -- the platform's language is the one on screen, so a Turkish
+ * page never says "Sep 23" and an English one never says "23 Eyl". */
 export function formatTime(iso: string | null | undefined): string {
   if (!iso) return "—";
   const d = new Date(iso);
-  return d.toLocaleString(undefined, {
-    month: "short",
+  if (Number.isNaN(d.getTime())) return "—";
+  const tr = currentLang() === "tr";
+  const locale = tr ? "tr-TR" : "en-GB";
+  const clock = d.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
+  const now = new Date();
+  const midnight = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const days = Math.round((midnight(now) - midnight(d)) / 86_400_000);
+  if (days === 0) return `${tr ? "Bugün" : "Today"} ${clock}`;
+  if (days === 1) return `${tr ? "Dün" : "Yesterday"} ${clock}`;
+  const day = d.toLocaleDateString(locale, {
     day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
+    month: "long",
+    ...(d.getFullYear() === now.getFullYear() ? {} : { year: "numeric" }),
   });
+  return `${day} ${clock}`;
 }
 
 export function Empty({
@@ -148,22 +184,28 @@ export function Loading({ rows = 3 }: { rows?: number }) {
   );
 }
 
+/** The tone tints the tile's mark. It is the state the number is about -- running,
+ *  waiting, done -- so the colour says what the label says, never something else. */
+export type Tone = "neutral" | "run" | "wait" | "done";
+
 export function StatTile({
   label,
   value,
   sub,
   icon,
+  tone = "neutral",
 }: {
   label: string;
   value: ReactNode;
   sub?: ReactNode;
   icon?: ReactNode;
+  tone?: Tone;
 }) {
   return (
-    <div className="tile">
-      <div className="label">
-        {icon}
-        {label}
+    <div className="tile" data-tone={tone}>
+      <div className="tile-head">
+        <div className="label">{label}</div>
+        {icon && <span className="tile-mark">{icon}</span>}
       </div>
       <div className="value">{value}</div>
       {sub && <div className="sub">{sub}</div>}
@@ -187,6 +229,45 @@ export function PageHead({
         {subtitle && <p>{subtitle}</p>}
       </div>
       {actions && <div className="row">{actions}</div>}
+    </div>
+  );
+}
+
+/**
+ * Pages a long list. A list shorter than one page draws nothing at all, so the control
+ * appears exactly when it is needed. It states where you are ("11-20 / 34") rather than
+ * only offering arrows, because a number of developments is worth knowing.
+ */
+export function Pager({
+  page,
+  pageSize,
+  total,
+  onPage,
+}: {
+  page: number; // zero-based
+  pageSize: number;
+  total: number;
+  onPage: (page: number) => void;
+}) {
+  const tx = useT();
+  const pages = Math.max(1, Math.ceil(total / pageSize));
+  if (pages <= 1) return null;
+  const first = page * pageSize + 1;
+  const last = Math.min(total, (page + 1) * pageSize);
+  return (
+    <div className="pager">
+      <span className="faint small">
+        {tx("{from}-{to} of {total}", { from: first, to: last, total })}
+      </span>
+      <div className="row" style={{ gap: 6 }}>
+        <button className="btn small" onClick={() => onPage(page - 1)} disabled={page === 0}>
+          {tx("Previous")}
+        </button>
+        <span className="faint tiny mono">{`${page + 1} / ${pages}`}</span>
+        <button className="btn small" onClick={() => onPage(page + 1)} disabled={page >= pages - 1}>
+          {tx("Next")}
+        </button>
+      </div>
     </div>
   );
 }

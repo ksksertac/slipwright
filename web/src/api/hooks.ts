@@ -9,6 +9,10 @@ import {
   type ApiToken,
   type BatchResult,
   type Board,
+  type BriefEdit,
+  type BriefView,
+  type DeployEdit,
+  type DesignReview,
   type GitHubIdentity,
   type GitHubRepo,
   type GitHubSettings,
@@ -20,10 +24,18 @@ import {
   type JiraSweep,
   type JiraTestResult,
   type LocalRepos,
+  type Membership,
+  type MyTeam,
+  type MailSettings,
+  type MailSettingsIn,
+  type MailTestResult,
+  type OutboxLetter,
   type Job,
   type JobResult,
   type NewProject,
   type SourceIdentity,
+  type SupportRequest,
+  type SupportRequestIn,
   type SourceRepo,
   type SourceSettings,
   type SourceSettingsIn,
@@ -33,8 +45,11 @@ import {
   type Pipeline,
   type PlanEdit,
   type Project,
+  type ProjectCosts,
   type ProjectPatch,
   type StandardsHit,
+  type Translations,
+  type StepDetail,
   type StandardsRule,
   type StandardsSettingsIn,
   type StandardsStatus,
@@ -50,8 +65,11 @@ import {
 
 export const keys = {
   me: ["me"] as const,
+  myTeam: ["me", "team"] as const,
+  agentMembers: (role: string) => ["agents", role, "members"] as const,
   overview: ["overview"] as const,
   agents: ["agents"] as const,
+  onboarding: ["onboarding"] as const,
   activityAll: (role: string) => ["activity", role] as const,
   projects: ["projects"] as const,
   project: (id: string) => ["projects", id] as const,
@@ -60,10 +78,14 @@ export const keys = {
   progress: (id: string) => ["projects", id, "progress"] as const,
   pipeline: (id: string) => ["projects", id, "pipeline"] as const,
   activity: (id: string) => ["projects", id, "activity"] as const,
+  costs: (id: string) => ["projects", id, "costs"] as const,
+  translations: (id: string | null, lang: string) => ["translations", id ?? "all", lang] as const,
   testRuns: (id: string) => ["projects", id, "test-runs"] as const,
+  brief: (id: string) => ["projects", id, "brief"] as const,
   job: (id: string) => ["jobs", id] as const,
   transition: (id: string, index: number) => ["jobs", id, "history", index] as const,
   step: (id: string, key: string) => ["jobs", id, "steps", key] as const,
+  design: (id: string) => ["jobs", id, "design"] as const,
   jobResult: (id: string) => ["jobs", id, "result"] as const,
   workList: (id: string) => ["jobs", id, "worklist"] as const,
   testRun: (id: string) => ["test-runs", id] as const,
@@ -75,6 +97,10 @@ export const keys = {
   jira: ["settings", "jira"] as const,
   jiraProjects: ["settings", "jira", "projects"] as const,
   users: ["users"] as const,
+  mail: ["settings", "mail"] as const,
+  mailOutbox: ["settings", "mail", "outbox"] as const,
+  support: ["support"] as const,
+  supportMine: ["support", "mine"] as const,
   providers: ["settings", "providers"] as const,
   providerModels: (name: string) => ["settings", "providers", name, "models"] as const,
   tokens: (userId: string) => ["users", userId, "tokens"] as const,
@@ -114,10 +140,111 @@ export function useAssignAgent(role: string) {
   });
 }
 
+/** The agents this person holds. An owner holds none and may do everything. */
+export function useMyTeam() {
+  return useQuery({
+    queryKey: keys.myTeam,
+    queryFn: () => api.get<MyTeam>("/api/me/team"),
+    staleTime: 60_000,
+  });
+}
+
+/** Who is on one agent, invitations included. */
+export function useAgentMembers(role: string, enabled = true) {
+  return useQuery({
+    queryKey: keys.agentMembers(role),
+    queryFn: () => api.get<Membership[]>(`/api/agents/${role}/members`),
+    enabled,
+  });
+}
+
+/** Put an address on an agent; the letter goes out from the server. */
+export function useInviteToAgent(role: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { email: string; name?: string; lang?: string }) =>
+      api.post<Membership>(`/api/agents/${role}/members`, body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.agentMembers(role) });
+      void qc.invalidateQueries({ queryKey: keys.agents });
+    },
+  });
+}
+
+/** Put one person on several agents at once: one invitation, one letter. */
+export function useInviteToTeam() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { email: string; name?: string; lang?: string; roles: string[] }) =>
+      api.post<Membership[]>("/api/team/members", body),
+    onSuccess: (_data, body) => {
+      for (const role of body.roles) {
+        void qc.invalidateQueries({ queryKey: keys.agentMembers(role) });
+      }
+      void qc.invalidateQueries({ queryKey: keys.agents });
+      void qc.invalidateQueries({ queryKey: keys.myTeam });
+    },
+  });
+}
+
+/** Take somebody off an agent -- or, asked by that person, step off it. */
+export function useEndMembership(role: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (memberId: string) =>
+      api.delete<Membership>(`/api/agents/${role}/members/${memberId}`),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.agentMembers(role) });
+      void qc.invalidateQueries({ queryKey: keys.agents });
+      void qc.invalidateQueries({ queryKey: keys.myTeam });
+    },
+  });
+}
+
 export function useActivity_all(role: string, limit = 100) {
   return useQuery({
     queryKey: keys.activityAll(role),
     queryFn: () => api.get<ActivityItem[]>(`/api/activity?role=${role}&limit=${limit}`),
+  });
+}
+
+// -- the project brief: what the agents are told the project is (T11.1-T11.3) ----------
+
+/** The brief plus whether this project is read (analysis) or asked about (intake). */
+export function useBrief(projectId: string, poll = false) {
+  return useQuery({
+    queryKey: keys.brief(projectId),
+    queryFn: () => api.get<BriefView>(`/api/projects/${projectId}/brief`),
+    // while an agent is working there is nothing to push an update: ask again
+    refetchInterval: poll ? 2000 : false,
+  });
+}
+
+/** Read the checkout and propose the brief. The answer arrives on the brief itself. */
+export function useAnalyseProject(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<BriefView>(`/api/projects/${projectId}/brief/analysis`),
+    onSuccess: (view) => qc.setQueryData(keys.brief(projectId), view),
+  });
+}
+
+/** Answer the questions on the table (if any) and ask for the next round. */
+export function useIntake(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (answers: Record<string, string>) =>
+      api.post<BriefView>(`/api/projects/${projectId}/brief/intake`, { answers }),
+    onSuccess: (view) => qc.setQueryData(keys.brief(projectId), view),
+  });
+}
+
+/** Save the person's edits; approving is what lets an agent read any of it. */
+export function useSaveBrief(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: BriefEdit) => api.put<BriefView>(`/api/projects/${projectId}/brief`, body),
+    onSuccess: (view) => qc.setQueryData(keys.brief(projectId), view),
   });
 }
 
@@ -175,6 +302,26 @@ export function useActivity(id: string, limit = 200) {
   return useQuery({
     queryKey: keys.activity(id),
     queryFn: () => api.get<ActivityItem[]>(`/api/projects/${id}/activity?limit=${limit}`),
+  });
+}
+
+/** What the agents wrote, in the language the platform is set to.
+ *
+ * The agents write in the project's language and the page is read in the platform's; when
+ * they differ this is the bridge, keyed by the source string. It is deliberately not tied
+ * to the live event stream: a translation of a sentence never changes, and a project
+ * opened in the other language fills in over a few polls as the server works through it.
+ * ``projectId: null`` asks across every project, for the dashboard's feed. */
+export function useTranslations(projectId: string | null, lang: string) {
+  const path = projectId
+    ? `/api/projects/${projectId}/translations?lang=${lang}`
+    : `/api/translations?lang=${lang}`;
+  return useQuery({
+    queryKey: keys.translations(projectId, lang),
+    queryFn: () => api.get<Translations>(path),
+    // the server translates a capped number of new strings per call and serves the rest
+    // from its cache, so a large project fills in over a few polls rather than hanging
+    refetchInterval: 20_000,
   });
 }
 
@@ -247,6 +394,16 @@ export function useTransition(jobId: string, index: number | null) {
   });
 }
 
+/** Everything one pipeline step produced: the lists the side panel lays out. */
+export function useStepDetail(jobId: string, stepKey: string | null) {
+  return useQuery({
+    queryKey: keys.step(jobId, stepKey ?? ""),
+    queryFn: () =>
+      api.get<StepDetail>(`/api/jobs/${jobId}/steps/${encodeURIComponent(stepKey ?? "")}`),
+    enabled: stepKey !== null,
+  });
+}
+
 function useJobAction(jobId: string) {
   const qc = useQueryClient();
   return (fn: () => Promise<Job>) => ({
@@ -254,6 +411,34 @@ function useJobAction(jobId: string) {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: keys.job(jobId) });
       void qc.invalidateQueries({ queryKey: keys.projects });
+    },
+  });
+}
+
+/** The screens of a development and where each one stands, for the design gate. */
+export function useDesignReview(jobId: string, enabled = true) {
+  return useQuery({
+    queryKey: keys.design(jobId),
+    queryFn: () => api.get<DesignReview>(`/api/jobs/${jobId}/design`),
+    enabled,
+  });
+}
+
+/** Sign off one screen, or send it back with what should be different. */
+export function useReviewScreen(jobId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ok, feedback }: { id: string; ok: boolean; feedback?: string }) =>
+      api.post<Job>(`/api/jobs/${jobId}/design/${encodeURIComponent(id)}`, {
+        ok,
+        feedback: feedback ?? "",
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.design(jobId) });
+      void qc.invalidateQueries({ queryKey: keys.job(jobId) });
+      // the lane, the board and the dashboard all read where this development is
+      void qc.invalidateQueries({ queryKey: keys.projects });
+      void qc.invalidateQueries({ queryKey: keys.overview });
     },
   });
 }
@@ -294,11 +479,26 @@ export function useSendMessage(jobId: string) {
 export function useRerunStep(jobId: string, projectId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (step: "tests" | "devops") => api.post<Job>(`/api/jobs/${jobId}/rerun`, { step }),
+    mutationFn: (step: "test_cases" | "tests" | "devops") =>
+      api.post<Job>(`/api/jobs/${jobId}/rerun`, { step }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: keys.job(jobId) });
       void qc.invalidateQueries({ queryKey: keys.pipeline(projectId) });
       void qc.invalidateQueries({ queryKey: keys.projects });
+    },
+  });
+}
+
+/** Plan a failed development a different way: back to the Product Owner and the Architect
+ * with what should be tried instead, rather than back to the step that failed. */
+export function useReplanJob(jobId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (note: string) => api.post<Job>(`/api/jobs/${jobId}/replan`, { note }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.job(jobId) });
+      void qc.invalidateQueries({ queryKey: keys.projects });
+      void qc.invalidateQueries({ queryKey: keys.overview });
     },
   });
 }
@@ -327,6 +527,15 @@ export function useSetPlan(jobId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (plan: PlanEdit) => api.put<Job>(`/api/jobs/${jobId}/plan`, plan),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.job(jobId) }),
+  });
+}
+
+/** Edit the deployment proposal while the job waits at the deployment gate (T11.6). */
+export function useSetDeploy(jobId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (plan: DeployEdit) => api.put<Job>(`/api/jobs/${jobId}/deploy`, plan),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.job(jobId) }),
   });
 }
@@ -458,6 +667,14 @@ export function useGitHubRepos(enabled: boolean) {
   });
 }
 
+/** What this project's developments cost, what they were expected to, and the gap. */
+export function useCosts(projectId: string) {
+  return useQuery({
+    queryKey: keys.costs(projectId),
+    queryFn: () => api.get<ProjectCosts>(`/api/projects/${projectId}/costs`),
+  });
+}
+
 export function useJiraSettings() {
   return useQuery({
     queryKey: keys.jira,
@@ -493,6 +710,16 @@ export function useRunJiraSweep() {
 
 export function useTestJira() {
   return useMutation({ mutationFn: () => api.post<JiraTestResult>("/api/settings/jira/test") });
+}
+
+/** Open a Scrum project on the connected Jira, then show it in the picker straight away. */
+export function useCreateJiraProject() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { key: string; name: string }) =>
+      api.post<JiraProject>("/api/settings/jira/projects", body),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: keys.jiraProjects }),
+  });
 }
 
 export function useJiraProjects(enabled: boolean) {
@@ -723,5 +950,90 @@ export function useStandardsSearch(projectId: string | null, domain: string, q: 
         )}&k=6&${scopeParam(projectId)}`,
       ),
     enabled: q.trim().length > 0,
+  });
+}
+
+// -- email and support -------------------------------------------------------------------
+
+/** How mail leaves this installation. Admin-only on the server, so the hook is only
+ *  mounted from the email page. */
+export function useMailSettings(enabled = true) {
+  return useQuery({
+    queryKey: keys.mail,
+    queryFn: () => api.get<MailSettings>("/api/settings/mail"),
+    enabled,
+    retry: false,
+  });
+}
+
+export function useSaveMailSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: MailSettingsIn) => api.put<MailSettings>("/api/settings/mail", body),
+    onSuccess: (data) => {
+      qc.setQueryData(keys.mail, data);
+      void qc.invalidateQueries({ queryKey: keys.mailOutbox });
+    },
+  });
+}
+
+/** Post one message with the settings as they stand, so a mistake surfaces here rather
+ *  than to somebody who never got their verification link. */
+export function useTestMailSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { to: string; lang: "tr" | "en" }) =>
+      api.post<MailTestResult>("/api/settings/mail/test", body),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: keys.mailOutbox }),
+  });
+}
+
+/** Letters held back because no SMTP is configured. */
+export function useMailOutbox(enabled = true) {
+  return useQuery({
+    queryKey: keys.mailOutbox,
+    queryFn: () => api.get<OutboxLetter[]>("/api/settings/mail/outbox?limit=20"),
+    enabled,
+    retry: false,
+  });
+}
+
+export function useSendSupportRequest() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: SupportRequestIn) => api.post<SupportRequest>("/api/support", body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.supportMine });
+      void qc.invalidateQueries({ queryKey: keys.support });
+    },
+  });
+}
+
+export function useMySupportRequests() {
+  return useQuery({
+    queryKey: keys.supportMine,
+    queryFn: () => api.get<SupportRequest[]>("/api/support/mine"),
+  });
+}
+
+/** Everything anybody wrote. Admin-only; mounted from the email settings page. */
+export function useAllSupportRequests(enabled = true) {
+  return useQuery({
+    queryKey: keys.support,
+    queryFn: () => api.get<SupportRequest[]>("/api/support"),
+    enabled,
+    retry: false,
+  });
+}
+
+export function useSetSupportStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, status }: { id: string; status: "open" | "closed" }) =>
+      api.put<SupportRequest>(`/api/support/${id}/status`, { status }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.support });
+      void qc.invalidateQueries({ queryKey: keys.supportMine });
+    },
   });
 }

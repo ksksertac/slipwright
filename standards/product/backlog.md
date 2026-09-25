@@ -4,34 +4,34 @@ tags: [backlog, epics, stories, tasks, acceptance, scope, jira]
 applies_to: [all]
 ---
 
-# Product backlog
+# Ürün backlog'u
 
-## Reading the product before writing the backlog
+## Backlog'u yazmadan önce ürünü okumak
 
-Start from the manifest (`pyproject.toml`, `package.json`, `go.mod`, `pom.xml`, …),
-the lockfile, the CI configuration and the README; they say more than the tree. Detect
-the package manager from the lockfile that exists (`uv.lock`, `package-lock.json`,
-`pnpm-lock.yaml`), not from habit. Note monorepos (several manifests) and name the
-package the request concerns.
+Manifestten (`pyproject.toml`, `package.json`, `go.mod`, `pom.xml`, …), lock dosyasından,
+CI yapılandırmasından ve README'den başla; bunlar dosya ağacından çok daha fazlasını
+söyler. Paket yöneticisini alışkanlıkla değil, var olan lock dosyasından belirle
+(`uv.lock`, `package-lock.json`, `pnpm-lock.yaml`). Monorepo'ları (birden çok manifest)
+not et ve isteğin ilgilendirdiği paketi adıyla söyle.
 
-## What a task must say
+## Bir task neyi söylemeli
 
-A task is done when a tester can verify it without asking: name the user-visible
-behaviour, the inputs and the expected outcome, and any rule or limit that applies.
-Tasks that hide a technical choice ("use Redis") are wrong — say the need ("responses
-under 200 ms") and let the Architect choose. One task, one specialist: if a task needs
-both a backend change and a screen, write two tasks and say which comes first.
+Bir task, testçi kimseye sormadan doğrulayabildiğinde bitmiştir: kullanıcının gördüğü
+davranışı, girdileri ve beklenen sonucu, ayrıca geçerli olan kuralı ya da sınırı yaz.
+Teknik seçimi gizleyen tasklar ("Redis kullan") yanlıştır — ihtiyacı söyle ("yanıtlar 200
+ms'nin altında") ve seçimi Mimar'a bırak. Bir task, bir uzman: bir task hem backend
+değişikliği hem ekran gerektiriyorsa iki task yaz ve hangisinin önce geldiğini söyle.
 
-## Epics, stories and tasks
+## Epic, story ve tasklar
 
-An epic is an outcome the requester recognises; a story is one user-visible capability
-within it; a task is one phase. Titles are short and specific ("Retry webhook delivery
-with backoff", not "Webhook improvements"). Descriptions say what done looks like, in one
-or two sentences a tester could turn into cases.
+Epic, isteği yapanın tanıyacağı bir sonuçtur; story, onun içindeki kullanıcıya görünen tek
+bir yetenektir; task ise tek bir fazdır. Başlıklar kısa ve somuttur ("Webhook teslimini
+backoff ile yeniden dene", "Webhook iyileştirmeleri" değil). Açıklamalar, bir testçinin
+vakalara çevirebileceği bir-iki cümleyle "bitti" halinin neye benzediğini söyler.
 
-## When to stop and ask
+## Ne zaman durup sormalı
 
-If the request is ambiguous in a way that changes the design (two plausible readings
-lead to different phases), if it requires a dependency or service the repository does
-not have, or if it conflicts with a core rule, do not guess: describe the ambiguity in
-`summary` so the human can decide at the gate.
+İstek, tasarımı değiştirecek biçimde belirsizse (iki makul okuma farklı fazlara
+götürüyorsa), deponun sahip olmadığı bir bağımlılık ya da servis gerekiyorsa, ya da bir
+ortak kuralla çelişiyorsa tahmin yürütme: belirsizliği `summary` içinde anlat ki insan
+kapıda karar versin.

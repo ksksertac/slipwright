@@ -4,57 +4,60 @@ tags: [react, components, state, styling, accessibility, forms, api-client, perf
 applies_to: [react, typescript, vite, nextjs, vue, any]
 ---
 
-# Web front-end
+# Web ön yüzü
 
-## Components and files
+## Bileşenler ve dosyalar
 
-One component per file, named like the file, exported by name. Pages compose feature
-components; feature components compose UI primitives from the shared `components/`
-folder — never copy a primitive's markup into a page. Props are typed explicitly; avoid
-`any`. Keep components under ~250 lines; split by responsibility, not by size.
+Dosya başına tek bileşen, dosyayla aynı adda, adıyla dışa aktarılır. Sayfalar özellik
+bileşenlerini birleştirir; özellik bileşenleri ortak `components/` klasöründeki arayüz
+parçalarını birleştirir — bir parçanın işaretlemesini asla sayfanın içine kopyalama.
+Prop'lar açıkça tiplenir; `any` kullanma. Bileşenleri ~250 satırın altında tut; boyuta
+göre değil, sorumluluğa göre böl.
 
-## State
+## Durum
 
-Server data lives in the query layer (TanStack Query or the project's equivalent), keyed
-so that live updates can invalidate exactly what changed; never copy server data into
-local state to edit it unless the user is editing (then track `dirty` and follow the
-server value until they do). Local UI state stays in the component. Global stores only
-for cross-cutting concerns (session, theme). No state derived from props via effects —
-derive during render.
+Sunucu verisi sorgu katmanında yaşar (TanStack Query ya da projenin dengi) ve canlı
+güncellemeler tam olarak değişeni geçersiz kılabilsin diye anahtarlanır; kullanıcı
+düzenlemedikçe sunucu verisini düzenlemek için yerel duruma asla kopyalama (düzenlerken
+`dirty` bilgisini tut ve o ana dek sunucu değerini izle). Yerel arayüz durumu bileşende
+kalır. Global depolar yalnızca kesişen konular içindir (oturum, tema). Effect'lerle
+prop'lardan türetilen durum olmaz — render sırasında türet.
 
-## API access
+## API erişimi
 
-All calls go through the typed client generated from the API's OpenAPI schema; no raw
-`fetch` in components. Handle the three states explicitly: loading (skeleton, not a
-spinner over the whole page), error (inline callout with the server's message), empty
-(a sentence that says what to do next). Mutations show pending state on the button and
-a toast on success or failure.
+Tüm çağrılar API'nin OpenAPI şemasından üretilen tipli istemciden geçer; bileşenlerde ham
+`fetch` olmaz. Üç durumu da açıkça karşıla: yükleniyor (tüm sayfayı kaplayan bir dönme
+değil, iskelet), hata (sunucunun mesajını taşıyan satır içi uyarı), boş (bundan sonra ne
+yapılacağını söyleyen bir cümle). Mutasyonlar düğmede bekleme durumunu gösterir ve
+başarıda ya da hatada bir bildirim düşer.
 
-## Styling and theming
+## Stil ve tema
 
-Colours, spacing, radii and fonts come from the design tokens in `styles.css`; never
-hard-code a hex value in a component. Support light and dark themes through the tokens.
-Layouts must work at 360 px width with a 16 px gutter and no horizontal scroll. Prefer
-CSS classes over inline styles except for one-off sizes.
+Renkler, boşluklar, köşe yarıçapları ve yazı tipleri `styles.css` içindeki tasarım
+token'larından gelir; bir bileşene asla hex değeri gömme. Açık ve karanlık temayı
+token'lar üzerinden destekle. Düzenler 360 px genişlikte, 16 px kenar boşluğuyla ve yatay
+kaydırma olmadan çalışmalıdır. Tek seferlik ölçüler dışında satır içi stil yerine CSS
+sınıflarını yeğle.
 
-## Accessibility
+## Erişilebilirlik
 
-Every interactive element is a `button` or `a` (not a `div` with `onClick`), has a
-visible focus ring and an accessible name; icon-only buttons carry `aria-label`. Forms
-use `label` bound to the input by `id`. Colour never carries meaning alone — pair it with
-text or an icon. Modals trap focus and close on Escape. Test with keyboard only before
-calling a page done.
+Etkileşimli her öğe bir `button` ya da `a`'dır (`onClick`'li bir `div` değil), görünür bir
+odak halkası ve erişilebilir bir adı vardır; yalnızca ikonlu düğmeler `aria-label` taşır.
+Formlarda `label`, girdiye `id` ile bağlanır. Renk tek başına anlam taşımaz — yanına metin
+ya da ikon koy. Modaller odağı içeride tutar ve Escape ile kapanır. Bir sayfayı bitti
+saymadan önce yalnızca klavyeyle test et.
 
-## Forms
+## Formlar
 
-Validate on submit and show field-level errors next to the field; disable the submit
-button while pending, never silently ignore a click. Preserve what the user typed when a
-request fails. Password and token fields are `type="password"`, `autocomplete="off"`
-for secrets, and never echo a stored secret back into the input.
+Gönderimde doğrula ve alan hatalarını alanın yanında göster; beklerken gönder düğmesini
+kilitle, bir tıklamayı asla sessizce yutma. İstek düştüğünde kullanıcının yazdığını
+koru. Parola ve token alanları `type="password"` olur, sırlar için `autocomplete="off"`
+kullanılır ve saklanan bir sır asla girdiye geri yazılmaz.
 
-## Performance
+## Başarım
 
-Code-split by route; lazy-load heavy views (editors, charts). Avoid re-rendering large
-lists on every keystroke — debounce searches, key lists by stable ids, memoize expensive
-derivations. Images carry width/height. Measure with the browser profiler before
-optimising; do not add memoization speculatively.
+Rotaya göre kod böl; ağır görünümleri (editörler, grafikler) tembel yükle. Büyük
+listeleri her tuş vuruşunda yeniden çizme — aramaları geciktir, listeleri kararlı
+kimliklerle anahtarla, pahalı türetmeleri belleğe al. Görsellerde genişlik/yükseklik
+bulunur. İyileştirmeden önce tarayıcının profilleyicisiyle ölç; tahmine dayalı
+memoization ekleme.

@@ -22,6 +22,7 @@ from slipwright.sources.registry import (
     SourceError,
     SourceSpec,
 )
+from slipwright.sources.scrub import scrub
 from slipwright.workspace import git as g
 
 # Bitbucket's build states: INPROGRESS | SUCCESSFUL | FAILED | STOPPED
@@ -255,7 +256,7 @@ def _origin(worktree: Path) -> str:
 
 def _scrub(text: str, token: str) -> str:
     """git prints the URL it was given: the token must not reach the job's history."""
-    return text.replace(token, "…") if token else text
+    return scrub(text, token)
 
 
 __all__ = ["BitbucketHost"]

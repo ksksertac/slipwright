@@ -17,7 +17,7 @@ import { IconEdit, IconExternal, IconPlus, IconTrash } from "../components/icons
 import { JiraLink } from "../components/JiraLink";
 import { Menu } from "../components/Menu";
 import { ConfirmModal } from "../components/Modal";
-import { DeleteProjectModal, EditProjectModal } from "../components/ProjectDialogs";
+import { DeleteProjectModal } from "../components/ProjectDialogs";
 import { useToast } from "../components/Toast";
 import {
   Empty,
@@ -28,15 +28,32 @@ import {
   StatusBadge,
   StatusDot,
   formatTime,
+  sentence,
   timeAgo,
 } from "../components/ui";
 import { PipelineTab } from "./PipelineTab";
+import { ProjectBriefTab } from "./ProjectBriefTab";
+import { CostsTab } from "./CostsTab";
+import { ProjectSettingsTab } from "./ProjectSettingsTab";
 import { TestsTab } from "./TestsTab";
-import { useT } from "../i18n";
+import { isOwner } from "../api/gates";
+import { useMyTeam } from "../api/hooks";
+import { sentenceCase, useT } from "../i18n";
+import { SayProvider, useSay } from "../i18n/said";
 import { ResultCard } from "../components/ResultCard";
 import { WorkListPanel } from "../components/WorkList";
 
-const TABS = ["pipeline", "overview", "board", "developments", "tests", "activity"] as const;
+const TABS = [
+  "pipeline",
+  "overview",
+  "brief",
+  "board",
+  "developments",
+  "tests",
+  "costs",
+  "activity",
+  "settings",
+] as const;
 type Tab = (typeof TABS)[number];
 
 export function ProjectPage() {
@@ -51,57 +68,69 @@ export function ProjectPage() {
   const p = project.data;
 
   return (
-    <div>
-      <Crumbs items={[{ label: "Projects", to: "/projects" }, { label: p.name }]} />
+    // everything under here can ask for the agents' prose in the platform's language
+    <SayProvider projectId={p.id}>
+      <Crumbs items={[{ label: "Projects", to: "/projects" }, { label: sentenceCase(p.name) }]} />
       <ProjectHeader project={p} />
 
       <nav className="tabs">
         {TABS.map((t) => (
           <NavLink key={t} to={`/projects/${p.id}/${t}`} className={t === current ? "active" : ""}>
-            {tx(t[0]!.toUpperCase() + t.slice(1))}
+            {t === "brief"
+              ? tx("About the project")
+              : t === "settings"
+                ? tx("Settings")
+                : tx(t[0]!.toUpperCase() + t.slice(1))}
           </NavLink>
         ))}
       </nav>
 
       {current === "pipeline" && <PipelineTab projectId={p.id} />}
       {current === "overview" && <OverviewTab projectId={p.id} />}
+      {current === "brief" && <ProjectBriefTab projectId={p.id} />}
       {current === "board" && <BoardTab projectId={p.id} />}
       {current === "developments" && <DevelopmentsTab projectId={p.id} />}
       {current === "tests" && <TestsTab projectId={p.id} />}
+      {current === "costs" && <CostsTab projectId={p.id} />}
       {current === "activity" && <ActivityTab projectId={p.id} />}
-    </div>
+      {current === "settings" && <ProjectSettingsTab project={p} />}
+    </SayProvider>
   );
 }
 
 function ProjectHeader({ project: p }: { project: Project }) {
   const tx = useT();
-  const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  // a member holds an agent; the project itself is the owner's
+  const owner = isOwner(useMyTeam().data);
   return (
     <div className="page-head">
       <div style={{ minWidth: 0 }}>
         <h1>
-          {p.name} {p.jira_project_key && <JiraLink issueKey={p.jira_project_key} />}
+          {sentenceCase(p.name)} {p.jira_project_key && <JiraLink issueKey={p.jira_project_key} />}
         </h1>
         <div className="faint small mono truncate">
           {p.github_repo ?? p.clone_url ?? ""} {p.repo_path ? `· ${p.repo_path}` : ""}
         </div>
         {p.description && <p>{p.description}</p>}
       </div>
-      <div className="row" style={{ flexWrap: "nowrap" }}>
-        <Link className="btn primary" to={`/projects/${p.id}/developments`}>
-          <IconPlus /> {tx("New development")}
-        </Link>
-        <Menu>
-          <button onClick={() => setEditing(true)}>
-            <IconEdit /> {tx("Edit project")}
-          </button>
-          <button className="danger" onClick={() => setDeleting(true)}>
-            <IconTrash /> {tx("Delete project")}
-          </button>
-        </Menu>
-      </div>
-      {editing && <EditProjectModal project={p} onClose={() => setEditing(false)} />}
+      {owner && (
+        <div className="row" style={{ flexWrap: "nowrap" }}>
+          <Link className="btn primary" to={`/projects/${p.id}/developments`}>
+            <IconPlus /> {tx("New development")}
+          </Link>
+          <Menu>
+            {/* the settings are a tab of this page now: the same sections the project was
+                created through, in the place somebody comes back to change them */}
+            <Link to={`/projects/${p.id}/settings`}>
+              <IconEdit /> {tx("Edit project")}
+            </Link>
+            <button className="danger" onClick={() => setDeleting(true)}>
+              <IconTrash /> {tx("Delete project")}
+            </button>
+          </Menu>
+        </div>
+      )}
       {deleting && (
         <DeleteProjectModal project={p} onClose={() => setDeleting(false)} redirectTo="/projects" />
       )}
@@ -171,7 +200,7 @@ function OverviewTab({ projectId }: { projectId: string }) {
               <div className="row spread">
                 <div>
                   <Link to={`/projects/${projectId}/jobs/${row.job_id}`}>
-                    <strong>{row.request}</strong>
+                    <strong>{sentence(row.request)}</strong>
                   </Link>{" "}
                   <span className="muted small">· {row.pending_approval}</span>
                 </div>
@@ -193,7 +222,9 @@ function OverviewTab({ projectId }: { projectId: string }) {
               {running.map((row) => (
                 <tr key={row.job_id}>
                   <td>
-                    <Link to={`/projects/${projectId}/jobs/${row.job_id}`}>{row.request}</Link>
+                    <Link to={`/projects/${projectId}/jobs/${row.job_id}`}>
+                      {sentence(row.request)}
+                    </Link>
                   </td>
                   <td>
                     <StateBadge state={row.state} />
@@ -216,6 +247,7 @@ function OverviewTab({ projectId }: { projectId: string }) {
 
 function BoardTab({ projectId }: { projectId: string }) {
   const tx = useT();
+  const say = useSay();
   const board = useBoard(projectId);
   if (board.isLoading) return <Loading />;
   if (board.error) return <ErrorBox error={board.error} />;
@@ -244,7 +276,7 @@ function BoardTab({ projectId }: { projectId: string }) {
               <StatusDot status={epic.status} />
               <span className="kind">epic</span>
               <span className="title">
-                {epic.title}{" "}
+                {say(epic.title)}{" "}
                 <Link className="muted small" to={`/projects/${projectId}/jobs/${epic.job_id}`}>
                   · {epic.job_request}
                 </Link>
@@ -258,7 +290,7 @@ function BoardTab({ projectId }: { projectId: string }) {
                   <div className="node">
                     <StatusDot status={story.status} />
                     <span className="kind">story</span>
-                    <span className="title">{story.title}</span>
+                    <span className="title">{say(story.title)}</span>
                     <JiraLink issueKey={story.jira_key} />
                     <StatusBadge status={story.status} />
                   </div>
@@ -272,7 +304,7 @@ function BoardTab({ projectId }: { projectId: string }) {
                             <Link
                               to={`/projects/${projectId}/jobs/${task.job_id}#phase-${task.phase}`}
                             >
-                              {task.title}
+                              {say(task.title)}
                             </Link>
                             {task.files.length > 0 && (
                               <span className="muted small mono"> · {task.files.join(", ")}</span>
@@ -312,6 +344,8 @@ function DevelopmentsTab({ projectId }: { projectId: string }) {
   const start = useStartJob(projectId);
   const navigate = useNavigate();
   const [request, setRequest] = useState("");
+  // starting a development is the owner's; a member reads the list and waits for a gate
+  const owner = isOwner(useMyTeam().data);
 
   // a development that has not started yet is the list waiting to be read: it is shown
   // here, so closing the tab (or the whole application) loses nothing
@@ -329,30 +363,32 @@ function DevelopmentsTab({ projectId }: { projectId: string }) {
 
   return (
     <div className="stack">
-      <form className="card" onSubmit={submit}>
-        <h3 style={{ marginBottom: 6 }}>{tx("New development")}</h3>
-        <p className="muted small">
-          {tx(
-            "Describe what you want. The Product Owner turns it into epics, stories and tasks, the Architect designs how to build and test it, and you approve each step.",
-          )}
-        </p>
-        <textarea
-          value={request}
-          onChange={(e) => setRequest(e.target.value)}
-          placeholder={tx("e.g. Add a /health endpoint that reports the database status")}
-        />
-        {start.error && <div className="error">{describeError(start.error)}</div>}
-        <div className="row" style={{ marginTop: 8 }}>
-          <button className="btn primary" disabled={!request.trim() || start.isPending}>
-            <IconPlus /> {start.isPending ? tx("Working it out…") : tx("Plan it")}
-          </button>
-          <span className="faint small">
-            {tx("The Product Owner and the Architect answer first; nothing is built yet.")}
-          </span>
-        </div>
-      </form>
+      {owner && (
+        <form className="card" onSubmit={submit}>
+          <h3 style={{ marginBottom: 6 }}>{tx("New development")}</h3>
+          <p className="muted small">
+            {tx(
+              "Describe what you want. The Product Owner turns it into epics, stories and tasks, the Architect designs how to build and test it, and you approve each step.",
+            )}
+          </p>
+          <textarea
+            value={request}
+            onChange={(e) => setRequest(e.target.value)}
+            placeholder={tx("e.g. Add a /health endpoint that reports the database status")}
+          />
+          {start.error && <div className="error">{describeError(start.error)}</div>}
+          <div className="row" style={{ marginTop: 8 }}>
+            <button className="btn primary" disabled={!request.trim() || start.isPending}>
+              <IconPlus /> {start.isPending ? tx("Working it out…") : tx("Plan it")}
+            </button>
+            <span className="faint small">
+              {tx("The Product Owner and the Architect answer first; nothing is built yet.")}
+            </span>
+          </div>
+        </form>
+      )}
 
-      {planning && (
+      {owner && planning && (
         <div className="card">
           <WorkListPanel
             job={planning}
@@ -373,7 +409,11 @@ function DevelopmentsTab({ projectId }: { projectId: string }) {
         )}
         {jobs.data && jobs.data.length === 0 && (
           <div className="empty" style={{ padding: 28 }}>
-            <div className="small">{tx("No developments yet. Describe one above to start.")}</div>
+            <div className="small">
+              {owner
+                ? tx("No developments yet. Describe one above to start.")
+                : tx("No developments yet.")}
+            </div>
           </div>
         )}
         {jobs.data && jobs.data.length > 0 && (
@@ -410,7 +450,7 @@ function JobRow({ job, projectId }: { job: Job; projectId: string }) {
   return (
     <tr>
       <td>
-        <Link to={`/projects/${projectId}/jobs/${job.id}`}>{job.request}</Link>
+        <Link to={`/projects/${projectId}/jobs/${job.id}`}>{sentence(job.request)}</Link>
         <div className="faint tiny mono">{job.id}</div>
       </td>
       <td>

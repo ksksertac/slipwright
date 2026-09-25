@@ -2,7 +2,6 @@ import { type CSSProperties, useState } from "react";
 import { Link } from "react-router-dom";
 import type { Project } from "../api/client";
 import { useProgress, useProjects } from "../api/hooks";
-import { Crumbs } from "../components/Crumbs";
 import {
   IconEdit,
   IconGit,
@@ -14,7 +13,7 @@ import {
 import { Menu } from "../components/Menu";
 import { DeleteProjectModal, EditProjectModal } from "../components/ProjectDialogs";
 import { Empty, ErrorBox, Loading, PageHead, ProgressBar, timeAgo } from "../components/ui";
-import { useT } from "../i18n";
+import { sentenceCase, useT } from "../i18n";
 
 export function ProjectsPage() {
   const tx = useT();
@@ -28,7 +27,6 @@ export function ProjectsPage() {
 
   return (
     <div>
-      <Crumbs items={[{ label: "Projects" }]} />
       <PageHead
         title={tx("Projects")}
         subtitle={tx("Repositories the agents work on.")}
@@ -156,7 +154,7 @@ function ProjectCard({
         </span>
         <div style={{ minWidth: 0 }}>
           <div className="title truncate">
-            <Link to={`/projects/${project.id}`}>{project.name}</Link>
+            <Link to={`/projects/${project.id}`}>{sentenceCase(project.name)}</Link>
           </div>
           {project.description ? (
             <div className="pcard-desc muted small">{project.description}</div>

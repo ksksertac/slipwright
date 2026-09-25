@@ -1,7 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import { useLiveEvents } from "../api/events";
+import { isOwner } from "../api/gates";
+import { useMyTeam } from "../api/hooks";
+import { BrandMark } from "./BrandMark";
+import { LangPicker } from "./LangPicker";
 import { useToast } from "./Toast";
 import { useAuth } from "../auth/AuthProvider";
 import {
@@ -10,7 +14,9 @@ import {
   IconFolder,
   IconGit,
   IconHome,
+  IconLifebuoy,
   IconLogout,
+  IconMail,
   IconMonitor,
   IconMoon,
   IconSun,
@@ -18,7 +24,7 @@ import {
   IconUsers,
 } from "./icons";
 import { useTheme, type Theme } from "./theme";
-import { useLang, useT } from "../i18n";
+import { useT } from "../i18n";
 import { BuildWatch } from "./BuildWatch";
 
 const THEMES: { value: Theme; icon: React.ReactNode; title: string }[] = [
@@ -27,12 +33,28 @@ const THEMES: { value: Theme; icon: React.ReactNode; title: string }[] = [
   { value: "system", icon: <IconMonitor />, title: "System" },
 ];
 
+/** Signed in, but the address is still unproved: everything reads, nothing runs. The
+ *  banner is the only place that says so, because a 403 at the moment of starting work
+ *  is a poor way to learn it. */
+function UnverifiedBanner() {
+  const tx = useT();
+  const { unverified, user } = useAuth();
+  if (!unverified) return null;
+  return (
+    <div className="callout warn banner-verify">
+      <span>{tx("Confirm {email} before starting any work.", { email: user?.email ?? "" })}</span>
+      <Link className="btn tiny" to="/verify">
+        {tx("Confirm now")}
+      </Link>
+    </div>
+  );
+}
+
 export function Layout() {
   const tx = useT();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [theme, setTheme] = useTheme();
-  const { lang, setLang } = useLang();
   const toast = useToast();
   useLiveEvents(undefined, toast.ok);
   const overview = useQuery({
@@ -41,41 +63,58 @@ export function Layout() {
     refetchInterval: 30_000,
   });
   const pending = overview.data?.pending_approvals ?? 0;
+  const team = useMyTeam();
+  const owner = isOwner(team.data);
 
   return (
     <div className="shell">
       <aside className="sidebar">
         <div className="brand">
-          <span className="brand-mark">⛵</span> {tx("Slipwright")}
+          <BrandMark /> {tx("Slipwright")}
         </div>
         <nav className="nav">
-          <NavLink to="/" end>
+          <NavLink to="/" end data-nav="dashboard">
             <IconHome /> {tx("Dashboard")}
             {pending > 0 && <span className="count">{pending}</span>}
           </NavLink>
-          <NavLink to="/projects">
+          <NavLink to="/projects" data-nav="projects">
             <IconFolder /> {tx("Projects")}
           </NavLink>
-          <NavLink to="/agents">
+          <NavLink to="/agents" data-nav="agents">
             <IconBot /> {tx("Agents")}
           </NavLink>
-          <div className="nav-label">{tx("Settings")}</div>
-          <NavLink to="/settings/models">
-            <IconCpu /> {tx("Models")}
+          <NavLink to="/support" data-nav="support">
+            <IconLifebuoy /> {tx("Support")}
           </NavLink>
-          <NavLink to="/settings/sources">
-            <IconGit /> {tx("Sources")}
-          </NavLink>
-          <NavLink to="/settings/jira">
-            <IconTicket /> {tx("Jira")}
-          </NavLink>
-          {user?.is_admin && (
-            <NavLink to="/settings/users">
+          {/* the settings belong to whoever owns the account; somebody who holds an
+              agent configures it on the agent's own page */}
+          {owner && <div className="nav-label">{tx("Settings")}</div>}
+          {owner && (
+            <NavLink to="/settings/models" data-nav="models">
+              <IconCpu /> {tx("Models")}
+            </NavLink>
+          )}
+          {owner && (
+            <NavLink to="/settings/sources" data-nav="sources">
+              <IconGit /> {tx("Sources")}
+            </NavLink>
+          )}
+          {owner && (
+            <NavLink to="/settings/jira" data-nav="jira">
+              <IconTicket /> {tx("Jira")}
+            </NavLink>
+          )}
+          {owner && user?.is_admin && (
+            <NavLink to="/settings/email" data-nav="email">
+              <IconMail /> {tx("Email")}
+            </NavLink>
+          )}
+          {owner && user?.is_admin && (
+            <NavLink to="/settings/users" data-nav="users">
               <IconUsers /> {tx("Users")}
             </NavLink>
           )}
         </nav>
-        <BuildWatch />
         <div className="sidebar-foot">
           <div className="avatar">{user?.username.slice(0, 2)}</div>
           <div style={{ minWidth: 0, flex: 1 }}>
@@ -94,22 +133,12 @@ export function Layout() {
             <IconLogout />
           </button>
         </div>
+        <BuildWatch />
       </aside>
       <div className="main">
         <header className="topbar">
           <div id="crumbs" className="crumbs" />
-          <div className="segmented" role="group" aria-label={tx("Language")}>
-            {(["tr", "en"] as const).map((l) => (
-              <button
-                key={l}
-                className={lang === l ? "on" : ""}
-                title={l === "tr" ? "Türkçe" : "English"}
-                onClick={() => setLang(l)}
-              >
-                {l.toUpperCase()}
-              </button>
-            ))}
-          </div>
+          <LangPicker />
           <div className="segmented" role="group" aria-label={tx("Theme")}>
             {THEMES.map((t) => (
               <button
@@ -124,6 +153,7 @@ export function Layout() {
           </div>
         </header>
         <main className="content">
+          <UnverifiedBanner />
           <Outlet />
         </main>
       </div>

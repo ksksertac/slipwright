@@ -6,7 +6,6 @@ import { useState, type FormEvent } from "react";
 import { describeError, type SourceSettings } from "../../api/client";
 import { useSaveSource, useSources, useTestSource } from "../../api/hooks";
 import { useAuth } from "../../auth/AuthProvider";
-import { Crumbs } from "../../components/Crumbs";
 import { IconCheck, IconChevron } from "../../components/icons";
 import { ErrorBox, Loading, PageHead } from "../../components/ui";
 import { useT } from "../../i18n";
@@ -20,7 +19,6 @@ export function SourcesSettingsPage() {
   const none = !list.some((s) => s.token_set);
   return (
     <div>
-      <Crumbs items={[{ label: "Settings" }, { label: "Sources" }]} />
       <PageHead
         title={tx("Sources")}
         subtitle={tx("Where the code lives: clone, push and open pull requests.")}

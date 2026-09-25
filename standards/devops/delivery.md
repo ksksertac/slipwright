@@ -4,58 +4,57 @@ tags: [ci, github-actions, docker, deployment, pull-requests, secrets, infrastru
 applies_to: [github, docker, compose, kubernetes, terraform, any]
 ---
 
-# Delivery and infrastructure
+# Teslimat ve altyapı
 
-## Pull requests
+## Pull request'ler
 
-One PR per job branch, titled in the imperative under 70 characters, with a body that
-says what changed, why, how it was tested and what the reviewer should look at first.
-Link the tracker issue. Keep the branch rebased on the base branch; never merge the base
-into the feature branch repeatedly. A PR that changes infrastructure includes the plan
-output (`terraform plan`, migration SQL) in the description.
+İş dalı başına tek PR; başlık emir kipinde ve 70 karakterin altında; gövde neyin
+değiştiğini, nedenini, nasıl test edildiğini ve inceleyicinin önce nereye bakması
+gerektiğini söyler. İzleyicideki kaydı bağla. Dalı taban dalın üzerine rebase'li tut;
+tabanı özellik dalına tekrar tekrar merge etme. Altyapıyı değiştiren bir PR, plan
+çıktısını (`terraform plan`, migration SQL'i) açıklamasında taşır.
 
-## Continuous integration
+## Sürekli entegrasyon
 
-CI runs on every push: lint, type-check, unit tests, integration tests with services
-from `docker compose`, and a build of every artefact. The pipeline is defined in the
-repository, uses pinned action/image versions, caches dependencies by lockfile hash, and
-fails fast on the cheapest check. Red CI blocks merge; do not retry a red run without a
-fix unless the failure is a known flake with an open issue.
+CI her push'ta çalışır: lint, tip kontrolü, birim testleri, `docker compose` servisleriyle
+entegrasyon testleri ve her çıktının build'i. Hat depoda tanımlıdır, sabitlenmiş
+action/imaj sürümleri kullanır, bağımlılıkları lock dosyasının özetine göre önbellekler ve
+en ucuz kontrolde erken düşer. Kırmızı CI merge'ü engeller; açık kaydı olan bilinen bir
+flake değilse kırmızı bir koşuyu düzeltmeden yeniden çalıştırma.
 
-## Containers
+## Konteynerler
 
-Multi-stage Dockerfiles; the runtime image contains only what runs (no compilers, no
-dev dependencies, no source of the build stage). Pin base images by tag and refresh
-monthly. Run as a non-root user where the workload allows. Every image has a
-`HEALTHCHECK` and exposes configuration through environment variables only. Never bake
-secrets into layers or build args.
+Çok aşamalı Dockerfile'lar; çalışma imajında yalnızca koşan şey bulunur (derleyici yok,
+geliştirme bağımlılığı yok, build aşamasının kaynağı yok). Temel imajları etiketle
+sabitle ve ayda bir tazele. İş yükü elverdiğince root olmayan bir kullanıcıyla çalıştır.
+Her imajın bir `HEALTHCHECK`'i olur ve yapılandırmayı yalnızca ortam değişkenleriyle alır.
+Sırları katmanlara ya da build argümanlarına asla gömme.
 
-## Deployment
+## Dağıtım
 
-Deployments are declarative (compose, Helm, Terraform) and idempotent; a rerun with no
-changes changes nothing. Roll out with health checks and a rollback path that is tested
-before it is needed. Database migrations run before the new version serves traffic and
-are backward compatible with the version still running. Feature flags gate risky
-behaviour so a rollback is a flag flip, not a redeploy.
+Dağıtımlar bildirimseldir (compose, Helm, Terraform) ve idempotent'tir; değişiklik yokken
+yeniden koşmak hiçbir şeyi değiştirmez. Sağlık kontrolleriyle ve gerekmeden önce
+denenmiş bir geri alma yoluyla yay. Veritabanı migration'ları yeni sürüm trafik almadan
+önce koşar ve hâlâ çalışan sürümle geriye dönük uyumludur. Riskli davranışı özellik
+bayrakları kapatır ki geri almak yeniden dağıtım değil, bayrak çevirmek olsun.
 
-## Secrets and access
+## Sırlar ve erişim
 
-Secrets live in the platform's secret manager and reach the process as environment
-variables at start; never in the repository, CI logs or images. Rotate on every
-departure and on any suspected leak. CI tokens are scoped to the minimum (contents:
-write, pull-requests: write) and expire. Production access is by role, audited, and
-never shared.
+Sırlar platformun sır yöneticisinde durur ve sürece açılışta ortam değişkeni olarak
+ulaşır; depoda, CI loglarında ya da imajlarda asla bulunmaz. Her ayrılışta ve her sızıntı
+şüphesinde döndür. CI token'ları en aza kısıtlanır (contents: write, pull-requests: write)
+ve süresi dolar. Üretim erişimi role bağlıdır, denetlenir ve asla paylaşılmaz.
 
-## Monitoring and on-call
+## İzleme ve nöbet
 
-Every service ships with a dashboard (traffic, errors, latency, saturation) and alerts
-on symptoms users feel (error rate, p95 latency, queue lag), not on causes. Alerts have a
-runbook link. Log retention and PII rules are written down. After an incident, a short
-blameless write-up with actions goes into the repository.
+Her servis bir panoyla (trafik, hata, gecikme, doyum) ve nedenlere değil kullanıcının
+hissettiği belirtilere (hata oranı, p95 gecikme, kuyruk gecikmesi) kurulmuş uyarılarla
+gelir. Uyarıların bir runbook bağlantısı olur. Log saklama ve kişisel veri kuralları
+yazılıdır. Bir olaydan sonra, eylemleri olan kısa ve suçlamasız bir yazı depoya girer.
 
-## Fixing red CI
+## Kırmızı CI'yı düzeltmek
 
-When CI fails on a job branch, read the failing step's log first; fix the cause in the
-smallest change; do not disable the step, loosen the check or bump timeouts to hide a
-real failure. If the failure is unrelated flakiness, say so in the summary with the log
-excerpt so a human can decide.
+Bir iş dalında CI düştüğünde önce düşen adımın logunu oku; nedeni en küçük değişiklikle
+düzelt; adımı devre dışı bırakma, kontrolü gevşetme ya da gerçek bir hatayı örtmek için
+zaman aşımını büyütme. Hata ilgisiz bir kararsızlıksa, bir insan karar verebilsin diye
+özette log alıntısıyla birlikte bunu söyle.

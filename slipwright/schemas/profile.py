@@ -22,6 +22,7 @@ class RoleName(StrEnum):
     PO = "po"  # product owner: request -> epics, stories, tasks
     ARCHITECT = "architect"  # backlog + repository -> profile, decisions, phases
     BACKEND = "backend"  # also takes phases without a specialist domain (general, docs)
+    DESIGNER = "designer"  # screens and their states, for the two UI specialists to build
     WEB_UI = "web_ui"
     MOBILE_UI = "mobile_ui"
     QA = "qa"
@@ -48,6 +49,21 @@ class Permission(StrEnum):
     NETWORK = "network"
     GIT_PUSH = "git_push"
     JIRA = "jira"  # may return jira_actions the engine executes (T7.5)
+
+
+# The other direction from RETIRED_ROLES: a role added after a profile was written is
+# missing from every stored one, and a profile that will not load locks its job out for
+# good. A role listed here is filled in instead -- it takes the model and provider of the
+# role it works beside, so the profile stays on one vendor, and carries its own depth and
+# rights. A role that is not listed is still required: a hand-written profile missing
+# `po` is a mistake, not an old file.
+NEW_ROLES: dict[RoleName, tuple[RoleName, ThinkingDepth, tuple[Permission, ...]]] = {
+    RoleName.DESIGNER: (
+        RoleName.ARCHITECT,
+        ThinkingDepth.HIGH,
+        (Permission.READ_FILES, Permission.JIRA),
+    ),
+}
 
 
 class RoleConfig(BaseModel):
@@ -107,9 +123,25 @@ class Profile(BaseModel):
     @field_validator("roles")
     @classmethod
     def _all_roles_present(cls, value: dict[RoleName, RoleConfig]) -> dict[RoleName, RoleConfig]:
-        missing = [r.value for r in RoleName if r not in value]
-        if missing:
-            raise ValueError(f"missing role configuration for: {', '.join(missing)}")
+        missing = [r for r in RoleName if r not in value]
+        if not missing:
+            return value
+        filled = dict(value)
+        for role in missing:
+            spec = NEW_ROLES.get(role)
+            beside = filled.get(spec[0]) if spec else None
+            if spec is None or beside is None:
+                continue
+            filled[role] = RoleConfig(
+                model=beside.model,
+                provider=beside.provider,
+                thinking_depth=spec[1],
+                permissions=list(spec[2]),
+            )
+        still_missing = [r.value for r in RoleName if r not in filled]
+        if still_missing:
+            raise ValueError(f"missing role configuration for: {', '.join(still_missing)}")
+        return filled
         return value
 
     @field_validator("roles", mode="before")

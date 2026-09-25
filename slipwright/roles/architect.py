@@ -26,10 +26,16 @@ You are the Software Architect. Read the repository (`worktree`) and the approve
    build, test and run it. `run_cmd` must start the project listening on the literal
    placeholder `{port}`. Prefer the commands the repository's CI already runs. Keep the
    `roles` map exactly as given in `seed_profile`.
-2. `decisions` — the architecture decisions this work needs (components touched, data
+2. `stack` — one entry for each part of the product this project needs (`backend`,
+   `web`, `mobile`, `infra`), naming the language and the framework it is written in and
+   one sentence of why. For a repository that already holds code, report what is there
+   rather than what you would have chosen; propose something new only for a part that
+   does not exist yet. Leave out a part the project does not have. The person reads this
+   at the approval gate and may change it before anything is written.
+3. `decisions` — the architecture decisions this work needs (components touched, data
    model changes, contracts between backend and front-ends, error handling, anything a
    reviewer must know). One sentence each; omit the obvious.
-3. `phases` — ordered implementation phases. Every phase implements exactly one backlog
+4. `phases` — ordered implementation phases. Every phase implements exactly one backlog
    task (`task_id`), names its `domain` (`backend`, `web`, `mobile`, `infra`, `docs`,
    `general`) so the right specialist gets it, and lists the files it will create or
    change. Backend contracts come before the front-ends that use them. A phase must not

@@ -15,7 +15,7 @@ from slipwright.schemas.job import JobState
 from slipwright.schemas.profile import Profile, RoleName
 from slipwright.schemas.project import Project
 from slipwright.store import JobStore
-from tests.pipeline import full_engine, full_provider, set_plan
+from tests.pipeline import full_engine, full_provider, past_design, set_plan
 
 WEB = Path(__file__).resolve().parent.parent / "web"
 
@@ -60,6 +60,7 @@ def test_lane_follows_the_job_through_every_gate(
         "test_gate:1": "pending",
         "qa:2": "pending",
         "test_gate:2": "pending",
+        "deploy": "pending",
         "devops": "pending",
         "done": "pending",
     }
@@ -85,15 +86,37 @@ def test_lane_follows_the_job_through_every_gate(
     assert cards["backlog_gate"].status is StepStatus.DONE
     assert cards["architecture"].status is StepStatus.DONE
     assert cards["architecture_gate"].status is StepStatus.WAITING
-    assert [c.key for c in lane_for(job).steps][4:6] == ["phase:1", "phase:2"]
+    # the phases, read by position relative to phase 1 rather than by a fixed index. The
+    # design gate is not here yet: the Designer has not drawn anything, and a card that
+    # cannot run yet reads as a step still to come
+    keys = [c.key for c in lane_for(job).steps]
+    first = keys.index("phase:1")
+    assert keys[first : first + 2] == ["phase:1", "phase:2"]
     phase = cards["phase:1"]
-    assert phase.label == "Backend: add the endpoint" and phase.role is RoleName.BACKEND
+    assert phase.label == "Backend Developer: add the endpoint" and phase.role is RoleName.BACKEND
     assert phase.domain == "backend" and phase.task_title == "step 1"
     assert phase.status is StepStatus.PENDING
     assert cards["phase:2"].role is RoleName.WEB_UI
 
-    job = engine.approve(job.id)  # both phases built, test cases proposed
+    # the backend phase is built and the development stops for the screens; the web phase
+    # is the first one that would have to guess what they look like
+    job = engine.approve(job.id)
     cards = _by_key(job)
+    assert job.state is JobState.AWAITING_DESIGN_APPROVAL
+    assert cards["phase:1"].status is StepStatus.DONE
+    assert cards["phase:2"].status is StepStatus.PENDING
+    gate = cards["design_gate"]
+    assert gate.status is StepStatus.WAITING and gate.pending == "design" and gate.editable
+    assert lane_for(job).pending_approval == "design"
+    # and now it stands where the development actually stopped: after the backend phase,
+    # in front of the web one
+    keys = [c.key for c in lane_for(job).steps]
+    first = keys.index("phase:1")
+    assert keys[first : first + 3] == ["phase:1", "design_gate", "phase:2"]
+
+    job = engine.approve(job.id)  # the screens approved: the web phase built, cases proposed
+    cards = _by_key(job)
+    assert cards["design_gate"].status is StepStatus.DONE
     assert cards["phase:1"].status is StepStatus.DONE and cards["phase:2"].status is StepStatus.DONE
     notes = [job.history[i].note or "" for i in cards["phase:1"].outputs]
     assert any(n.startswith("backend phase 1/2") for n in notes)
@@ -266,7 +289,8 @@ def test_plan_edits_are_checked_like_the_architects(
         engine.set_plan(job.id, {"phases": [{"goal": "", "task_id": "t1"}]})
     assert [p["task_id"] for p in engine.store.get(job.id).data.plan["phases"]] == ["t2", "t1"]  # type: ignore[index]
 
-    job = engine.approve(job.id)  # the edited order is what runs
+    # the edited order puts the mobile phase first, so the screens are wanted straight away
+    job = past_design(engine, engine.approve(job.id))
     assert job.state is JobState.AWAITING_TEST_APPROVAL
     roles = [r.role for r in provider.requests if r.role in (RoleName.MOBILE_UI, RoleName.BACKEND)]
     assert roles == [RoleName.MOBILE_UI, RoleName.BACKEND]
@@ -394,3 +418,30 @@ def test_pipeline_ui_sources() -> None:
     assert "/api/jobs/approve" in hooks and "/api/jobs/reject" in hooks
     assert "/api/jobs/${jobId}/plan" in hooks and "/api/jobs/${jobId}/backlog" in hooks
     assert "/api/projects/${id}/pipeline" in hooks
+
+
+def test_a_phase_sent_back_by_the_review_reads_as_running_again(
+    store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
+) -> None:
+    """A phase whose gate passed once and was then reopened — by a standards review, or
+    by the specialist being asked again — is where the work is now. Reading the gate's
+    history alone made the card say "done" while its specialist was mid-call, and the
+    lane then showed no running step at all."""
+    engine, _ = _two_domain_engine(store, worktrees_root, seed)
+    job = engine.approve(engine.approve(engine.start(engine.create_job("x", repo).id).id).id)
+    cards = _by_key(job)
+    assert cards["phase:1"].status is StepStatus.DONE  # it really did finish
+
+    # the review reopens it: the job is developing phase 1 again, gate history and all
+    reopened = job.model_copy(
+        update={
+            "state": JobState.DEVELOPING,
+            "data": job.data.model_copy(update={"phase_index": 0}),
+        }
+    )
+    assert any(
+        (t.note or "").startswith("build gate passed for phase 1/") for t in reopened.history
+    )
+
+    # the card follows the job, not the gate's history: phase 1 is where the work is
+    assert _by_key(reopened)["phase:1"].status is StepStatus.RUNNING

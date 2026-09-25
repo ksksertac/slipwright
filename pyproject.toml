@@ -13,10 +13,14 @@ dependencies = [
     "python-multipart>=0.0.32",
     "httpx>=0.28",
     "cryptography>=42",
+    "sqlalchemy>=2.0",
+    "alembic>=1.13",
 ]
 
 [project.optional-dependencies]
 local-embeddings = ["sentence-transformers>=3.0"]
+# The database a hosted installation runs on; SQLite needs nothing extra.
+postgres = ["psycopg[binary]>=3.2"]
 
 [project.scripts]
 slipwright = "slipwright.cli:main"

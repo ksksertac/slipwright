@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import text
 
 from slipwright.api import create_app
 from slipwright.engine import Engine
@@ -43,9 +44,10 @@ def test_settings_are_encrypted_at_rest(tmp_path: Path) -> None:
         assert store.get_setting("github.token") == "ghp_abc"
         assert store.get_setting("missing", "dflt") == "dflt"
         assert store.setting_is_set("github.token") and not store.setting_is_set("nope")
-        raw = store._conn.execute(
-            "SELECT value_json FROM settings WHERE name = 'github.token'"
-        ).fetchone()[0]
+        with store.db.connect() as conn:
+            raw = conn.execute(
+                text("SELECT value_json FROM settings WHERE name = 'github.token'")
+            ).scalar_one()
         assert "ghp_abc" not in raw
         store.set_setting("plain", 2)
         assert store.get_setting("plain") == 2
@@ -124,14 +126,35 @@ def test_github_settings_endpoints(client: TestClient, engine: Engine) -> None:
     assert all(call.startswith(("GET /user",)) for call in gh.calls)
 
 
-def test_settings_writes_are_admin_only(engine: Engine) -> None:
+def test_a_code_host_connection_belongs_to_the_account_that_entered_it(
+    engine: Engine,
+) -> None:
+    """Connecting a code host is no longer an administrator's errand.
+
+    On a hosted installation every account brings its own token, so each writes its own
+    and sees nobody else's. What stays admin-only is the server's own configuration --
+    the price table, the standards index, mail — not this.
+    """
     engine.store.create_user("ada", "pw")  # admin
     engine.store.create_user("bob", "pw")
-    with TestClient(create_app(engine, resume_on_startup=False)) as c:
-        c.post("/api/auth/login", json={"username": "bob", "password": "pw"})
-        assert c.get("/api/settings/github").status_code == 200
-        assert c.put("/api/settings/github", json={"owner": "x"}).status_code == 403
-        assert c.post("/api/settings/github/test").status_code == 403
+    app = create_app(engine, resume_on_startup=False)
+    with TestClient(app) as bob, TestClient(app) as ada:
+        bob.post("/api/auth/login", json={"username": "bob", "password": "pw"})
+        ada.post("/api/auth/login", json={"username": "ada", "password": "pw"})
+
+        assert bob.put("/api/settings/github", json={"owner": "bobs-org"}).status_code == 200
+        assert bob.get("/api/settings/github").json()["owner"] == "bobs-org"
+        # the admin's own connection is untouched by what bob entered
+        assert ada.get("/api/settings/github").json()["owner"] != "bobs-org"
+
+    # and the price table is still the server's alone
+    with TestClient(app) as bob:
+        bob.post("/api/auth/login", json={"username": "bob", "password": "pw"})
+        priced = bob.put(
+            "/api/settings/prices/anthropic/some-model",
+            json={"input_usd": 1.0, "output_usd": 2.0},
+        )
+        assert priced.status_code == 403
 
 
 def test_gh_host_passes_the_stored_token_to_gh(

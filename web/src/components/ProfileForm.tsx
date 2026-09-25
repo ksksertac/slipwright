@@ -26,6 +26,35 @@ const PERMISSIONS: Permission[] = [
  * Editable project profile: build/test/run commands and, per role, model, thinking depth
  * and permissions. Used for a job's proposed profile and for a project's seed profile.
  */
+/** What the agents are usually asked to work in. Free text is still accepted: the list
+ *  is a shortcut, not a restriction. */
+const LANGUAGES = [
+  "python",
+  "typescript",
+  "javascript",
+  "kotlin",
+  "swift",
+  "java",
+  "go",
+  "rust",
+  "csharp",
+  "php",
+  "ruby",
+] as const;
+
+const PACKAGE_MANAGERS = [
+  "uv",
+  "pip",
+  "poetry",
+  "npm",
+  "pnpm",
+  "yarn",
+  "gradle",
+  "maven",
+  "go",
+  "cargo",
+] as const;
+
 export function ProfileForm({
   value,
   onChange,
@@ -45,62 +74,79 @@ export function ProfileForm({
     onChange({ ...value, roles: { ...value.roles, [role]: { ...roleOf(role), ...patch } } });
 
   return (
-    <div className="stack">
-      <div className="grid-2">
-        <Field label={tx("Language")}>
-          <input
-            type="text"
-            value={value.language}
-            disabled={disabled}
-            onChange={(e) => set({ language: e.target.value })}
-          />
-        </Field>
-        <Field label={tx("Package manager")}>
-          <input
-            type="text"
-            value={value.package_manager}
-            disabled={disabled}
-            onChange={(e) => set({ package_manager: e.target.value })}
-          />
-        </Field>
-      </div>
-      <Field label={tx("Build command")}>
-        <input
-          type="text"
-          className="mono"
-          value={value.build_cmd}
-          disabled={disabled}
-          onChange={(e) => set({ build_cmd: e.target.value })}
-        />
-      </Field>
-      <Field label={tx("Test command")}>
-        <input
-          type="text"
-          className="mono"
-          value={value.test_cmd}
-          disabled={disabled}
-          onChange={(e) => set({ test_cmd: e.target.value })}
-        />
-      </Field>
-      <div className="grid-2">
-        <Field label="Run command (must contain {port})">
+    <div className="stack profile-form">
+      <section className="profile-block">
+        <div className="profile-block-head">{tx("How it is built, tested and run")}</div>
+        <div className="grid-2">
+          <Field label={tx("Language")}>
+            {/* a list, not a bare box: these are the stacks the agents are asked about, and
+              typing one is still allowed because a project can be anything */}
+            <input
+              type="text"
+              list="profile-languages"
+              value={value.language}
+              disabled={disabled}
+              onChange={(e) => set({ language: e.target.value })}
+            />
+            <datalist id="profile-languages">
+              {LANGUAGES.map((l) => (
+                <option key={l} value={l} />
+              ))}
+            </datalist>
+          </Field>
+          <Field label={tx("Package manager")}>
+            <input
+              type="text"
+              list="profile-package-managers"
+              value={value.package_manager}
+              disabled={disabled}
+              onChange={(e) => set({ package_manager: e.target.value })}
+            />
+            <datalist id="profile-package-managers">
+              {PACKAGE_MANAGERS.map((m) => (
+                <option key={m} value={m} />
+              ))}
+            </datalist>
+          </Field>
+        </div>
+        <Field label={tx("Build command")}>
           <input
             type="text"
             className="mono"
-            value={value.run_cmd}
+            value={value.build_cmd}
             disabled={disabled}
-            onChange={(e) => set({ run_cmd: e.target.value })}
+            onChange={(e) => set({ build_cmd: e.target.value })}
           />
         </Field>
-        <Field label={tx("Default port")}>
+        <Field label={tx("Test command")}>
           <input
-            type="number"
-            value={value.port}
+            type="text"
+            className="mono"
+            value={value.test_cmd}
             disabled={disabled}
-            onChange={(e) => set({ port: Number(e.target.value) })}
+            onChange={(e) => set({ test_cmd: e.target.value })}
           />
         </Field>
-      </div>
+        <div className="grid-2">
+          <Field label={tx("Run command (must contain {port})")}>
+            <input
+              type="text"
+              className="mono"
+              value={value.run_cmd}
+              disabled={disabled}
+              onChange={(e) => set({ run_cmd: e.target.value })}
+            />
+          </Field>
+          <Field label={tx("Default port")}>
+            <input
+              type="number"
+              value={value.port}
+              disabled={disabled}
+              onChange={(e) => set({ port: Number(e.target.value) })}
+            />
+          </Field>
+        </div>
+      </section>
 
       <h3 style={{ marginTop: 8 }}>{tx("Roles")}</h3>
       <table>

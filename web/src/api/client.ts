@@ -15,6 +15,9 @@ export type WorkGroup = Schemas["WorkGroup"];
 export type WorkItem = Schemas["WorkItem"];
 export type Version = Schemas["Version"];
 export type Board = Schemas["Board"];
+export type ProjectCosts = Schemas["ProjectCosts"];
+export type JobCost = Schemas["JobCost"];
+export type Spend = Schemas["Spend"];
 export type EpicView = Schemas["EpicView"];
 export type StoryView = Schemas["StoryView"];
 export type TaskView = Schemas["TaskView"];
@@ -26,6 +29,11 @@ export type DayActivity = Schemas["DayActivity"];
 export type RoleWork = Schemas["RoleWork"];
 export type TestRun = Schemas["TestRun"];
 export type User = Schemas["User"];
+export type Membership = Schemas["Membership"];
+export type MemberStatus = Membership["status"];
+export type MyTeam = Schemas["MyTeam"];
+export type InvitationView = Schemas["InvitationView"];
+export type RoleName = Schemas["RoleName"];
 export type ApiToken = Schemas["ApiToken"];
 export type IssuedToken = Schemas["IssuedToken"];
 export type GitHubSettings = Schemas["GitHubSettings"];
@@ -52,13 +60,56 @@ export type AgentRouting = Schemas["AgentRouting"];
 export type ProviderSettingsIn = Schemas["ProviderSettingsIn"];
 export type ProviderModels = Schemas["ProviderModels"];
 export type Pipeline = Schemas["Pipeline"];
+export type Translations = Schemas["Translations"];
+export type Onboarding = Schemas["Onboarding"];
 export type LocalRepos = Schemas["LocalRepos"];
 export type Lane = Schemas["Lane"];
 export type StepCard = Schemas["StepCard"];
 export type StepStatus = StepCard["status"];
+export type StepDetail = Schemas["StepDetail"];
+export type StepGroup = Schemas["StepGroup"];
+export type StepItem = Schemas["StepItem"];
+export type StepItemStatus = StepItem["status"];
+export type StepBadge = Schemas["Badge"];
+export type DesignReview = Schemas["DesignReview"];
+export type DesignScreen = Schemas["DesignScreen"];
 export type BatchResult = Schemas["BatchResult"];
 export type BatchOutcome = Schemas["BatchOutcome"];
 export type PlanEdit = Schemas["PlanEdit"];
+export type BriefView = Schemas["BriefView"];
+export type ProjectBrief = Schemas["ProjectBrief"];
+export type BriefItem = Schemas["BriefItem"];
+export type BriefCategory = NonNullable<BriefItem["category"]>;
+export type BriefEdit = Schemas["BriefEdit"];
+export type Intake = Schemas["Intake"];
+export type IntakeQuestion = Schemas["IntakeQuestion"];
+export type DeployEdit = Schemas["DeployEdit"];
+export type DeployScriptIn = Schemas["DeployScriptIn"];
+
+/** One part of the product and what it is written in. It travels inside the plan, which
+ * the API types as a free-form object, so the shape is spelled out here. */
+export type StackChoice = {
+  domain: "backend" | "web" | "mobile" | "infra";
+  language: string;
+  framework?: string;
+  why?: string;
+};
+
+/** The deployment proposal as it sits on a job (`job.data.deploy`). */
+export type DeployPlan = {
+  summary?: string;
+  target: "aws" | "azure" | "none";
+  services?: string[];
+  scripts?: { path: string; purpose: string }[];
+  notes?: string[];
+};
+export type MailSettings = Schemas["MailSettingsView"];
+export type MailSettingsIn = Schemas["MailSettingsIn"];
+export type MailTestResult = Schemas["MailTestResult"];
+export type OutboxLetter = Schemas["OutboxLetter"];
+export type SupportRequest = Schemas["SupportRequestView"];
+export type SupportRequestIn = Schemas["SupportRequestIn"];
+export type SupportCategory = SupportRequestIn["category"];
 export type StandardsRule = Schemas["StandardsRule"];
 export type StandardsStatus = Schemas["StandardsStatus"];
 export type StandardsSettingsIn = Schemas["StandardsSettingsIn"];
@@ -77,6 +128,32 @@ export class ApiError extends Error {
 
 export const UNAUTHORIZED_EVENT = "slipwright:unauthorized";
 
+/** Why the server last refused a session, when it was worth saying: the header the API
+ * answers with (`removed`, `invited`). It is kept for the login page, which is where the
+ * browser is about to land, and read once. */
+const SIGNED_OUT_HEADER = "x-slipwright-signed-out";
+const SIGNED_OUT_KEY = "slipwright:signed-out";
+
+export function takeSignedOutReason(): string | null {
+  try {
+    const reason = sessionStorage.getItem(SIGNED_OUT_KEY);
+    if (reason) sessionStorage.removeItem(SIGNED_OUT_KEY);
+    return reason;
+  } catch {
+    return null; // a browser with storage turned off simply shows the plain login page
+  }
+}
+
+function rememberSignedOut(resp: Response): void {
+  const reason = resp.headers.get(SIGNED_OUT_HEADER);
+  if (!reason) return;
+  try {
+    sessionStorage.setItem(SIGNED_OUT_KEY, reason);
+  } catch {
+    /* nothing to do: the message is a courtesy, not the mechanism */
+  }
+}
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const init: RequestInit = {
     method,
@@ -93,6 +170,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     data = JSON.parse(text);
   }
   if (!resp.ok) {
+    rememberSignedOut(resp);
     if (resp.status === 401 && !path.startsWith("/api/auth/login")) {
       window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
     }

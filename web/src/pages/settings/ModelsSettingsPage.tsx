@@ -3,7 +3,6 @@ import { describeError, type ProviderSettings } from "../../api/client";
 import { useProviderModels, useProviders, useSaveProvider, useTestProvider } from "../../api/hooks";
 import { useAuth } from "../../auth/AuthProvider";
 import { ErrorBox, Loading, PageHead } from "../../components/ui";
-import { Crumbs } from "../../components/Crumbs";
 import { IconCheck, IconChevron } from "../../components/icons";
 import { useT } from "../../i18n";
 
@@ -23,7 +22,6 @@ export function ModelsSettingsPage() {
   const none = !list.some((p) => p.key_set);
   return (
     <div>
-      <Crumbs items={[{ label: "Settings" }, { label: "Models" }]} />
       <PageHead
         title={tx("Models")}
         subtitle={tx("API keys for Anthropic, OpenAI and DeepSeek.")}

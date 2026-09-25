@@ -205,7 +205,11 @@ export function RoleLoadChart({ roles }: { roles: RoleWork[] }) {
           {rows.map((r) => (
             <li key={r.role} title={r.last_used ? timeAgo(r.last_used) : undefined}>
               <span className="name truncate">
-                <AgentIcon role={r.role} />
+                {/* the role's own hue on its glyph, as on its card; the bar stays one
+                    colour, because there the length is what carries the number */}
+                <span className="role-ink" data-agent={r.role}>
+                  <AgentIcon role={r.role} />
+                </span>
                 {tx(r.label)}
               </span>
               <span className="track">

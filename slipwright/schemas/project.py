@@ -62,6 +62,16 @@ class Project(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     id: str = Field(default_factory=new_job_id, min_length=1)
+    owner_id: str | None = Field(
+        default=None,
+        description="The account this project belongs to. None on projects from before "
+        "accounts owned anything: those belong to the installation.",
+    )
+    is_demo: bool = Field(
+        default=False,
+        description="The worked example a new account starts with. It has no checkout and "
+        "nothing runs in it: it is read-only, and deleting it is the point.",
+    )
     name: str = Field(min_length=1)
     description: str = ""
     repo_path: Path | None = Field(

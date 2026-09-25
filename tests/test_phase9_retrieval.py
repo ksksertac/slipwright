@@ -23,7 +23,7 @@ from slipwright.standards.retrieval import (
     retrieve,
 )
 from slipwright.store import JobStore
-from tests.pipeline import full_engine, full_provider, full_seed, set_plan
+from tests.pipeline import full_engine, full_provider, full_seed, past_design, set_plan
 
 KAFKA = "Add a Kafka consumer that retries failed messages with backoff"
 FORM = "Add a signup form with labelled inputs and keyboard focus"
@@ -68,7 +68,8 @@ def _two_phase_job(store: JobStore, worktrees_root: Path, seed: Profile, repo: P
     engine = full_engine(store, worktrees_root, seed, provider)
     job = engine.start(engine.create_job("messaging and signup", repo).id)
     job = engine.approve(job.id)  # backlog
-    job = engine.approve(job.id)  # architecture -> develop both phases -> qa gate
+    job = engine.approve(job.id)  # architecture -> the backend phase, then the screens
+    job = past_design(engine, job)  # the web phase waits for them; this test is not about that
     assert job.state is JobState.AWAITING_TEST_APPROVAL, job.history[-1]
     return engine, provider, job
 
@@ -79,7 +80,7 @@ def test_every_role_gets_core_and_its_domain(
     _, provider, _ = _two_phase_job(store, worktrees_root, seed, repo)
     by_role = {r.role: r for r in provider.requests}
     core = core_text(GLOBAL_DIR)
-    assert core.startswith("# Core rules")
+    assert core.startswith("# Ortak kurallar")
     for role, req in by_role.items():
         section = _standards(req)
         assert section["core"] == core
@@ -104,12 +105,14 @@ def test_kafka_phase_gets_retry_rules_and_form_phase_gets_accessibility(
     web = next(r for r in provider.requests if r.role is RoleName.WEB_UI)
 
     backend_headings = _headings(backend)
-    assert any("Kafka consumers and retries" in h for h in backend_headings), backend_headings
-    assert not any("Accessibility" in h for h in backend_headings)
+    assert any("Kafka tüketicileri ve yeniden denemeler" in h for h in backend_headings), (
+        backend_headings
+    )
+    assert not any("Erişilebilirlik" in h for h in backend_headings)
     assert all(s["page"].startswith("backend/") for s in _standards(backend)["retrieved"])
 
     web_headings = _headings(web)
-    assert any("Accessibility" in h for h in web_headings), web_headings
+    assert any("Erişilebilirlik" in h for h in web_headings), web_headings
     assert not any("Kafka" in h for h in web_headings)
     assert all(s["page"].startswith("web/") for s in _standards(web)["retrieved"])
 
@@ -129,7 +132,8 @@ def test_retrievals_are_recorded_per_phase_in_the_history(
     assert any(n.startswith("standards (qa): ") for n in notes)
     entry = next(t for t in job.history if (t.note or "").startswith("standards (backend"))
     assert entry.detail is not None
-    assert "domain: backend" in entry.detail and "Kafka consumers and retries" in entry.detail
+    assert "domain: backend" in entry.detail
+    assert "Kafka tüketicileri ve yeniden denemeler" in entry.detail
     items = job_activity(job)
     kinds = {(i.kind, i.role) for i in items if i.kind is ActivityKind.STANDARDS}
     assert (ActivityKind.STANDARDS, RoleName.BACKEND) in kinds
@@ -256,7 +260,7 @@ def test_project_core_page_is_appended(tmp_path: Path) -> None:
         "---\ndomain: core\n---\n\n# Our rules\n\n## Licences\n\nMIT only.\n", encoding="utf-8"
     )
     text = core_text(GLOBAL_DIR, tmp_path)
-    assert text.startswith("# Core rules") and text.rstrip().endswith("MIT only.")
+    assert text.startswith("# Ortak kurallar") and text.rstrip().endswith("MIT only.")
     assert core_text(tmp_path / "nowhere") == ""
 
 
