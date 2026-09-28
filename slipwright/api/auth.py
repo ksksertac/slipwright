@@ -37,6 +37,27 @@ def _engine(request: Request) -> Engine:
     engine: Engine = request.app.state.engine
     return engine
 
+
+def engine_for(request: Request) -> Engine:
+    """The engine bound to whoever is asking.
+
+    Model keys, Git and Jira tokens and which model each agent runs on belong to an
+    account, so anything that reads or writes them must go through that account's
+    settings. This was once done in the settings router and *not* in the projects one:
+    the Agents page then read the installation's settings, showed Anthropic as the
+    default however the person had set theirs, and pinning an agent to a model wrote
+    somewhere no job would ever read.
+
+    Somebody invited onto a team is bound to the account that invited them
+    (``tenant_id``), because the settings their work runs under are that account's. What
+    they may *change* is decided by the guards on each endpoint, not here.
+    """
+    engine = _engine(request)
+    user = getattr(request.state, "user", None)
+    if user is None or user.id == "anonymous":
+        return engine
+    return engine.for_user(str(user.tenant_id))
+
 #: Told to the browser when a session is refused for a reason worth showing on the login
 #: page. The application clears it as soon as it has been read once.
 SIGNED_OUT_HEADER = "X-Slipwright-Signed-Out"

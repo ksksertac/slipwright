@@ -5,7 +5,7 @@ Two kinds of setting live here and they are governed differently.
 **A person's own** -- model API keys, Git host tokens, the Jira connection, which model
 each of their agents runs on. Any signed-in account reads and writes its own, because on
 a hosted installation everybody brings their own keys and nobody should need an
-administrator to enter one. ``_engine`` binds every call below to the caller.
+administrator to enter one. ``engine_for`` binds every call below to the caller.
 
 **The installation's** -- what models cost, how the shared standards index is built, the
 sender mail goes out from, where webhooks are posted. Those stay admin-only, and
@@ -26,7 +26,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 
 from slipwright import prices
-from slipwright.api.auth import require_admin, require_owner
+from slipwright.api.auth import engine_for, require_admin, require_owner
 from slipwright.engine import Engine
 from slipwright.github import GitHubError, GitHubIdentity, GitHubRepo, GitHubSettings
 from slipwright.jira import JiraAccount, JiraError, JiraProject, JiraSettings
@@ -106,28 +106,6 @@ class ProviderModels(BaseModel):
     models: list[str]
 
 
-def _engine(request: Request) -> Engine:
-    """The engine bound to whoever is asking.
-
-    Every settings page below reads and writes through this, so a model key, a Git token
-    or a Jira connection entered here belongs to that account and to nobody else. The
-    settings that are the server's rather than a person's -- mail, prices, webhooks, how
-    the standards index is built -- are routed back to the installation by
-    ``store/scoped.py`` whatever engine they are asked of, so the admin-only endpoints
-    below still see and change exactly what they always did.
-
-    Somebody on a team is bound to the account that invited them (``tenant_id``), because
-    the settings they are allowed to look at -- which model an agent runs on, the team's
-    standards -- are the ones their work actually runs under. What they may *change* is
-    decided by the guards on each endpoint, not here.
-    """
-    eng: Engine = request.app.state.engine
-    user = getattr(request.state, "user", None)
-    if user is None or user.id == "anonymous":
-        return eng
-    return eng.for_user(str(user.tenant_id))
-
-
 class SourceSettingsIn(BaseModel):
     """What the sources page may change. An omitted token keeps the stored one."""
 
@@ -144,14 +122,14 @@ class SourceSettingsIn(BaseModel):
 @router.get("/settings/sources", response_model=list[SourceSettings])
 def get_sources(request: Request) -> list[SourceSettings]:
     """Every known host: whether it is connected, where it points, which is the default."""
-    return _engine(request).source_settings()
+    return engine_for(request).source_settings()
 
 
 @router.put("/settings/sources/{name}", response_model=list[SourceSettings])
 def put_source(name: str, body: SourceSettingsIn, request: Request) -> list[SourceSettings]:
     require_owner(request)
     try:
-        return _engine(request).update_source_settings(
+        return engine_for(request).update_source_settings(
             name,
             token=body.token,
             owner=body.owner,
@@ -169,7 +147,7 @@ def test_source(name: str, request: Request) -> Identity:
     """Ask the host who the stored token belongs to: 400 without a token, 502 when the
     host refuses it."""
     require_owner(request)
-    eng = _engine(request)
+    eng = engine_for(request)
     if name not in SOURCES:
         raise HTTPException(status_code=404, detail=f"unknown source: {name}")
     try:
@@ -196,7 +174,7 @@ class NewRepo(BaseModel):
 def create_source_repo(name: str, body: NewRepo, request: Request) -> Repo:
     """Open a repository on the host and hand it back, ready for a project to clone."""
     require_owner(request)
-    eng = _engine(request)
+    eng = engine_for(request)
     if name not in SOURCES:
         raise HTTPException(status_code=404, detail=f"unknown source: {name}")
     try:
@@ -211,7 +189,7 @@ def create_source_repo(name: str, body: NewRepo, request: Request) -> Repo:
 @router.get("/settings/sources/{name}/repos", response_model=list[Repo])
 def source_repos(name: str, request: Request) -> list[Repo]:
     """The repositories that host's token can see, for the new-project picker."""
-    eng = _engine(request)
+    eng = engine_for(request)
     if name not in SOURCES:
         raise HTTPException(status_code=404, detail=f"unknown source: {name}")
     try:
@@ -223,13 +201,13 @@ def source_repos(name: str, request: Request) -> list[Repo]:
 
 @router.get("/settings/github", response_model=GitHubSettings)
 def get_github(request: Request) -> GitHubSettings:
-    return _engine(request).github_settings()
+    return engine_for(request).github_settings()
 
 
 @router.put("/settings/github", response_model=GitHubSettings)
 def put_github(body: GitHubSettingsIn, request: Request) -> GitHubSettings:
     require_owner(request)
-    return _engine(request).update_github_settings(
+    return engine_for(request).update_github_settings(
         token=body.token,
         owner=body.owner,
         base_branch=body.base_branch,
@@ -241,7 +219,7 @@ def put_github(body: GitHubSettingsIn, request: Request) -> GitHubSettings:
 def test_github(request: Request) -> GitHubIdentity:
     """Call GitHub with the stored token; 400 when none is stored, 502 when it fails."""
     require_owner(request)
-    eng = _engine(request)
+    eng = engine_for(request)
     try:
         client = eng.github_client()
     except GitHubError as exc:
@@ -254,7 +232,7 @@ def test_github(request: Request) -> GitHubIdentity:
 
 @router.get("/settings/github/repos", response_model=list[GitHubRepo])
 def github_repos(request: Request) -> list[GitHubRepo]:
-    eng = _engine(request)
+    eng = engine_for(request)
     try:
         return eng.github_client().list_repos()
     except GitHubError as exc:
@@ -265,7 +243,7 @@ def github_repos(request: Request) -> list[GitHubRepo]:
 @router.get("/settings/profile", response_model=Profile)
 def default_profile(request: Request) -> Profile:
     """The engine's default seed profile: what a project without its own starts from."""
-    return _engine(request).seed_profile
+    return engine_for(request).seed_profile
 
 
 # -- model providers ---------------------------------------------------------------------------
@@ -274,7 +252,7 @@ def default_profile(request: Request) -> Profile:
 @router.get("/settings/providers", response_model=list[ProviderSettings])
 def get_providers(request: Request) -> list[ProviderSettings]:
     """Every known model provider with whether a key is set (never the key itself)."""
-    return [ProviderSettings(**p) for p in _engine(request).provider_settings()]
+    return [ProviderSettings(**p) for p in engine_for(request).provider_settings()]
 
 
 # -- what one account may take of a shared machine ------------------------------------------
@@ -308,7 +286,7 @@ class QuotaUsage(BaseModel):
 @router.get("/quota", response_model=QuotaUsage)
 def get_quota(request: Request) -> QuotaUsage:
     """What you are using of the server, and where the line is."""
-    eng = _engine(request)
+    eng = engine_for(request)
     owner = _caller(request)
     use = eng.quotas.usage(owner)
     return QuotaUsage(
@@ -323,7 +301,7 @@ def get_quota(request: Request) -> QuotaUsage:
 def put_quota(body: QuotaSettingsIn, request: Request) -> QuotaSettings:
     """Raise or lower the limits. The server's own decision, so administrators only."""
     require_admin(request)
-    changed = _engine(request).quotas.update(
+    changed = engine_for(request).quotas.update(
         **{k: v for k, v in body.model_dump().items() if v is not None}
     )
     return QuotaSettings(**vars(changed))
@@ -362,7 +340,7 @@ class Dismiss(BaseModel):
 
 
 def _onboarding(request: Request) -> Onboarding:
-    eng = _engine(request)
+    eng = engine_for(request)
     has_key = any(p["key_set"] for p in eng.provider_settings())
     has_host = any(s.token_set for s in eng.source_settings())
     # the same scope the settings above are read in: somebody on a team is getting the
@@ -394,7 +372,7 @@ def get_onboarding(request: Request) -> Onboarding:
 @router.put("/onboarding", response_model=Onboarding)
 def put_onboarding(body: Dismiss, request: Request) -> Onboarding:
     """Stop showing the checklist -- or show it again."""
-    _engine(request).store.set_setting("onboarding.dismissed", body.dismissed)
+    engine_for(request).store.set_setting("onboarding.dismissed", body.dismissed)
     return _onboarding(request)
 
 
@@ -407,7 +385,7 @@ def _provider_name(name: str) -> str:
 @router.put("/settings/providers/{name}", response_model=list[ProviderSettings])
 def put_provider(name: str, body: ProviderSettingsIn, request: Request) -> list[ProviderSettings]:
     require_owner(request)
-    eng = _engine(request)
+    eng = engine_for(request)
     eng.update_provider_settings(_provider_name(name), **body.model_dump())
     return [ProviderSettings(**p) for p in eng.provider_settings()]
 
@@ -421,7 +399,7 @@ def test_provider(name: str, request: Request) -> ProviderModels:
 
 @router.get("/settings/providers/{name}/models", response_model=ProviderModels)
 def provider_models(name: str, request: Request) -> ProviderModels:
-    eng = _engine(request)
+    eng = engine_for(request)
     try:
         return ProviderModels(name=name, models=eng.provider_models(_provider_name(name)))
     except ProviderError as exc:
@@ -459,7 +437,7 @@ class ModelPriceIn(BaseModel):
 @router.get("/settings/prices", response_model=ModelPrices)
 def list_model_prices(request: Request, provider: str | None = None) -> ModelPrices:
     """Every stored price, newest fetch first in the header."""
-    eng = _engine(request)
+    eng = engine_for(request)
     last = eng.store.get_setting("prices.last_fetch", {}) or {}
     return ModelPrices(
         prices=[ModelPrice(**row) for row in eng.store.list_prices(provider)],
@@ -473,7 +451,7 @@ def list_model_prices(request: Request, provider: str | None = None) -> ModelPri
 def refresh_model_prices(request: Request) -> ModelPrices:
     """Fetch the published table now instead of waiting for the daily run."""
     require_admin(request)
-    eng = _engine(request)
+    eng = engine_for(request)
     try:
         eng.refresh_prices()
     except prices.PriceFetchError as exc:
@@ -485,7 +463,7 @@ def refresh_model_prices(request: Request) -> ModelPrices:
 def set_model_price(provider: str, model: str, body: ModelPriceIn, request: Request) -> ModelPrice:
     """Enter a rate by hand. It is kept through every later fetch until it is deleted."""
     require_admin(request)
-    eng = _engine(request)
+    eng = engine_for(request)
     eng.store.put_price(
         provider, model, input_usd=body.input_usd, output_usd=body.output_usd, source="manual"
     )
@@ -498,7 +476,7 @@ def set_model_price(provider: str, model: str, body: ModelPriceIn, request: Requ
 def delete_model_price(provider: str, model: str, request: Request) -> None:
     """Drop a hand-entered rate; the next fetch puts the published one back."""
     require_admin(request)
-    _engine(request).store.delete_price(provider, model)
+    engine_for(request).store.delete_price(provider, model)
 
 
 # -- standards (RAG) ---------------------------------------------------------------------------
@@ -541,7 +519,7 @@ class StandardsHit(BaseModel):
 
 @router.get("/settings/standards", response_model=StandardsStatus)
 def get_standards(request: Request) -> StandardsStatus:
-    eng = _engine(request)
+    eng = engine_for(request)
     eng.ensure_standards_indexed()
     stats = eng.standards_index.stats()
     return StandardsStatus(
@@ -559,13 +537,13 @@ def put_standards(body: StandardsSettingsIn, request: Request) -> StandardsSetti
         raise HTTPException(
             status_code=400, detail="embedder must be none, openai, local or hashing"
         )
-    return StandardsSettings(**_engine(request).update_standards_settings(**body.model_dump()))
+    return StandardsSettings(**engine_for(request).update_standards_settings(**body.model_dump()))
 
 
 @router.post("/settings/standards/reindex", response_model=StandardsStatus)
 def reindex_standards(request: Request, project_id: str | None = None) -> StandardsStatus:
     require_admin(request)
-    eng = _engine(request)
+    eng = engine_for(request)
     try:
         eng.reindex_standards(None, force=True)
         if project_id:
@@ -583,7 +561,7 @@ def search_standards(
     request: Request, q: str, domain: str | None = None, project_id: str | None = None, k: int = 4
 ) -> list[StandardsHit]:
     """Try a query the way the agents do: ranked sections with their scores."""
-    eng = _engine(request)
+    eng = engine_for(request)
     try:
         hits = eng.search_standards(q, domain, project_id=project_id, k=k)
     except StandardsIndexError as exc:
@@ -609,13 +587,13 @@ def search_standards(
 
 @router.get("/settings/jira", response_model=JiraSettings)
 def get_jira(request: Request) -> JiraSettings:
-    return _engine(request).jira_settings()
+    return engine_for(request).jira_settings()
 
 
 @router.put("/settings/jira", response_model=JiraSettings)
 def put_jira(body: JiraSettingsIn, request: Request) -> JiraSettings:
     require_owner(request)
-    return _engine(request).update_jira_settings(**body.model_dump())
+    return engine_for(request).update_jira_settings(**body.model_dump())
 
 
 class JiraSweep(BaseModel):
@@ -627,7 +605,7 @@ class JiraSweep(BaseModel):
 
 @router.get("/settings/jira/sweep", response_model=JiraSweep | None)
 def last_jira_sweep(request: Request) -> JiraSweep | None:
-    data = _engine(request).store.get_setting("jira.last_sweep")
+    data = engine_for(request).store.get_setting("jira.last_sweep")
     return JiraSweep(**data) if data else None
 
 
@@ -635,14 +613,14 @@ def last_jira_sweep(request: Request) -> JiraSweep | None:
 def run_jira_sweep(request: Request) -> JiraSweep:
     """Run the PO's round now: complete missing issues and sprints for every job."""
     require_owner(request)
-    return JiraSweep(**_engine(request).jira_sweep())
+    return JiraSweep(**engine_for(request).jira_sweep())
 
 
 @router.post("/settings/jira/test", response_model=JiraTestResult)
 def test_jira(request: Request) -> JiraTestResult:
     """Call Jira with the stored credentials (and the agent account when set)."""
     require_owner(request)
-    eng = _engine(request)
+    eng = engine_for(request)
     try:
         client = eng.jira_client()
     except JiraError as exc:
@@ -669,7 +647,7 @@ class NewJiraProject(BaseModel):
 def create_jira_project(body: NewJiraProject, request: Request) -> JiraProject:
     """Create the project the new-project page asked for, led by the connected account."""
     require_admin(request)
-    eng = _engine(request)
+    eng = engine_for(request)
     try:
         return eng.jira_client().create_project(body.key, body.name)
     except JiraError as exc:
@@ -679,7 +657,7 @@ def create_jira_project(body: NewJiraProject, request: Request) -> JiraProject:
 
 @router.get("/settings/jira/projects", response_model=list[JiraProject])
 def jira_projects(request: Request) -> list[JiraProject]:
-    eng = _engine(request)
+    eng = engine_for(request)
     try:
         return eng.jira_client().list_projects()
     except JiraError as exc:
@@ -776,7 +754,7 @@ def list_standards_pages(
     request: Request, domain: str | None = None, project_id: str | None = None
 ) -> list[StandardsPage]:
     """The pages of a domain (plus ``core.md``) in the global corpus or a project's overrides."""
-    eng = _engine(request)
+    eng = engine_for(request)
     pages = eng.standards_editor.list_pages(_repo(eng, project_id), domain)
     return [_page(p) for p in pages]
 
@@ -785,7 +763,7 @@ def list_standards_pages(
 def get_standards_page(
     path: str, request: Request, project_id: str | None = None
 ) -> StandardsPageText:
-    eng = _engine(request)
+    eng = engine_for(request)
     repo = _repo(eng, project_id)
     try:
         text = eng.standards_editor.read(path, repo)
@@ -825,7 +803,7 @@ def put_standards_page(path: str, body: PageWrite, request: Request) -> Standard
     property of the code rather than of a person. A local install with no accounts
     keeps writing the files and committing them on the review branch, as before.
     """
-    eng = _engine(request)
+    eng = engine_for(request)
     owner = _caller(request)
     if body.project_id is not None or owner is None:
         user = require_admin(request)
@@ -850,7 +828,7 @@ def put_standards_page(path: str, body: PageWrite, request: Request) -> Standard
 @router.post("/standards/pages", response_model=StandardsPage, status_code=201)
 def create_standards_page(body: PageCreate, request: Request) -> StandardsPage:
     user = require_admin(request)
-    eng = _engine(request)
+    eng = engine_for(request)
     repo = _repo(eng, body.project_id)
     try:
         info = eng.standards_editor.create(
@@ -868,7 +846,7 @@ def delete_standards_page(path: str, request: Request, project_id: str | None = 
 
     Deleting is therefore never destructive -- the default is always underneath.
     """
-    eng = _engine(request)
+    eng = engine_for(request)
     owner = _caller(request)
     if project_id is not None or owner is None:
         user = require_admin(request)
@@ -896,14 +874,14 @@ def list_standards_rules(
     request: Request, domain: str, project_id: str | None = None
 ) -> list[StandardsRule]:
     """The domain's rules, flat, in the global corpus or a project's overrides."""
-    eng = _engine(request)
+    eng = engine_for(request)
     return [_rule(r) for r in eng.standards_editor.list_rules(_repo(eng, project_id), domain)]
 
 
 @router.post("/standards/rules", response_model=StandardsRule, status_code=201)
 def create_standards_rule(body: RuleCreate, request: Request) -> StandardsRule:
     user = require_admin(request)
-    eng = _engine(request)
+    eng = engine_for(request)
     repo = _repo(eng, body.project_id)
     try:
         rule = eng.standards_editor.add_rule(
@@ -918,7 +896,7 @@ def create_standards_rule(body: RuleCreate, request: Request) -> StandardsRule:
 @router.put("/standards/rules/{rule_id:path}", response_model=StandardsRule)
 def put_standards_rule(rule_id: str, body: RuleWrite, request: Request) -> StandardsRule:
     user = require_admin(request)
-    eng = _engine(request)
+    eng = engine_for(request)
     repo = _repo(eng, body.project_id)
     try:
         rule = eng.standards_editor.update_rule(
@@ -935,7 +913,7 @@ def put_standards_rule(rule_id: str, body: RuleWrite, request: Request) -> Stand
 @router.delete("/standards/rules/{rule_id:path}", status_code=204)
 def delete_standards_rule(rule_id: str, request: Request, project_id: str | None = None) -> None:
     user = require_admin(request)
-    eng = _engine(request)
+    eng = engine_for(request)
     repo = _repo(eng, project_id)
     try:
         eng.standards_editor.delete_rule(rule_id, repo, author=user.username)
@@ -957,14 +935,14 @@ class NotificationSettings(BaseModel):
 
 @router.get("/settings/notifications", response_model=NotificationSettings)
 def get_notifications(request: Request) -> NotificationSettings:
-    eng = _engine(request)
+    eng = engine_for(request)
     return NotificationSettings(webhook_url=eng.store.get_setting("notifications.webhook_url"))
 
 
 @router.put("/settings/notifications", response_model=NotificationSettings)
 def put_notifications(body: NotificationSettings, request: Request) -> NotificationSettings:
     require_admin(request)
-    eng = _engine(request)
+    eng = engine_for(request)
     url = (body.webhook_url or "").strip() or None
     if url and not url.startswith(("http://", "https://")):
         raise HTTPException(status_code=400, detail="webhook_url must be http(s)")
@@ -1063,14 +1041,14 @@ def _mail_view(eng: Engine) -> MailSettingsView:
 def get_mail_settings(request: Request) -> MailSettingsView:
     """How mail leaves this installation, and where support requests land."""
     require_admin(request)
-    return _mail_view(_engine(request))
+    return _mail_view(engine_for(request))
 
 
 @router.put("/settings/mail", response_model=MailSettingsView)
 def put_mail_settings(body: MailSettingsIn, request: Request) -> MailSettingsView:
     """Change what is given; an omitted password keeps the stored one."""
     require_admin(request)
-    eng = _engine(request)
+    eng = engine_for(request)
     changes = body.model_dump(exclude_none=True, exclude={"clear_password"})
     if body.clear_password:
         changes["password"] = ""
@@ -1094,7 +1072,7 @@ def test_mail_settings(body: MailTestIn, request: Request) -> MailTestResult:
     """Post one message with the settings as they now stand, so a mistake is found here
     rather than by somebody who never got their verification link."""
     require_admin(request)
-    eng = _engine(request)
+    eng = engine_for(request)
     try:
         sent_to = eng.support().send_test(body.to, lang=body.lang)
     except SupportError as exc:
@@ -1110,4 +1088,4 @@ def get_mail_outbox(request: Request, limit: int = 20) -> list[OutboxLetter]:
     """The letters held back because no SMTP is configured. Contains live links, so it is
     admin-only like the rest of this page."""
     require_admin(request)
-    return [OutboxLetter(**row) for row in read_outbox(_engine(request).store, limit=limit)]
+    return [OutboxLetter(**row) for row in read_outbox(engine_for(request).store, limit=limit)]

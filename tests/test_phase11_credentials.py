@@ -154,3 +154,95 @@ def test_the_settings_pages_are_personal(app: TestClient, repo: Path) -> None:
 
     assert anthropic(bob)["key_set"] is False, "bob must not inherit ada's key"
     assert bob.get("/api/settings/jira").json()["site_url"] is None
+
+
+def test_a_project_is_cloned_on_its_owners_token(
+    engine: Engine, repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A project clones before it has a single job, so there is nothing to borrow the
+    credentials from: they have to come from its owner. Reading the installation's
+    settings instead left the URL bare, and git asked a server with no terminal for a
+    username."""
+    import shutil
+
+    from slipwright.schemas.project import Project
+
+    engine.for_user("ada").update_source_settings("github", token="ghp-adas-own-token")
+
+    seen: list[str] = []
+
+    def fake_clone(url: str, target: Path) -> None:
+        seen.append(url)
+        shutil.copytree(repo, target)
+
+    monkeypatch.setattr("slipwright.engine.g.clone", fake_clone)
+    engine.create_project(
+        Project(name="ada's", github_repo="ada/tasklist", owner_id="ada")
+    )
+
+    assert seen, "the project was never cloned"
+    assert "ghp-adas-own-token@" in seen[0], f"cloned anonymously: {seen[0]}"
+
+
+def test_cloning_without_a_token_says_so(
+    engine: Engine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """git's own complaint is about the terminal, not about the missing token. The
+    person is told what they actually have to go and do."""
+    from slipwright.engine import ProjectCloneError
+    from slipwright.schemas.project import Project
+    from slipwright.workspace import git as g
+
+    def fake_clone(url: str, target: Path) -> None:
+        raise g.GitError(["clone"], 128, "fatal: could not read Username for 'https://github.com'")
+
+    monkeypatch.setattr("slipwright.engine.g.clone", fake_clone)
+    with pytest.raises(ProjectCloneError) as caught:
+        engine.create_project(
+            Project(name="nobody's", github_repo="ada/tasklist", owner_id="ada")
+        )
+    assert "Settings -> Sources" in str(caught.value)
+
+
+def test_the_agents_page_shows_the_account_its_own_setup(app: TestClient) -> None:
+    """The Agents page reads the same settings a job will run on.
+
+    It used to read the installation's instead: an account whose default provider was
+    DeepSeek saw every card claim Anthropic, and pinning an agent from that page wrote
+    where no job would ever look.
+    """
+    ada = _person(app, "ada@example.com")
+    bob = _person(app, "bob@example.com")
+
+    saved = ada.put(
+        "/api/settings/providers/deepseek",
+        json={"api_key": "sk-ada-deepseek", "make_default": True, "default_model": "deepseek-chat"},
+    )
+    assert saved.status_code == 200, saved.text
+
+    cards = ada.get("/api/agents").json()
+    assert cards, "no agents"
+    assert {c["effective_provider"] for c in cards} == {"deepseek"}
+    assert {c["effective_model"] for c in cards} == {"deepseek-chat"}
+
+    # and it is ada's setup, not the installation's
+    assert {c["effective_provider"] for c in bob.get("/api/agents").json()} == {"anthropic"}
+
+
+def test_pinning_an_agent_is_what_that_accounts_jobs_run_on(app: TestClient) -> None:
+    ada = _person(app, "ada@example.com")
+    ada.put("/api/settings/providers/deepseek", json={"api_key": "sk-ada-deepseek"})
+
+    pinned = ada.put(
+        "/api/agents/backend/routing", json={"provider": "deepseek", "model": "deepseek-chat"}
+    )
+    assert pinned.status_code == 200, pinned.text
+    assert pinned.json()["assigned_provider"] == "deepseek"
+
+    # the run path resolves the same pin from the job's owner, which is where it counts
+    engine: Engine = app.app.state.engine  # type: ignore[attr-defined]
+    store: JobStore = engine.store
+    ada_id = store.find_by_email("ada@example.com")
+    assert ada_id is not None
+    assert engine.for_user(ada_id.id).agent_routing("backend") == ("deepseek", "deepseek-chat")
+    assert engine.for_user("somebody-else").agent_routing("backend") is None

@@ -354,7 +354,7 @@ def create_app(
 
     from slipwright.api.auth import (
         auth_dependency,
-        require_admin,
+        engine_for,
         require_owner,
         require_verified,
     )
@@ -407,9 +407,6 @@ def create_app(
         when a browser is still running an older one — a hashed bundle it cached."""
         return Version(build=_build_id(static_dir))
 
-    def _engine(request: Request) -> Engine:
-        eng: Engine = request.app.state.engine
-        return eng
 
     def _owner(request: Request) -> str | None:
         """Whose data this request may touch.
@@ -430,7 +427,7 @@ def create_app(
         user = getattr(request.state, "user", None)
         if user is None or not user.is_member:
             return set()
-        agents: set[RoleName] = _engine(request).raw_store.agents_of(user.id)
+        agents: set[RoleName] = engine_for(request).raw_store.agents_of(user.id)
         return agents
 
     def _may_act(request: Request, job: Job) -> None:
@@ -462,10 +459,15 @@ def create_app(
         )
 
     def _may_configure(request: Request, role: RoleName) -> None:
-        """Agent setup: the owner's administrator, or whoever holds that one agent."""
+        """Agent setup: whoever holds that one agent, else the owner of the account.
+
+        Not the installation's administrator, which is what this asked for while there
+        was one shared set of agents. An account's agents are its own now, and its keys
+        pay for them.
+        """
         if role in _my_agents(request):
             return
-        require_admin(request)
+        require_owner(request)
 
     def _agents(eng: Engine, request: Request) -> list[AgentSummary]:
         owner = _owner(request)
@@ -497,7 +499,7 @@ def create_app(
         if job.project_id is None:
             return
         try:
-            project = _engine(request).store.get_project(job.project_id, _owner(request))
+            project = engine_for(request).store.get_project(job.project_id, _owner(request))
         except ProjectNotFound:
             return
         if project.is_demo:
@@ -528,7 +530,7 @@ def create_app(
     @api.get("/overview", response_model=Overview)
     def get_overview(request: Request, recent: int = 20) -> Overview:
         """Numbers, pending approvals and recent activity across every project."""
-        eng = _engine(request)
+        eng = engine_for(request)
         owner = _owner(request)
         return overview(
             len(eng.store.list_projects(owner)), eng.store.list(owner_id=owner), recent=recent
@@ -538,13 +540,13 @@ def create_app(
     def get_all_activity(
         request: Request, limit: int | None = 50, role: RoleName | None = None
     ) -> list[ActivityItem]:
-        jobs = _engine(request).store.list(owner_id=_owner(request))
+        jobs = engine_for(request).store.list(owner_id=_owner(request))
         return project_activity(jobs, limit=limit, role=role)
 
     @api.get("/agents", response_model=list[AgentSummary])
     def get_agents(request: Request) -> list[AgentSummary]:
         """The agent cards: scope, default model routing and how much each has worked."""
-        eng = _engine(request)
+        eng = engine_for(request)
         return _agents(eng, request)
 
     @api.put("/agents/{role}/routing", response_model=AgentSummary)
@@ -552,7 +554,7 @@ def create_app(
         """Pin an agent to a provider and model. 400 when the provider is unknown, has no
         key, or no model was named -- the job would only fail at its first call."""
         _may_configure(request, role)
-        eng = _engine(request)
+        eng = engine_for(request)
         try:
             eng.assign_agent(role, body.provider, body.model)
         except (ValueError, ProviderUnavailableError) as exc:
@@ -564,7 +566,7 @@ def create_app(
     @api.get("/local-repos", response_model=LocalRepos)
     def local_repos(request: Request) -> LocalRepos:
         """Folders the server can register as local checkouts (the mounted repos root)."""
-        eng = _engine(request)
+        eng = engine_for(request)
         root = eng.local_repos_root
         return LocalRepos(
             root=root.as_posix() if root else None,
@@ -575,7 +577,7 @@ def create_app(
     def create_project(body: NewProject, request: Request) -> Project:
         require_owner(request)
         require_verified(request)
-        eng = _engine(request)
+        eng = engine_for(request)
         if body.repo_path is not None and not body.repo_path.is_dir():
             raise HTTPException(
                 status_code=400, detail=f"repo_path is not a directory: {body.repo_path}"
@@ -605,16 +607,16 @@ def create_app(
 
     @api.get("/projects", response_model=list[Project])
     def list_projects(request: Request) -> list[Project]:
-        return _engine(request).store.list_projects(_owner(request))
+        return engine_for(request).store.list_projects(_owner(request))
 
     @api.get("/projects/{project_id}", response_model=Project)
     def get_project(project_id: str, request: Request) -> Project:
-        return _get_project(_engine(request), project_id, request)
+        return _get_project(engine_for(request), project_id, request)
 
     @api.patch("/projects/{project_id}", response_model=Project)
     def patch_project(project_id: str, body: ProjectPatch, request: Request) -> Project:
         require_owner(request)
-        eng = _engine(request)
+        eng = engine_for(request)
         project = _get_project(eng, project_id, request)
         changes = body.model_dump(exclude_unset=True)
         try:
@@ -628,7 +630,7 @@ def create_app(
     @api.delete("/projects/{project_id}", status_code=204)
     def delete_project(project_id: str, request: Request) -> None:
         require_owner(request)
-        eng = _engine(request)
+        eng = engine_for(request)
         _get_project(eng, project_id, request)
         try:
             eng.store.delete_project(project_id)
@@ -641,27 +643,27 @@ def create_app(
     ) -> Job:
         require_owner(request)
         require_verified(request)
-        eng = _engine(request)
+        eng = engine_for(request)
         _get_project(eng, project_id, request)
         return _start(eng, eng.create_job(body.request, project_id=project_id), background)
 
     @api.get("/projects/{project_id}/jobs", response_model=list[Job])
     def list_project_jobs(project_id: str, request: Request) -> list[Job]:
-        eng = _engine(request)
+        eng = engine_for(request)
         _get_project(eng, project_id, request)
         return eng.store.list(project_id, owner_id=_owner(request))
 
     @api.get("/projects/{project_id}/board", response_model=Board)
     def get_board(project_id: str, request: Request) -> Board:
         """Epics, stories and tasks of every job whose plan was approved, with statuses."""
-        eng = _engine(request)
+        eng = engine_for(request)
         _get_project(eng, project_id, request)
         return project_board(project_id, eng.store.list(project_id, owner_id=_owner(request)))
 
     @api.get("/projects/{project_id}/pipeline", response_model=Pipeline)
     def get_pipeline(project_id: str, request: Request) -> Pipeline:
         """Every development as a lane of step cards, newest first."""
-        eng = _engine(request)
+        eng = engine_for(request)
         _get_project(eng, project_id, request)
         jobs = sorted(
             eng.store.list(project_id, owner_id=_owner(request)),
@@ -672,7 +674,7 @@ def create_app(
 
     @api.get("/projects/{project_id}/progress", response_model=ProjectProgress)
     def get_progress(project_id: str, request: Request) -> ProjectProgress:
-        eng = _engine(request)
+        eng = engine_for(request)
         _get_project(eng, project_id, request)
         return project_progress(project_id, eng.store.list(project_id, owner_id=_owner(request)))
 
@@ -681,7 +683,7 @@ def create_app(
         """What this project's developments cost, what they were expected to cost, and
         the gap. Spend is read from the per-call log; the expectation is arithmetic over
         what the roles have actually used here, so it sharpens as the project is used."""
-        eng = _engine(request)
+        eng = engine_for(request)
         project = _get_project(eng, project_id, request)
         owner = _owner(request)
         jobs = sorted(
@@ -701,7 +703,7 @@ def create_app(
         project_id: str, request: Request, limit: int | None = None
     ) -> list[ActivityItem]:
         """Every job's history, newest first; ``index`` addresses the detail endpoint."""
-        eng = _engine(request)
+        eng = engine_for(request)
         _get_project(eng, project_id, request)
         return project_activity(eng.store.list(project_id, owner_id=_owner(request)), limit=limit)
 
@@ -713,7 +715,7 @@ def create_app(
         When they differ this is the bridge -- keyed by the source text, so the page looks
         up whatever string it is about to render and falls back to it when there is no
         entry yet. A development already written in ``lang`` contributes nothing."""
-        eng = _engine(request)
+        eng = engine_for(request)
         _get_project(eng, project_id, request)
         return Translations(lang=lang, texts=eng.translations(lang, project_id=project_id))
 
@@ -721,7 +723,7 @@ def create_app(
     def get_all_translations(request: Request, lang: Language) -> Translations:
         """The same bridge across every project, for the dashboard's feed."""
         return Translations(
-            lang=lang, texts=_engine(request).translations(lang, owner_id=_owner(request))
+            lang=lang, texts=engine_for(request).translations(lang, owner_id=_owner(request))
         )
 
     # -- test runs -----------------------------------------------------------------------
@@ -736,14 +738,14 @@ def create_app(
     @api.get("/projects/{project_id}/brief", response_model=BriefView)
     def get_brief(project_id: str, request: Request) -> BriefView:
         """What Slipwright knows about the project, and how it came to know it."""
-        return _brief_view(_engine(request), project_id, request)
+        return _brief_view(engine_for(request), project_id, request)
 
     @api.post("/projects/{project_id}/brief/analysis", response_model=BriefView, status_code=202)
     def start_analysis(project_id: str, request: Request, background: BackgroundTasks) -> BriefView:
         """Read the checkout and propose the brief; the answer comes back on the brief."""
         require_owner(request)
         require_verified(request)
-        eng = _engine(request)
+        eng = engine_for(request)
         _get_project(eng, project_id, request)
         try:
             eng.start_analysis(project_id)
@@ -759,7 +761,7 @@ def create_app(
         """Answer the questions on the table (if any) and ask for the next round."""
         require_owner(request)
         require_verified(request)
-        eng = _engine(request)
+        eng = engine_for(request)
         _get_project(eng, project_id, request)
         try:
             eng.start_intake(project_id, body.answers)
@@ -774,7 +776,7 @@ def create_app(
     def save_brief(project_id: str, body: BriefEdit, request: Request) -> BriefView:
         require_owner(request)
         """Take the person's edits; approving is what lets the agents read any of it."""
-        eng = _engine(request)
+        eng = engine_for(request)
         _get_project(eng, project_id, request)
         try:
             eng.save_brief(project_id, body)
@@ -791,7 +793,7 @@ def create_app(
         """Run the profile's test command on the main checkout, or in a job's worktree."""
         require_owner(request)
         require_verified(request)
-        eng = _engine(request)
+        eng = engine_for(request)
         _get_project(eng, project_id, request)
         if body.job_id is not None:
             _get(eng, body.job_id, request)
@@ -807,7 +809,7 @@ def create_app(
     def list_test_runs(
         project_id: str, request: Request, job_id: str | None = None
     ) -> list[TestRun]:
-        eng = _engine(request)
+        eng = engine_for(request)
         _get_project(eng, project_id, request)
         return eng.store.list_test_runs(project_id, job_id, owner_id=_owner(request))
 
@@ -819,11 +821,11 @@ def create_app(
 
     @api.get("/test-runs/{run_id}", response_model=TestRun)
     def get_test_run(run_id: str, request: Request) -> TestRun:
-        return _get_run(_engine(request), run_id, request)
+        return _get_run(engine_for(request), run_id, request)
 
     @api.get("/test-runs/{run_id}/output", response_class=PlainTextResponse)
     def get_test_run_output(run_id: str, request: Request) -> str:
-        eng = _engine(request)
+        eng = engine_for(request)
         return eng.test_run_output(_get_run(eng, run_id, request))
 
     # -- jobs ----------------------------------------------------------------------------
@@ -833,7 +835,7 @@ def create_app(
         """Start a job straight from a repository path (its project is found or created)."""
         require_owner(request)
         require_verified(request)
-        eng = _engine(request)
+        eng = engine_for(request)
         if not body.repo_path.is_dir():
             raise HTTPException(
                 status_code=400, detail=f"repo_path is not a directory: {body.repo_path}"
@@ -842,17 +844,17 @@ def create_app(
 
     @api.get("/jobs", response_model=list[Job])
     def list_jobs(request: Request) -> list[Job]:
-        return _engine(request).store.list(owner_id=_owner(request))
+        return engine_for(request).store.list(owner_id=_owner(request))
 
     @api.get("/jobs/{job_id}", response_model=Job)
     def get_job(job_id: str, request: Request) -> Job:
-        return _get(_engine(request), job_id, request)
+        return _get(engine_for(request), job_id, request)
 
     @api.delete("/jobs/{job_id}", status_code=204)
     def delete_job(job_id: str, request: Request) -> None:
         require_owner(request)
         """Delete a finished job (worktree, branch, port and rows). Running jobs: 409."""
-        eng = _engine(request)
+        eng = engine_for(request)
         # deleting it is not running it: the example is meant to be thrown away
         _get(eng, job_id, request)
         try:
@@ -863,7 +865,7 @@ def create_app(
     @api.get("/jobs/{job_id}/history/{index}", response_model=Transition)
     def get_transition(job_id: str, index: int, request: Request) -> Transition:
         """One history entry in full (its ``detail`` holds the diff, log or JSON)."""
-        job = _get(_engine(request), job_id, request)
+        job = _get(engine_for(request), job_id, request)
         if index < 0 or index >= len(job.history):
             raise HTTPException(status_code=404, detail=f"no history entry {index}")
         return job.history[index]
@@ -873,7 +875,7 @@ def create_app(
         """What one pipeline step produced: the backlog it wrote, the decisions it took,
         the files it touched, the cases it proposed — each with when, and with whether it
         reached Jira. ``step_key`` is the key the lane card carries."""
-        job = _get(_engine(request), job_id, request)
+        job = _get(engine_for(request), job_id, request)
         detail = step_detail(job, step_key)
         if detail is None:
             raise HTTPException(status_code=404, detail=f"no step {step_key!r} on this job")
@@ -883,7 +885,7 @@ def create_app(
     def approve_many(body: Batch, request: Request, background: BackgroundTasks) -> BatchResult:
         """Approve several gates at once. Each job is an ordinary approval recorded on
         that job; one that is not at a gate is reported, never the whole batch."""
-        eng = _engine(request)
+        eng = engine_for(request)
         results: list[BatchOutcome] = []
         for job_id in dict.fromkeys(body.job_ids):
             try:
@@ -904,7 +906,7 @@ def create_app(
         body: BatchRejection, request: Request, background: BackgroundTasks
     ) -> BatchResult:
         """Reject several gates with one feedback text."""
-        eng = _engine(request)
+        eng = engine_for(request)
         results: list[BatchOutcome] = []
         for job_id in dict.fromkeys(body.job_ids):
             try:
@@ -922,7 +924,7 @@ def create_app(
 
     @api.post("/jobs/{job_id}/approve", response_model=Job)
     def approve(job_id: str, request: Request, background: BackgroundTasks) -> Job:
-        eng = _engine(request)
+        eng = engine_for(request)
         _may_act(request, _get(eng, job_id, request))
         try:
             job = eng.approve(job_id, run=False)
@@ -935,7 +937,7 @@ def create_app(
 
     @api.post("/jobs/{job_id}/reject", response_model=Job)
     def reject(job_id: str, body: Rejection, request: Request, background: BackgroundTasks) -> Job:
-        eng = _engine(request)
+        eng = engine_for(request)
         _may_act(request, _get(eng, job_id, request))
         try:
             job = eng.reject(job_id, body.feedback, run=False)
@@ -947,7 +949,7 @@ def create_app(
     @api.get("/jobs/{job_id}/design", response_model=DesignReview)
     def design_review(job_id: str, request: Request) -> DesignReview:
         """The screens of this development, with where each one stands."""
-        job = _get(_engine(request), job_id, request)
+        job = _get(engine_for(request), job_id, request)
         design = job.data.design or {}
         approvals = job.data.design_approvals or {}
         feedback = job.data.design_feedback or {}
@@ -984,7 +986,7 @@ def create_app(
         and every external asset, which leaves exactly what a mock is -- markup, inline
         styles and inline images.
         """
-        job = _get(_engine(request), job_id, request)
+        job = _get(engine_for(request), job_id, request)
         screens = (job.data.design or {}).get("screens") or []
         screen = next((s for s in screens if str(s.get("id")) == screen_id), None)
         if screen is None:
@@ -1014,7 +1016,7 @@ def create_app(
         background: BackgroundTasks,
     ) -> Job:
         """Sign off one screen, or send it back with what should be different."""
-        eng = _engine(request)
+        eng = engine_for(request)
         _may_act(request, _get(eng, job_id, request))
         try:
             job = eng.review_screen(
@@ -1032,7 +1034,7 @@ def create_app(
     @api.put("/jobs/{job_id}/profile", response_model=Job)
     def set_profile(job_id: str, body: Profile, request: Request) -> Job:
         """Edit the proposed profile while the job awaits its approval."""
-        eng = _engine(request)
+        eng = engine_for(request)
         _may_act(request, _get(eng, job_id, request))
         try:
             return eng.set_profile(job_id, body)
@@ -1042,7 +1044,7 @@ def create_app(
     @api.put("/jobs/{job_id}/backlog", response_model=Job)
     def set_backlog(job_id: str, body: BacklogEdit, request: Request) -> Job:
         """Edit the proposed backlog while the job awaits its approval."""
-        eng = _engine(request)
+        eng = engine_for(request)
         _may_act(request, _get(eng, job_id, request))
         try:
             return eng.set_backlog(job_id, body.breakdown)
@@ -1055,7 +1057,7 @@ def create_app(
     def set_plan(job_id: str, body: PlanEdit, request: Request) -> Job:
         """Edit the proposed plan while the job awaits the architecture approval; the
         edit must pass the Architect's own checks (one phase per task)."""
-        eng = _engine(request)
+        eng = engine_for(request)
         _may_act(request, _get(eng, job_id, request))
         try:
             return eng.set_plan(job_id, body.model_dump(exclude_none=True))
@@ -1067,7 +1069,7 @@ def create_app(
     @api.put("/jobs/{job_id}/tests", response_model=Job)
     def set_tests(job_id: str, body: TestCases, request: Request) -> Job:
         """Edit the proposed test list while the job awaits its approval."""
-        eng = _engine(request)
+        eng = engine_for(request)
         _may_act(request, _get(eng, job_id, request))
         try:
             return eng.set_test_cases(job_id, [c.model_dump() for c in body.test_cases])
@@ -1077,7 +1079,7 @@ def create_app(
     @api.put("/jobs/{job_id}/deploy", response_model=Job)
     def set_deploy(job_id: str, body: DeployEdit, request: Request) -> Job:
         """Edit the deployment proposal while the job waits at the deployment gate."""
-        eng = _engine(request)
+        eng = engine_for(request)
         _may_act(request, _get(eng, job_id, request))
         try:
             return eng.set_deploy(job_id, body.model_dump(exclude_unset=True))
@@ -1090,13 +1092,13 @@ def create_app(
     def get_worklist(job_id: str, request: Request) -> WorkList:
         """What each agent is about to do, grouped by agent: the list the person reads
         before starting a development, and the one they edit at the plan gate."""
-        eng = _engine(request)
+        eng = engine_for(request)
         return work_list(_get(eng, job_id, request))
 
     @api.get("/jobs/{job_id}/result", response_model=JobResult)
     def get_job_result(job_id: str, request: Request) -> JobResult:
         """What the development produced: branch, commits, files and how to get them."""
-        eng = _engine(request)
+        eng = engine_for(request)
         _get(eng, job_id, request)  # 404 for an unknown job
         result: JobResult = eng.job_result(job_id)
         return result
@@ -1107,7 +1109,7 @@ def create_app(
     ) -> Job:
         """Continue a failed job from the step it failed in."""
         require_owner(request)
-        eng = _engine(request)
+        eng = engine_for(request)
         _refuse_if_demo(request, _get(eng, job_id, request))
         try:
             job = eng.retry(job_id, run=False, feedback=(body.feedback if body else None))
@@ -1120,7 +1122,7 @@ def create_app(
     def replan(job_id: str, body: Replan, request: Request, background: BackgroundTasks) -> Job:
         """Send a failed job back to the plan with what should be tried instead."""
         require_owner(request)
-        eng = _engine(request)
+        eng = engine_for(request)
         _refuse_if_demo(request, _get(eng, job_id, request))
         try:
             job = eng.replan(job_id, body.note, run=False)
@@ -1137,7 +1139,7 @@ def create_app(
     def rerun(job_id: str, body: Rerun, request: Request, background: BackgroundTasks) -> Job:
         """Run the tests, or the DevOps step, again on a development that has stopped."""
         require_owner(request)
-        eng = _engine(request)
+        eng = engine_for(request)
         _refuse_if_demo(request, _get(eng, job_id, request))
         try:
             job = eng.rerun(job_id, body.step, run=False)
@@ -1158,7 +1160,7 @@ def create_app(
         """Overrule the supervisor's automatic approval: the feedback reaches the next role
         through the inbox and the approval is marked undone."""
         require_owner(request)
-        eng = _engine(request)
+        eng = engine_for(request)
         _refuse_if_demo(request, _get(eng, job_id, request))
         try:
             return eng.undo_auto_approval(job_id, body.feedback)
@@ -1170,7 +1172,7 @@ def create_app(
     @api.post("/jobs/{job_id}/message", response_model=Job)
     def message(job_id: str, body: Message, request: Request) -> Job:
         require_owner(request)
-        eng = _engine(request)
+        eng = engine_for(request)
         _may_act(request, _get(eng, job_id, request))
         return eng.message(job_id, body.text)
 
@@ -1189,7 +1191,7 @@ def create_app(
         stream after that many events (for scripts and tests). ``since`` (or the
         ``Last-Event-ID`` header a reader sends when it reconnects) replays what it
         missed, as far back as the bus still holds."""
-        eng = _engine(request)
+        eng = engine_for(request)
         owner = _owner(request)
         return StreamingResponse(
             _event_stream(

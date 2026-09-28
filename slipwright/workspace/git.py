@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 
@@ -32,12 +33,18 @@ def run(
 
 def clone(url: str, target: Path) -> None:
     """Clone ``url`` into ``target`` (which must not exist yet)."""
+    # Without a token in the URL git asks for a username. There is nobody at the other
+    # end of a server's stdin, so it either hangs until the request times out or fails
+    # with an error about the terminal rather than about the credentials. Refusing the
+    # prompt turns that into an immediate, honest failure the caller can explain.
+    env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
     proc = subprocess.run(
         ["git", "clone", "--quiet", url, str(target)],
         capture_output=True,
         text=True,
         encoding="utf-8",
         errors="replace",
+        env=env,
     )
     if proc.returncode != 0:
         raise GitError(["clone", url, str(target)], proc.returncode, proc.stderr)

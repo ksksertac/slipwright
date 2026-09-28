@@ -1292,30 +1292,40 @@ class Engine:
 
     def create_project(self, project: Project) -> Project:
         """Register a project; clone its remote first when it has no local checkout."""
+        # The clone runs on the *owner's* token, exactly as the pushes that follow it
+        # will. The sources page writes that token under the account, so an unbound read
+        # here finds nothing at all and git falls through to asking for a username.
+        mine = self.for_user(project.owner_id)
         if project.repo_path is None:
             url = project.effective_clone_url
             if url is None:
                 raise ValueError("project needs a repo_path or a github_repo/clone_url")
             target = self.repos_root / project.id
             target.parent.mkdir(parents=True, exist_ok=True)
+            source = project.source or mine.default_source()
+            token = mine.source_token(source)
             try:
-                g.clone(self._authenticated(url, project.source), target)
+                g.clone(mine._authenticated(url, source), target)
             except g.GitError as exc:
                 # git prints back the URL it was given, token and all; this message is
                 # written into the job's history and shown on the page
-                raise ProjectCloneError(
-                    scrub(
-                        f"could not clone {url}: {exc.stderr}",
-                        self.for_user(project.owner_id).source_token(project.source),
+                detail = scrub(f"could not clone {url}: {exc.stderr}", token)
+                if token is None:
+                    # a private repository refused an anonymous clone: the missing token
+                    # is the cause, and git's own words never say so
+                    spec = SOURCES.get(source)
+                    detail += (
+                        f" -- no token for {spec.label if spec else source}:"
+                        " add one under Settings -> Sources"
                     )
-                ) from exc
-            self._seed_if_empty(target, project)
+                raise ProjectCloneError(detail) from exc
+            mine._seed_if_empty(target, project)
             project = project.model_copy(update={"repo_path": target})
         elif not project.repo_path.is_dir():
             raise ValueError(f"repo_path is not a directory: {project.repo_path}")
         else:
             self._ensure_git_repository(project.repo_path)
-        self._wire_remote(project)
+        mine._wire_remote(project)
         return self.store.create_project(project)
 
     def update_project(self, project: Project) -> Project:

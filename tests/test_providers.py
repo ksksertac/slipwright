@@ -575,15 +575,23 @@ def test_an_agent_assigned_a_model_runs_on_it_whatever_the_profile_says(
 
 
 def test_agent_routing_endpoint(engine: Engine, monkeypatch: pytest.MonkeyPatch) -> None:
+    """An account routes its own agents, on its own keys.
+
+    This asked for the installation's administrator while there was one set of agents for
+    everybody. There is one set per account now: bob pinning an agent is bob's own
+    business, and the key it would spend has to be bob's.
+    """
     for spec in PROVIDERS.values():
         monkeypatch.delenv(spec.env_var, raising=False)
-    engine.store.create_user("ada", "pw")
+    ada = engine.store.create_user("ada", "pw")
     engine.store.create_user("bob", "pw")
-    engine.update_provider_settings("deepseek", api_key="sk-d", make_default=True)
+    engine.for_user(ada.id).update_provider_settings("deepseek", api_key="sk-d", make_default=True)
     with TestClient(create_app(engine, resume_on_startup=False)) as c:
         c.post("/api/auth/login", json={"username": "bob", "password": "pw"})
         body = {"provider": "deepseek", "model": "deep-model"}
-        assert c.put("/api/agents/qa/routing", json=body).status_code == 403
+        refused = c.put("/api/agents/qa/routing", json=body)
+        assert refused.status_code == 400, "bob may pin his own agents"
+        assert "no API key for DeepSeek" in refused.json()["detail"], "on ada's key, though"
         c.post("/api/auth/login", json={"username": "ada", "password": "pw"})
         # a provider without a key is a 400 with the same note the job would fail with
         resp = c.put("/api/agents/qa/routing", json={"provider": "openai", "model": "gpt"})
@@ -602,6 +610,11 @@ def test_agent_routing_endpoint(engine: Engine, monkeypatch: pytest.MonkeyPatch)
         assert agents["qa"]["assigned_model"] == "deep-model"
         assert agents["po"]["assigned_model"] is None
 
+        # and the pin is ada's: bob's own qa agent is still following his profile
+        c.post("/api/auth/login", json={"username": "bob", "password": "pw"})
+        assert {a["role"]: a["assigned_model"] for a in c.get("/api/agents").json()}["qa"] is None
+
+        c.post("/api/auth/login", json={"username": "ada", "password": "pw"})
         resp = c.put("/api/agents/qa/routing", json={"provider": None, "model": None})
         assert resp.status_code == 200 and resp.json()["assigned_model"] is None
 
