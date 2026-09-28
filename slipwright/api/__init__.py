@@ -91,6 +91,9 @@ class NewProject(BaseModel):
     clone_url: str | None = None
     jira_project_key: str | None = None
     profile: Profile | None = None
+    # what the agents should build first. Held on the project until the brief is approved
+    # rather than started here, so the first development knows what it is working on
+    pending_request: str = ""
     review: ReviewMode = "advisory"
     language: Language = "tr"
     # which hosting service the repository lives on (Settings → Sources)
@@ -121,6 +124,9 @@ class BriefView(BaseModel):
 
     kind: Literal["analysis", "intake"]
     brief: ProjectBrief
+    # the first development waiting on this brief, so the page can say what approving
+    # will set off; empty on every project that has none
+    pending_request: str = ""
 
 
 class IntakeAnswers(BaseModel):
@@ -733,7 +739,11 @@ def create_app(
     def _brief_view(eng: Engine, project_id: str, request: Request) -> BriefView:
         project = _get_project(eng, project_id, request)
         kind = cast(Literal["analysis", "intake"], eng.brief_kind(project))
-        return BriefView(kind=kind, brief=eng.store.get_brief(project_id))
+        return BriefView(
+            kind=kind,
+            brief=eng.store.get_brief(project_id),
+            pending_request=project.pending_request,
+        )
 
     @api.get("/projects/{project_id}/brief", response_model=BriefView)
     def get_brief(project_id: str, request: Request) -> BriefView:
@@ -773,7 +783,9 @@ def create_app(
         return _brief_view(eng, project_id, request)
 
     @api.put("/projects/{project_id}/brief", response_model=BriefView)
-    def save_brief(project_id: str, body: BriefEdit, request: Request) -> BriefView:
+    def save_brief(
+        project_id: str, body: BriefEdit, request: Request, background: BackgroundTasks
+    ) -> BriefView:
         require_owner(request)
         """Take the person's edits; approving is what lets the agents read any of it."""
         eng = engine_for(request)
@@ -784,6 +796,12 @@ def create_app(
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         except (EmptyApproval, ValueError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        # approving is what the first development was waiting for: it starts here, with
+        # the brief the person has just signed off in its context
+        waiting = eng.take_pending_request(project_id)
+        if waiting is not None:
+            require_verified(request)
+            _start(eng, waiting, background)
         return _brief_view(eng, project_id, request)
 
     @api.post("/projects/{project_id}/test-runs", response_model=TestRun, status_code=202)

@@ -237,3 +237,61 @@ def test_the_brief_dies_with_its_project(engine: Engine, repo: Path) -> None:
     engine.execute_analysis(project.id)
     engine.store.delete_project(project.id)
     assert engine.store.get_brief(project.id).items == []
+
+
+# --- the first development waits for the brief ----------------------------------------------
+
+
+def test_the_first_development_waits_for_the_brief(
+    engine: Engine, client: TestClient, repo: Path
+) -> None:
+    """The wizard's last step used to start the job straight away, which meant the brief
+    never ran and the whole team planned and built without knowing what the project was.
+    It waits on the project until somebody approves what the agents will be told."""
+    (repo / "app.py").write_text("x = 1\n")
+    made = client.post(
+        "/api/projects",
+        json={"name": "p", "repo_path": str(repo), "pending_request": "add a login page"},
+    )
+    assert made.status_code == 201
+    project_id = made.json()["id"]
+
+    # nothing is running: the request is on the project, not in a job
+    assert client.get(f"/api/projects/{project_id}/jobs").json() == []
+    view = client.get(f"/api/projects/{project_id}/brief").json()
+    assert view["pending_request"] == "add a login page"
+
+    engine.start_analysis(project_id)
+    engine.execute_analysis(project_id)
+    items = [i.model_dump(mode="json") for i in engine.brief(project_id).items]
+
+    # saving a draft is not approving, so it still waits
+    client.put(f"/api/projects/{project_id}/brief", json={"items": items, "approve": False})
+    assert client.get(f"/api/projects/{project_id}/jobs").json() == []
+
+    approved = client.put(
+        f"/api/projects/{project_id}/brief", json={"items": items, "approve": True}
+    )
+    assert approved.status_code == 200
+    jobs = client.get(f"/api/projects/{project_id}/jobs").json()
+    assert [j["request"] for j in jobs] == ["add a login page"]
+    # and it started knowing what the project is, which was the whole point
+    assert jobs[0]["data"]["brief"], "the development began with an empty brief"
+
+    # claimed once: approving again does not start a second development
+    assert approved.json()["pending_request"] == ""
+    client.put(f"/api/projects/{project_id}/brief", json={"items": items, "approve": True})
+    assert len(client.get(f"/api/projects/{project_id}/jobs").json()) == 1
+
+
+def test_a_project_with_nothing_pending_starts_nothing(
+    engine: Engine, client: TestClient, repo: Path
+) -> None:
+    """Approving a brief on a project made without a first request is just approving."""
+    (repo / "app.py").write_text("x = 1\n")
+    project = engine.create_project(Project(name="p", repo_path=repo))
+    engine.start_analysis(project.id)
+    engine.execute_analysis(project.id)
+    items = [i.model_dump(mode="json") for i in engine.brief(project.id).items]
+    client.put(f"/api/projects/{project.id}/brief", json={"items": items, "approve": True})
+    assert client.get(f"/api/projects/{project.id}/jobs").json() == []

@@ -95,6 +95,13 @@ class Project(BaseModel):
         "approve one work list; separate: the backlog and the architecture are approved "
         "one after the other.",
     )
+    pending_request: str = Field(
+        default="",
+        description="The first development, written on the wizard's last step and held "
+        "back until the brief is approved. An agent that starts before the brief is ready "
+        "is handed an empty one and builds without knowing what the project is, so the "
+        "request waits here instead. Cleared the moment its job is created.",
+    )
     jira_project_key: str | None = None
     language: Language = Field(
         default="tr",

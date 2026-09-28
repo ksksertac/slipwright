@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Crumbs } from "../components/Crumbs";
 import { PageHead } from "../components/ui";
-import { api, describeError, type Job, type NewProject } from "../api/client";
+import { describeError, type NewProject } from "../api/client";
 import {
   useCreateProject,
   useCreateSourceRepo,
@@ -72,6 +72,9 @@ export function NewProjectPage() {
       description: description.trim(),
       jira_project_key: chosenJiraKey.trim() || null,
       language,
+      // held on the project, not started here: an agent whose brief is not ready is
+      // handed an empty one and builds without knowing what the project is
+      pending_request: firstRequest.trim(),
     };
     if (host === "local") {
       body.repo_path = repoPath.trim();
@@ -101,14 +104,9 @@ export function NewProjectPage() {
         body.github_repo = made.full_name;
       }
       const project = await create.mutateAsync(body);
-      if (firstRequest.trim()) {
-        // the first development starts right away; the pipeline shows it working
-        await api.post<Job>(`/api/projects/${project.id}/jobs`, { request: firstRequest.trim() });
-        navigate(`/projects/${project.id}`);
-        return;
-      }
-      // nothing to build yet: get to know the project first — the checkout is read, or,
-      // when there is nothing to read, the Product Owner asks what you are building
+      // get to know the project first, whatever was typed above — the checkout is read,
+      // or, when there is nothing to read, the Product Owner asks what you are building.
+      // Approving the brief is what sets the first development off.
       navigate(`/projects/${project.id}/brief`);
     } catch (err) {
       setError(describeError(err));

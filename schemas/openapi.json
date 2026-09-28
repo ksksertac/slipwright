@@ -613,11 +613,17 @@
             ],
             "title": "Kind",
             "type": "string"
+          },
+          "pending_request": {
+            "default": "",
+            "title": "Pending Request",
+            "type": "string"
           }
         },
         "required": [
           "brief",
-          "kind"
+          "kind",
+          "pending_request"
         ],
         "title": "BriefView",
         "type": "object"
@@ -3616,6 +3622,11 @@
             "title": "Name",
             "type": "string"
           },
+          "pending_request": {
+            "default": "",
+            "title": "Pending Request",
+            "type": "string"
+          },
           "plan_gate": {
             "default": "combined",
             "enum": [
@@ -4313,6 +4324,12 @@
             "description": "The account this project belongs to. None on projects from before accounts owned anything: those belong to the installation.",
             "title": "Owner Id"
           },
+          "pending_request": {
+            "default": "",
+            "description": "The first development, written on the wizard's last step and held back until the brief is approved. An agent that starts before the brief is ready is handed an empty one and builds without knowing what the project is, so the request waits here instead. Cleared the moment its job is created.",
+            "title": "Pending Request",
+            "type": "string"
+          },
           "plan_gate": {
             "default": "separate",
             "description": "combined: the Product Owner and the Architect run together and you approve one work list; separate: the backlog and the architecture are approved one after the other.",
@@ -4382,6 +4399,7 @@
           "language",
           "name",
           "owner_id",
+          "pending_request",
           "plan_gate",
           "profile",
           "repo_path",

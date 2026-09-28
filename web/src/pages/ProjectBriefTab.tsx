@@ -48,6 +48,21 @@ const CATEGORIES: BriefCategory[] = [
   "risks",
 ];
 
+/** The development the project was created with, still waiting. It is the person's own
+ *  words, so it is shown as typed and never translated. */
+function Waiting({ request }: { request: string }) {
+  const tx = useT();
+  return (
+    <div className="card">
+      <div className="faint small">{tx("Waiting on this brief")}</div>
+      <p style={{ margin: "4px 0 0" }}>{request}</p>
+      <p className="muted small" style={{ marginBottom: 0 }}>
+        {tx("It starts the moment you approve, with everything below in its context.")}
+      </p>
+    </div>
+  );
+}
+
 export function ProjectBriefTab({ projectId }: { projectId: string }) {
   const tx = useT();
   const project = useProject(projectId);
@@ -92,6 +107,7 @@ function BriefEditor({ projectId, view }: { projectId: string; view: BriefView }
   const analyse = useAnalyseProject(projectId);
   const save = useSaveBrief(projectId);
   const running = view.brief.state === "running";
+  const waiting = view.pending_request.trim();
   const [items, setItems] = useState<Row[]>(view.brief.items.map(toRow));
   const [touched, setTouched] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
@@ -136,7 +152,9 @@ function BriefEditor({ projectId, view }: { projectId: string; view: BriefView }
         onSuccess: () => {
           setTouched(false);
           toast.ok(tx("Saved — the agents read this from now on"));
-          navigate(`/projects/${projectId}/developments`);
+          // approving releases the development the project was created with, so the
+          // pipeline is where something is now happening
+          navigate(waiting ? `/projects/${projectId}` : `/projects/${projectId}/developments`);
         },
       },
     );
@@ -144,6 +162,7 @@ function BriefEditor({ projectId, view }: { projectId: string; view: BriefView }
   if (view.brief.state === "empty" && !running) {
     return (
       <div className="card empty" style={{ padding: 32, textAlign: "center" }}>
+        {waiting && <Waiting request={waiting} />}
         <p>{tx("Nothing has been written down yet.")}</p>
         <button
           className="btn primary"
@@ -240,6 +259,8 @@ function BriefEditor({ projectId, view }: { projectId: string; view: BriefView }
           ))
         )}
       </div>
+
+      {waiting && <Waiting request={waiting} />}
 
       <div className="card row spread">
         <div className="small muted">

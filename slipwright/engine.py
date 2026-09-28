@@ -2231,6 +2231,23 @@ class Engine:
             brief.error = ""
             return self.store.save_brief(brief)
 
+    def take_pending_request(self, project_id: str) -> Job | None:
+        """The first development the project was made with, once the brief is ready.
+
+        The wizard's last step asks what the agents should build. Starting it there meant
+        the brief never ran, and a job whose brief is not ready is handed an empty one --
+        the whole team then plans and builds without knowing what the project is. So the
+        request waits on the project and is claimed here, exactly once: under the brief's
+        own lock, and cleared before the caller can ask again.
+        """
+        with self._brief_locks[project_id]:
+            project = self.store.get_project(project_id)
+            if not project.pending_request.strip() or not self.store.get_brief(project_id).ready:
+                return None
+            job = self.create_job(project.pending_request, project_id=project_id)
+            self.store.update_project(project.model_copy(update={"pending_request": ""}))
+            return job
+
     # -- test runs -----------------------------------------------------------------------
 
     def project_profile(self, project: Project) -> Profile:

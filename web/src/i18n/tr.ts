@@ -1375,6 +1375,9 @@ export const TR: Record<string, string> = {
   "Project brief": "Proje künyesi",
   "Add a line": "Madde ekle",
   "No lines yet.": "Henüz madde yok.",
+  "Waiting on this brief": "Bu tanıtımı bekliyor",
+  "It starts the moment you approve, with everything below in its context.":
+    "Sen onaylar onaylamaz, aşağıdaki her şey bağlamında olacak şekilde başlıyor.",
   "Approved — every agent reads this.": "Onaylandı — bunu her ajan okuyor.",
   "Not approved yet: the agents are told nothing until you approve it.":
     "Henüz onaylanmadı: sen onaylayana kadar ajanlara hiçbir şey söylenmiyor.",
