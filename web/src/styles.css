@@ -631,16 +631,19 @@ p {
   background: var(--surface-3);
   color: var(--text);
 }
+/* A tinted button and a tinted badge were the same two colours with no border between
+   them, so at a gate the actions read as labels sitting beside the supervisor's verdict
+   chip -- nothing said they could be pressed. Badges never carry a border; these do. */
 .btn.ok {
   background: var(--good-soft);
   color: var(--good-text);
-  border-color: transparent;
+  border-color: var(--good);
 }
 .btn.bad,
 .btn.danger {
   background: var(--bad-soft);
   color: var(--bad-text);
-  border-color: transparent;
+  border-color: var(--bad);
 }
 .btn.danger.solid {
   background: var(--bad);
@@ -5373,4 +5376,349 @@ tr.run-detail td {
   .phase-body {
     padding-left: 13px;
   }
+}
+
+/* QA's test cases (components/TestCases.tsx): each a numbered card, the endpoints it
+   touches pinned to the right, statuses coloured by class so a 4xx case reads as one */
+.tc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.tc {
+  display: flex;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.tc-n {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--mono);
+  background: var(--surface-3);
+  color: var(--text-2);
+}
+.tc-body {
+  min-width: 0;
+  flex: 1;
+}
+.tc-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 12px;
+}
+.tc-title {
+  font-size: 14px;
+}
+.tc-eps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.tc-id {
+  font-size: 11px;
+  color: var(--text-3);
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+}
+.tc-desc {
+  margin-top: 6px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-2);
+}
+.tc-desc code,
+.tc-ep {
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--code);
+  border: 1px solid var(--line);
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.tc-ep {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding-left: 0;
+  overflow: hidden;
+}
+.tc-method {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  padding: 2px 6px;
+  align-self: stretch;
+  display: inline-flex;
+  align-items: center;
+  background: var(--surface-3);
+  color: var(--text-2);
+}
+.tc-method.get {
+  background: var(--info-soft);
+  color: var(--info-text);
+}
+.tc-method.post {
+  background: var(--good-soft);
+  color: var(--good-text);
+}
+.tc-method.put,
+.tc-method.patch {
+  background: var(--warn-soft);
+  color: var(--warn-text);
+}
+.tc-method.delete {
+  background: var(--bad-soft);
+  color: var(--bad-text);
+}
+.tc-status {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  color: var(--text-2);
+}
+.tc-status.s2 {
+  background: var(--good-soft);
+  color: var(--good-text);
+}
+.tc-status.s3 {
+  background: var(--info-soft);
+  color: var(--info-text);
+}
+.tc-status.s4 {
+  background: var(--warn-soft);
+  color: var(--warn-text);
+}
+.tc-status.s5 {
+  background: var(--bad-soft);
+  color: var(--bad-text);
+}
+.tc-status-name {
+  font-weight: 500;
+  opacity: 0.85;
+}
+
+/* notifications (pages/settings/NotificationsPage.tsx) */
+.notify-steps {
+  margin: 0 0 12px;
+  font-size: 13px;
+}
+.notify-steps summary {
+  cursor: pointer;
+  color: var(--accent);
+}
+.notify-steps ol {
+  margin: 8px 0 0 18px;
+  padding: 0;
+  color: var(--text-2);
+  line-height: 1.6;
+}
+.notify-events {
+  border: 0;
+  padding: 0;
+  margin: 4px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+}
+.notify-events legend {
+  width: 100%;
+  margin-bottom: 4px;
+}
+.notify-clear {
+  align-self: flex-start;
+  margin-top: 2px;
+}
+.notify-endpoint {
+  display: block;
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 8px 10px;
+  background: var(--code);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  overflow-wrap: anywhere;
+}
+.notify-code {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.notify-code-value code {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  padding: 8px 16px;
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+/* the checkout's path on the project settings tab: long, and never worth wrapping mid-word */
+.checkout-path {
+  overflow-wrap: anywhere;
+  padding: 4px 8px;
+  background: var(--code);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+/* a chat service's mark on the Notifications tabs, its setup state on the corner */
+.channel-icon {
+  position: relative;
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+.channel-icon svg {
+  width: 100%;
+  height: 100%;
+}
+.tabs.dotted a:not(.active) .channel-icon svg {
+  opacity: 0.75;
+}
+.channel-icon-dot {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 2px solid var(--bg);
+  background: var(--good-text);
+}
+.channel-icon-dot.todo {
+  background: var(--info-text);
+}
+/* nothing set up yet: the mark alone says enough */
+.channel-icon-dot.optional {
+  display: none;
+}
+
+/* notifications: Personal / Group under the service tabs, and air between the cards */
+.notify-parts {
+  margin: 14px 0 16px;
+}
+.notify-parts a {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid transparent;
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 6px 14px;
+  border-radius: var(--radius-ctl);
+  text-decoration: none;
+}
+.notify-parts a:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.notify-parts a.on {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+.notify-part-ready {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--good-text);
+}
+.notify-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-top: 16px;
+}
+.notify-cards .setup-panel {
+  margin: 0;
+}
+.notify-cards .form .row {
+  margin-top: 6px;
+}
+
+/* the project brief, grouped: each kind of line under its own tile, in the sidebar's style */
+.brief-group {
+  --h: 212;
+  margin-top: 18px;
+  border: 1px solid var(--line);
+  border-left: 3px solid hsl(var(--h) 60% 55%);
+  border-radius: var(--radius);
+  padding: 12px 14px 4px;
+  background: var(--surface);
+}
+.brief-group-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.brief-group-head strong {
+  font-size: 14px;
+}
+.brief-group-icon {
+  display: inline-flex;
+}
+.brief-group-icon svg {
+  width: 30px;
+  height: 30px;
+  box-sizing: border-box;
+  padding: 6px;
+  border-radius: 9px;
+  background: hsl(var(--h) 68% 94%);
+  color: hsl(var(--h) 68% 38%);
+}
+.brief-group-reader {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: hsl(var(--h) 68% 94%);
+  color: hsl(var(--h) 60% 32%);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .brief-group-icon svg,
+  :root:not([data-theme="light"]) .brief-group-reader {
+    background: hsl(var(--h) 30% 16%);
+    color: hsl(var(--h) 60% 70%);
+  }
+}
+:root[data-theme="dark"] .brief-group-icon svg,
+:root[data-theme="dark"] .brief-group-reader {
+  background: hsl(var(--h) 30% 16%);
+  color: hsl(var(--h) 60% 70%);
+}
+.brief-group .rules {
+  margin: 0;
+}
+.brief-group .rule:last-child {
+  border-bottom: 0;
 }

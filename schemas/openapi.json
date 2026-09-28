@@ -697,6 +697,202 @@
         "title": "ChangedFile",
         "type": "object"
       },
+      "ChannelSettingsIn": {
+        "additionalProperties": false,
+        "properties": {
+          "clear": {
+            "description": "Secrets to remove.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Clear",
+            "type": "array"
+          },
+          "events": {
+            "anyOf": [
+              {
+                "items": {
+                  "enum": [
+                    "gate",
+                    "failed",
+                    "done"
+                  ],
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Events"
+          },
+          "fields": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fields"
+          },
+          "secrets": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "New values; a missing or empty one keeps what is stored.",
+            "title": "Secrets"
+          }
+        },
+        "title": "ChannelSettingsIn",
+        "type": "object"
+      },
+      "ChannelView": {
+        "properties": {
+          "bot_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The bot's name, where known.",
+            "title": "Bot Name"
+          },
+          "bot_ready": {
+            "description": "Whether people can link to a bot here.",
+            "title": "Bot Ready",
+            "type": "boolean"
+          },
+          "channel": {
+            "enum": [
+              "telegram",
+              "slack",
+              "discord",
+              "teams"
+            ],
+            "title": "Channel",
+            "type": "string"
+          },
+          "events": {
+            "items": {
+              "enum": [
+                "gate",
+                "failed",
+                "done"
+              ],
+              "type": "string"
+            },
+            "title": "Events",
+            "type": "array"
+          },
+          "fields": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "The plain settings; empty for a member.",
+            "title": "Fields",
+            "type": "object"
+          },
+          "group_ready": {
+            "description": "Whether a group is set up to be told.",
+            "title": "Group Ready",
+            "type": "boolean"
+          },
+          "inbound_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Teams only: the messaging endpoint to give Azure.",
+            "title": "Inbound Url"
+          },
+          "listening": {
+            "description": "Whether the bot is connected right now (Teams: whether it is set up).",
+            "title": "Listening",
+            "type": "boolean"
+          },
+          "secrets": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/SecretView"
+            },
+            "description": "Which secrets are stored; empty for a member.",
+            "title": "Secrets",
+            "type": "object"
+          },
+          "warning": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set on a save that half worked.",
+            "title": "Warning"
+          }
+        },
+        "required": [
+          "bot_name",
+          "bot_ready",
+          "channel",
+          "events",
+          "fields",
+          "group_ready",
+          "inbound_url",
+          "listening",
+          "secrets",
+          "warning"
+        ],
+        "title": "ChannelView",
+        "type": "object"
+      },
+      "CheckoutPath": {
+        "properties": {
+          "host_path": {
+            "description": "The same folder, as Explorer or Finder would open it.",
+            "title": "Host Path",
+            "type": "string"
+          },
+          "path": {
+            "description": "The checkout as the server sees it.",
+            "title": "Path",
+            "type": "string"
+          },
+          "translated": {
+            "description": "False when no host name is configured and the path is given as is.",
+            "title": "Translated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "host_path",
+          "path",
+          "translated"
+        ],
+        "title": "CheckoutPath",
+        "type": "object"
+      },
       "Commit": {
         "additionalProperties": false,
         "properties": {
@@ -2127,6 +2323,12 @@
             "description": "Commit the job branched from.",
             "title": "Base Commit"
           },
+          "branch_name": {
+            "default": "",
+            "description": "The branch this job works on. Empty on jobs made before it was recorded, which fall back to the old slipwright/<id>.",
+            "title": "Branch Name",
+            "type": "string"
+          },
           "brief": {
             "description": "The project brief as it stood when this job started: what the agents were told the project is (see slipwright/schemas/brief.py).",
             "items": {
@@ -2491,6 +2693,12 @@
             "title": "Test Cases",
             "type": "array"
           },
+          "tests_skipped": {
+            "default": false,
+            "description": "The test cases were read and deliberately not taken up: QA writes nothing and the development goes straight to DevOps. Writing tests is the most expensive step there is, and it is not always worth it.",
+            "title": "Tests Skipped",
+            "type": "boolean"
+          },
           "tokens_used": {
             "default": 0,
             "description": "Input + output tokens so far.",
@@ -2503,6 +2711,7 @@
           "auto_approvals",
           "backlog",
           "base_commit",
+          "branch_name",
           "brief",
           "build_attempts",
           "ci_attempts",
@@ -2544,6 +2753,7 @@
           "reviews",
           "supervision",
           "test_cases",
+          "tests_skipped",
           "tokens_used"
         ],
         "title": "JobData",
@@ -2909,6 +3119,83 @@
           "summary"
         ],
         "title": "Lane",
+        "type": "object"
+      },
+      "LinkCode": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "telegram_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Opens the bot with the code already in it.",
+            "title": "Telegram Url"
+          }
+        },
+        "required": [
+          "code",
+          "expires_at",
+          "telegram_url"
+        ],
+        "title": "LinkCode",
+        "type": "object"
+      },
+      "LinkView": {
+        "properties": {
+          "channel": {
+            "enum": [
+              "telegram",
+              "slack",
+              "discord",
+              "teams"
+            ],
+            "title": "Channel",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "linked_at": {
+            "format": "date-time",
+            "title": "Linked At",
+            "type": "string"
+          },
+          "mine": {
+            "title": "Mine",
+            "type": "boolean"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "channel",
+          "label",
+          "linked_at",
+          "mine",
+          "user_id",
+          "username"
+        ],
+        "title": "LinkView",
         "type": "object"
       },
       "LocalRepo": {
@@ -3696,7 +3983,7 @@
       },
       "NewRepo": {
         "additionalProperties": false,
-        "description": "Open a repository on the host, for a project that starts from nothing.",
+        "description": "What the new-project page asks the host to open.",
         "properties": {
           "description": {
             "default": "",
@@ -3803,6 +4090,36 @@
           }
         },
         "title": "NotificationSettings",
+        "type": "object"
+      },
+      "NotifyOverview": {
+        "properties": {
+          "channels": {
+            "items": {
+              "$ref": "#/components/schemas/ChannelView"
+            },
+            "title": "Channels",
+            "type": "array"
+          },
+          "links": {
+            "description": "The owner sees everyone's; a member their own.",
+            "items": {
+              "$ref": "#/components/schemas/LinkView"
+            },
+            "title": "Links",
+            "type": "array"
+          },
+          "may_configure": {
+            "title": "May Configure",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "channels",
+          "links",
+          "may_configure"
+        ],
+        "title": "NotifyOverview",
         "type": "object"
       },
       "Onboarding": {
@@ -5410,6 +5727,31 @@
         "title": "ScreenVerdict",
         "type": "object"
       },
+      "SecretView": {
+        "properties": {
+          "hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hint"
+          },
+          "set": {
+            "title": "Set",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "hint",
+          "set"
+        ],
+        "title": "SecretView",
+        "type": "object"
+      },
       "SignUp": {
         "properties": {
           "email": {
@@ -6470,7 +6812,8 @@
           "running",
           "done",
           "failed",
-          "waiting"
+          "waiting",
+          "skipped"
         ],
         "title": "StepStatus",
         "type": "string"
@@ -6924,6 +7267,22 @@
           "test_cases"
         ],
         "title": "TestCases",
+        "type": "object"
+      },
+      "TestResult": {
+        "properties": {
+          "sent": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Sent",
+            "type": "array"
+          }
+        },
+        "required": [
+          "sent"
+        ],
+        "title": "TestResult",
         "type": "object"
       },
       "TestRun": {
@@ -9213,6 +9572,46 @@
         "summary": "Retry"
       }
     },
+    "/api/jobs/{job_id}/skip-tests": {
+      "post": {
+        "description": "Go on without tests. Only at the test-cases gate; 409 anywhere else.",
+        "operationId": "skip_tests_api_jobs__job_id__skip_tests_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Skip Tests"
+      }
+    },
     "/api/jobs/{job_id}/steps/{step_key}": {
       "get": {
         "description": "What one pipeline step produced: the backlog it wrote, the decisions it took,\nthe files it touched, the cases it proposed \u2014 each with when, and with whether it\nreached Jira. ``step_key`` is the key the lane card carries.",
@@ -9442,6 +9841,249 @@
         ]
       }
     },
+    "/api/notify": {
+      "get": {
+        "description": "The channels as this person may see them, and the chat accounts linked here.",
+        "operationId": "get_notify_api_notify_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotifyOverview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Notify",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/api/notify/link-code": {
+      "post": {
+        "description": "A one-time code that, sent to one of the account's bots, links that chat account to\nthe caller. Asking again replaces the previous code.",
+        "operationId": "link_code_api_notify_link_code_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkCode"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Link Code",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/api/notify/links/{channel}": {
+      "delete": {
+        "operationId": "unlink_mine_api_notify_links__channel__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "channel",
+            "required": true,
+            "schema": {
+              "enum": [
+                "telegram",
+                "slack",
+                "discord",
+                "teams"
+              ],
+              "title": "Channel",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Unlink Mine",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/api/notify/links/{channel}/{user_id}": {
+      "delete": {
+        "description": "The owner taking somebody's chat off the account -- they left, the phone was lost.",
+        "operationId": "unlink_api_notify_links__channel___user_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "channel",
+            "required": true,
+            "schema": {
+              "enum": [
+                "telegram",
+                "slack",
+                "discord",
+                "teams"
+              ],
+              "title": "Channel",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Unlink",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/api/notify/{channel}": {
+      "put": {
+        "operationId": "put_notify_api_notify__channel__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "channel",
+            "required": true,
+            "schema": {
+              "enum": [
+                "telegram",
+                "slack",
+                "discord",
+                "teams"
+              ],
+              "title": "Channel",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChannelSettingsIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Notify",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/api/notify/{channel}/test": {
+      "post": {
+        "description": "A test message to the group, and to the caller's own linked chat.",
+        "operationId": "test_notify_api_notify__channel__test_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "channel",
+            "required": true,
+            "schema": {
+              "enum": [
+                "telegram",
+                "slack",
+                "discord",
+                "teams"
+              ],
+              "title": "Channel",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Test Notify",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
     "/api/onboarding": {
       "get": {
         "description": "What this account still has to connect before it can start work.",
@@ -9605,6 +10247,7 @@
     },
     "/api/projects/{project_id}": {
       "delete": {
+        "description": "Delete a project. ``purge`` gives up on it: unfinished developments and all,\nwith the worktrees, and a checkout Slipwright cloned, removed from the disk.",
         "operationId": "delete_project_api_projects__project_id__delete",
         "parameters": [
           {
@@ -9614,6 +10257,16 @@
             "schema": {
               "title": "Project Id",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "purge",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Purge",
+              "type": "boolean"
             }
           }
         ],
@@ -9994,6 +10647,46 @@
           }
         },
         "summary": "Start Intake"
+      }
+    },
+    "/api/projects/{project_id}/checkout": {
+      "get": {
+        "description": "Where the checkout is, spelled for the machine the person is at: in Docker the\nserver's ``/work/repos/<id>`` is a volume the host names differently.",
+        "operationId": "project_checkout_api_projects__project_id__checkout_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckoutPath"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Project Checkout"
       }
     },
     "/api/projects/{project_id}/costs": {

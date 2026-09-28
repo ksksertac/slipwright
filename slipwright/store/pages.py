@@ -91,8 +91,11 @@ class PageStoreMixin:
         when nothing has moved. Mirrors ``corpus_fingerprint`` over files."""
         import hashlib
 
+        # over the body itself, not its length: two edits that swap a word for one the
+        # same size, inside the same clock tick, would otherwise look like no edit at all
+        # and the person's rule would never reach their agents
         parts = [
-            f"{p['domain']}/{p['name']}:{p['updated_at']}:{len(p['body'])}"
+            f"{p['domain']}/{p['name']}:{p['updated_at']}:{p['body']}"
             for p in self.user_pages(owner_id)
         ]
         return hashlib.sha256("\n".join(parts).encode()).hexdigest()

@@ -312,6 +312,14 @@ BUILD_HINT = (
 )
 
 
+class CheckoutPath(BaseModel):
+    path: str = Field(description="The checkout as the server sees it.")
+    host_path: str = Field(description="The same folder, as Explorer or Finder would open it.")
+    translated: bool = Field(
+        description="False when no host name is configured and the path is given as is."
+    )
+
+
 def create_app(
     engine: Engine,
     *,
@@ -355,8 +363,18 @@ def create_app(
             threading.Thread(
                 target=_price_refresher, args=(engine, price_refresh_s, stop), daemon=True
             ).start()
+        # the chat bots that hear "carry on" and "reject": started with the rest of the
+        # background work, and restarted by the settings page when a token changes
+        app.state.notify_listeners = None
+        if resume_on_startup:
+            from slipwright.notify.listeners import Listeners
+
+            app.state.notify_listeners = Listeners(engine)
+            threading.Thread(target=app.state.notify_listeners.reconcile, daemon=True).start()
         yield
         stop.set()
+        if app.state.notify_listeners is not None:
+            app.state.notify_listeners.stop_all()
 
     from slipwright.api.auth import (
         auth_dependency,
@@ -365,6 +383,7 @@ def create_app(
         require_verified,
     )
     from slipwright.api.auth import router as auth_router
+    from slipwright.api.notify import router as notify_router
     from slipwright.api.settings import router as settings_router
     from slipwright.api.support import router as support_router
     from slipwright.api.teams import router as teams_router
@@ -402,6 +421,7 @@ def create_app(
     app.include_router(settings_router, prefix="/api")
     app.include_router(support_router, prefix="/api")
     app.include_router(teams_router, prefix="/api")
+    app.include_router(notify_router, prefix="/api")
 
     @app.get("/healthz", include_in_schema=False)
     def healthz() -> dict[str, str]:
@@ -619,6 +639,18 @@ def create_app(
     def get_project(project_id: str, request: Request) -> Project:
         return _get_project(engine_for(request), project_id, request)
 
+    @api.get("/projects/{project_id}/checkout", response_model=CheckoutPath)
+    def project_checkout(project_id: str, request: Request) -> CheckoutPath:
+        """Where the checkout is, spelled for the machine the person is at: in Docker the
+        server's ``/work/repos/<id>`` is a volume the host names differently."""
+        eng = engine_for(request)
+        project = _get_project(eng, project_id, request)
+        if project.repo_path is None:
+            raise HTTPException(status_code=404, detail="this project has no checkout")
+        inside = str(project.repo_path)
+        host = eng.host_paths.to_host(inside)
+        return CheckoutPath(path=inside, host_path=host, translated=host != inside)
+
     @api.patch("/projects/{project_id}", response_model=Project)
     def patch_project(project_id: str, body: ProjectPatch, request: Request) -> Project:
         require_owner(request)
@@ -634,12 +666,14 @@ def create_app(
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @api.delete("/projects/{project_id}", status_code=204)
-    def delete_project(project_id: str, request: Request) -> None:
+    def delete_project(project_id: str, request: Request, purge: bool = False) -> None:
+        """Delete a project. ``purge`` gives up on it: unfinished developments and all,
+        with the worktrees, and a checkout Slipwright cloned, removed from the disk."""
         require_owner(request)
         eng = engine_for(request)
         _get_project(eng, project_id, request)
         try:
-            eng.store.delete_project(project_id)
+            eng.delete_project(project_id, purge=purge)
         except ProjectInUse as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
 
@@ -959,6 +993,18 @@ def create_app(
         _may_act(request, _get(eng, job_id, request))
         try:
             job = eng.reject(job_id, body.feedback, run=False)
+        except NotAwaitingApproval as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        background.add_task(_resume, eng, job.id)
+        return job
+
+    @api.post("/jobs/{job_id}/skip-tests", response_model=Job)
+    def skip_tests(job_id: str, request: Request, background: BackgroundTasks) -> Job:
+        """Go on without tests. Only at the test-cases gate; 409 anywhere else."""
+        eng = engine_for(request)
+        _may_act(request, _get(eng, job_id, request))
+        try:
+            job = eng.skip_tests(job_id, run=False)
         except NotAwaitingApproval as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         background.add_task(_resume, eng, job.id)

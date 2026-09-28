@@ -230,6 +230,63 @@ def test_reject_reruns_the_current_stage_with_feedback(
     assert '"stage": 2' in last.prompt and "tests are too shallow" in last.prompt
 
 
+def test_the_tests_can_be_skipped_at_the_first_gate_but_not_the_second(
+    store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
+) -> None:
+    """Reading the cases and deciding they are not worth writing.
+
+    Writing the tests is the most expensive step there is, so the test-cases gate has a
+    third answer beside yes and "do it again". It is its own action: rejecting means
+    "these cases are wrong" at this gate as at every other, and somebody asking for one
+    more case must not lose the tests altogether.
+    """
+    provider = _provider(seed)
+    engine = _engine(store, worktrees_root, seed, provider)
+    job = _to_test_gate(engine, repo)
+    written = len(_requests(provider, RoleName.QA))
+
+    job = engine.skip_tests(job.id, run=False)
+    assert job.state is JobState.DEVOPS
+    assert job.data.tests_skipped is True
+    assert "skipped the tests" in job.history[-1].note
+    # the cases are still on the record; what was skipped is the writing
+    assert job.data.test_cases == CASES
+    assert len(_requests(provider, RoleName.QA)) == written, "QA was asked to write anyway"
+
+    # and the pipeline says so rather than leaving two steps waiting for a turn that
+    # will never come
+    from slipwright.pipeline import lane_for
+
+    cards = {c.key: c.status.value for c in lane_for(job).steps}
+    assert cards["qa:2"] == "skipped" and cards["test_gate:2"] == "skipped"
+    assert cards["qa:1"] == "done"
+
+
+def test_the_tests_cannot_be_skipped_once_they_are_written(
+    store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
+) -> None:
+    """Nothing is saved by throwing away work that has already been paid for."""
+    engine = _engine(store, worktrees_root, seed, _provider(seed))
+    job = engine.approve(_to_test_gate(engine, repo).id)  # -> stage 2, tests written
+    assert job.data.qa_stage == 2
+    with pytest.raises(NotAwaitingApproval):
+        engine.skip_tests(job.id, run=False)
+
+
+def test_skip_tests_endpoint(
+    store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
+) -> None:
+    engine = _engine(store, worktrees_root, seed, _provider(seed))
+    job = _to_test_gate(engine, repo)
+    with TestClient(create_app(engine, resume_on_startup=False, require_auth=False)) as client:
+        resp = client.post(f"/api/jobs/{job.id}/skip-tests")
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["data"]["tests_skipped"] is True
+        # asking twice is a 409, not a second skip
+        assert client.post(f"/api/jobs/{job.id}/skip-tests").status_code == 409
+        assert client.post("/api/jobs/nope/skip-tests").status_code == 404
+
+
 def test_put_tests_endpoint(
     store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
 ) -> None:

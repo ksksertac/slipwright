@@ -1,10 +1,14 @@
 // What a development produced: the branch, what changed on it, and how to get it. Read
 // from git on every visit, so it stays true after a restart and after a manual merge.
 //
-// There is nothing to read until the development finishes, so the git read is only asked
-// for once it has. On the job page this is a tab somebody clicked, and a tab that renders
-// nothing looks broken -- so it says why it is empty instead. In `compact` mode it is one
-// card among others on a page nobody opened for it, and there it stays out of the way.
+// It used to wait for the development to finish, which read as a lie: five phases built,
+// the tests written, commits sitting on the branch -- and a tab saying nothing had come
+// out yet. Git can be read at any point, so it is, and the card says whether what it shows
+// is finished or still growing. The empty state is kept for what it actually means: a
+// branch with nothing on it yet.
+//
+// In `compact` mode it is one card among others on a page nobody opened for it, and there
+// it stays out of the way until there is a finished result to show.
 import { Link } from "react-router-dom";
 import type { Job } from "../api/client";
 import { useJobResult } from "../api/hooks";
@@ -17,33 +21,44 @@ import { useT } from "../i18n";
 export function ResultCard({ job, compact = false }: { job: Job; compact?: boolean }) {
   const tx = useT();
   const finished = job.state === "done" || job.state === "failed";
-  const result = useJobResult(job.id, finished);
+  // nothing to read before the branch exists; after that there is something to show at
+  // every step, and it is asked for again while the agents are still committing to it
+  const started = Boolean(job.data.base_commit);
+  const result = useJobResult(job.id, compact ? finished : started, !finished);
 
-  if (!finished) {
+  if (compact && !finished) return null;
+  if (result.isLoading) return compact ? null : <Loading rows={3} />;
+  if (result.error) return compact ? null : <ErrorBox error={result.error} />;
+
+  const r = result.data;
+  // no branch yet, or a branch with no commit on it: the only case where the tab is
+  // honestly empty
+  if (!r || (!finished && r.commits.length === 0)) {
     if (compact) return null;
     return (
       <Empty title={tx("Nothing has come out yet.")} icon={<IconLayers />}>
         {tx(
-          "This development is still running — it is {state}. What it produced, and how to take it into your working copy, appears here once it finishes.",
+          "This development is still running — it is {state}. What it produced, and how to take it into your working copy, appears here as soon as the first commit lands on its branch.",
           { state: tx(STATE_LABEL[job.state]) },
         )}
       </Empty>
     );
   }
-  if (result.isLoading) return compact ? null : <Loading rows={3} />;
-  if (result.error) return compact ? null : <ErrorBox error={result.error} />;
-
-  const r = result.data;
-  if (!r) return null;
   const files = [...r.files].sort((a, b) => b.added + b.removed - (a.added + a.removed));
   const shown = compact ? files.slice(0, 5) : files.slice(0, 40);
 
   return (
     <div className="card result">
       <div className="row spread">
-        <h3 style={{ margin: 0 }}>{tx("What came out of it")}</h3>
-        <span className={`badge ${r.merged ? "ok" : "idle"}`}>
-          {r.merged ? tx("merged into {branch}", { branch: r.base_branch }) : tx("on its branch")}
+        <h3 style={{ margin: 0 }}>
+          {finished ? tx("What came out of it") : tx("What is on the branch so far")}
+        </h3>
+        <span className={`badge ${r.merged ? "ok" : finished ? "idle" : "work"}`}>
+          {r.merged
+            ? tx("merged into {branch}", { branch: r.base_branch })
+            : finished
+              ? tx("on its branch")
+              : tx("still being written")}
         </span>
       </div>
       {r.problem ? (
@@ -73,7 +88,9 @@ export function ResultCard({ job, compact = false }: { job: Job; compact?: boole
               )}
             </ul>
           )}
-          {r.merge_command && (
+          {/* not offered mid-run: merging a branch the agents are still committing to
+              takes half a feature, and the badge above already says it is still growing */}
+          {r.merge_command && finished && (
             <div style={{ marginTop: 10 }}>
               <div className="muted small">{tx("Take it into your working copy:")}</div>
               <Copyable text={r.merge_command}>

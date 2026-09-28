@@ -432,6 +432,9 @@ def test_a_database_written_before_teams_upgrades_into_one(tmp_path: Path) -> No
     try:
         metadata.create_all(db.engine)
         with db.begin() as conn:
+            # and what every later revision adds, since those replay on top (0008: notify)
+            for later in ("chat_prompts", "chat_codes", "chat_links"):
+                conn.execute(text(f"DROP TABLE {later}"))
             conn.execute(text("DROP TABLE agent_members"))
             conn.execute(text("ALTER TABLE users DROP COLUMN owner_id"))
             conn.execute(

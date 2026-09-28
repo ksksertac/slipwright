@@ -17,8 +17,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from slipwright.api import create_app
-from slipwright.engine import Engine
+from slipwright.engine import WORKING_STATES, Engine
 from slipwright.githost import CiState, NoRemote
+from slipwright.schemas.job import APPROVAL_STATES, Job, JobState
 from slipwright.schemas.profile import Profile
 from slipwright.schemas.project import Project
 from slipwright.sources import BITBUCKET, GITHUB, SOURCES, SourceError
@@ -298,8 +299,8 @@ def test_the_sources_endpoints_connect_test_and_list(
 def test_a_repository_can_be_opened_on_the_host(
     store: JobStore, worktrees_root: Path, seed: Profile
 ) -> None:
-    """A project that starts from nothing: the host opens the repository and hands back
-    the name to clone."""
+    """A project that starts from nothing: the host opens the repository the agents will
+    build in, and hands back the name to clone."""
     engine = _engine(store, worktrees_root, seed)
     fake = FakeBitbucket()
     engine.http_transport = fake.transport
@@ -333,8 +334,11 @@ def test_opening_a_repository_without_a_workspace_says_so(
 def test_a_project_is_created_from_a_repository_opened_on_the_host(
     store: JobStore, worktrees_root: Path, seed: Profile, tmp_path: Path
 ) -> None:
-    """The whole path the new-project page takes: open the repository, then create the
-    project against it. The clone of an empty repository still gives a usable checkout."""
+    """The whole path the new-project page takes: open the repository the project will be
+    built in, then create the project against it. The clone of an empty repository still
+    gives a usable checkout -- seeded on the base branch of the host the project names,
+    rather than whatever GitHub happens to be set to.
+    """
     import subprocess
 
     bare = tmp_path / "opened.git"
@@ -343,7 +347,10 @@ def test_a_project_is_created_from_a_repository_opened_on_the_host(
     engine = _engine(store, worktrees_root, seed)
     fake = FakeBitbucket()
     engine.http_transport = fake.transport
-    engine.update_source_settings(BITBUCKET, token=fake.token, owner=WORKSPACE)
+    engine.update_source_settings(GITHUB, token="gh_token", base_branch="main")
+    engine.update_source_settings(
+        BITBUCKET, token=fake.token, owner=WORKSPACE, base_branch="trunk"
+    )
     made = engine.source_host(BITBUCKET).create_repo("opened")
 
     # the host's clone URL stands in for the bare repository above — both the plain form
@@ -377,10 +384,69 @@ def test_a_project_is_created_from_a_repository_opened_on_the_host(
             text=True,
             check=True,
         ).stdout.split()
-        assert pushed == ["main"]  # the host has the same starting point
+        assert pushed == ["trunk"]  # the host has the same starting point
     finally:
         subprocess.run(
             ["git", "config", "--global", "--unset-all", f"url.{bare.as_uri()}.insteadOf"],
             check=False,
             capture_output=True,
         )
+
+
+def _drive(engine: Engine, job: Job) -> Job:
+    """Say yes at every gate until the development ends."""
+    while not job.is_terminal:
+        if job.state in APPROVAL_STATES:
+            job = engine.approve(job.id)
+        elif job.state in WORKING_STATES and job.state not in engine.handlers:
+            return job
+        else:
+            job = engine.resume(job.id)
+    return job
+
+
+def test_a_development_pushes_to_the_source_its_project_names(
+    store: JobStore, worktrees_root: Path, seed: Profile, repo: Path, remote: Path
+) -> None:
+    """What the registry is for, met the way a person meets it.
+
+    Nothing in the run names a vendor: the project says Bitbucket, so the branch is pushed
+    to Bitbucket and the pull request is opened there, on the account's own token. The
+    host is resolved from the project for every push, including the CI fix rounds.
+    """
+    engine = _engine(store, worktrees_root, seed)  # git_host=None: nothing is injected
+    fake = FakeBitbucket()
+    engine.http_transport = fake.transport
+    engine.for_user("ada").update_source_settings(
+        BITBUCKET, token=fake.token, owner=WORKSPACE, base_branch="main"
+    )
+    project = engine.create_project(
+        Project(name="demo", repo_path=repo, source=BITBUCKET, github_repo=REPO, owner_id="ada")
+    )
+
+    job = _drive(engine, engine.start(engine.create_job("health", project_id=project.id).id))
+    assert job.state is JobState.DONE, job.history[-1].detail
+    assert job.data.pr_url == PR_URL
+
+    # it really left the machine: the branch is in the repository standing in for Bitbucket
+    branches = subprocess.run(
+        ["git", "branch", "--format=%(refname:short)"],
+        cwd=remote,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.split()
+    assert job.branch in branches
+    assert ("POST", f"/repositories/{REPO}/pullrequests") in fake.calls
+
+
+def test_a_project_on_a_source_the_account_has_no_token_for_says_so(
+    store: JobStore, worktrees_root: Path, seed: Profile, repo: Path
+) -> None:
+    """The reason is the one a person can act on, and it names the host they chose."""
+    engine = _engine(store, worktrees_root, seed)
+    project = engine.create_project(
+        Project(name="demo", repo_path=repo, source=BITBUCKET, github_repo=REPO, owner_id="ada")
+    )
+    with pytest.raises(SourceError, match="Bitbucket"):
+        engine.host_for(project)

@@ -295,3 +295,96 @@ def test_a_project_with_nothing_pending_starts_nothing(
     items = [i.model_dump(mode="json") for i in engine.brief(project.id).items]
     client.put(f"/api/projects/{project.id}/brief", json={"items": items, "approve": True})
     assert client.get(f"/api/projects/{project.id}/jobs").json() == []
+
+
+def test_a_new_repository_is_named_after_the_project(client: TestClient) -> None:
+    """A project called "Note app" opens a repository called "note-app": the wizard
+    derives it, because a repository name cannot hold a space and nobody should have to
+    work that out twice."""
+    from pathlib import Path as P
+
+    page = (P("web/src/pages/NewProjectPage.tsx")).read_text(encoding="utf-8")
+    assert "slugify(name)" in page, "the repository name follows the project's"
+    assert "touchedRepoName" in page, "typing your own name must win"
+    slug = (P("web/src/slug.ts")).read_text(encoding="utf-8")
+    # the same folding as the server's, so a branch and a repository agree on Turkish
+    for ch in ("ı", "ğ", "ş", "ö", "ç", "ü"):
+        assert ch in slug, ch
+
+
+# --- giving up on a project -----------------------------------------------------------------
+
+
+def test_a_project_can_be_given_up_on(engine: Engine, client: TestClient, repo: Path) -> None:
+    """A development stopped at a gate has no edge to a terminal state, so the ordinary
+    delete would refuse this project forever and its worktrees would sit on the disk.
+    A purge stops caring about state."""
+    from slipwright.schemas.job import JobState
+
+    (repo / "app.py").write_text("x = 1\n")
+    project = engine.create_project(Project(name="p", repo_path=repo))
+    job = engine.create_job("build a thing", project_id=project.id)
+    engine.store.update_state(job.id, JobState.AWAITING_ARCHITECTURE_APPROVAL)
+    engine.store.save(engine.workspace.create(engine.store.get(job.id)))
+    worktree = engine.store.get(job.id).worktree_path
+    assert worktree is not None and worktree.is_dir()
+
+    # the ordinary delete says why it will not
+    refused = client.delete(f"/api/projects/{project.id}")
+    assert refused.status_code == 409 and "unfinished" in refused.json()["detail"]
+
+    gone = client.delete(f"/api/projects/{project.id}?purge=true")
+    assert gone.status_code == 204
+    assert client.get(f"/api/projects/{project.id}").status_code == 404
+    assert not worktree.exists(), "the worktree was left on the disk"
+    # the person's own checkout is not ours to delete
+    assert repo.is_dir() and (repo / "app.py").exists()
+
+
+def test_a_purge_removes_only_a_checkout_we_cloned(
+    engine: Engine, client: TestClient, repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The folder under ``repos_root`` is one Slipwright made and is its to remove; a
+    folder the person pointed at is their work, and the two must never be confused."""
+    import shutil
+
+    def fake_clone(url: str, target: Path) -> None:
+        shutil.copytree(repo, target)
+
+    monkeypatch.setattr("slipwright.engine.g.clone", fake_clone)
+    made = engine.create_project(Project(name="cloned", github_repo="ada/thing"))
+    assert made.repo_path is not None and made.repo_path.parent == engine.repos_root
+    checkout = made.repo_path
+    assert checkout.is_dir()
+
+    assert client.delete(f"/api/projects/{made.id}?purge=true").status_code == 204
+    assert not checkout.exists(), "a checkout we cloned is ours to remove"
+
+
+def test_a_project_whose_work_is_still_on_a_branch_is_read_not_interviewed(
+    engine: Engine, client: TestClient, tmp_path: Path
+) -> None:
+    """A project opened from an empty repository keeps only the seeded README on main:
+    a development works in a worktree of its own and nothing merges it for you. Asked
+    about such a project after its agents had written a whole application, this said the
+    repository was empty and offered to interview the person about a product that
+    already existed."""
+    from slipwright.schemas.job import JobState
+
+    project = engine.create_project(Project(name="noteapp", repo_path=_empty_repo(tmp_path)))
+    assert client.get(f"/api/projects/{project.id}/brief").json()["kind"] == "intake"
+
+    job = engine.create_job("notes app", project_id=project.id)
+    engine.store.save(engine.workspace.create(engine.store.get(job.id)))
+    worktree = engine.store.get(job.id).worktree_path
+    assert worktree is not None
+    (worktree / "app.py").write_text("from fastapi import FastAPI\n")
+    engine.store.update_state(job.id, JobState.BACKLOG)
+
+    # the code exists, so there is something to read and nothing to ask
+    assert client.get(f"/api/projects/{project.id}/brief").json()["kind"] == "analysis"
+    assert engine.brief_source(engine.store.get_project(project.id)) == worktree
+
+    engine.execute_analysis(project.id)
+    brief = engine.brief(project.id)
+    assert brief.state is BriefState.PROPOSED and brief.items

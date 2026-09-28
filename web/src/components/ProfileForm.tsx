@@ -1,5 +1,5 @@
 import type { Permission, Profile, RoleConfig } from "../api/client";
-import { useProviderModels, useProviders } from "../api/hooks";
+import { useAgents, useProviderModels, useProviders } from "../api/hooks";
 import { useT } from "../i18n";
 
 const ROLES = [
@@ -69,7 +69,27 @@ export function ProfileForm({
   const roleOf = (role: (typeof ROLES)[number]): RoleConfig =>
     value.roles[role] ?? { model: "", thinking_depth: "medium", permissions: [] };
   const providers = useProviders();
-  const defaultProvider = providers.data?.find((p) => p.is_default)?.name ?? "anthropic";
+  const agents = useAgents();
+  const fallback = providers.data?.find((p) => p.is_default);
+  const defaultProvider = fallback?.name ?? "anthropic";
+
+  // What a role will actually run on. The profile carries a model per role, but it is not
+  // always the one that answers: a pin set under Agents beats everything, and a role with
+  // no provider of its own runs on the default provider's own default model. In both of
+  // those the profile's model is dead text -- nothing sends it anywhere -- so the box
+  // shows what will really answer and is closed, because editing it would change nothing.
+  // The rule is the server's, `Engine.effective_routing`; this mirrors it live, while the
+  // provider beside it is still being chosen.
+  const effective = (role: (typeof ROLES)[number], cfg: RoleConfig) => {
+    const pin = agents.data?.find((a) => a.role === role);
+    if (pin?.assigned_provider && pin.assigned_model) {
+      return { model: pin.assigned_model, why: "pinned" as const };
+    }
+    if (cfg.provider) return { model: cfg.model, why: null };
+    const fromDefault = fallback?.default_model;
+    if (fromDefault) return { model: fromDefault, why: "default" as const };
+    return { model: cfg.model, why: null };
+  };
   const setRole = (role: (typeof ROLES)[number], patch: Partial<RoleConfig>) =>
     onChange({ ...value, roles: { ...value.roles, [role]: { ...roleOf(role), ...patch } } });
 
@@ -183,12 +203,32 @@ export function ProfileForm({
                   </select>
                 </td>
                 <td>
-                  <ModelInput
-                    provider={cfg.provider ?? defaultProvider}
-                    value={cfg.model}
-                    disabled={disabled}
-                    onChange={(model) => setRole(role, { model })}
-                  />
+                  {(() => {
+                    const run = effective(role, cfg);
+                    return (
+                      <>
+                        <ModelInput
+                          provider={cfg.provider ?? defaultProvider}
+                          value={run.model}
+                          disabled={disabled || run.why !== null}
+                          title={run.why ? tx("the profile says {model}", { model: cfg.model }) : ""}
+                          onChange={(model) => setRole(role, { model })}
+                        />
+                        {run.why === "pinned" && (
+                          <div className="faint small" style={{ marginTop: 4 }}>
+                            {tx("pinned under Agents")}
+                          </div>
+                        )}
+                        {run.why === "default" && (
+                          <div className="faint small" style={{ marginTop: 4 }}>
+                            {tx("{provider}'s default; pick a provider to set your own", {
+                              provider: defaultProvider,
+                            })}
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                 </td>
                 <td>
                   <select
@@ -247,11 +287,13 @@ function ModelInput({
   provider,
   value,
   disabled,
+  title = "",
   onChange,
 }: {
   provider: string;
   value: string;
   disabled: boolean;
+  title?: string;
   onChange: (model: string) => void;
 }) {
   const tx = useT();
@@ -265,6 +307,7 @@ function ModelInput({
         list={listId}
         value={value}
         disabled={disabled}
+        title={title}
         onChange={(e) => onChange(e.target.value)}
         placeholder={tx("model id")}
       />

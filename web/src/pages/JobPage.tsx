@@ -19,6 +19,7 @@ import { AgentIcon, DomainBadge } from "../components/agents";
 import { Crumbs } from "../components/Crumbs";
 import { DesignGate } from "../components/DesignGate";
 import { Detail } from "../components/Detail";
+import { TestCaseList } from "../components/TestCases";
 import { Diff } from "../components/Diff";
 import { ReviewDetail, ViolationsTable, type ReviewRecord } from "../components/Review";
 import {
@@ -853,14 +854,16 @@ function Invocations({ job }: { job: Job }) {
   return (
     <section>
       <h2>{tx("Model calls")}</h2>
-      <details className="card">
-        <summary>
+      {/* Not folded: this was a <details> when it shared a long page with everything else,
+          but the tab exists only to show this table, so opening it should show it. */}
+      <div className="card">
+        <p style={{ margin: 0 }}>
           {tx("{calls} call(s) · {attempts} attempt(s) · {tokens} tokens", {
             calls: log.length,
             attempts: job.data.invocations,
             tokens: tokens.toLocaleString(),
           })}
-        </summary>
+        </p>
         <table style={{ marginTop: 8 }}>
           <thead>
             <tr>
@@ -898,14 +901,13 @@ function Invocations({ job }: { job: Job }) {
             ))}
           </tbody>
         </table>
-      </details>
+      </div>
     </section>
   );
 }
 
 function QaSection({ job }: { job: Job }) {
   const tx = useT();
-  const say = useSay();
   const cases = job.data.test_cases as { name: string; description: string }[];
   if (job.state === "awaiting_test_approval") return null;
   if (cases.length === 0)
@@ -913,15 +915,7 @@ function QaSection({ job }: { job: Job }) {
   return (
     <section>
       <h2>{tx("Test cases")}</h2>
-      <div className="card">
-        <ul>
-          {cases.map((c, i) => (
-            <li key={i}>
-              <strong>{say(c.name)}</strong> — {say(c.description)}
-            </li>
-          ))}
-        </ul>
-      </div>
+      <TestCaseList cases={cases} />
     </section>
   );
 }

@@ -73,6 +73,17 @@ any point and restart it: in-flight jobs resume, jobs waiting on you keep waitin
   is mailed to whoever holds it. An invited address belongs to the team and cannot open an
   account of its own. Either side can end it: they decline or step off, you take the agent
   back; whoever is left holding none is signed out and told why.
+- **Notifications** (the **Notifications** page; Telegram, Slack, Discord, Microsoft
+  Teams): a *group* — a Telegram group, a Slack or Discord webhook, a Teams Workflows
+  webhook — is told when an agent is waiting, when a development stops and when one
+  finishes, with a link to it. Nobody decides in the group. Anybody on the account can
+  also *link their own chat account* by sending the account's bot a one-time code; from
+  then on the gates that are theirs are put to them personally with **Continue** and
+  **Reject** buttons, and a rejection asks why and sends the answer to the agent as
+  feedback. A press counts only from the linked account, only under the same rules as
+  the web page (owner: every gate; member: their agent's), and only for the gate visit it
+  was asked about. Telegram, Slack (Socket Mode) and Discord (gateway) connect outward, so
+  they work without a public address; the Teams bot needs one (`/api/notify/inbound/teams/…`).
 
 ## Getting started
 

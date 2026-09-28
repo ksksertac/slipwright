@@ -16,12 +16,15 @@ import {
   useTestMailSettings,
 } from "../../api/hooks";
 import { useAuth } from "../../auth/AuthProvider";
+import { SUPPORT_DESK } from "../../features";
 import { IconCheck, IconLifebuoy } from "../../components/icons";
 import { Empty, ErrorBox, Loading, PageHead, formatTime } from "../../components/ui";
 import { useLang, useT } from "../../i18n";
 
 const TABS = ["sending", "support", "inbox", "outbox"] as const;
 type Tab = (typeof TABS)[number];
+// where support requests land, and the requests themselves, belong to the support desk
+const SHOWN: readonly Tab[] = SUPPORT_DESK ? TABS : ["sending", "outbox"];
 
 /** "done" is settled, "todo" still wants a decision, "optional" is fine left alone. */
 type StepState = "done" | "todo" | "optional";
@@ -60,10 +63,10 @@ export function EmailSettingsPage() {
   const { user } = useAuth();
   const admin = !!user?.is_admin;
   const mail = useMailSettings(admin);
-  const requests = useAllSupportRequests(admin);
+  const requests = useAllSupportRequests(admin && SUPPORT_DESK);
   const outbox = useMailOutbox(admin);
   const { tab = "sending" } = useParams();
-  const current: Tab = (TABS as readonly string[]).includes(tab) ? (tab as Tab) : "sending";
+  const current: Tab = (SHOWN as readonly string[]).includes(tab) ? (tab as Tab) : "sending";
 
   if (!admin) return <div className="callout error">{tx("Admins only.")}</div>;
   if (mail.isLoading) return <Loading />;
@@ -93,11 +96,15 @@ export function EmailSettingsPage() {
     <div className="settings-flow">
       <PageHead
         title={tx("Email")}
-        subtitle={tx("The sender every letter goes out from, and where support requests land.")}
+        subtitle={
+          SUPPORT_DESK
+            ? tx("The sender every letter goes out from, and where support requests land.")
+            : tx("The sender every letter goes out from.")
+        }
       />
 
       <nav className="tabs dotted">
-        {TABS.map((t) => (
+        {SHOWN.map((t) => (
           <NavLink key={t} to={`/settings/email/${t}`} className={t === current ? "active" : ""}>
             <span className={`tab-dot ${state[t]}`} />
             {label[t]}

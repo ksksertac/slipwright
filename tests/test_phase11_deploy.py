@@ -229,6 +229,59 @@ def test_a_project_with_nothing_to_deploy_never_stops(
     assert any("nothing to deploy" in (t.note or "") for t in job.history)
 
 
+def test_the_build_pipeline_is_written_where_its_host_looks_for_it(
+    store: JobStore, worktrees_root: Path, seed: Profile, repo: Path
+) -> None:
+    """The one file DevOps may write outside the deployment folder.
+
+    Without it the engine polled a pull request for checks that nothing had created:
+    every development went green on "no checks reported" and the CI-red-goes-back-to-the-
+    developer loop could never run. The path belongs to the project's own host, so it is
+    resolved from the project rather than assumed to be GitHub's.
+    """
+    workflow = ".github/workflows/ci.yml"
+    provider = _provider(seed, {**AWS_PLAN, "scripts": [{"path": workflow, "purpose": "build"}]})
+    provider.discovery["deploy_write"] = {
+        "summary": "wrote the pipeline",
+        "changes": [{"path": workflow, "content": "name: ci\non: [push, pull_request]\n"}],
+    }
+    engine = full_engine(store, worktrees_root, seed, provider)
+    job = engine.approve(_to_deploy_gate(engine, repo).id)
+
+    assert job.state is JobState.DONE, job.history[-1].note
+    assert job.data.deploy_written == [workflow]
+    assert job.worktree_path is not None
+    assert (job.worktree_path / workflow).read_text(encoding="utf-8").startswith("name: ci")
+
+
+def test_the_pipeline_path_follows_the_projects_own_host(
+    store: JobStore, worktrees_root: Path, seed: Profile, repo: Path
+) -> None:
+    """A Bitbucket project gets Bitbucket's file; GitHub's would simply never run."""
+    from slipwright.roles.devops import ci_path
+
+    assert ci_path("github") == ".github/workflows/"
+    assert ci_path("bitbucket") == "bitbucket-pipelines.yml"
+    assert ci_path("whatever") == ""
+
+    provider = _provider(seed, {**AWS_PLAN, "scripts": [{"path": "x", "purpose": "build"}]})
+    provider.discovery["deploy_write"] = {
+        "summary": "the wrong host's file",
+        "changes": [{"path": ".github/workflows/ci.yml", "content": "name: ci\n"}],
+    }
+    engine = full_engine(store, worktrees_root, seed, provider)
+    project = engine.create_project(
+        Project(name="theirs", repo_path=repo, source="bitbucket", github_repo="acme/demo")
+    )
+    job = engine.start(engine.create_job("add a health endpoint", project_id=project.id).id)
+    for _ in range(4):
+        job = engine.approve(job.id)
+    job = engine.approve(job.id)
+
+    assert job.state is JobState.FAILED
+    assert "bitbucket-pipelines.yml" in (job.history[-1].note or "")
+
+
 def test_deployment_files_outside_the_folder_fail_the_job(
     store: JobStore, worktrees_root: Path, seed: Profile, repo: Path
 ) -> None:
@@ -252,3 +305,85 @@ def test_the_pull_request_mentions_the_deployment(seeded: Engine, repo: Path) ->
     assert "## Deployment" in draft
     assert "Target: aws" in draft
     assert "`deployment/deploy.sh`" in draft
+
+
+def test_the_deployment_gate_can_be_answered() -> None:
+    """The deployment gate had no approve and no reject anywhere.
+
+    `pendingApproval` did not know the state, so the buttons on the development page
+    returned nothing; in the pipeline drawer the gate is marked editable, which hid the
+    plain buttons on the assumption that an editor would carry its own -- and the
+    deployment's editor carries only a save. So the one gate that decides where a thing
+    is deployed could not be answered at all.
+    """
+    from pathlib import Path
+
+    web = Path("web/src")
+    actions = (web / "components" / "GateActions.tsx").read_text(encoding="utf-8")
+    assert '"awaiting_deploy_approval"' in actions, "the gate must have a name to wait at"
+
+    drawer = (web / "pages" / "PipelineTab.tsx").read_text(encoding="utf-8")
+    assert "DeploymentGate" in drawer, "the scripts belong in the drawer that approves them"
+    # what the editor carries is not what the server means by "the material is editable"
+    assert "EDITOR_APPROVES" in drawer and "!step.editable && (" not in drawer
+
+
+def test_the_deployment_is_written_in_parts_when_one_answer_will_not_hold_it(
+    store: JobStore, worktrees_root: Path, seed: Profile, repo: Path
+) -> None:
+    """An approved plan can name seven files -- a Dockerfile, two templates, three shell
+    scripts and a README. Asked for all of them at once the answer hits the output limit
+    and is thrown away, and DevOps was the one role with no way to answer in parts: it
+    simply failed, and retrying failed identically."""
+    import inspect
+
+    from slipwright.roles import devops
+
+    # the same door the developer and QA have
+    params = inspect.signature(devops.write_deployment).parameters
+    assert "truncated" in params and "continuation" in params
+
+    engine_src = Path("slipwright/engine.py").read_text(encoding="utf-8")
+    write = engine_src[engine_src.index("def _write_deployment") :][:4000]
+    assert "continuation=continuation" in write, "the second call must know what is written"
+    assert "phase_complete" in write, "and must stop when DevOps says it is done"
+
+
+def test_a_finished_development_teaches_the_project_brief(seeded: Engine, repo: Path) -> None:
+    """A development leaves its work on its own branch and nothing merges it, so the
+    project's brief stayed blank however much was built -- and every later development
+    then planned knowing nothing about what was already there. The Architect reads what
+    now exists and proposes the brief; a person still approves it."""
+    from slipwright.schemas.brief import BriefState
+
+    job = seeded.approve(_to_deploy_gate(seeded, repo).id)
+    assert job.state is JobState.DONE
+    assert job.project_id is not None
+
+    brief = seeded.brief(job.project_id)
+    assert brief.items, "nothing was learned from a whole development"
+    assert brief.state is BriefState.PROPOSED, "it is proposed, never approved behind your back"
+    assert all(i.source == "analysis" for i in brief.items)
+
+
+def test_what_a_person_has_written_in_the_brief_is_not_overwritten(
+    seeded: Engine, repo: Path
+) -> None:
+    """Once the brief holds items they are somebody's: corrected, deleted, approved.
+    A development finishing must not quietly replace them."""
+    from slipwright.schemas.brief import BriefItem, BriefState
+
+    project = seeded.create_project(Project(name="demo", repo_path=repo))
+    brief = seeded.store.get_brief(project.id)
+    brief.items = [BriefItem(title="we deploy on Fridays", source="human")]
+    brief.state = BriefState.READY
+    seeded.store.save_brief(brief)
+
+    job = seeded.start(seeded.create_job("add a health endpoint", project_id=project.id).id)
+    for _ in range(5):  # backlog, plan, test cases, written tests, deployment
+        job = seeded.approve(job.id)
+    assert job.state is JobState.DONE
+
+    kept = seeded.brief(project.id)
+    assert [i.title for i in kept.items] == ["we deploy on Fridays"]
+    assert kept.state is BriefState.READY

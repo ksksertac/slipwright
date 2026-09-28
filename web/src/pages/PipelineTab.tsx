@@ -21,7 +21,8 @@ import {
 } from "../api/hooks";
 import { AgentIcon, DomainBadge, ROLE_LABEL } from "../components/agents";
 import { BulkBar } from "../components/BulkBar";
-import { RetryActions } from "../components/GateActions";
+import { Recommendation, RetryActions } from "../components/GateActions";
+import { DeploymentGate } from "../components/DeploymentGate";
 import { DesignGate } from "../components/DesignGate";
 import { Detail } from "../components/Detail";
 import { ReviewDetail } from "../components/Review";
@@ -546,6 +547,7 @@ const STATUS_CLASS: Record<StepCard["status"], string> = {
   done: "ok",
   failed: "bad",
   waiting: "wait",
+  skipped: "idle",
 };
 
 // -- the side panel ----------------------------------------------------------------------
@@ -715,6 +717,20 @@ function Output({ jobId, index }: { jobId: string; index: number }) {
 }
 
 /** What the human can change before approving, with Save / Save & approve. */
+/** Gate editors that carry their own approve and reject, in their SaveRow. Everything
+ *  else gets the plain buttons below.
+ *
+ *  This used to key off `step.editable`, which is the server saying the material can be
+ *  changed -- not the same thing. The deployment's material is editable and its editor
+ *  has no approval in it, so that gate offered neither an editor nor buttons: it could
+ *  not be answered at all from this drawer. */
+const EDITOR_APPROVES = new Set([
+  "backlog_gate",
+  "architecture_gate",
+  "design_gate",
+  "test_gate:1",
+]);
+
 function GateEditor({ job, step }: { job: Job; step: StepCard }) {
   const tx = useT();
   const approve = useApprove(job.id);
@@ -729,11 +745,15 @@ function GateEditor({ job, step }: { job: Job; step: StepCard }) {
       <div style={{ marginBottom: 8 }}>
         {tx("Waiting for your approval of the")} <strong>{tx(step.pending ?? "")}</strong>
       </div>
+      {/* the card only has room for "recommends reject · 0.85"; opening it is where the
+          reasons belong, before the plan they are about */}
+      <Recommendation job={job} detailed />
       {step.key === "backlog_gate" && <BacklogGateEditor job={job} />}
       {step.key === "architecture_gate" && <ArchitectureGateEditor job={job} />}
       {step.key === "design_gate" && <DesignGate jobId={job.id} />}
       {step.key === "test_gate:1" && <TestCasesGateEditor job={job} />}
-      {!step.editable && (
+      {step.key === "deploy_gate" && <DeploymentGate job={job} />}
+      {!EDITOR_APPROVES.has(step.key) && (
         <div className="row">
           <button
             className="btn ok small"

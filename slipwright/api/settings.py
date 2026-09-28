@@ -161,7 +161,7 @@ def test_source(name: str, request: Request) -> Identity:
 
 
 class NewRepo(BaseModel):
-    """Open a repository on the host, for a project that starts from nothing."""
+    """What the new-project page asks the host to open."""
 
     model_config = ConfigDict(extra="forbid")
 

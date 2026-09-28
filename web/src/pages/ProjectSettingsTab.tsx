@@ -13,7 +13,7 @@
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { describeError, type Project } from "../api/client";
-import { useJiraProjects, useJiraSettings, usePatchProject } from "../api/hooks";
+import { useCheckoutPath, useJiraProjects, useJiraSettings, usePatchProject } from "../api/hooks";
 import { ErrorBox } from "../components/ui";
 import { useT } from "../i18n";
 
@@ -132,6 +132,44 @@ function ProjectPanel({ project }: { project: Project }) {
   );
 }
 
+/** The checkout's path as Explorer or Finder would open it, and a button to copy it. A
+ * browser may not open a folder on the person's machine itself; pasting the path into the
+ * file manager's address bar is the one thing that works everywhere. */
+function CheckoutPathRow({ project }: { project: Project }) {
+  const tx = useT();
+  const where = useCheckoutPath(project.id, !!project.repo_path);
+  const [copied, setCopied] = useState(false);
+  const path = where.data?.host_path ?? project.repo_path ?? "";
+  const copy = () => {
+    void navigator.clipboard.writeText(path).then(() => {
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    });
+  };
+  return (
+    <>
+      <div className="row" style={{ gap: 8, alignItems: "center" }}>
+        <code className="mono small checkout-path">{path}</code>
+        <button type="button" className="btn small" onClick={copy} disabled={!path}>
+          {copied ? tx("Copied") : tx("Copy path")}
+        </button>
+      </div>
+      {where.data?.translated && (
+        <div className="faint tiny mono">
+          {tx("inside the server:")} {where.data.path}
+        </div>
+      )}
+      {where.data && !where.data.translated && where.data.path.startsWith("/work/") && (
+        <div className="help">
+          {tx(
+            "This is the path inside Docker. Set SLIPWRIGHT_HOST_WORK_DIR in .env to have the copy open in Explorer or Finder.",
+          )}
+        </div>
+      )}
+    </>
+  );
+}
+
 function WherePanel({ project }: { project: Project }) {
   const tx = useT();
   const patch = usePatchProject(project.id);
@@ -145,7 +183,7 @@ function WherePanel({ project }: { project: Project }) {
     >
       <div className="field">
         <label>{tx("The checkout")}</label>
-        <div className="mono small">{project.repo_path}</div>
+        <CheckoutPathRow project={project} />
         <div className="help">
           {tx(
             "Where the agents work. It is set when the project is created and does not move: the developments already in it are worktrees of this checkout.",

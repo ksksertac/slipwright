@@ -21,7 +21,9 @@ import { AgentsPage } from "./pages/AgentsPage";
 import { AgentDetailPage } from "./pages/AgentDetailPage";
 import { UsersSettingsPage } from "./pages/settings/UsersSettingsPage";
 import { EmailSettingsPage } from "./pages/settings/EmailSettingsPage";
+import { NotificationsPage } from "./pages/settings/NotificationsPage";
 import { SupportPage } from "./pages/SupportPage";
+import { SUPPORT_DESK } from "./features";
 import { useT } from "./i18n";
 
 export function App() {
@@ -61,7 +63,13 @@ export function App() {
         <Route path="/settings/users" element={<UsersSettingsPage />} />
         <Route path="/settings/email" element={<EmailSettingsPage />} />
         <Route path="/settings/email/:tab" element={<EmailSettingsPage />} />
-        <Route path="/support" element={<SupportPage />} />
+        <Route path="/notifications" element={<NotificationsPage />} />
+        <Route path="/notifications/:tab" element={<NotificationsPage />} />
+        <Route path="/notifications/:tab/:part" element={<NotificationsPage />} />
+        <Route
+          path="/support"
+          element={SUPPORT_DESK ? <SupportPage /> : <Navigate to="/" replace />}
+        />
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>

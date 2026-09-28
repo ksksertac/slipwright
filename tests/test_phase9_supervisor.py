@@ -363,3 +363,41 @@ def test_supervisor_ui_sources() -> None:
     assert "Recommendation" in text["GateActions.tsx"] or "recommend" in text["GateActions.tsx"]
     events = (WEB / "src" / "api" / "events.ts").read_text(encoding="utf-8")
     assert "supervisor.auto_approved" in events
+
+
+def test_the_rejection_box_offers_what_the_supervisor_asked_for(
+    store: JobStore, worktrees_root: Path, seed: Profile, repo: Path
+) -> None:
+    """The supervisor writes the rewrite it wants in full -- numbered, with file names.
+    Acting on it meant retyping that paragraph into a one-line box, so the box now opens
+    holding it and there is a button that sends it as it stands. Nothing about the
+    rejection itself changes: the feedback is the person's, and it reaches the agent that
+    plans again."""
+    engine = full_engine(store, worktrees_root, seed, full_provider(seed, phases=1))
+    project = _project(engine, repo)
+    asked = "1) Split T3-T5 into backend and web halves. 2) Fix the phase order."
+    made = engine.create_job("x", project_id=project.id)
+    engine.store.update_state(made.id, JobState.AWAITING_ARCHITECTURE_APPROVAL)
+    job = engine.store.get(made.id)
+    job.data.supervision = {
+        "gate": "architecture",
+        "decision": "reject",
+        "acted": "none",
+        "feedback": asked,
+    }
+    engine.store.save(job)
+
+    # the long text goes through the ordinary reject path and reaches the next planner
+    engine.reject(job.id, asked, run=False)
+    assert engine.store.get(job.id).data.feedback == asked
+
+    gate = (WEB / "src" / "components" / "GateActions.tsx").read_text(encoding="utf-8")
+    for expected in (
+        "suggestedFeedback",  # the supervisor's own words, read straight off the record
+        "<textarea",  # a paragraph does not fit in a one-line input
+        "Send the supervisor's changes",  # one click, no retyping
+        "Approving goes ahead without them",  # approving is allowed, but never silent
+    ):
+        assert expected in gate, expected
+    # and it is not run through the translator: what is typed here is saved and shipped on
+    assert "say(suggested)" not in gate

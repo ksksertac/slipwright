@@ -54,6 +54,13 @@ services:
       SLIPWRIGHT_PROVIDER: ${SLIPWRIGHT_PROVIDER:-live}
       # the mounted checkouts, offered as a list on the New project page
       SLIPWRIGHT_LOCAL_REPOS: /repos
+      # What /repos and /work are called on your own machine, so a project's "Copy path"
+      # copies something Explorer or Finder can open. /repos is the folder you mounted;
+      # /work is a Docker volume -- on Windows (Docker Desktop) it is reachable at
+      #   \\wsl.localhost\docker-desktop\mnt\docker-desktop-disk\data\docker\volumes\slipwright_slipwright-work\_data
+      # and on macOS it is not reachable from Finder at all.
+      SLIPWRIGHT_HOST_REPOS: ${SLIPWRIGHT_REPOS:-}
+      SLIPWRIGHT_HOST_WORK_DIR: ${SLIPWRIGHT_HOST_WORK_DIR:-}
       # Where a project's own build and test commands run. `local` is this container,
       # which is right when the agents are yours. A server strangers sign up to must set
       # `docker` -- each command then gets a throwaway container with no network, no

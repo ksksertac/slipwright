@@ -846,6 +846,48 @@ def test_a_finished_development_reports_what_it_produced(
     assert merged.merged is True and merged.merge_command is None
 
 
+def test_what_is_on_the_branch_is_readable_before_the_development_finishes(
+    store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
+) -> None:
+    """Five phases built and the tests written, and the page said nothing had come out yet.
+
+    The result is read from git, so it can be read at any point: as soon as the first
+    commit lands on the branch there is something to show, and waiting for ``done`` to
+    show it was the page's own rule, not a limit of what can be known.
+    """
+    from slipwright.githost import GhHost
+
+    engine = full_engine(
+        store, worktrees_root, seed, full_provider(seed, phases=1), git_host=GhHost(gh="gh-missing")
+    )
+    project = engine.create_project(Project(name="demo", repo_path=repo))
+    job = engine.approve(engine.start(engine.create_job("x", project_id=project.id).id).id)
+    job = engine.approve(job.id)  # plan approved: the phases are built and committed
+    assert job.state is not JobState.DONE, "this test is about a development still running"
+
+    result = engine.job_result(job.id)
+    assert result.problem is None
+    assert result.commits, "the phases committed, so the branch has something on it"
+    assert result.files and result.added > 0
+    assert result.merged is False
+
+
+def test_the_base_branch_comes_from_the_projects_own_source(
+    store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
+) -> None:
+    """Which branch the work merges back into is the host's answer, not GitHub's always."""
+    engine = full_engine(store, worktrees_root, seed, full_provider(seed, phases=1))
+    engine.for_user("ada").update_source_settings("github", token="gh", base_branch="main")
+    engine.for_user("ada").update_source_settings("bitbucket", token="bb", base_branch="trunk")
+
+    on_bitbucket = Project(name="theirs", repo_path=repo, source="bitbucket", owner_id="ada")
+    on_github = Project(name="mine", repo_path=repo, source="github", owner_id="ada")
+    assert engine.base_branch_of(on_bitbucket) == "trunk"
+    assert engine.base_branch_of(on_github) == "main"
+    # an account that has set nothing still gets an answer rather than an empty branch name
+    assert engine.base_branch_of(Project(name="new", repo_path=repo, owner_id="bob")) == "main"
+
+
 def test_every_role_is_told_which_language_to_write_in(
     store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
 ) -> None:

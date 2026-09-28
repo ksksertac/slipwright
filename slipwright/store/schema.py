@@ -334,10 +334,69 @@ standards_fingerprints = Table(
     Column("value", Text, nullable=False),
 )
 
+# -- notifications (slipwright/notify) ---------------------------------------------------
+
+# A person's account on a chat service, proven by a code they sent to the account's own
+# bot. ``owner_id`` is whose bot it is (the account; "" for the installation) and
+# ``external_id`` the service's stable id for the person -- what a button press arrives
+# carrying, and therefore the only thing a press is ever matched against.
+chat_links = Table(
+    "chat_links",
+    metadata,
+    Column("id", String(64), primary_key=True),
+    Column("owner_id", String(64), nullable=False),
+    Column("user_id", String(64), nullable=False),
+    Column("channel", String(16), nullable=False),  # telegram | slack | discord | teams
+    Column("external_id", String(255), nullable=False),
+    Column("address_json", Text, nullable=False),  # where a message to them is sent
+    Column("label", Text, nullable=False, server_default=""),
+    Column("linked_at", Text, nullable=False),
+    Index("chat_links_person", "owner_id", "channel", "user_id", unique=True),
+    Index("chat_links_external", "owner_id", "channel", "external_id"),
+)
+
+# The one-time code a person sends the bot to prove the chat account is theirs. Only the
+# hash is kept, as with the mail tokens.
+chat_codes = Table(
+    "chat_codes",
+    metadata,
+    Column("code_hash", String(128), primary_key=True),
+    Column("owner_id", String(64), nullable=False),
+    Column("user_id", String(64), nullable=False),
+    Column("created_at", Text, nullable=False),
+    Column("expires_at", Text, nullable=False),
+)
+
+# A question put to one person in a chat: "the Architect is waiting -- carry on?". The id
+# is what the buttons carry; ``marker`` is the gate visit it was asked about, so a button
+# pressed after the gate has moved on is refused rather than approving the next one.
+chat_prompts = Table(
+    "chat_prompts",
+    metadata,
+    Column("id", String(64), primary_key=True),
+    Column("owner_id", String(64), nullable=False),
+    Column("user_id", String(64), nullable=False),
+    Column("channel", String(16), nullable=False),
+    Column("external_id", String(255), nullable=False),
+    Column("job_id", String(64), nullable=False),
+    Column("marker", Text, nullable=False),
+    Column("address_json", Text, nullable=False),
+    Column("ref_json", Text, nullable=False, server_default="{}"),  # the sent message
+    # open | reason (asked why, waiting for the answer) | approved | rejected | closed
+    Column("status", String(16), nullable=False, server_default="open"),
+    Column("created_at", Text, nullable=False),
+    Column("decided_at", Text),
+    Index("chat_prompts_job", "job_id", "status"),
+    Index("chat_prompts_person", "owner_id", "channel", "external_id", "status"),
+)
+
 
 __all__ = [
     "agent_members",
     "api_tokens",
+    "chat_codes",
+    "chat_links",
+    "chat_prompts",
     "email_outbox",
     "email_tokens",
     "job_history",

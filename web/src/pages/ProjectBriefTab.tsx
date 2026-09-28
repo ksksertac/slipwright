@@ -2,7 +2,7 @@
 // repository with code is read by the Architect, an empty one is asked about by the
 // Product Owner. Either way the person edits the lines and approves them — nothing here
 // reaches an agent until they do.
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   describeError,
@@ -12,7 +12,16 @@ import {
   type IntakeQuestion,
 } from "../api/client";
 import { useAnalyseProject, useBrief, useIntake, useProject, useSaveBrief } from "../api/hooks";
-import { IconEdit, IconPlus, IconTrash } from "../components/icons";
+import { AgentIcon, ROLE_LABEL } from "../components/agents";
+import {
+  IconAlert,
+  IconCpu,
+  IconEdit,
+  IconFolder,
+  IconPlus,
+  IconSettings,
+  IconTrash,
+} from "../components/icons";
 import { useToast } from "../components/Toast";
 import { ErrorBox, Loading } from "../components/ui";
 import { useT } from "../i18n";
@@ -99,6 +108,48 @@ export function ProjectBriefTab({ projectId }: { projectId: string }) {
 
 // -- the analysis / the list ---------------------------------------------------------------
 
+/** How each kind of line is shown: in this order, under its own icon and colour, with the
+ * agent that leans on it most. Every agent reads the whole brief; the chip only says whose
+ * work a wrong line would hurt first. */
+const GROUPS: Record<
+  BriefCategory,
+  { title: string; hue: number; icon: ReactNode; reader: string }
+> = {
+  product: { title: "Product", hue: 38, icon: <AgentIcon role="po" />, reader: "po" },
+  stack: { title: "Stack", hue: 172, icon: <IconCpu />, reader: "developers" },
+  architecture: {
+    title: "Architecture",
+    hue: 265,
+    icon: <AgentIcon role="architect" />,
+    reader: "architect",
+  },
+  modules: { title: "Modules", hue: 212, icon: <IconFolder />, reader: "developers" },
+  conventions: { title: "Conventions", hue: 150, icon: <IconSettings />, reader: "developers" },
+  testing: { title: "Testing", hue: 330, icon: <AgentIcon role="qa" />, reader: "qa" },
+  deployment: { title: "Deployment", hue: 20, icon: <AgentIcon role="devops" />, reader: "devops" },
+  risks: { title: "Risks", hue: 0, icon: <IconAlert />, reader: "everyone" },
+};
+const ORDER = Object.keys(GROUPS) as BriefCategory[];
+
+function GroupHead({ category, count }: { category: BriefCategory; count: number }) {
+  const tx = useT();
+  const g = GROUPS[category];
+  const reader =
+    g.reader === "developers"
+      ? tx("Developers")
+      : g.reader === "everyone"
+        ? tx("Every agent")
+        : tx(ROLE_LABEL[g.reader] ?? g.reader);
+  return (
+    <header className="brief-group-head">
+      <span className="brief-group-icon">{g.icon}</span>
+      <strong>{tx(g.title)}</strong>
+      <span className="badge">{count}</span>
+      <span className="brief-group-reader">{reader}</span>
+    </header>
+  );
+}
+
 function BriefEditor({ projectId, view }: { projectId: string; view: BriefView }) {
   const tx = useT();
   const say = useSay();
@@ -124,7 +175,7 @@ function BriefEditor({ projectId, view }: { projectId: string; view: BriefView }
   const grouped = useMemo(() => {
     const out = new Map<BriefCategory, Row[]>();
     for (const item of items) out.set(item.category, [...(out.get(item.category) ?? []), item]);
-    return [...out.entries()];
+    return [...out.entries()].sort(([a], [b]) => ORDER.indexOf(a) - ORDER.indexOf(b));
   }, [items]);
 
   const change = (id: string, patch: Partial<Row>) => {
@@ -215,8 +266,12 @@ function BriefEditor({ projectId, view }: { projectId: string; view: BriefView }
           </div>
         ) : (
           grouped.map(([category, rows]) => (
-            <section key={category} style={{ marginTop: 16 }}>
-              <div className="faint small">{tx(category)}</div>
+            <section
+              key={category}
+              className="brief-group"
+              style={{ "--h": GROUPS[category]?.hue ?? 212 } as CSSProperties}
+            >
+              <GroupHead category={category} count={rows.length} />
               <ul className="rules">
                 {rows.map((item) =>
                   editing === item.id ? (

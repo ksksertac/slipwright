@@ -1,9 +1,17 @@
 import { useState } from "react";
 import { describeError, type Job } from "../api/client";
-import { useApprove, useMyTeam, useReject, useReplanJob, useRetryJob } from "../api/hooks";
+import {
+  useApprove,
+  useMyTeam,
+  useReject,
+  useReplanJob,
+  useRetryJob,
+  useSkipTests,
+} from "../api/hooks";
 import { isOwner, mayActAt } from "../api/gates";
 import { Modal } from "./Modal";
 import { useT } from "../i18n";
+import { useSay } from "../i18n/said";
 
 export function pendingApproval(job: Job): string | null {
   switch (job.state) {
@@ -17,6 +25,8 @@ export function pendingApproval(job: Job): string | null {
       return "review";
     case "awaiting_decision":
       return "decision";
+    case "awaiting_deploy_approval":
+      return "deployment";
     case "awaiting_test_approval":
       return job.data.qa_stage === 1 ? "test cases" : "written tests";
     default:
@@ -115,22 +125,38 @@ function ReplanModal({ job, onClose }: { job: Job; onClose: () => void }) {
   );
 }
 
+type Supervision = {
+  decision?: string;
+  confidence?: number;
+  risk?: string;
+  reasons?: string[];
+  feedback?: string;
+  acted?: string;
+  blockers?: string[];
+  error?: string;
+};
+
+/** What the supervisor said about the gate this job is waiting at, or null when it did not
+ *  speak, could not be reached, or already acted on its own. */
+function supervision(job: Job): Supervision | null {
+  const s = job.data.supervision as Supervision | null | undefined;
+  if (!s || !pendingApproval(job) || !s.decision || s.acted !== "none") return null;
+  return s;
+}
+
+/** The rewrite the supervisor asked for, as it wrote it. Never translated: it is about to
+ *  become the person's own feedback, which is saved and read by the agent that continues. */
+function suggestedFeedback(job: Job): string {
+  const s = supervision(job);
+  return s && s.decision !== "approve" ? (s.feedback ?? "").trim() : "";
+}
+
 /** The supervisor's view of the gate the job waits at (assisted / auto modes). */
 export function Recommendation({ job, detailed = false }: { job: Job; detailed?: boolean }) {
   const tx = useT();
-  const s = job.data.supervision as
-    | {
-        decision?: string;
-        confidence?: number;
-        risk?: string;
-        reasons?: string[];
-        feedback?: string;
-        acted?: string;
-        blockers?: string[];
-        error?: string;
-      }
-    | null
-    | undefined;
+  // the reasons and the suggested feedback are the supervisor's own prose
+  const say = useSay();
+  const s = job.data.supervision as Supervision | null | undefined;
   if (!s || !pendingApproval(job)) return null;
   if (s.acted === "error") {
     return (
@@ -157,18 +183,18 @@ export function Recommendation({ job, detailed = false }: { job: Job; detailed?:
       {s.reasons && s.reasons.length > 0 && (
         <ul className="small" style={{ margin: "6px 0 0 18px" }}>
           {s.reasons.map((r, i) => (
-            <li key={i}>{r}</li>
+            <li key={i}>{say(r)}</li>
           ))}
         </ul>
       )}
       {s.decision === "reject" && s.feedback && (
         <div className="small muted" style={{ marginTop: 4 }}>
-          suggested feedback: {s.feedback}
+          {tx("suggested feedback: ")}{say(s.feedback)}
         </div>
       )}
       {s.blockers && s.blockers.length > 0 && (
         <div className="small muted" style={{ marginTop: 4 }}>
-          not approved automatically: {s.blockers.join(", ")}
+          {tx("not approved automatically: ")}{s.blockers.join(", ")}
         </div>
       )}
     </div>
@@ -180,9 +206,22 @@ export function GateActions({ job, compact = false }: { job: Job; compact?: bool
   const tx = useT();
   const approve = useApprove(job.id);
   const reject = useReject(job.id);
+  const skipTests = useSkipTests(job.id);
   const team = useMyTeam();
   const [rejecting, setRejecting] = useState(false);
   const [feedback, setFeedback] = useState("");
+  // writing the tests is the most expensive step in a development, so the test-cases gate
+  // has a third answer: not "these cases are wrong" but "this one is not worth testing".
+  // Rejecting keeps the meaning it has everywhere else -- QA writes the cases again.
+  const canSkipTests = job.state === "awaiting_test_approval" && job.data.qa_stage === 1;
+  // What the supervisor asked for, already written out. Retyping a numbered paragraph of
+  // it into the box was the only way to act on it, so the box opens holding it -- to send
+  // as it stands, to edit, or to clear and say something else entirely.
+  const suggested = suggestedFeedback(job);
+  const openReject = () => {
+    setFeedback((typed) => typed || suggested);
+    setRejecting(true);
+  };
   const pending = pendingApproval(job);
   if (!pending) return null;
   // somebody who holds another agent sees the gate and who it belongs to, but not the
@@ -196,7 +235,7 @@ export function GateActions({ job, compact = false }: { job: Job; compact?: bool
       </div>
     );
   }
-  const error = approve.error ?? reject.error;
+  const error = approve.error ?? reject.error ?? skipTests.error;
 
   return (
     <div className={compact ? "row" : "gate"}>
@@ -210,18 +249,45 @@ export function GateActions({ job, compact = false }: { job: Job; compact?: bool
           className="btn ok small"
           disabled={approve.isPending}
           onClick={() => approve.mutate()}
+          title={suggested ? tx("the supervisor asked for changes; approving sets them aside") : ""}
         >
           {tx("Approve")} · {tx(pending)}
         </button>
         {!rejecting ? (
-          <button className="btn bad small" onClick={() => setRejecting(true)}>
-            {tx("Reject…")}
-          </button>
+          <>
+            {suggested && (
+              <button
+                className="btn bad small"
+                disabled={reject.isPending}
+                onClick={() =>
+                  reject.mutate(suggested, { onSuccess: () => setFeedback("") })
+                }
+                title={suggested}
+              >
+                {reject.isPending ? tx("Sending…") : tx("Send the supervisor's changes")}
+              </button>
+            )}
+            <button className="btn bad small" onClick={openReject}>
+              {suggested ? tx("Reject, my own words…") : tx("Reject…")}
+            </button>
+            {canSkipTests && (
+              <button
+                className="btn small"
+                disabled={skipTests.isPending}
+                onClick={() => skipTests.mutate()}
+                title={tx(
+                  "no tests are written and the development goes straight to delivery; the cases stay on the record",
+                )}
+              >
+                {skipTests.isPending ? tx("Skipping…") : tx("Go on without tests")}
+              </button>
+            )}
+          </>
         ) : (
           <>
-            <input
-              type="text"
-              style={{ width: compact ? 220 : 360 }}
+            <textarea
+              rows={compact ? 4 : 6}
+              style={{ width: compact ? 260 : 480 }}
               placeholder={tx("what should change?")}
               value={feedback}
               onChange={(e) => setFeedback(e.target.value)}
@@ -247,6 +313,11 @@ export function GateActions({ job, compact = false }: { job: Job; compact?: bool
           </>
         )}
       </div>
+      {suggested && !rejecting && (
+        <div className="faint small" style={{ marginTop: 6 }}>
+          {tx("The supervisor asked for changes. Approving goes ahead without them.")}
+        </div>
+      )}
       {error && <div className="callout error">{describeError(error)}</div>}
     </div>
   );

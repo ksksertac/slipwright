@@ -80,5 +80,7 @@ export function stageStatus(steps: StepCard[]): string {
   if (steps.some((s) => s.status === "waiting")) return "waiting";
   if (steps.some((s) => s.status === "failed")) return "failed";
   if (steps.some((s) => s.status === "running")) return "running";
-  return steps.every((s) => s.status === "done") ? "done" : "pending";
+  // a step that was deliberately passed over is settled, not outstanding: a stage whose
+  // tests were skipped is finished with, and must not sit at "pending" for ever
+  return steps.every((s) => s.status === "done" || s.status === "skipped") ? "done" : "pending";
 }

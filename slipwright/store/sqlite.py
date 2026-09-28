@@ -29,6 +29,7 @@ from slipwright.schemas.profile import Profile
 from slipwright.schemas.project import Project
 from slipwright.schemas.testrun import TestRun
 from slipwright.secrets import SecretBox, load_or_create_key
+from slipwright.store.chat import ChatStoreMixin
 from slipwright.store.db import Database, one, rows
 from slipwright.store.members import MemberStoreMixin
 from slipwright.store.migrate import migrate
@@ -103,6 +104,7 @@ class JobStore(
     PriceStoreMixin,
     SupportStoreMixin,
     PageStoreMixin,
+    ChatStoreMixin,
 ):
     """One store per database. Safe to share across threads within a process.
 
@@ -404,8 +406,17 @@ class JobStore(
         )
         return self.get_project(project.id)
 
-    def delete_project(self, project_id: str, owner_id: str | None = ANY_OWNER) -> None:
-        """Delete a project and its finished jobs. Refused while a job is still running."""
+    def delete_project(
+        self, project_id: str, owner_id: str | None = ANY_OWNER, *, force: bool = False
+    ) -> None:
+        """Delete a project and its finished jobs. Refused while a job is still running.
+
+        ``force`` deletes it anyway. A development stopped at a gate can never reach a
+        terminal state on its own -- no approval state has an edge to one -- so without
+        this a project somebody has given up on could not be got rid of at all. Deleting
+        is not a transition: the row simply stops existing, and the caller is responsible
+        for the worktrees and the checkout that go with it.
+        """
         from slipwright.schemas.job import TERMINAL_STATES
 
         with self.db.begin() as conn:
@@ -419,7 +430,7 @@ class JobStore(
                 conn.execute(select(jobs.c.state).where(jobs.c.project_id == project_id))
             )
             active = sum(1 for r in states if JobState(r["state"]) not in TERMINAL_STATES)
-            if active:
+            if active and not force:
                 raise ProjectInUse(project_id, active)
             conn.execute(delete(test_runs).where(test_runs.c.project_id == project_id))
             conn.execute(delete(jobs).where(jobs.c.project_id == project_id))

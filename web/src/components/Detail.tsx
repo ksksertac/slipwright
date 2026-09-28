@@ -8,6 +8,7 @@ import { Copyable } from "./Copyable";
 import { BreakdownTree, type BreakdownShape, type PlanShape } from "./Breakdown";
 import { ViolationsTable, type ReviewRecord } from "./Review";
 import { DomainBadge } from "./agents";
+import { TestCaseList, type CaseShape } from "./TestCases";
 
 type Dict = Record<string, unknown>;
 
@@ -16,11 +17,6 @@ const isStringList = (v: unknown): v is string[] =>
   Array.isArray(v) && v.every((x) => typeof x === "string");
 const isDictList = (v: unknown): v is Dict[] => Array.isArray(v) && v.every(isDict);
 const str = (v: unknown): string | undefined => (typeof v === "string" ? v : undefined);
-
-interface CaseShape {
-  name?: string;
-  description?: string;
-}
 
 function parseJson(text: string): unknown {
   const trimmed = text.trim();
@@ -153,14 +149,7 @@ function CaseList({ cases, title }: { cases: CaseShape[]; title: string }) {
   return (
     <section>
       <h4>{title}</h4>
-      <ol className="cases">
-        {cases.map((c, i) => (
-          <li key={i}>
-            <strong>{c.name}</strong>
-            {c.description && <div className="muted small">{c.description}</div>}
-          </li>
-        ))}
-      </ol>
+      <TestCaseList cases={cases} />
     </section>
   );
 }

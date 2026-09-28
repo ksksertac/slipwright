@@ -178,6 +178,12 @@ export const IconLifebuoy = (p: P) => (
     <path d="m6 6 3.5 3.5M14.5 14.5 18 18M18 6l-3.5 3.5M9.5 14.5 6 18" />
   </svg>
 );
+export const IconBell = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z" />
+    <path d="M10 20.5a2.2 2.2 0 0 0 4 0" />
+  </svg>
+);
 export const IconMail = (p: P) => (
   <svg {...base(p)}>
     <rect x="3" y="5" width="18" height="14" rx="2" />

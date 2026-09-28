@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from slipwright.engine import Engine
+from slipwright.hostpaths import HostPaths
 from slipwright.providers import ModelProvider
 from slipwright.schemas.profile import Profile, load_profile
 from slipwright.secrets import load_or_create_key
@@ -43,6 +44,10 @@ class Settings:
     # Where a job's own commands work: checkouts, clones, logs. Kept apart from the
     # state directory on purpose -- see `work_dir`.
     work_root: Path | None = None
+    # What ``work_dir`` and ``local_repos`` are called on the host, for "copy the path".
+    # Only a Docker install needs them; from source the paths are the host's already.
+    host_work_dir: str | None = None
+    host_repos: str | None = None
 
     @property
     def db_path(self) -> Path:
@@ -100,6 +105,8 @@ class Settings:
             settings.work_root = Path(env["SLIPWRIGHT_WORK_DIR"])
         if env.get("SLIPWRIGHT_LOCAL_REPOS"):
             settings.local_repos = Path(env["SLIPWRIGHT_LOCAL_REPOS"])
+        settings.host_work_dir = env.get("SLIPWRIGHT_HOST_WORK_DIR") or None
+        settings.host_repos = env.get("SLIPWRIGHT_HOST_REPOS") or None
         settings.dev = env.get("SLIPWRIGHT_DEV", "").strip().lower() not in ("", *_OFF)
         return settings
 
@@ -130,6 +137,12 @@ def build_engine(settings: Settings) -> Engine:
         provider=build_provider(settings.provider, seed),
     )
     engine.local_repos_root = settings.local_repos
+    engine.host_paths = HostPaths(
+        [
+            (str(settings.work_dir), settings.host_work_dir or ""),
+            (str(settings.local_repos or ""), settings.host_repos or ""),
+        ]
+    )
     return engine
 
 

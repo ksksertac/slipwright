@@ -649,3 +649,29 @@ def test_every_provider_is_reachable_with_its_own_client(
             == name
         )
     assert client.put("/api/agents/backend/routing", json={}).status_code == 200
+
+
+def test_the_profile_table_says_where_a_role_really_runs(engine: Engine, seed: Profile) -> None:
+    """A role with no provider of its own runs on the default provider's own default
+    model: the model written beside it in the profile is never sent anywhere. The table
+    used to show that dead text as though it were the answer -- an Anthropic model name
+    under a DeepSeek provider -- so it now shows what will really answer as well."""
+    engine.update_provider_settings(
+        "deepseek", api_key="sk-d", make_default=True, default_model="deep-model"
+    )
+    po = seed.roles[RoleName.PO]
+    assert po.provider is None and po.model != "deep-model", "the fixture must disagree"
+    assert engine.effective_routing(po) == ("deepseek", "deep-model")
+
+    from pathlib import Path
+
+    form = (Path("web/src/components/ProfileForm.tsx")).read_text(encoding="utf-8")
+    for expected in (
+        "assigned_provider",  # a pin under Agents beats the profile
+        "default_model",  # else the default provider's own model beats the profile's
+        "disabled={disabled || run.why !== null}",  # closed, because editing changes nothing
+        "pinned under Agents",
+    ):
+        assert expected in form, expected
+    # the box shows what answers, not what the profile happens to carry
+    assert "value={run.model}" in form

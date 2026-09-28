@@ -83,6 +83,10 @@ PUBLIC_PATHS = frozenset(
         "/healthz",
     }
 )
+#: Paths a chat service calls, not a person. Anybody on the internet can reach them, so
+#: each one proves the caller itself -- Teams' signed token, in ``api/notify.py`` -- and
+#: refuses before reading anything when that proof is missing.
+PUBLIC_PREFIXES = ("/api/notify/inbound/",)
 NO_USERS_HINT = "no users exist yet; create one with: slipwright user add <name>"
 #: What every "is this address known?" endpoint says, whatever the answer.
 SENT_IF_KNOWN = "if that address has an account, a message is on its way"
@@ -167,7 +171,7 @@ def auth_dependency(*, enabled: bool) -> Callable[[Request], None]:
             return
         path = request.url.path
         protected = path.startswith("/api/")
-        if not protected or path in PUBLIC_PATHS:
+        if not protected or path in PUBLIC_PATHS or path.startswith(PUBLIC_PREFIXES):
             request.state.user = None
             return
         store = _store(request)

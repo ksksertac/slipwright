@@ -215,6 +215,10 @@ export const TR: Record<string, string> = {
   // -- generic actions -----------------------------------------------------------------------
   Approve: "Onayla",
   "Reject…": "Reddet…",
+  "Go on without tests": "Testsiz devam et",
+  "Skipping…": "Atlanıyor…",
+  "no tests are written and the development goes straight to delivery; the cases stay on the record":
+    "test yazılmaz, geliştirme doğrudan teslime geçer; senaryolar kayıtta kalır",
   "Send rejection": "Reddi gönder",
   Cancel: "Vazgeç",
   Close: "Kapat",
@@ -300,6 +304,7 @@ export const TR: Record<string, string> = {
   "the model was asked again {n} times": "modele {n} kez yeniden soruldu",
 
   waiting: "seni bekliyor",
+  skipped: "atlandı",
   todo: "yapılacak",
   "in progress": "sürüyor",
   "needs {pending}": "{pending} bekliyor",
@@ -534,6 +539,7 @@ export const TR: Record<string, string> = {
     "Her geliştirme burada bir adım şeridi olarak görünür: ajanların yaptıkları, şu an çalışan ve seni bekleyen.",
   "No development yet": "Henüz geliştirme yok",
   "Start one": "Bir tane başlat",
+  Start: "Başla",
   "{n} development(s) waiting for your approval": "{n} geliştirme onayını bekliyor",
   "Select all recommended ({n})": "Önerilenlerin tümünü seç ({n})",
   "the gates the supervisor recommends approving": "denetçinin onaylanmasını önerdiği kapılar",
@@ -1375,6 +1381,25 @@ export const TR: Record<string, string> = {
   "Project brief": "Proje künyesi",
   "Add a line": "Madde ekle",
   "No lines yet.": "Henüz madde yok.",
+  "Give up on this project": "Bu projeden vazgeç",
+  "Delete everything": "Her şeyi sil",
+  "Give up on": "Vazgeçilecek:",
+  "with its unfinished developments? Their branches and worktrees are removed from the disk, and nothing can be resumed afterwards.":
+    "bitmemiş geliştirmeleriyle birlikte silinsin mi? Dalları ve çalışma kopyaları diskten kaldırılır, sonrasında hiçbiri sürdürülemez.",
+  "The checkout Slipwright cloned is deleted too. Whatever was pushed stays on the host.":
+    "Slipwright'ın klonladığı çalışma kopyası da silinir. Push edilmiş olan her şey uzak depoda kalır.",
+  "The folder you pointed Slipwright at is left exactly as it is.":
+    "Slipwright'a gösterdiğin klasöre hiç dokunulmaz.",
+  "pinned under Agents": "Ajanlar'dan sabitlendi",
+  "{provider}'s default; pick a provider to set your own":
+    "{provider} varsayılanı; kendin seçmek için bir sağlayıcı belirle",
+  "the profile says {model}": "profilde yazan: {model}",
+  "Send the supervisor's changes": "Denetçinin istediklerini gönder",
+  "Reject, my own words…": "Kendi sözlerimle reddet…",
+  "The supervisor asked for changes. Approving goes ahead without them.":
+    "Denetçi değişiklik istedi. Onaylarsan onlarsız devam edilir.",
+  "the supervisor asked for changes; approving sets them aside":
+    "denetçi değişiklik istedi; onaylamak onları bir kenara koyar",
   "Waiting on this brief": "Bu tanıtımı bekliyor",
   "It starts the moment you approve, with everything below in its context.":
     "Sen onaylar onaylamaz, aşağıdaki her şey bağlamında olacak şekilde başlıyor.",
@@ -1662,8 +1687,10 @@ export const TR: Record<string, string> = {
 
   // -- the result tab before there is a result ---------------------------------------------
   "Nothing has come out yet.": "Henüz ortaya bir şey çıkmadı.",
-  "This development is still running — it is {state}. What it produced, and how to take it into your working copy, appears here once it finishes.":
-    "Bu geliştirme hâlâ sürüyor — şu an {state}. Ne ürettiği ve onu kendi çalışma kopyana nasıl alacağın, iş bittiğinde burada görünecek.",
+  "This development is still running — it is {state}. What it produced, and how to take it into your working copy, appears here as soon as the first commit lands on its branch.":
+    "Bu geliştirme hâlâ sürüyor — şu an {state}. Dalına ilk commit düştüğü anda ne ürettiği ve onu kendi çalışma kopyana nasıl alacağın burada görünecek.",
+  "What is on the branch so far": "Şimdiye kadar dalda ne var",
+  "still being written": "hâlâ yazılıyor",
 
   // -- the tests tab filter bar ------------------------------------------------------------
   "Clear the filters": "Filtreleri temizle",
@@ -1690,4 +1717,130 @@ export const TR: Record<string, string> = {
   "Example: a Notes app": "Örnek: Notlar uygulaması",
   "this is the example project: it is there to read, not to run":
     "bu örnek proje: okumak için var, çalıştırmak için değil",
+
+  // -- notifications ------------------------------------------------------------------------------------
+  Notifications: "Bildirimler",
+  "Agents reach your team where it already talks.":
+    "Ajanlar ekibine zaten konuştuğu yerden ulaşır.",
+  "A group is told when an agent is waiting, when a development stops and when one finishes. Somebody who links their own chat account is also asked personally at the gates that are theirs, and can carry on or reject — with a reason — from there.":
+    "Bir ajan onay beklediğinde, bir geliştirme durduğunda ya da bittiğinde grup haberdar edilir. Kendi sohbet hesabını bağlayan kişiye de kendi kapılarında ayrıca sorulur; oradan devam diyebilir ya da nedenini yazarak reddedebilir.",
+  "An agent is waiting for approval": "Bir ajan onay bekliyor",
+  "A development stopped": "Bir geliştirme durdu",
+  "A development finished": "Bir geliştirme tamamlandı",
+  "Group id": "Grup kimliği",
+  "Add the bot to the group and send /chatid there; it answers with this number.":
+    "Botu gruba ekle ve orada /chatid yaz; bu numarayla cevap verir.",
+  "Incoming webhook URL": "Incoming webhook adresi",
+  "Channel webhook URL": "Kanal webhook adresi",
+  "Workflows webhook URL": "Workflows webhook adresi",
+  "Bot token": "Bot token'ı",
+  "App-level token": "Uygulama düzeyi token",
+  "Microsoft app id": "Microsoft uygulama kimliği",
+  "Client secret": "İstemci gizli anahtarı",
+  "Tenant id": "Kiracı (tenant) kimliği",
+  "Only for a single-tenant bot; leave it empty otherwise.":
+    "Yalnızca tek kiracılı bir bot için; değilse boş bırak.",
+  "Create a bot with @BotFather (/newbot) and paste its token in the bot card below — the group uses the same bot.":
+    "@BotFather ile bir bot oluştur (/newbot) ve token'ını aşağıdaki bot kartına yapıştır — grup da aynı botu kullanır.",
+  "Add the bot to your team's group.": "Botu ekibinin grubuna ekle.",
+  "Send /chatid in the group and paste the number here.":
+    "Grupta /chatid yaz ve gelen numarayı buraya yapıştır.",
+  "At api.slack.com/apps, open your app (or create one) → Incoming Webhooks → turn it on.":
+    "api.slack.com/apps adresinde uygulamanı aç (ya da oluştur) → Incoming Webhooks → aç.",
+  "Add New Webhook to Workspace, pick the channel, and paste the URL here.":
+    "Add New Webhook to Workspace'e tıkla, kanalı seç ve adresi buraya yapıştır.",
+  "In the channel's settings: Integrations → Webhooks → New Webhook.":
+    "Kanal ayarlarında: Entegrasyonlar → Webhook'lar → Yeni Webhook.",
+  "Copy Webhook URL and paste it here.": "Webhook URL'sini kopyala ve buraya yapıştır.",
+  "In the channel: … → Workflows → “Post to a channel when a webhook request is received”.":
+    "Kanalda: … → Workflows → “Post to a channel when a webhook request is received”.",
+  "Finish the flow and paste the URL it gives you here.":
+    "Akışı tamamla ve verdiği adresi buraya yapıştır.",
+  "Talk to @BotFather, send /newbot, and paste the token it gives you.":
+    "@BotFather'a yaz, /newbot gönder ve verdiği token'ı yapıştır.",
+  "That is all: the bot listens from this server, no public address needed.":
+    "Bu kadar: bot bu sunucudan dinler, dışarıya açık bir adres gerekmez.",
+  "At api.slack.com/apps create an app; under Socket Mode turn it on and create an app-level token with connections:write (xapp-…).":
+    "api.slack.com/apps adresinde bir uygulama oluştur; Socket Mode'u aç ve connections:write yetkili bir uygulama düzeyi token oluştur (xapp-…).",
+  "OAuth & Permissions → Bot Token Scopes: chat:write and im:history.":
+    "OAuth & Permissions → Bot Token Scopes: chat:write ve im:history.",
+  "Event Subscriptions → on, and subscribe to the bot event message.im. Interactivity → on.":
+    "Event Subscriptions → aç ve message.im bot olayına abone ol. Interactivity → aç.",
+  "App Home → allow people to send messages in the Messages tab.":
+    "App Home → Messages sekmesinden mesaj gönderilmesine izin ver.",
+  "Install the app to the workspace and paste the bot token (xoxb-…).":
+    "Uygulamayı çalışma alanına kur ve bot token'ını yapıştır (xoxb-…).",
+  "At discord.com/developers create an application → Bot → Reset Token, and paste it here.":
+    "discord.com/developers adresinde bir uygulama oluştur → Bot → Reset Token, ve token'ı buraya yapıştır.",
+  "OAuth2 → URL Generator: scope “bot”; open the URL and add the bot to a server your team is on.":
+    "OAuth2 → URL Generator: “bot” kapsamı; adresi aç ve botu ekibinin olduğu bir sunucuya ekle.",
+  "People write to the bot directly; no public address needed.":
+    "Kişiler bota doğrudan yazar; dışarıya açık bir adres gerekmez.",
+  "In Azure create an Azure Bot; note its Microsoft app id and create a client secret.":
+    "Azure'da bir Azure Bot oluştur; Microsoft uygulama kimliğini not al ve bir istemci gizli anahtarı oluştur.",
+  "Set its messaging endpoint to the address below. It must be reachable from the internet over https.":
+    "Mesajlaşma uç noktasını aşağıdaki adres yap. İnternetten https ile erişilebilir olmalı.",
+  "Channels → add Microsoft Teams, then open the bot in Teams (or install it with an app package).":
+    "Channels → Microsoft Teams'i ekle, sonra botu Teams'te aç (ya da bir uygulama paketiyle kur).",
+  "Open the bot with the button, or send it: /start {code}":
+    "Botu butonla aç ya da ona şunu gönder: /start {code}",
+  "Write to the app in Slack (its Messages tab): link {code}":
+    "Slack'te uygulamaya yaz (Messages sekmesi): link {code}",
+  "Send the bot a direct message: {code}": "Bota doğrudan mesaj gönder: {code}",
+  "Write to the bot in Teams: link {code}": "Teams'te bota yaz: link {code}",
+  "How to set it up": "Nasıl kurulur",
+  set: "kayıtlı",
+  "Tell the group when": "Grubu şu durumlarda haberdar et",
+  "Test message sent: {where}": "Deneme mesajı gönderildi: {where}",
+  "to the group": "gruba",
+  "to you": "sana",
+  "The team's group": "Ekibin grubu",
+  "Everybody reads it; nobody decides in it. A message says what is waiting and links to it.":
+    "Herkes okur, kimse orada karar vermez. Mesaj neyin beklediğini söyler ve ona bağlantı verir.",
+  ready: "hazır",
+  "not set up": "kurulmadı",
+  "Telegram posts to the group through the bot: set its token below first.":
+    "Telegram gruba bot üzerinden yazar: önce aşağıdan token'ını gir.",
+  "set up": "kuruldu",
+  listening: "dinliyor",
+  "connecting…": "bağlanıyor…",
+  "Asking people personally": "Kişilere tek tek sormak",
+  "A bot writes to each linked person at the gates that are theirs, with two buttons: carry on, or reject and say why. What they write goes back to the agent.":
+    "Bot, bağlı her kişiye kendi kapılarında iki butonla yazar: devam et ya da reddet ve nedenini söyle. Yazılan ajana geri gider.",
+  "The bot:": "Bot:",
+  "Messaging endpoint": "Mesajlaşma uç noktası",
+  "Teams needs this server's public https address. Set it as the link base on the Email page.":
+    "Teams bu sunucunun dışarıya açık https adresine ihtiyaç duyar. E-posta sayfasında bağlantı kökü olarak gir.",
+  "Your {service} account": "{service} hesabın",
+  "Link it once and the gates that are yours arrive there too. The code proves the account is yours; a button pressed by anybody else does nothing.":
+    "Bir kez bağla, sana ait kapılar oraya da gelsin. Kod hesabın sana ait olduğunu kanıtlar; başkasının bastığı buton hiçbir şey yapmaz.",
+  linked: "bağlı",
+  "not linked": "bağlı değil",
+  "Set up the bot above first; then you and your team can link.":
+    "Önce yukarıdaki botu kur; sonra sen ve ekibin bağlanabilirsiniz.",
+  "The owner of the account has not set up a bot here yet.":
+    "Hesabın sahibi burada henüz bir bot kurmadı.",
+  "Linked as": "Bağlı hesap:",
+  Unlink: "Bağlantıyı kaldır",
+  "Open in Telegram": "Telegram'da aç",
+  "Works once, for 30 minutes.": "Bir kez, 30 dakika boyunca geçerli.",
+  "Get a link code": "Bağlantı kodu al",
+  "Others on the account who linked {service}": "Hesapta {service} bağlayan diğer kişiler",
+  "Copy path": "Yolu kopyala",
+  "inside the server:": "sunucunun içinde:",
+  "This is the path inside Docker. Set SLIPWRIGHT_HOST_WORK_DIR in .env to have the copy open in Explorer or Finder.":
+    "Bu, Docker'ın içindeki yol. Kopyalanan yolun Gezgin'de ya da Finder'da açılması için .env dosyasında SLIPWRIGHT_HOST_WORK_DIR'i ayarla.",
+  Personal: "Kişisel",
+  Group: "Grup",
+  "Telegram posts to the group through the bot: set its token on the Personal tab first.":
+    "Telegram gruba bot üzerinden yazar: önce Kişisel sekmesinden token'ını gir.",
+  "The sender every letter goes out from.": "Tüm postaların çıktığı gönderici.",
+  Product: "Ürün",
+  Stack: "Teknoloji",
+  Modules: "Modüller",
+  Conventions: "Kurallar",
+  Deployment: "Dağıtım",
+  Risks: "Riskler",
+  Developers: "Geliştiriciler",
+  "Every agent": "Tüm ajanlar",
 };

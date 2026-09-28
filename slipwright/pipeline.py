@@ -27,6 +27,7 @@ class StepStatus(StrEnum):
     DONE = "done"
     FAILED = "failed"
     WAITING = "waiting"  # for the human
+    SKIPPED = "skipped"  # deliberately passed over; it will not run
 
 
 class StepCard(BaseModel):
@@ -600,6 +601,14 @@ def lane_for(job: Job) -> Lane:
             span=stage2,
             current=not in_stage1,
         ),
+    ]
+    # the tests were read and deliberately not written: the two steps that would have done
+    # it are shown as passed over rather than left waiting for a turn that never comes
+    if job.data.tests_skipped:
+        for card in steps:
+            if card.key in ("qa:2", "test_gate:2"):
+                card.status = StepStatus.SKIPPED
+    steps += [
         *_deploy_cards(job, r),
         r.stage(
             key="devops",

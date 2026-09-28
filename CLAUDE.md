@@ -62,6 +62,8 @@ slipwright/
   costs.py + prices.py  what a development cost against what it was expected to
   support.py          the support desk
   net.py              retrying a request that never left
+  notify/             Telegram, Slack, Discord and Teams: core.py decides who is asked
+                      and what a press may do; listeners.py runs the bots
 
 web/src/              React. i18n.tsx translates the interface, i18n/said.tsx the agents'
                       own prose
@@ -156,6 +158,11 @@ behaviour deliberately changed, rewrite it to state the new rule -- do not weake
   also refuses the demo project. A new mutating endpoint that skips it has no guard.
 - **The demo project has no checkout.** Anything that would run something in it must
   refuse (409) rather than fail deeper in. Deleting it is allowed -- that is its purpose.
+- **A chat press is a gate action.** `notify/core.py`'s `_refusal` is the chat twin of
+  `_may_act`; a press counts only from the chat account linked to the person it was asked
+  of, and only for the gate visit (`gate_marker`) it was asked about. Change one guard and
+  change the other. `/api/notify/inbound/` is outside the login (`PUBLIC_PREFIXES`) and
+  proves itself with Microsoft's signed token instead -- keep that check first.
 - **`_resume_all` is deliberately unscoped.** The server starting is not somebody asking;
   in-flight work of every account must carry on, each on its own owner's credentials.
 - **Alembic is quiet on purpose.** It narrates at INFO, which once landed in a CLI's

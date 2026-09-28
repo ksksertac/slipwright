@@ -104,6 +104,14 @@ export type DeployPlan = {
   notes?: string[];
 };
 export type MailSettings = Schemas["MailSettingsView"];
+export type NotifyOverview = Schemas["NotifyOverview"];
+export type CheckoutPath = Schemas["CheckoutPath"];
+export type NotifyChannel = Schemas["ChannelView"];
+export type NotifyChannelIn = Schemas["ChannelSettingsIn"];
+export type NotifyLink = Schemas["LinkView"];
+export type NotifyLinkCode = Schemas["LinkCode"];
+export type ChannelName = NotifyChannel["channel"];
+export type NotifyEvent = NotifyChannel["events"][number];
 export type MailSettingsIn = Schemas["MailSettingsIn"];
 export type MailTestResult = Schemas["MailTestResult"];
 export type OutboxLetter = Schemas["OutboxLetter"];

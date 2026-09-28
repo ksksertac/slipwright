@@ -22,9 +22,11 @@ import {
   IconSun,
   IconTicket,
   IconUsers,
+  IconBell,
 } from "./icons";
 import { useTheme, type Theme } from "./theme";
 import { useT } from "../i18n";
+import { SUPPORT_DESK } from "../features";
 import { BuildWatch } from "./BuildWatch";
 
 const THEMES: { value: Theme; icon: React.ReactNode; title: string }[] = [
@@ -83,9 +85,11 @@ export function Layout() {
           <NavLink to="/agents" data-nav="agents">
             <IconBot /> {tx("Agents")}
           </NavLink>
-          <NavLink to="/support" data-nav="support">
-            <IconLifebuoy /> {tx("Support")}
-          </NavLink>
+          {SUPPORT_DESK && (
+            <NavLink to="/support" data-nav="support">
+              <IconLifebuoy /> {tx("Support")}
+            </NavLink>
+          )}
           {/* the settings belong to whoever owns the account; somebody who holds an
               agent configures it on the agent's own page */}
           {owner && <div className="nav-label">{tx("Settings")}</div>}
@@ -109,6 +113,14 @@ export function Layout() {
               <IconMail /> {tx("Email")}
             </NavLink>
           )}
+          {/* under Email, because the two answer the same question -- where word of this
+              reaches you. Not guarded like the rest of the settings: everybody on the
+              account links their own chat here, and only setting the channels up belongs
+              to the owner, which the page itself decides. For somebody who is not the
+              owner the links above render nothing, so this lands back beside Agents. */}
+          <NavLink to="/notifications" data-nav="notifications">
+            <IconBell /> {tx("Notifications")}
+          </NavLink>
           {owner && user?.is_admin && (
             <NavLink to="/settings/users" data-nav="users">
               <IconUsers /> {tx("Users")}

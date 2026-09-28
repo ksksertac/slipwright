@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { describeError, type Project } from "../api/client";
+import { ApiError, describeError, type Project } from "../api/client";
 import { useDeleteProject, usePatchProject } from "../api/hooks";
 import { ConfirmModal, Modal } from "./Modal";
 import { useToast } from "./Toast";
@@ -284,28 +284,60 @@ export function DeleteProjectModal({
   const remove = useDeleteProject();
   const toast = useToast();
   const navigate = useNavigate();
+  // A development stopped at a gate can never finish on its own, so the ordinary delete
+  // refuses forever once you have given up on one. The second press is where you say you
+  // mean it, and it is only offered after the first has actually been refused.
+  const [giveUp, setGiveUp] = useState(false);
+  // Slipwright cloned it: the folder is ours to remove. A checkout the person pointed at
+  // is their own work and is never touched, whatever they press here.
+  const ourCheckout = (project.repo_path ?? "").includes("/repos/");
+  const done = () => {
+    toast.ok(`Deleted ${project.name}`);
+    onClose();
+    if (redirectTo) navigate(redirectTo);
+  };
   return (
     <ConfirmModal
-      title={tx("Delete project")}
+      title={giveUp ? tx("Give up on this project") : tx("Delete project")}
+      confirmLabel={giveUp ? tx("Delete everything") : tx("Delete")}
       body={
-        <>
-          {tx("Delete")} <strong>{sentenceCase(project.name)}</strong>{" "}
-          {tx(
-            "and its finished developments? The repository on disk is not touched. Projects with a running development cannot be deleted.",
-          )}
-        </>
+        giveUp ? (
+          <>
+            <p style={{ marginTop: 0 }}>
+              {tx("Give up on")} <strong>{sentenceCase(project.name)}</strong>{" "}
+              {tx(
+                "with its unfinished developments? Their branches and worktrees are removed from the disk, and nothing can be resumed afterwards.",
+              )}
+            </p>
+            <p className="muted small" style={{ marginBottom: 0 }}>
+              {ourCheckout
+                ? tx("The checkout Slipwright cloned is deleted too. Whatever was pushed stays on the host.")
+                : tx("The folder you pointed Slipwright at is left exactly as it is.")}
+            </p>
+          </>
+        ) : (
+          <>
+            {tx("Delete")} <strong>{sentenceCase(project.name)}</strong>{" "}
+            {tx(
+              "and its finished developments? The repository on disk is not touched. Projects with a running development cannot be deleted.",
+            )}
+          </>
+        )
       }
       busy={remove.isPending}
-      error={remove.error ? describeError(remove.error) : null}
+      error={remove.error && !giveUp ? describeError(remove.error) : null}
       onClose={onClose}
       onConfirm={() =>
-        remove.mutate(project.id, {
-          onSuccess: () => {
-            toast.ok(`Deleted ${project.name}`);
-            onClose();
-            if (redirectTo) navigate(redirectTo);
+        remove.mutate(
+          { id: project.id, purge: giveUp },
+          {
+            onSuccess: done,
+            onError: (err) => {
+              // refused because something is still unfinished: offer the other door
+              if (err instanceof ApiError && err.status === 409) setGiveUp(true);
+            },
           },
-        })
+        )
       }
     />
   );

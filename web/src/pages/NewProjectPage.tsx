@@ -3,13 +3,14 @@ import { Link, useNavigate } from "react-router-dom";
 import { Crumbs } from "../components/Crumbs";
 import { PageHead } from "../components/ui";
 import { describeError, type NewProject } from "../api/client";
+import { slugify } from "../slug";
 import {
   useCreateProject,
-  useCreateSourceRepo,
   useCreateJiraProject,
   useJiraProjects,
   useJiraSettings,
   useLocalRepos,
+  useCreateSourceRepo,
   useSourceRepos,
   useSources,
 } from "../api/hooks";
@@ -39,6 +40,7 @@ export function NewProjectPage() {
   const openRepo = useCreateSourceRepo(host);
   const [mode, setMode] = useState<"existing" | "new">("existing");
   const [newRepoName, setNewRepoName] = useState("");
+  const [touchedRepoName, setTouchedRepoName] = useState(false);
   const [privateRepo, setPrivateRepo] = useState(true);
   const [repoPath, setRepoPath] = useState("");
   const [typing, setTyping] = useState(false); // type a path instead of picking a folder
@@ -63,6 +65,9 @@ export function NewProjectPage() {
   // because the list arrives after the first render and "not linked" stays pickable
   const onlyProject = jiraProjects.data?.length === 1 ? jiraProjects.data[0] : undefined;
   const chosenJiraKey = touchedJira ? jiraKey : (onlyProject?.key ?? jiraKey);
+  // "Note app" is not a repository name; "note-app" is. Derived rather than stored, so it
+  // follows the project's name while nobody has typed a name of their own here.
+  const repoName = touchedRepoName ? newRepoName : slugify(name);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -97,7 +102,7 @@ export function NewProjectPage() {
       if (host !== "local" && mode === "new") {
         // open it on the host first: the project is created against what comes back
         const made = await openRepo.mutateAsync({
-          name: newRepoName.trim(),
+          name: repoName.trim(),
           private: privateRepo,
           description: description.trim(),
         });
@@ -120,7 +125,7 @@ export function NewProjectPage() {
     (host === "local"
       ? repoPath.trim() !== ""
       : mode === "new"
-        ? newRepoName.trim() !== ""
+        ? repoName.trim() !== ""
         : githubRepo.trim() !== "");
 
   /* One question at a time, in the order somebody answers them: what it is called, where
@@ -137,7 +142,7 @@ export function NewProjectPage() {
         host === "local"
           ? repoPath.trim() !== ""
           : mode === "new"
-            ? newRepoName.trim() !== ""
+            ? repoName.trim() !== ""
             : githubRepo.trim() !== "",
     },
     { key: "tracking", label: "Tracking", ready: !badJiraKey && !badNewJiraKey },
@@ -356,9 +361,13 @@ export function NewProjectPage() {
                   <input
                     id="github_repo"
                     type="text"
-                    value={newRepoName}
-                    onChange={(e) => setNewRepoName(e.target.value)}
-                    placeholder={name.trim() || tx("my-service")}
+                    className="mono"
+                    value={repoName}
+                    onChange={(e) => {
+                      setTouchedRepoName(true);
+                      setNewRepoName(e.target.value);
+                    }}
+                    placeholder={tx("my-service")}
                   />
                   <label className="row small" style={{ marginTop: 6 }}>
                     <input

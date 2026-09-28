@@ -176,12 +176,20 @@ def test_a_project_is_cloned_on_its_owners_token(
         shutil.copytree(repo, target)
 
     monkeypatch.setattr("slipwright.engine.g.clone", fake_clone)
-    engine.create_project(
-        Project(name="ada's", github_repo="ada/tasklist", owner_id="ada")
-    )
+    made = engine.create_project(Project(name="ada's", github_repo="ada/tasklist", owner_id="ada"))
+    assert made.repo_path is not None
 
     assert seen, "the project was never cloned"
     assert "ghp-adas-own-token@" in seen[0], f"cloned anonymously: {seen[0]}"
+
+    # ...but the token does not stay there. git clone keeps the URL it was given, and a
+    # project's own build and test commands run inside that checkout: `git remote -v`
+    # would hand them the token. Push supplies it per call instead.
+    from slipwright.workspace import git as real_git
+
+    remote = real_git.run(made.repo_path, "remote", "get-url", "origin").stdout
+    assert "ghp-adas-own-token" not in remote, f"the token was left in the checkout: {remote}"
+    assert remote.strip() == "https://github.com/ada/tasklist.git"
 
 
 def test_cloning_without_a_token_says_so(
@@ -246,3 +254,26 @@ def test_pinning_an_agent_is_what_that_accounts_jobs_run_on(app: TestClient) -> 
     assert ada_id is not None
     assert engine.for_user(ada_id.id).agent_routing("backend") == ("deepseek", "deepseek-chat")
     assert engine.for_user("somebody-else").agent_routing("backend") is None
+
+
+def test_a_branch_is_named_after_the_project_and_what_was_asked(
+    engine: Engine, repo: Path
+) -> None:
+    """`slipwright/d5ee9987c86a` said nothing about whose repository it was in or what it
+    was for, and read like a reference to Slipwright's own repository -- which is not
+    where it lives. The name now says the project and the request."""
+    from slipwright.schemas.job import branch_name, slugify
+    from slipwright.schemas.project import Project
+
+    project = engine.store.create_project(Project(name="Note app", repo_path=repo))
+    job = engine.create_job("Görevler herkeste ortak görünecek", project_id=project.id)
+
+    where, _, what = job.branch.partition("/")
+    assert where == "note-app", job.branch
+    assert what.startswith("gorevler-herkeste-ortak-gorunecek"), job.branch
+    assert what.endswith(job.id[:8]), "the short id is what keeps two goes apart"
+
+    # the name is written down, so a later change of formula never renames a branch that
+    # already exists in git under the old one
+    assert engine.store.get(job.id).data.branch_name == job.branch
+    assert slugify("") == "" and branch_name("", "", "abcdef123456") == "slipwright/abcdef12"

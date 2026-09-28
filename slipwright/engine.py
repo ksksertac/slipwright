@@ -39,6 +39,7 @@ from slipwright.gates import GateResult, build_gate, run_command
 from slipwright.gates.runner import Runner, build_runner
 from slipwright.githost import CiState, CiStatus, GitHost, GitHostError, NoRemote
 from slipwright.github import GitHubClient, GitHubError, GitHubSettings
+from slipwright.hostpaths import HostPaths
 from slipwright.invoke import (
     DEFAULT_TIMEOUT_S,
     RETRYABLE,
@@ -51,6 +52,7 @@ from slipwright.jira import DEFAULT_ISSUE_TYPES, JiraClient, JiraError, JiraSett
 from slipwright.jiraactions import ActionOutcome, ActionRunner, jira_context
 from slipwright.jirasync import JiraSync
 from slipwright.mail import Mailer, MailSettings, OutboxMailer, SmtpMailer
+from slipwright.notify.core import notify_gate, notify_outcome, settle_prompts
 from slipwright.orchestrator import IllegalTransitionError, Orchestrator
 from slipwright.providers import ModelProvider, ProviderUnavailableError
 from slipwright.providers.registry import (
@@ -106,6 +108,8 @@ from slipwright.schemas.job import (
     JobData,
     JobResult,
     JobState,
+    branch_name,
+    new_job_id,
     utcnow,
 )
 from slipwright.schemas.profile import Permission, Profile, RoleConfig, RoleName
@@ -142,6 +146,7 @@ from slipwright.teams import Teams
 from slipwright.translate import OTHER_LANGUAGE, strings_of, translate
 from slipwright.workspace import Workspace
 from slipwright.workspace import git as g
+from slipwright.workspace.worktree import rmtree as _rmtree
 
 log = logging.getLogger(__name__)
 
@@ -331,6 +336,9 @@ class Engine:
         self.standards_dir = GLOBAL_DIR
         # where the UI looks for local checkouts to register (None: type a path)
         self.local_repos_root: Path | None = None
+        # what the checkouts are called on the person's own machine (Docker: /work is a
+        # volume the host sees under another name); empty means they are already there
+        self.host_paths = HostPaths()
         self._standards_index: StandardsIndex | None = None
         self._standards_editor: StandardsEditor | None = None
         self.orchestrator = Orchestrator(store)
@@ -694,6 +702,18 @@ class Engine:
         branch = base_branch or rows[chosen].base_branch
         return build_host(creds, transport=self.http_transport, base_branch=branch)
 
+    def base_branch_of(self, project: Project | None) -> str:
+        """The branch this project's work is merged back into.
+
+        Read from the source the project actually names, through its owner. It used to be
+        GitHub's setting whatever the project was on, so a Bitbucket project whose trunk
+        is called something else was told to merge into a branch that does not exist.
+        """
+        mine = self.for_user(project.owner_id if project else None)
+        rows = {r.name: r for r in mine.source_settings()}
+        row = rows.get(project.source if project else mine.default_source())
+        return (row.base_branch if row else "") or "main"
+
     def host_for(self, project: Project | None) -> SourceHost:
         """The host a project belongs to; the default for a project that names none.
 
@@ -897,6 +917,14 @@ class Engine:
             return self.store.get_project(job.project_id)
         except ProjectNotFound:
             return None
+
+    def _source_of(self, job: Job) -> str:
+        """Which host this job's project lives on; the account's default when it has no
+        project of its own (the CLI, a job older than projects)."""
+        project = self._project_of(job)
+        if project is not None:
+            return project.source
+        return self.for_user(job.owner_id).default_source()
 
     def _agent_jira_client(self, owner_id: str | None = None) -> JiraClient | None:
         try:
@@ -1319,6 +1347,12 @@ class Engine:
                         " add one under Settings -> Sources"
                     )
                 raise ProjectCloneError(detail) from exc
+            # git clone keeps the URL it was handed, so the token would live on in
+            # .git/config -- readable by `git remote -v` from inside the checkout, which
+            # is where a project's own build and test commands run. Push does not need it
+            # there (`GhHost._credentials` supplies it per call), so origin is put back to
+            # the plain URL at once.
+            g.set_remote(target, "origin", url)
             mine._seed_if_empty(target, project)
             project = project.model_copy(update={"repo_path": target})
         elif not project.repo_path.is_dir():
@@ -1355,7 +1389,9 @@ class Engine:
         host agree on where the work begins."""
         if g.run(checkout, "rev-parse", "--verify", "--quiet", "HEAD", check=False).returncode == 0:
             return
-        branch = self.github_settings().base_branch or "main"
+        # the branch the *project's* host starts from, which is not always GitHub's: a
+        # repository opened on Bitbucket was seeded on whatever GitHub had been set to
+        branch = self.base_branch_of(project)
         readme = checkout / "README.md"
         if not readme.exists():
             readme.write_text(f"# {project.name}\n\n{project.description}\n", encoding="utf-8")
@@ -1442,8 +1478,12 @@ class Engine:
         if project.repo_path is None:
             raise RuntimeError(f"project {project.id} has no checkout")
         brief = self.store.get_brief(project.id)
+        # the id is minted here rather than by the default factory: the branch is named
+        # after it, and the two have to be the same id
+        job_id = new_job_id()
         return self.store.create(
             Job(
+                id=job_id,
                 project_id=project.id,
                 # the job inherits the project's owner: it decides who may see it and,
                 # once it runs, whose model keys pay for it
@@ -1453,11 +1493,57 @@ class Engine:
                 data=JobData(
                     language=project.language,
                     plan_gate=project.plan_gate,
+                    branch_name=branch_name(project.name, request, job_id),
                     # the approved brief only: half-written analysis items never reach an agent
                     brief=brief.context() if brief.ready else [],
                 ),
             )
         )
+
+    def delete_project(self, project_id: str, *, purge: bool = False) -> None:
+        """Delete a project. ``purge`` gives up on it entirely.
+
+        The ordinary delete refuses while a development is unfinished, which is right
+        while the work still matters. It is wrong when it no longer does: a development
+        stopped at a gate cannot be failed or finished, so a project somebody has
+        abandoned would be undeletable and its worktrees would sit on the disk forever.
+
+        A purge stops caring about state: every worktree and branch goes, and so does the
+        checkout -- **but only one Slipwright cloned itself**, which is the one under
+        ``repos_root``. A folder the person pointed at is their own work and is left
+        exactly as it is, whatever else happens here.
+        """
+        project = self.store.get_project(project_id)
+        if purge:
+            for job in self.store.list(project_id):
+                with self._locks[job.id]:
+                    if job.worktree_path is not None or job.port is not None:
+                        # a worktree of a development still running is pulled out from
+                        # under it; it has been given up on, so that is the point
+                        try:
+                            self.workspace.destroy(job)
+                        except Exception as exc:  # noqa: BLE001 - one bad worktree must
+                            # not stop the purge: whatever is left is still wanted gone
+                            log.warning("purge %s: job %s: %s", project_id, job.id, exc)
+        self.store.delete_project(project_id, force=purge)
+        if purge:
+            self._remove_our_checkout(project)
+
+    def _remove_our_checkout(self, project: Project) -> None:
+        """Delete the checkout, if it is one Slipwright cloned rather than one it was
+        pointed at. Compared by resolved path: a symlink or a relative parent must not be
+        able to make somebody's own folder look like ours."""
+        path = project.repo_path
+        if path is None:
+            return
+        try:
+            here = path.resolve()
+            ours = self.repos_root.resolve()
+        except OSError:  # already gone, or unreadable: nothing of ours to remove
+            return
+        if here.parent != ours or not here.is_dir():
+            return
+        _rmtree(here)
 
     def delete_job(self, job_id: str) -> None:
         """Remove a finished job: its worktree and branch, its port, its rows."""
@@ -1529,6 +1615,33 @@ class Engine:
         job.data.output_hashes = {}  # a human decision is a fresh start for the loop check
         self.store.save(job)
         job = self.orchestrator.transition(job, edges[0], note=note)
+        return self._run(job) if run else job
+
+    def skip_tests(self, job_id: str, *, run: bool = True) -> Job:
+        """Read the test cases, decide they are not worth writing, and go on without them.
+
+        Rejecting means "not good enough, do it again", at this gate as at every other one,
+        and it would be a trap to make it mean "abandon the step" here alone: somebody
+        asking for one more case would lose the tests altogether. This is the other answer,
+        and it is a deliberate one -- writing the tests is the most expensive step in a
+        development, and not every development is worth it.
+
+        Only at the first of QA's two gates. Once the tests exist there is nothing to save
+        by throwing them away.
+        """
+        job = self.store.get(job_id)
+        if job.state is not JobState.AWAITING_TEST_APPROVAL or job.data.qa_stage != 1:
+            raise NotAwaitingApproval(job)
+        job.data.tests_skipped = True
+        job.data.feedback = None
+        job.data.reject_rounds = 0
+        job.data.output_hashes = {}
+        self.store.save(job)
+        job = self.orchestrator.transition(
+            job,
+            JobState.DEVOPS,
+            note=f"skipped the tests: {len(job.data.test_cases)} case(s) were not written",
+        )
         return self._run(job) if run else job
 
     def reject(self, job_id: str, feedback: str, *, run: bool = True) -> Job:
@@ -2032,7 +2145,7 @@ class Engine:
         new one, and a server that restarts mid-gate writes none. A job with nobody on the
         agent costs one query and writes nothing.
         """
-        if job.state not in APPROVAL_STATES or job.owner_id is None:
+        if job.state not in APPROVAL_STATES:
             return job
         visits = sum(
             1 for t in job.history if t.to_state is job.state and t.from_state is not job.state
@@ -2040,17 +2153,22 @@ class Engine:
         marker = f"{job.state.value}:{visits}"
         if marker in job.data.notified:
             return job
-        project = ""
-        if job.project_id:
+        # the chat groups, and everybody linked in a chat who may decide this gate. A job
+        # with no owner (a local install, the CLI) has nobody to mail but may still have
+        # a Telegram group; the marker below keeps both to once per arrival.
+        notify_gate(self, job)
+        told: list[str] = []
+        if job.owner_id is not None:
+            project = ""
+            if job.project_id:
+                try:
+                    project = self.store.get_project(job.project_id).name
+                except ProjectNotFound:
+                    project = ""
             try:
-                project = self.store.get_project(job.project_id).name
-            except ProjectNotFound:
-                project = ""
-        try:
-            told = self.teams().notify_gate(job, project_name=project, lang=lang)
-        except Exception as exc:  # noqa: BLE001 - a gate must not wait on a mail server
-            log.warning("job %s: could not notify the team: %s", job.id, exc)
-            return job
+                told = self.teams().notify_gate(job, project_name=project, lang=lang)
+            except Exception as exc:  # noqa: BLE001 - a gate must not wait on a mail server
+                log.warning("job %s: could not notify the team: %s", job.id, exc)
         job = self.store.get(job.id)
         job.data.notified.append(marker)
         self.store.save(job)
@@ -2087,12 +2205,29 @@ class Engine:
         self.store.get_project(project_id)  # raises for an unknown project
         return self.store.get_brief(project_id)
 
+    def brief_source(self, project: Project) -> Path | None:
+        """The folder the brief is read from, or None when there is nothing to read yet.
+
+        Normally the project's own checkout. But a development works on a branch in a
+        worktree of its own and nothing merges it for you: a project opened from an empty
+        repository still has only the seeded README on ``main`` after its agents have
+        written a whole application. Asked about that project, this said "the repository
+        is empty" and offered to interview the person about a product that already
+        existed. So when the checkout holds no code, the newest development that has some
+        is read instead -- the code that was actually written, not the plan for it.
+        """
+        here = Path(project.repo_path) if project.repo_path is not None else None
+        if here is not None and here.is_dir() and not discovery.repository_is_empty(here):
+            return here
+        for job in sorted(self.store.list(project.id), key=lambda j: j.created_at, reverse=True):
+            tree = job.worktree_path
+            if tree is not None and tree.is_dir() and not discovery.repository_is_empty(tree):
+                return tree
+        return None
+
     def brief_kind(self, project: Project) -> str:
-        """``intake`` when the checkout holds no code to read, else ``analysis``."""
-        checkout = project.repo_path
-        if checkout is None or not Path(checkout).is_dir():
-            return "intake"
-        return "intake" if discovery.repository_is_empty(Path(checkout)) else "analysis"
+        """``intake`` when there is no code anywhere to read, else ``analysis``."""
+        return "analysis" if self.brief_source(project) is not None else "intake"
 
     def _brief_failed(self, project_id: str, why: str) -> ProjectBrief:
         brief = self.store.get_brief(project_id)
@@ -2114,12 +2249,12 @@ class Engine:
     def execute_analysis(self, project_id: str) -> ProjectBrief:
         """Read the checkout and propose the brief. Never raises: a failure is a state."""
         project = self.store.get_project(project_id)
-        checkout = project.repo_path
-        if checkout is None or not Path(checkout).is_dir():
-            return self._brief_failed(project_id, f"project {project_id} has no checkout")
+        checkout = self.brief_source(project)
+        if checkout is None:
+            return self._brief_failed(project_id, f"project {project_id} has no code to read")
         try:
             result = discovery.analyse(
-                Path(checkout),
+                checkout,
                 self.project_profile(project),
                 language=project.language,
                 provider=self.provider_for(project.owner_id),
@@ -2348,6 +2483,9 @@ class Engine:
         """
         with self._locks[job.id]:
             job = self._jira_reconcile(self.store.get(job.id))
+            # whoever moved it -- the web page, the API, somebody else's chat -- the
+            # questions still open in people's chats about where it was are now moot
+            settle_prompts(self, job)
             while job.state in WORKING_STATES:
                 handler = self.handlers.get(job.state)
                 if handler is None:
@@ -2363,14 +2501,65 @@ class Engine:
                         f"{before.value} crashed: {type(exc).__name__}: {exc}",
                         detail=traceback.format_exc(),
                     )
-                    return self._jira_reconcile(job)
+                    return self._notify_outcome(self._jira_reconcile(job))
                 if job.state is before:  # a handler must always move the job
                     raise RuntimeError(f"handler for {before.value} did not change job {job.id}")
                 job = self._jira_reconcile(job)
                 if job.state in APPROVAL_STATES:
                     job = self._supervise(job)  # may approve, in which case the loop goes on
                     job = self._notify_team(job)
+            job = self._notify_outcome(job)
+        # outside the job's lock: reading the code it wrote is a model call, and a job
+        # that has finished must not look busy while it happens
+        self._learn_from(job)
+        return job
+
+    def _learn_from(self, job: Job) -> None:
+        """Read what a finished development built, so the next one knows the project.
+
+        A development leaves its work on its own branch and nothing merges it, so a
+        project opened from an empty repository still looked empty afterwards and its
+        brief stayed blank -- every later development then planned and built knowing
+        nothing about what was already there. The Architect reads the code that now
+        exists and proposes the brief, for a person to approve.
+
+        Only a brief nobody has written yet is filled. Once it holds items they are
+        somebody's: corrected, deleted, approved. Those are replaced when the person
+        asks for it on the page, never behind their back.
+        """
+        if job.state is not JobState.DONE or job.project_id is None:
+            return
+        try:
+            if self.store.get_brief(job.project_id).items:
+                return
+            self.start_analysis(job.project_id)
+        except (ProjectNotFound, BriefIsRunning):
+            return
+        # the model call is the job's owner's, like every other this development made
+        self.for_user(job.owner_id).execute_analysis(job.project_id)
+
+    def _notify_outcome(self, job: Job) -> Job:
+        """Tell the groups that asked that a development finished or stopped. Once per
+        arrival, on the same ``notified`` markers the gate letters use, so a restart does
+        not announce a failure twice and a retried one that fails again does."""
+        if job.state not in (JobState.DONE, JobState.FAILED):
             return job
+        visits = sum(
+            1 for t in job.history if t.to_state is job.state and t.from_state is not job.state
+        )
+        marker = f"{job.state.value}:{visits}"
+        if marker in job.data.notified:
+            return job
+        job.data.notified.append(marker)
+        job = self.store.save(job)
+        error = None
+        if job.state is JobState.FAILED:
+            failure = next(
+                (t for t in reversed(job.history) if t.to_state is JobState.FAILED), None
+            )
+            error = failure.note if failure else None
+        notify_outcome(self, job, "done" if job.state is JobState.DONE else "failed", error)
+        return job
 
     def _fail(self, job: Job, note: str, detail: str | None = None) -> Job:
         try:
@@ -2394,7 +2583,7 @@ class Engine:
         job = self.store.get(job_id)
         project = self._project_of(job)
         checkout = project.repo_path if project and project.repo_path else job.repo_path
-        base_branch = self.github_settings().base_branch
+        base_branch = self.base_branch_of(project)
         result = JobResult(
             job_id=job.id,
             state=job.state,
@@ -3455,11 +3644,20 @@ class Engine:
         A project that is not deployed to a cloud, or whose deployment folder already
         holds what this change needs, comes back with no scripts: there is nothing to
         approve, so the job goes straight on to the pull request.
+
+        ``target: none`` is not the same as "no files". A library has nothing to deploy
+        and still wants a build pipeline, and the pipeline is a file landing in somebody's
+        repository, so it goes to the gate like any other.
         """
         profile = self._profile(job)
         existing = self._deployment_files(job)
         result = self._invoke(
-            RoleName.DEVOPS, devops.plan_deploy, job, profile=profile, existing=existing
+            RoleName.DEVOPS,
+            devops.plan_deploy,
+            job,
+            profile=profile,
+            existing=existing,
+            source=self._source_of(job),
         )
         if not result.ok:
             return self._invocation_failed(job, result)
@@ -3468,7 +3666,7 @@ class Engine:
         job.data.deploy = plan.model_dump(mode="json")
         job.data.feedback = None
         self.store.save(job)
-        if plan.target == "none" or not plan.scripts:
+        if not plan.scripts:
             job.data.devops_stage = 2
             self.store.save(job)
             self.store.update_state(
@@ -3489,47 +3687,89 @@ class Engine:
         """Stage two, first half: write the approved scripts into ``deployment/``.
 
         Returns the failed job, or None when the branch is ready for its pull request.
-        Paths are confined to the deployment folder: DevOps is opening a pull request,
-        not editing the product.
+        Paths are confined to the deployment folder and to the one file this project's
+        host runs its pipeline from: DevOps is opening a pull request, not editing the
+        product. Anything else is a failure rather than a silent trim, because a script
+        that was approved and quietly dropped is worse than one that never ran.
         """
         plan = job.data.deploy or {}
         if job.data.deploy_written or not plan.get("scripts"):
             return None
         profile = self._profile(job)
         worktree = require_worktree(job)
-        result = self._invoke(
-            RoleName.DEVOPS,
-            devops.write_deployment,
-            job,
-            profile=profile,
-            existing=self._deployment_files(job),
-        )
-        if not result.ok:
-            return self._invocation_failed(job, result)
-        assert isinstance(result.output, DeveloperResult)
+        # An approved plan of seven files does not always fit in one answer. The phases
+        # take several parts for the same reason, so the deployment does too: each part
+        # is applied and DevOps is called again with what is already written.
+        touched: list[str] = []
+        summaries: list[str] = []
+        continuation: dict[str, Any] | None = None
         prefix = f"{devops.DEPLOY_FOLDER}/"
-        stray = [c.path for c in result.output.changes if not c.path.startswith(prefix)]
-        if stray:
-            return self._fail(
+        pipeline = devops.ci_path(self._source_of(job))
+        for part in range(1, self.max_phase_parts + 1):
+            result = self._invoke(
+                RoleName.DEVOPS,
+                devops.write_deployment,
                 job,
-                f"devops wrote outside {prefix}: {', '.join(sorted(stray))}",
-                detail=result.output.summary,
+                profile=profile,
+                existing=self._deployment_files(job),
+                continuation=continuation,
+                source=self._source_of(job),
             )
-        try:
-            touched = apply_changes(job, profile, RoleName.DEVOPS, result.output.changes)
-        except PermissionError as exc:
-            return self._fail(job, f"devops: {exc}")
+            if not result.ok:
+                return self._invocation_failed(job, result)
+            assert isinstance(result.output, DeveloperResult)
+            stray = [
+                c.path
+                for c in result.output.changes
+                if not c.path.startswith(prefix)
+                and not (pipeline and c.path.startswith(pipeline))
+            ]
+            if stray:
+                allowed = f"{prefix} or {pipeline}" if pipeline else prefix
+                return self._fail(
+                    job,
+                    f"devops wrote outside {allowed}: {', '.join(sorted(stray))}",
+                    detail=result.output.summary,
+                )
+            try:
+                written = apply_changes(job, profile, RoleName.DEVOPS, result.output.changes)
+            except PermissionError as exc:
+                return self._fail(job, f"devops: {exc}")
+            touched.extend(t for t in written if t not in touched)
+            summaries.append(result.output.summary)
+            if result.output.phase_complete or part == self.max_phase_parts:
+                break
+            g.stage_all(worktree)
+            self.store.update_state(
+                job.id,
+                job.state,
+                note=(
+                    f"devops part {part}: {result.output.summary} "
+                    f"({len(written)} file(s), more to come)"
+                ),
+                detail=g.staged_diff(worktree) or "(no changes)",
+            )
+            job.history = self.store.get(job.id).history
+            continuation = {
+                "part": part + 1,
+                "files_so_far": list(touched),
+                "summary_so_far": " ".join(summaries),
+            }
         if not touched:
-            return self._fail(job, "devops wrote no deployment files", detail=result.output.summary)
+            return self._fail(job, "devops wrote no deployment files", detail=" ".join(summaries))
         job.data.deploy_written = touched
         self.store.save(job)
         g.stage_all(worktree)
         diff = g.staged_diff(worktree)
         g.commit(worktree, f"slipwright: deployment ({plan.get('target')})")
+        parts = f" in {len(summaries)} parts" if len(summaries) > 1 else ""
         self.store.update_state(
             job.id,
             job.state,
-            note=f"devops: {len(touched)} deployment file(s) written — {result.output.summary}",
+            note=(
+                f"devops: {len(touched)} deployment file(s) written{parts} "
+                f"— {summaries[-1]}"
+            ),
             detail=diff or "(no changes)",
         )
         job.history = self.store.get(job.id).history

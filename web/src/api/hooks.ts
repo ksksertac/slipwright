@@ -4,6 +4,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   api,
   type ActivityItem,
+  type ChannelName,
+  type CheckoutPath,
+  type NotifyChannel,
+  type NotifyChannelIn,
+  type NotifyLinkCode,
+  type NotifyOverview,
   type AgentRouting,
   type AgentSummary,
   type ApiToken,
@@ -98,6 +104,7 @@ export const keys = {
   jiraProjects: ["settings", "jira", "projects"] as const,
   users: ["users"] as const,
   mail: ["settings", "mail"] as const,
+  notify: ["notify"] as const,
   mailOutbox: ["settings", "mail", "outbox"] as const,
   support: ["support"] as const,
   supportMine: ["support", "mine"] as const,
@@ -263,6 +270,15 @@ export function useProjects() {
   return useQuery({ queryKey: keys.projects, queryFn: () => api.get<Project[]>("/api/projects") });
 }
 
+/** Where the checkout is, as the person's own file manager would open it. */
+export function useCheckoutPath(id: string, enabled = true) {
+  return useQuery({
+    queryKey: [...keys.project(id), "checkout"],
+    queryFn: () => api.get<CheckoutPath>(`/api/projects/${id}/checkout`),
+    enabled,
+  });
+}
+
 export function useProject(id: string) {
   return useQuery({
     queryKey: keys.project(id),
@@ -347,7 +363,10 @@ export function usePatchProject(id: string) {
 export function useDeleteProject() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => api.delete<void>(`/api/projects/${id}`),
+    // `purge` gives up on the project: the unfinished developments go too, with their
+    // worktrees and a checkout Slipwright cloned itself
+    mutationFn: ({ id, purge = false }: { id: string; purge?: boolean }) =>
+      api.delete<void>(`/api/projects/${id}${purge ? "?purge=true" : ""}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.projects }),
   });
 }
@@ -378,11 +397,15 @@ export function useWorkList(id: string) {
   });
 }
 
-export function useJobResult(id: string, enabled = true) {
+/** What is on the branch. Read from git, so it answers while the development is still
+ *  running as happily as it does when it has finished; `live` keeps it current while the
+ *  agents are still committing. */
+export function useJobResult(id: string, enabled = true, live = false) {
   return useQuery({
     queryKey: keys.jobResult(id),
     queryFn: () => api.get<JobResult>(`/api/jobs/${id}/result`),
     enabled,
+    refetchInterval: live ? 20_000 : false,
   });
 }
 
@@ -452,6 +475,16 @@ export function useReject(jobId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (feedback: string) => api.post<Job>(`/api/jobs/${jobId}/reject`, { feedback }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.job(jobId) }),
+  });
+}
+
+/** Go on without tests. Only the test-cases gate offers it; the server refuses anywhere
+ *  else. */
+export function useSkipTests(jobId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<Job>(`/api/jobs/${jobId}/skip-tests`, {}),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.job(jobId) }),
   });
 }
@@ -1035,5 +1068,45 @@ export function useSetSupportStatus() {
       void qc.invalidateQueries({ queryKey: keys.support });
       void qc.invalidateQueries({ queryKey: keys.supportMine });
     },
+  });
+}
+
+// -- notifications ---------------------------------------------------------------------
+
+export function useNotify() {
+  return useQuery({
+    queryKey: keys.notify,
+    queryFn: () => api.get<NotifyOverview>("/api/notify"),
+    // a bot connects a moment after its token is saved; the badge catches up by itself
+    refetchInterval: 15_000,
+  });
+}
+
+export function useSaveNotify(channel: ChannelName) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: NotifyChannelIn) => api.put<NotifyChannel>(`/api/notify/${channel}`, body),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: keys.notify }),
+  });
+}
+
+export function useTestNotify(channel: ChannelName) {
+  return useMutation({
+    mutationFn: () => api.post<{ sent: string[] }>(`/api/notify/${channel}/test`),
+  });
+}
+
+export function useLinkCode() {
+  return useMutation({
+    mutationFn: () => api.post<NotifyLinkCode>("/api/notify/link-code"),
+  });
+}
+
+export function useUnlink() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ channel, userId }: { channel: ChannelName; userId?: string }) =>
+      api.delete<void>(`/api/notify/links/${channel}${userId ? `/${userId}` : ""}`),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: keys.notify }),
   });
 }

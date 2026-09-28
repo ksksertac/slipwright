@@ -6,7 +6,9 @@ orchestrator's concern. ``history`` is append-only and every entry is timestampe
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+import threading
+import time
+from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
@@ -15,6 +17,8 @@ from uuid import uuid4
 from pydantic import BaseModel, ConfigDict, Field
 
 from slipwright.schemas.profile import Profile
+
+_EPOCH = datetime.fromtimestamp(0, UTC)
 
 
 class JobState(StrEnum):
@@ -53,8 +57,65 @@ APPROVAL_STATES: frozenset[JobState] = frozenset(
 TERMINAL_STATES: frozenset[JobState] = frozenset({JobState.DONE, JobState.FAILED})
 
 
+_CLOCK = threading.Lock()
+_LAST_US = 0
+
+
 def utcnow() -> datetime:
-    return datetime.now(UTC)
+    """Now -- but never the same instant twice.
+
+    Windows moves the system clock in steps of about 16ms, so a burst of writes all carry
+    the same timestamp: 2000 calls here produced three distinct values. Anything ordered
+    by one then falls back to its tie-break -- a random id, for jobs -- and the list comes
+    back shuffled. Each call is nudged one microsecond past the last one, which costs
+    nothing and makes every timestamp this process writes strictly increasing.
+    """
+    global _LAST_US
+    with _CLOCK:
+        us = max(int(time.time() * 1_000_000), _LAST_US + 1)
+        _LAST_US = us
+    return _EPOCH + timedelta(microseconds=us)
+
+
+#: Turkish (and the rest of Latin-1) folded to ASCII, so a branch name stays typeable on
+#: any keyboard and git never has to carry bytes a shell will mangle.
+_FOLD = str.maketrans(
+    {
+        "ı": "i", "İ": "i", "ğ": "g", "Ğ": "g", "ü": "u", "Ü": "u",
+        "ş": "s", "Ş": "s", "ö": "o", "Ö": "o", "ç": "c", "Ç": "c",
+        "â": "a", "î": "i", "û": "u", "é": "e", "è": "e", "ñ": "n",
+    }
+)
+
+
+def slugify(text: str, *, limit: int = 40) -> str:
+    """``text`` as a branch-safe slug: ascii, lower case, words joined by hyphens.
+
+    Empty when there is nothing usable left, which the caller has to handle -- a branch
+    name is never allowed to end up as a bare hyphen or an empty segment.
+    """
+    out: list[str] = []
+    for ch in text.translate(_FOLD).lower():
+        if ch.isascii() and (ch.isalnum()):
+            out.append(ch)
+        elif out and out[-1] != "-":
+            out.append("-")
+    slug = "".join(out)[:limit].strip("-")
+    # git refuses a component ending in ".lock" and treats a leading "-" as a flag
+    return slug if not slug.endswith(".lock") else slug[:-5].strip("-")
+
+
+def branch_name(project: str, request: str, job_id: str) -> str:
+    """``<project>/<what-was-asked>-<short id>``.
+
+    The name a person reads on GitHub, so it says which project it belongs to and what it
+    was for. The short id is what keeps two goes at the same request apart, and it is why
+    the slug never has to be unique.
+    """
+    where = slugify(project, limit=24) or "slipwright"
+    what = slugify(request, limit=40)
+    tail = job_id[:8]
+    return f"{where}/{what}-{tail}" if what else f"{where}/{tail}"
 
 
 def new_job_id() -> str:
@@ -139,6 +200,11 @@ class JobData(BaseModel):
         description="Screen id -> what the person asked to be different. The Designer draws "
         "those screens again and leaves the rest as they are.",
     )
+    branch_name: str = Field(
+        default="",
+        description="The branch this job works on. Empty on jobs made before it was "
+        "recorded, which fall back to the old slipwright/<id>.",
+    )
     phase_index: int = Field(default=0, ge=0, description="Next plan phase to execute.")
     build_attempts: int = Field(default=0, ge=0)
     last_build_output: str | None = None
@@ -204,6 +270,12 @@ class JobData(BaseModel):
     )
     test_cases: list[dict[str, Any]] = Field(default_factory=list)
     qa_stage: int = Field(default=1, ge=1, le=2)
+    tests_skipped: bool = Field(
+        default=False,
+        description="The test cases were read and deliberately not taken up: QA writes "
+        "nothing and the development goes straight to DevOps. Writing tests is the most "
+        "expensive step there is, and it is not always worth it.",
+    )
     devops_stage: int = Field(
         default=1,
         ge=1,
@@ -309,7 +381,14 @@ class Job(BaseModel):
 
     @property
     def branch(self) -> str:
-        return f"slipwright/{self.id}"
+        """The branch this job's work lives on, in the project's own checkout.
+
+        Written down at creation rather than computed, because a job already running has
+        that branch in git under the name it was given: changing the formula must never
+        rename a branch out from under a development. Jobs made before the name was
+        recorded keep the one they were created with.
+        """
+        return self.data.branch_name or f"slipwright/{self.id}"
 
     @property
     def is_awaiting_approval(self) -> bool:
