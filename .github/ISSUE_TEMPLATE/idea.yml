@@ -1,0 +1,33 @@
+name: Idea
+description: Something it should do, or should do differently
+labels: ["idea"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is awkward today
+      description: >
+        The situation you were in, rather than the feature you have in mind. A good
+        change usually starts from somebody having to do something twice, or having to
+        go and look something up that the page could have told them.
+      placeholder: |
+        I wanted to know how much a project had cost without opening the page, so I…
+    validations:
+      required: true
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you would do about it
+      description: Optional. What you have in mind, if you have something in mind.
+
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Where it belongs
+      options:
+        - label: The agents and what they produce
+        - label: The web interface
+        - label: The chat bot (Telegram and the rest)
+        - label: Running it — Docker, PostgreSQL, deployment
+        - label: Model providers

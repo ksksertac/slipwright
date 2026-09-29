@@ -3884,7 +3884,17 @@ class Engine:
             if not result.ok:
                 return self._invocation_failed(job, result)
             assert isinstance(result.output, DevOpsResult)
-            host = self._host_of(job)
+            try:
+                host = self._host_of(job)
+            except SourceError as exc:
+                # No token for the host. That is a failure for a project that has a
+                # repository on one -- and no kind of failure at all for a checkout with
+                # nowhere to push, which is most of them on somebody's own machine. The
+                # token was asked for before anybody looked at whether a remote existed,
+                # so a local project crashed here instead of finishing.
+                if not g.has_remote(worktree):
+                    return self._done_locally(job, result.output)
+                return self._fail(job, f"devops: {exc}")
             try:
                 host.push(worktree, job.branch)
                 job.data.pr_url = host.open_pr(

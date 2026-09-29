@@ -39,6 +39,31 @@ const THEMES: { value: Theme; icon: React.ReactNode; title: string }[] = [
 /** Signed in, but the address is still unproved: everything reads, nothing runs. The
  *  banner is the only place that says so, because a 403 at the moment of starting work
  *  is a poor way to learn it. */
+function DefaultPasswordBanner() {
+  const tx = useT();
+  // asked of the server rather than remembered, so it goes away the moment the password
+  // is changed -- and stays until it is. A published default is only safe while everybody
+  // can see that it is still in place.
+  const still = useQuery({
+    queryKey: ["first-run"],
+    queryFn: () => api.get<{ default_admin: boolean }>("/api/auth/first-run"),
+    refetchInterval: 60_000,
+  });
+  if (!still.data?.default_admin) return null;
+  return (
+    <div className="callout error banner-verify">
+      <span>
+        {tx(
+          "This server still lets anybody in with the password it started with. Change it before it is reachable from anywhere but this machine.",
+        )}
+      </span>
+      <Link className="btn tiny" to="/settings/users">
+        {tx("Change it")}
+      </Link>
+    </div>
+  );
+}
+
 function UnverifiedBanner() {
   const tx = useT();
   const { unverified, user } = useAuth();
@@ -172,6 +197,7 @@ export function Layout() {
           </div>
         </header>
         <main className="content">
+          <DefaultPasswordBanner />
           <UnverifiedBanner />
           <Outlet />
         </main>

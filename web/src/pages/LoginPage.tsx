@@ -1,6 +1,6 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
-import { describeError, takeSignedOutReason } from "../api/client";
+import { api, describeError, takeSignedOutReason } from "../api/client";
 import { BrandMark } from "../components/BrandMark";
 import { AuthLangPicker } from "../components/LangPicker";
 import { useAuth } from "../auth/AuthProvider";
@@ -19,6 +19,25 @@ export function LoginPage() {
   // the way in, so a browser that was open when somebody was taken off a team is not left
   // wondering what happened.
   const [signedOut] = useState(takeSignedOutReason);
+  // A server nobody has signed into yet starts with one account and says what it is, so
+  // that starting it is the whole of the setup. The fields are filled in: the person is
+  // one click from looking at the thing, and one banner from being told to change it.
+  const [starting, setStarting] = useState<{ username: string; password: string } | null>(null);
+  useEffect(() => {
+    let watching = true;
+    api
+      .get<{ default_admin: boolean; username: string; password: string }>("/api/auth/first-run")
+      .then((answer) => {
+        if (!watching || !answer.default_admin) return;
+        setStarting({ username: answer.username, password: answer.password });
+        setUsername((typed) => typed || answer.username);
+        setPassword((typed) => typed || answer.password);
+      })
+      .catch(() => undefined); // an older server has no such endpoint, which is fine
+    return () => {
+      watching = false;
+    };
+  }, []);
 
   const from = (location.state as { from?: { pathname: string } } | null)?.from?.pathname;
   if (user) return <Navigate to={from ?? "/"} replace />;
@@ -56,10 +75,29 @@ export function LoginPage() {
             {tx("Accept your invitation first: the link is in the letter we sent you.")}
           </div>
         )}
-        {noUsers ? (
+        {starting && (
           <div className="callout hint" style={{ display: "block" }}>
-            {tx("No login exists yet. Create the first (admin) user on the server:")}
-            <pre style={{ marginTop: 8 }}>slipwright user add &lt;name&gt;</pre>
+            {tx("Nobody has signed in here yet, so this server made you an account:")}
+            <pre style={{ marginTop: 8 }}>
+              {starting.username} / {starting.password}
+            </pre>
+            {tx("It is filled in below. Change it under Users once you are in.")}
+          </div>
+        )}
+        {noUsers && !starting ? (
+          /* A server that was told not to make a starting account. The first one anybody
+             creates is the administrator's, and it happens here rather than in a terminal */
+          <div className="callout hint" style={{ display: "block" }}>
+            {tx("Nobody has an account here yet. The first one is the administrator's.")}
+            <div className="row" style={{ marginTop: 10 }}>
+              <Link className="btn primary" to="/signup">
+                {tx("Create the first account")}
+              </Link>
+            </div>
+            <details style={{ marginTop: 10 }}>
+              <summary className="small muted">{tx("Or on the server itself")}</summary>
+              <pre style={{ marginTop: 8 }}>slipwright user add &lt;name&gt;</pre>
+            </details>
           </div>
         ) : (
           <form onSubmit={submit}>

@@ -60,6 +60,32 @@ def _token(link: str) -> str:
 # --- signing up --------------------------------------------------------------------------
 
 
+def test_the_first_account_on_an_empty_server_is_the_administrator(
+    client: TestClient, store: JobStore
+) -> None:
+    """Somebody who has just started the server is not a stranger signing up.
+
+    Signing up asked for a plain account whoever did it, so a fresh installation handed
+    its owner one that could not reach Models, Email or Users -- and the only way to a
+    working server was a command typed inside the container. The store's own rule already
+    said the first account in an empty database is the administrator; the signup path was
+    overriding it.
+    """
+    first = client.post(
+        "/api/auth/signup", json={"email": "ada@example.com", "password": "correct horse"}
+    )
+    assert first.status_code == 201, first.text
+    assert first.json()["is_admin"] is True
+
+    # and the next one is not: this is about an empty server, not about signing up
+    client.post("/api/auth/logout")
+    second = client.post(
+        "/api/auth/signup", json={"email": "bob@example.com", "password": "correct horse"}
+    )
+    assert second.status_code == 201
+    assert second.json()["is_admin"] is False
+
+
 def test_signing_up_mails_a_link_and_verifying_it_signs_you_in(
     client: TestClient, store: JobStore
 ) -> None:
@@ -71,13 +97,11 @@ def test_signing_up_mails_a_link_and_verifying_it_signs_you_in(
     body = created.json()
     assert body["email"] == "ada@example.com"  # the address is stored lowercased
     assert body["email_verified_at"] is None
-    assert body["is_admin"] is False
+    # the first account on an empty server is its administrator; the rule has a test of
+    # its own above, and proving the address is still the thing this one is about
+    assert body["is_admin"] is True
 
-    # signed in already, but not allowed to start work yet
     assert client.get("/api/auth/me").json()["email"] == "ada@example.com"
-    refused = client.post("/api/projects", json={"name": "demo", "repo_path": "."})
-    assert refused.status_code == 403
-    assert "confirm your email" in refused.json()["detail"]
 
     link = _link(store, "ada@example.com")
     assert link.startswith(f"{BASE}/verify?token=")

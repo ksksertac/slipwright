@@ -33,6 +33,10 @@ class Settings:
     port: int = 8500
     port_range: tuple[int, int] = (8100, 8999)
     require_auth: bool = True
+    #: An installation with no accounts makes one, so that starting the server is the
+    #: whole of the setup. Off for a server that is reachable from anywhere but the
+    #: machine it runs on -- see ``slipwright/firstrun.py``.
+    default_admin: bool = True
     token: str | None = None
     dev: bool = False
     # a folder whose sub-folders the UI offers as local checkouts (Docker mounts /repos)
@@ -111,6 +115,8 @@ class Settings:
             settings.port_range = (int(lo), int(hi))
         if "SLIPWRIGHT_AUTH" in env:
             settings.require_auth = env["SLIPWRIGHT_AUTH"].strip().lower() not in _OFF
+        if "SLIPWRIGHT_DEFAULT_ADMIN" in env:
+            settings.default_admin = env["SLIPWRIGHT_DEFAULT_ADMIN"].strip().lower() not in _OFF
         settings.token = env.get("SLIPWRIGHT_TOKEN") or None
         settings.database_url = env.get("SLIPWRIGHT_DATABASE_URL") or None
         if env.get("SLIPWRIGHT_WORK_DIR"):

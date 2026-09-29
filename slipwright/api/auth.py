@@ -12,7 +12,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, HTTPException, Request, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from slipwright.accounts import LOGIN_LIMIT, RESET_LIMIT, WINDOW_S, TooManyAttempts
 from slipwright.auth import (
@@ -25,6 +25,9 @@ from slipwright.auth import (
     WeakPassword,
     normalise_email,
 )
+from slipwright.firstrun import NAME as FIRST_RUN_NAME
+from slipwright.firstrun import PASSWORD as FIRST_RUN_PASSWORD
+from slipwright.firstrun import default_admin_still_open
 from slipwright.quota import forget_everything
 from slipwright.store import JobStore, UsernameTaken, UserNotFound
 from slipwright.store.users import EmailTaken
@@ -69,6 +72,7 @@ SIGNED_OUT_INVITED = "invited"
 PUBLIC_PATHS = frozenset(
     {
         "/api/auth/login",
+        "/api/auth/first-run",
         "/api/auth/invitation",
         "/api/auth/accept-invitation",
         "/api/auth/decline-invitation",
@@ -239,10 +243,18 @@ def require_verified(request: Request) -> User:
     An unverified account may sign in and look around -- that is how somebody who has
     lost the letter finds the "send it again" button -- but it may not create projects or
     run agents, because that is what a throwaway address would be for.
+
+    Unless nothing can post the letter. An installation with no mail server writes it to
+    the outbox instead, which only an administrator can read, so asking somebody to
+    confirm an address is a lock whose key is in a drawer they cannot open -- and on a
+    machine somebody has just started, there is no stranger to keep out anyway. The proof
+    is asked for when it can be given: set a mail server up, and it is asked for again.
     """
     user = current_user(request)
     if not user.active:
         raise HTTPException(status_code=403, detail="this account is suspended")
+    if not _engine(request).mail_settings().configured:
+        return user
     if not user.verified:
         raise HTTPException(
             status_code=403,
@@ -252,6 +264,33 @@ def require_verified(request: Request) -> User:
 
 
 router = APIRouter(tags=["auth"])
+
+
+class FirstRun(BaseModel):
+    """What the login page needs to know before anybody has signed in."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    default_admin: bool = Field(
+        description="The starting account is still on its default password, so the login "
+        "page can say what it is -- and keep asking for it to be changed."
+    )
+    username: str = ""
+    password: str = ""
+
+
+@router.get("/auth/first-run", response_model=FirstRun)
+def first_run(request: Request) -> FirstRun:
+    """Public on purpose: it tells anybody who asks that the default password works.
+
+    That sounds like a leak and is the opposite of one. The password is a published
+    default -- announcing it changes nothing for an attacker, who would try it first, and
+    changes everything for the person who has just started the server and is looking at a
+    login form with nothing to type.
+    """
+    if not default_admin_still_open(_engine(request).raw_store):
+        return FirstRun(default_admin=False)
+    return FirstRun(default_admin=True, username=FIRST_RUN_NAME, password=FIRST_RUN_PASSWORD)
 
 
 def start_session(store: JobStore, user: User, request: Request, response: Response) -> None:
