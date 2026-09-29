@@ -32,7 +32,7 @@ from slipwright.github import GitHubError, GitHubIdentity, GitHubRepo, GitHubSet
 from slipwright.jira import JiraAccount, JiraError, JiraProject, JiraSettings
 from slipwright.mail import read_outbox
 from slipwright.providers import ProviderError
-from slipwright.providers.registry import PROVIDERS
+from slipwright.providers.registry import CHATGPT, PROVIDERS
 from slipwright.schemas.profile import Profile
 from slipwright.sources import SOURCES, Identity, Repo, SourceError
 from slipwright.sources.registry import SourceSettings
@@ -437,7 +437,14 @@ def _codex_home(request: Request) -> Path:
 @router.get("/settings/providers/chatgpt/login", response_model=ChatGPTLogin)
 def chatgpt_login_status(request: Request) -> ChatGPTLogin:
     home = _codex_home(request)
-    return ChatGPTLogin(status=engine_for(request).codex_logins.status(home))
+    eng = engine_for(request)
+    status = eng.codex_logins.status(home)
+    # the page polls this until the sign-in lands, so this is where "signed in" first
+    # becomes true and the only place that can notice it: a subscription has no key to
+    # save, and so never passes through update_provider_settings
+    if status == "signed_in":
+        eng.adopt_as_default(CHATGPT)
+    return ChatGPTLogin(status=status)
 
 
 @router.post("/settings/providers/chatgpt/login", response_model=ChatGPTLogin)

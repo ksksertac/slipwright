@@ -23,6 +23,19 @@ from slipwright.sources.registry import (
 )
 from slipwright.sources.scrub import scrub
 
+#: What GitHub accepts in a repository's description. Longer, and it refuses the whole
+#: request with a 422 -- which arrived as "Repository creation failed" at the end of the
+#: new-project form, after the person had answered four pages of questions.
+DESCRIPTION_LIMIT = 350
+
+
+def _clipped(text: str, limit: int) -> str:
+    """``text``, short enough, ending in a way that shows it was cut."""
+    text = text.strip()
+    if len(text) <= limit:
+        return text
+    return text[: limit - 1].rstrip() + "…"
+
 
 class GitHubHost:
     def __init__(
@@ -104,7 +117,11 @@ class GitHubHost:
         body = {
             "name": name,
             "private": private,
-            "description": description,
+            # a project's description is somebody's paragraph about what they are building
+            # and GitHub's is a one-line summary, so the long one is clipped rather than
+            # refused: losing the tail of a sentence is a smaller thing than losing the
+            # repository, and the whole of it is on the project either way
+            "description": _clipped(description, DESCRIPTION_LIMIT),
             "auto_init": True,
         }
         owner = (self.creds.owner or "").strip()
