@@ -269,9 +269,11 @@ function LaneRow({
             <LaneRetry jobId={lane.job_id} />
           </span>
         )}
-        {/* stopping is wanted most while it is running and costing money, which is
-            exactly when the lane is shut and nothing else on this card offers it */}
-        {!open && !hasFinished(lane.state) && (
+        {/* Retry hides when the lane is open because the failure and its buttons are
+            spelled out inside. Stopping has no such twin: nothing in the detail offers
+            it, so hiding it there left the open lane -- the one somebody watching a
+            development spend is looking at -- with no way to stop it at all. */}
+        {!hasFinished(lane.state) && (
           <span onClick={stop}>
             <LaneStop jobId={lane.job_id} />
           </span>

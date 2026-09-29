@@ -122,7 +122,11 @@ def test_stop_is_offered_wherever_the_development_is() -> None:
     # the header holds it next to Delete: the two answers to "I do not want this"
     assert "<StopAction job={job} />\n          <DeleteJobButton" in header
     lane = (web / "pages" / "PipelineTab.tsx").read_text(encoding="utf-8")
+    # on the lane whether it is open or shut: Retry hides when the lane is open because
+    # the detail repeats it, and stopping has no twin inside to hide behind
     assert "<LaneStop jobId={lane.job_id} />" in lane
+    assert "{!hasFinished(lane.state) && (" in lane
+    assert "{!open && !hasFinished(lane.state) && (" not in lane
     # and Delete knows every terminal state, not two of the three: a development that was
     # stopped could not be deleted, though the server had always allowed it
     assert "if (!hasFinished(job.state)) return null;" in header
