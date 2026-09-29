@@ -86,6 +86,10 @@ class User(BaseModel):
     )
     status: UserStatus = UserStatus.ACTIVE
     is_admin: bool = False
+    two_factor: bool = Field(
+        default=False,
+        description="Signing in asks for a code from an authenticator app after the password.",
+    )
     created_at: datetime = Field(default_factory=utcnow)
 
     @field_validator("email")

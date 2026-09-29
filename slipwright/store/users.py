@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from typing import Any
 
 from sqlalchemy import delete, func, insert, select, update
 from sqlalchemy.exc import IntegrityError
 
+from slipwright import twofactor
 from slipwright.auth import (
     EMAIL_TOKEN_TTL,
     INVITE_TOKEN_TTL,
@@ -24,6 +26,7 @@ from slipwright.auth import (
     verify_password,
 )
 from slipwright.schemas.job import utcnow
+from slipwright.secrets import SecretBox
 from slipwright.store.db import Database, one, rows
 from slipwright.store.schema import api_tokens, email_tokens, rate_limits, sessions, users
 
@@ -50,9 +53,10 @@ class EmailTaken(ValueError):
 
 
 class UserStoreMixin:
-    """Requires ``db`` on the host class."""
+    """Requires ``db`` and ``secret_box`` on the host class."""
 
     db: Database
+    secret_box: SecretBox
 
     # -- users -------------------------------------------------------------------------
 
@@ -332,6 +336,134 @@ class UserStoreMixin:
                 raise UserNotFound(user_id)
         return self.get_user(user_id)
 
+    def check_password(self, user_id: str, password: str) -> bool:
+        """Whether ``password`` is this account's: asked again before something that would
+        lower its guard, such as turning two-step sign-in off."""
+        with self.db.connect() as conn:
+            row = one(conn.execute(select(users.c.password_hash).where(users.c.id == user_id)))
+        return row is not None and verify_password(password, row["password_hash"])
+
+    # -- two-step sign-in ----------------------------------------------------------------
+
+    def start_two_factor(self, user_id: str) -> str:
+        """A fresh secret for an app to scan. Nothing about signing in changes until a
+        code from it has been shown back (``enable_two_factor``); starting again replaces
+        a secret that was never confirmed, so an abandoned attempt leaves nothing behind."""
+        secret = twofactor.new_secret()
+        with self.db.begin() as conn:
+            changed = conn.execute(
+                update(users)
+                .where(users.c.id == user_id, users.c.totp_enabled_at.is_(None))
+                .values(totp_secret=self.secret_box.encrypt(secret), totp_last_step=None)
+            )
+            if changed.rowcount == 0:
+                self.get_user(user_id)  # raises for an account that is not there
+                raise ValueError("two-step sign-in is already on")
+        return secret
+
+    def enable_two_factor(self, user_id: str, code: str) -> list[str] | None:
+        """Turn it on if ``code`` comes from the secret being set up.
+
+        Returns the recovery codes -- in the clear, this once; only their hashes are kept
+        -- or ``None`` for a wrong code. Asking for a code first is what makes sure the
+        app really has the secret: turning it on unproved could lock somebody out.
+        """
+        with self.db.begin() as conn:
+            row = one(
+                conn.execute(
+                    select(users.c.totp_secret, users.c.totp_enabled_at).where(
+                        users.c.id == user_id
+                    )
+                )
+            )
+            if row is None:
+                raise UserNotFound(user_id)
+            if row["totp_enabled_at"] is not None:
+                raise ValueError("two-step sign-in is already on")
+            if row["totp_secret"] is None:
+                raise ValueError("start setting it up first")
+            secret = self.secret_box.decrypt(row["totp_secret"])
+            step = twofactor.matching_step(secret, code)
+            if step is None:
+                return None
+            codes = twofactor.new_recovery_codes()
+            conn.execute(
+                update(users)
+                .where(users.c.id == user_id)
+                .values(
+                    totp_enabled_at=utcnow().isoformat(),
+                    totp_last_step=step,
+                    totp_recovery=json.dumps([twofactor.recovery_hash(c) for c in codes]),
+                )
+            )
+        return codes
+
+    def check_two_factor(self, user_id: str, code: str) -> bool:
+        """Spend ``code``: a current one from the app, or one of the recovery codes.
+
+        Either is good once. The update that spends it is conditional on what was read,
+        so two requests racing with the same code cannot both get in.
+        """
+        with self.db.begin() as conn:
+            row = one(
+                conn.execute(
+                    select(
+                        users.c.totp_secret,
+                        users.c.totp_enabled_at,
+                        users.c.totp_last_step,
+                        users.c.totp_recovery,
+                    ).where(users.c.id == user_id)
+                )
+            )
+            if row is None or row["totp_enabled_at"] is None or row["totp_secret"] is None:
+                return False
+            last = row["totp_last_step"]
+            secret = self.secret_box.decrypt(row["totp_secret"])
+            step = twofactor.matching_step(secret, code, after=-1 if last is None else int(last))
+            if step is not None:
+                spent = conn.execute(
+                    update(users)
+                    .where(
+                        users.c.id == user_id,
+                        users.c.totp_last_step.is_(None) | (users.c.totp_last_step < step),
+                    )
+                    .values(totp_last_step=step)
+                )
+                return spent.rowcount == 1
+            left: list[str] = json.loads(row["totp_recovery"] or "[]")
+            digest = twofactor.recovery_hash(code)
+            if digest not in left:
+                return False
+            spent = conn.execute(
+                update(users)
+                .where(users.c.id == user_id, users.c.totp_recovery == row["totp_recovery"])
+                .values(totp_recovery=json.dumps([h for h in left if h != digest]))
+            )
+            return spent.rowcount == 1
+
+    def recovery_codes_left(self, user_id: str) -> int:
+        with self.db.connect() as conn:
+            row = one(conn.execute(select(users.c.totp_recovery).where(users.c.id == user_id)))
+        return 0 if row is None else len(json.loads(row["totp_recovery"] or "[]"))
+
+    def disable_two_factor(self, user_id: str) -> User:
+        """Back to the password alone. The secret goes too: turning it on again means
+        scanning a new one, so an old phone that still has the entry is worth nothing."""
+        with self.db.begin() as conn:
+            changed = conn.execute(
+                update(users)
+                .where(users.c.id == user_id)
+                .values(
+                    totp_secret=None,
+                    totp_enabled_at=None,
+                    totp_last_step=None,
+                    totp_recovery=None,
+                )
+            )
+            if changed.rowcount == 0:
+                raise UserNotFound(user_id)
+        return self.get_user(user_id)
+
     # -- rate limiting -------------------------------------------------------------------
 
     def hit_rate_limit(self, bucket: str, *, limit: int, window_s: int) -> bool:
@@ -477,6 +609,7 @@ class UserStoreMixin:
             email_verified_at=None if verified is None else datetime.fromisoformat(verified),
             status=UserStatus(row.get("status") or UserStatus.ACTIVE.value),
             is_admin=bool(row["is_admin"]),
+            two_factor=row.get("totp_enabled_at") is not None,
             created_at=datetime.fromisoformat(row["created_at"]),
         )
 

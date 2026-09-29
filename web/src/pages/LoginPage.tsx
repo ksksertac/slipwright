@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
-import { api, describeError, takeSignedOutReason } from "../api/client";
+import { api, ApiError, describeError, takeSignedOutReason } from "../api/client";
 import { BrandMark } from "../components/BrandMark";
 import { AuthLangPicker } from "../components/LangPicker";
 import { useAuth } from "../auth/AuthProvider";
@@ -15,6 +15,11 @@ export function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // the second step, once the server has said the password was right and a code is
+  // what is missing. The password stays in memory to be sent again with it: the server
+  // keeps no half-signed-in state between the two.
+  const [asking, setAsking] = useState(false);
+  const [code, setCode] = useState("");
   // why the last session ended, when the server thought it worth saying. Read once, on
   // the way in, so a browser that was open when somebody was taken off a team is not left
   // wondering what happened.
@@ -39,7 +44,11 @@ export function LoginPage() {
     };
   }, []);
 
-  const from = (location.state as { from?: { pathname: string } } | null)?.from?.pathname;
+  const arrived = location.state as { from?: { pathname: string }; twoFactor?: boolean } | null;
+  const from = arrived?.from?.pathname;
+  // sent here from a letter's link that did its work but, for an account with two-step
+  // sign-in, could not sign in by itself
+  const afterLink = arrived?.twoFactor === true;
   if (user) return <Navigate to={from ?? "/"} replace />;
 
   const submit = async (e: FormEvent) => {
@@ -47,9 +56,14 @@ export function LoginPage() {
     setBusy(true);
     setError(null);
     try {
-      await login(username, password);
+      await login(username, password, asking ? code.trim() : undefined);
       navigate(from ?? "/", { replace: true });
     } catch (err) {
+      if (err instanceof ApiError && err.twoFactor === "required" && !asking) {
+        setAsking(true);
+        return;
+      }
+      if (err instanceof ApiError && err.twoFactor === "invalid") setCode("");
       setError(describeError(err));
     } finally {
       setBusy(false);
@@ -73,6 +87,11 @@ export function LoginPage() {
         {signedOut === "invited" && (
           <div className="callout hint" style={{ display: "block" }}>
             {tx("Accept your invitation first: the link is in the letter we sent you.")}
+          </div>
+        )}
+        {afterLink && !asking && (
+          <div className="callout notice" style={{ display: "block" }}>
+            {tx("Done. Now sign in — your account asks for the code from your app as well.")}
           </div>
         )}
         {starting && (
@@ -101,36 +120,69 @@ export function LoginPage() {
           </div>
         ) : (
           <form onSubmit={submit}>
-            <div className="field">
-              <label htmlFor="username">{tx("Email")}</label>
-              <input
-                id="username"
-                type="text"
-                autoComplete="username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                autoFocus
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="password">{tx("Password")}</label>
-              <input
-                id="password"
-                type="password"
-                autoComplete="current-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
+            {asking ? (
+              <div className="field">
+                <label htmlFor="code">{tx("Code from your authenticator app")}</label>
+                <input
+                  id="code"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  autoFocus
+                />
+                <div className="muted small" style={{ marginTop: 6 }}>
+                  {tx("Lost your phone? A recovery code works here too.")}
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="field">
+                  <label htmlFor="username">{tx("Email")}</label>
+                  <input
+                    id="username"
+                    type="text"
+                    autoComplete="username"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    autoFocus
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="password">{tx("Password")}</label>
+                  <input
+                    id="password"
+                    type="password"
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                </div>
+              </>
+            )}
             {error && <div className="callout error">{error}</div>}
             <button
               className="btn primary"
               type="submit"
               style={{ width: "100%" }}
-              disabled={busy || !username || !password}
+              disabled={busy || !username || !password || (asking && !code.trim())}
             >
-              {busy ? tx("Signing in…") : tx("Sign in")}
+              {busy ? tx("Signing in…") : asking ? tx("Verify") : tx("Sign in")}
             </button>
+            {asking && (
+              <button
+                className="text-btn tiny"
+                type="button"
+                style={{ display: "block", margin: "10px auto 0" }}
+                onClick={() => {
+                  setAsking(false);
+                  setCode("");
+                  setError(null);
+                }}
+              >
+                {tx("Sign in as somebody else")}
+              </button>
+            )}
             <p className="muted small account-foot">
               <Link to="/forgot-password">{tx("Forgot your password?")}</Link>
               <span className="account-sep">·</span>

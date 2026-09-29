@@ -7,7 +7,7 @@
 // token as `?token=`. The token is read from the query string and never shown.
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
-import { api, describeError, type InvitationView } from "../api/client";
+import { api, ApiError, describeError, type InvitationView } from "../api/client";
 import { BrandMark } from "../components/BrandMark";
 import { AuthLangPicker } from "../components/LangPicker";
 import { useAuth } from "../auth/AuthProvider";
@@ -136,7 +136,9 @@ export function VerifyEmailPage() {
         if (!cancelled) navigate("/", { replace: true });
       })
       .catch((err: unknown) => {
-        if (!cancelled) setError(describeError(err));
+        if (cancelled) return;
+        if (toSecondStep(err)) navigate("/login", { replace: true, state: { twoFactor: true } });
+        else setError(describeError(err));
       });
     return () => {
       cancelled = true;
@@ -289,7 +291,8 @@ export function ResetPasswordPage() {
       await resetPassword(token, password);
       navigate("/", { replace: true });
     } catch (err) {
-      setError(describeError(err));
+      if (toSecondStep(err)) navigate("/login", { replace: true, state: { twoFactor: true } });
+      else setError(describeError(err));
     } finally {
       setBusy(false);
     }
@@ -391,7 +394,8 @@ export function InvitationPage() {
       await acceptInvitation(token, password, name);
       navigate("/", { replace: true });
     } catch (err) {
-      setError(describeError(err));
+      if (toSecondStep(err)) navigate("/login", { replace: true, state: { twoFactor: true } });
+      else setError(describeError(err));
     } finally {
       setBusy(false);
     }
@@ -490,4 +494,11 @@ export function InvitationPage() {
       </p>
     </Frame>
   );
+}
+
+/** The link did its work -- the address is proved, the password is set -- but the account
+ *  has two-step sign-in, and a link proves the mailbox, not the phone. What is left is
+ *  signing in, not an error. */
+function toSecondStep(err: unknown): boolean {
+  return err instanceof ApiError && err.twoFactor === "required";
 }

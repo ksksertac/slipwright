@@ -961,6 +961,18 @@
       "Credentials": {
         "description": "``username`` is the login identity: an email address, or for an account made\nbefore signup existed, the name it was created with.",
         "properties": {
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "From the authenticator app, or a recovery code; only asked of an account with two-step sign-in on.",
+            "title": "Code"
+          },
           "password": {
             "minLength": 1,
             "title": "Password",
@@ -5504,6 +5516,22 @@
         "title": "QuotaUsage",
         "type": "object"
       },
+      "RecoveryCodes": {
+        "properties": {
+          "recovery_codes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Recovery Codes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "recovery_codes"
+        ],
+        "title": "RecoveryCodes",
+        "type": "object"
+      },
       "Rejection": {
         "properties": {
           "feedback": {
@@ -7636,6 +7664,86 @@
         "title": "Translations",
         "type": "object"
       },
+      "TwoFactorCode": {
+        "properties": {
+          "code": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "title": "TwoFactorCode",
+        "type": "object"
+      },
+      "TwoFactorOff": {
+        "properties": {
+          "code": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Code",
+            "type": "string"
+          },
+          "password": {
+            "minLength": 1,
+            "title": "Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "password",
+          "code"
+        ],
+        "title": "TwoFactorOff",
+        "type": "object"
+      },
+      "TwoFactorSetup": {
+        "description": "What an authenticator app needs: scan ``qr``, or type ``secret`` in by hand.",
+        "properties": {
+          "qr": {
+            "description": "The QR code, as an SVG data: URI.",
+            "title": "Qr",
+            "type": "string"
+          },
+          "secret": {
+            "title": "Secret",
+            "type": "string"
+          },
+          "uri": {
+            "title": "Uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "qr",
+          "secret",
+          "uri"
+        ],
+        "title": "TwoFactorSetup",
+        "type": "object"
+      },
+      "TwoFactorStatus": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "recovery_codes_left": {
+            "description": "Unspent recovery codes; worth a warning when it runs low.",
+            "title": "Recovery Codes Left",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "enabled",
+          "recovery_codes_left"
+        ],
+        "title": "TwoFactorStatus",
+        "type": "object"
+      },
       "User": {
         "additionalProperties": false,
         "properties": {
@@ -7694,6 +7802,12 @@
             "$ref": "#/components/schemas/UserStatus",
             "default": "active"
           },
+          "two_factor": {
+            "default": false,
+            "description": "Signing in asks for a code from an authenticator app after the password.",
+            "title": "Two Factor",
+            "type": "boolean"
+          },
           "username": {
             "description": "Display name.",
             "maxLength": 64,
@@ -7710,6 +7824,7 @@
           "is_admin",
           "owner_id",
           "status",
+          "two_factor",
           "username"
         ],
         "title": "User",
@@ -8619,6 +8734,133 @@
           }
         },
         "summary": "Sign Up",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/two-factor": {
+      "get": {
+        "operationId": "two_factor_status_api_auth_two_factor_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TwoFactorStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Two Factor Status",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/two-factor/disable": {
+      "post": {
+        "description": "Turn it off. Asks for the password *and* a code: a session left open on a shared\nmachine must not be enough to take the second step away.",
+        "operationId": "two_factor_disable_api_auth_two_factor_disable_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TwoFactorOff"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Two Factor Disable",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/two-factor/enable": {
+      "post": {
+        "description": "Turn it on with a code that proves the app has the secret; returns the recovery\ncodes, which are never shown again.",
+        "operationId": "two_factor_enable_api_auth_two_factor_enable_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TwoFactorCode"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecoveryCodes"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Two Factor Enable",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/two-factor/setup": {
+      "post": {
+        "description": "A new secret to scan. Signing in is unchanged until a code from it comes back.",
+        "operationId": "two_factor_setup_api_auth_two_factor_setup_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TwoFactorSetup"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Two Factor Setup",
         "tags": [
           "auth"
         ]
@@ -13886,6 +14128,49 @@
           }
         },
         "summary": "Create Token",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/users/{user_id}/two-factor": {
+      "delete": {
+        "description": "An administrator takes the second step off somebody who lost their phone and\ntheir recovery codes. The only way back in for them short of the database, so it is\nthe administrator's -- the same people who may already reset a password.",
+        "operationId": "reset_two_factor_api_users__user_id__two_factor_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reset Two Factor",
         "tags": [
           "auth"
         ]

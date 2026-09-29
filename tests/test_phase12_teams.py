@@ -435,6 +435,9 @@ def test_a_database_written_before_teams_upgrades_into_one(tmp_path: Path) -> No
             # and what every later revision adds, since those replay on top (0008: notify)
             for later in ("chat_prompts", "chat_codes", "chat_links"):
                 conn.execute(text(f"DROP TABLE {later}"))
+            # (0009: two-step sign-in)
+            for column in ("totp_secret", "totp_enabled_at", "totp_last_step", "totp_recovery"):
+                conn.execute(text(f"ALTER TABLE users DROP COLUMN {column}"))
             conn.execute(text("DROP TABLE agent_members"))
             conn.execute(text("ALTER TABLE users DROP COLUMN owner_id"))
             conn.execute(

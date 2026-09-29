@@ -12,7 +12,8 @@ interface AuthState {
   noUsers: boolean;
   /** Signed in but the address is still unproved: the app is read-only until it is. */
   unverified: boolean;
-  login: (username: string, password: string) => Promise<User>;
+  /** `code` is the second step, asked for only once the server says the account has one. */
+  login: (username: string, password: string, code?: string) => Promise<User>;
   signUp: (email: string, password: string, name: string) => Promise<User>;
   /** Redeem a link from a letter. `verify` proves the address; `reset` sets a password. */
   verifyEmail: (token: string) => Promise<User>;
@@ -51,8 +52,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [qc]);
 
   const login = useCallback(
-    async (username: string, password: string) => {
-      const user = await api.post<User>("/api/auth/login", { username, password });
+    async (username: string, password: string, code?: string) => {
+      const user = await api.post<User>("/api/auth/login", { username, password, code });
       qc.setQueryData(keys.me, user);
       await qc.invalidateQueries();
       return user;

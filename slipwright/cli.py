@@ -124,6 +124,10 @@ def build_parser() -> argparse.ArgumentParser:
     uadd.add_argument("--password", default=None, help="otherwise prompted for")
     uadd.add_argument("--admin", action="store_true", help="make this user an admin")
     usub.add_parser("list", help="list logins")
+    # the way back in for the one administrator there is, when the phone and the recovery
+    # codes are both gone: nobody is left in the application to do it for them
+    uoff = usub.add_parser("two-factor-off", help="turn off two-step sign-in for a login")
+    uoff.add_argument("name")
 
     token = sub.add_parser("token", help="bearer tokens (works directly on the database)")
     tsub = token.add_subparsers(dest="token_command", required=True)
@@ -344,6 +348,14 @@ def _user(settings: Settings, args: argparse.Namespace) -> int:
                 print("no users")
             for u in users:
                 print(f"{u.id}  {u.username:<24} admin={'yes' if u.is_admin else 'no'}")
+        elif args.user_command == "two-factor-off":
+            found = store.find_by_email(args.name) if "@" in args.name else None
+            found = found or store.find_user(args.name)
+            if found is None:
+                print(f"error: user not found: {args.name}", file=sys.stderr)
+                return 1
+            store.disable_two_factor(found.id)
+            print(f"two-step sign-in is off for {found.username}")
     return 0
 
 

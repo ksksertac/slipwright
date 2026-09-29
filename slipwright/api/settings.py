@@ -357,8 +357,13 @@ def _onboarding(request: Request) -> Onboarding:
         OnboardingStep(key="source", done=has_host),
         # Jira is genuinely optional: plenty of people do not use it at all
         OnboardingStep(key="jira", done=eng.jira_settings().configured, required=False),
-        OnboardingStep(key="project", done=has_project),
     ]
+    # the one step that is the person's own rather than the account's: somebody on a team
+    # secures their own sign-in. Offered, never required -- the wizard's "skip for now" is
+    # the whole point, and an app with no logins has no sign-in to put a second step on.
+    if user is not None and user.id != "anonymous":
+        steps.append(OnboardingStep(key="two_factor", done=user.two_factor, required=False))
+    steps.append(OnboardingStep(key="project", done=has_project))
     made = Onboarding(
         steps=steps,
         done=False,

@@ -138,6 +138,14 @@ users = Table(
     Column("password_hash", Text, nullable=False),
     Column("is_admin", Integer, nullable=False, server_default="0"),
     Column("created_at", Text, nullable=False),
+    # two-step sign-in (slipwright/twofactor.py). The secret is encrypted with the
+    # installation key and set as soon as setup starts; it only counts once enabled_at is.
+    Column("totp_secret", Text),
+    Column("totp_enabled_at", Text),
+    # the last time step a code was accepted for: no code is good twice
+    Column("totp_last_step", Integer),
+    # JSON list of the hashes of the recovery codes still unspent
+    Column("totp_recovery", Text),
 )
 
 # Who is on which agent. One row per (account, agent, person): an agent belongs to the

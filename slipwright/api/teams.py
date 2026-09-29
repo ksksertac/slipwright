@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 
-from slipwright.api.auth import current_user, require_owner, start_session
+from slipwright.api.auth import current_user, require_owner, session_from_link
 from slipwright.auth import InvalidEmail, User, WeakPassword
 from slipwright.schemas.profile import RoleName
 from slipwright.store import JobStore
@@ -106,8 +106,8 @@ def accept_invitation(body: AcceptInvitation, request: Request, response: Respon
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     if user is None:
         raise HTTPException(status_code=400, detail="this invitation is no longer valid")
-    start_session(_store(request), user, request, response)
-    return user
+    # somebody taken off a team and invited back may have kept two-step sign-in on
+    return session_from_link(_store(request), user, request, response)
 
 
 @router.post("/auth/decline-invitation", status_code=204)
