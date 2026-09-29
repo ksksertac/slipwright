@@ -317,6 +317,31 @@ def test_supervisor_chooses_fix(
     assert "exit 1" in asked[0]["material"]["failed_build_gate"]["output"]
 
 
+def test_the_supervisor_is_told_what_a_specialist_cannot_fix(
+    store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
+) -> None:
+    """A build gate can fail because of the command rather than the code -- an install
+    that wants a lock file nothing has written yet, a device that is not attached. No
+    specialist can mend that: the commands are the profile's. So the supervisor is shown
+    them, and is told when an attempt produced output identical to the one before, which
+    is what "the last fix changed nothing" looks like from here."""
+    engine, _ = _choice_engine(store, worktrees_root, seed, ["fix"])
+    project = engine.create_project(
+        Project(name="demo", repo_path=repo, supervisor=SupervisorSettings(mode="assisted"))
+    )
+    job = engine.start(engine.create_job("x", project_id=project.id).id)
+    engine.approve(engine.approve(job.id).id)
+
+    asked = [
+        c["material"]["failed_build_gate"]
+        for c in engine._sup_calls  # type: ignore[attr-defined]
+        if "failed_build_gate" in c["material"]
+    ]
+    assert [a["commands"]["test_cmd"] for a in asked] == [FALSE, FALSE]
+    # the first failure has nothing to be identical to; the second repeats it exactly
+    assert [a["repeated"] for a in asked] == [False, True]
+
+
 def test_supervisor_chooses_replan(
     store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
 ) -> None:

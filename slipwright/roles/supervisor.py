@@ -33,7 +33,15 @@ the build and you choose what happens next — `decision` is one of `fix` (the s
 specialist tries again with the build output; the usual answer for a test failure or a
 typo), `replan` (the failure shows the plan was wrong, e.g. a missing dependency or a
 phase far larger than its goal) or `ask_human` (secrets, data loss, or the same failure
-repeating). Give the reason in `reasons`."""
+repeating). Give the reason in `reasons`.
+Read the failure before choosing. When the build or test *command itself* is what failed
+— it needs a lock file nothing has written yet, a device that is not attached, a tool
+that is not installed — no specialist can mend that: the commands live in `profile` and
+only a re-plan rewrites them. Choosing `fix` there spends a specialist on a file that is
+not the problem and the same failure comes back unchanged.
+`material.failed_build_gate.repeated` says the output is identical to the previous
+attempt. Identical output means the last fix changed nothing that matters, so asking for
+the same thing again will produce it a third time."""
 
 GATE_LABELS = {
     JobState.AWAITING_BACKLOG_APPROVAL: "backlog",
