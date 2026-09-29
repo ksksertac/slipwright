@@ -19,7 +19,7 @@ from slipwright.engine import Engine, NotAwaitingApproval
 from slipwright.schemas.job import TERMINAL_STATES, JobState
 from slipwright.schemas.profile import Profile
 from slipwright.schemas.project import Project
-from slipwright.store import JobStore
+from slipwright.store import JobNotFound, JobStore
 from tests.pipeline import full_engine, full_provider
 
 
@@ -98,3 +98,35 @@ def test_the_groups_are_told(engine: Engine, repo: Path) -> None:
 
     assert told and told[0][0] == "cancelled", "not announced as a failure"
     assert "stopped by ada" in told[0][1]
+
+
+def test_a_stopped_development_can_be_thrown_away(engine: Engine, repo: Path) -> None:
+    """Stopping is what you do before deleting: a running development refuses to be
+    deleted, and the whole point of stopping one is that it need not be kept."""
+    job = engine.start(engine.create_job("health", repo).id)
+    engine.cancel(job.id, by="ada")
+
+    engine.delete_job(job.id)
+    with pytest.raises(JobNotFound):
+        engine.store.get(job.id)
+
+
+def test_stop_is_offered_wherever_the_development_is() -> None:
+    """It was offered only inside the gate block, which draws nothing while a phase is
+    being built -- so the one moment somebody wants to stop a development, because it is
+    running and spending, was the one moment there was no button. It is in the job's own
+    header now, which is on screen in every state, and on the closed lane in the pipeline,
+    which is where somebody watching it spend is actually looking."""
+    web = Path(__file__).resolve().parent.parent / "web" / "src"
+    header = (web / "pages" / "JobPage.tsx").read_text(encoding="utf-8")
+    # the header holds it next to Delete: the two answers to "I do not want this"
+    assert "<StopAction job={job} />\n          <DeleteJobButton" in header
+    lane = (web / "pages" / "PipelineTab.tsx").read_text(encoding="utf-8")
+    # on the lane whether it is open or shut: Retry hides when the lane is open because
+    # the detail repeats it, and stopping has no twin inside to hide behind
+    assert "<LaneStop jobId={lane.job_id} />" in lane
+    assert "{!hasFinished(lane.state) && (" in lane
+    assert "{!open && !hasFinished(lane.state) && (" not in lane
+    # and Delete knows every terminal state, not two of the three: a development that was
+    # stopped could not be deleted, though the server had always allowed it
+    assert "if (!hasFinished(job.state)) return null;" in header

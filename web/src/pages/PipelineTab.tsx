@@ -23,7 +23,12 @@ import {
 } from "../api/hooks";
 import { AgentIcon, DomainBadge, ROLE_LABEL } from "../components/agents";
 import { BulkBar } from "../components/BulkBar";
-import { Recommendation, RetryActions, SkipDeploymentButton } from "../components/GateActions";
+import {
+  Recommendation,
+  RetryActions,
+  SkipDeploymentButton,
+  StopAction,
+} from "../components/GateActions";
 import { DeploymentGate } from "../components/DeploymentGate";
 import { DesignGate } from "../components/DesignGate";
 import { Detail } from "../components/Detail";
@@ -49,16 +54,7 @@ import {
 } from "../components/stages";
 import { StepDetailView } from "../components/StepDetail";
 import { useToast } from "../components/Toast";
-import {
-  Empty,
-  ErrorBox,
-  Loading,
-  Pager,
-  ProgressBar,
-  StateBadge,
-  sentence,
-  timeAgo,
-} from "../components/ui";
+import { Empty, ErrorBox, hasFinished, Loading, Pager, ProgressBar, sentence, StateBadge, timeAgo } from "../components/ui";
 import { useT, type T } from "../i18n";
 import { useSay } from "../i18n/said";
 import { JobDetail } from "./JobPage";
@@ -273,6 +269,15 @@ function LaneRow({
             <LaneRetry jobId={lane.job_id} />
           </span>
         )}
+        {/* Retry hides when the lane is open because the failure and its buttons are
+            spelled out inside. Stopping has no such twin: nothing in the detail offers
+            it, so hiding it there left the open lane -- the one somebody watching a
+            development spend is looking at -- with no way to stop it at all. */}
+        {!hasFinished(lane.state) && (
+          <span onClick={stop}>
+            <LaneStop jobId={lane.job_id} />
+          </span>
+        )}
         {/* the button is what a keyboard reaches; the click on the head is the mouse's */}
         <button type="button" className="lane-toggle" aria-expanded={open}>
           {tx("Details")}
@@ -454,6 +459,11 @@ function BriefPart({
 function LaneRetry({ jobId }: { jobId: string }) {
   const job = useJob(jobId);
   return job.data ? <RetryActions job={job.data} /> : null;
+}
+
+function LaneStop({ jobId }: { jobId: string }) {
+  const job = useJob(jobId);
+  return job.data ? <StopAction job={job.data} compact /> : null;
 }
 
 /** Card labels come from the server in English; the fixed ones translate, a phase

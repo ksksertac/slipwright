@@ -49,6 +49,15 @@ export const STATE_LABEL: Record<JobState, string> = {
   cancelled: "stopped",
 };
 
+/** A development that is no longer moving: nothing to stop, and safe to delete. The
+ *  states are named once here because three places asked the same question separately
+ *  and `cancelled` was added to only two of them. */
+export const FINISHED: readonly JobState[] = ["done", "failed", "cancelled"];
+
+export function hasFinished(state: JobState): boolean {
+  return FINISHED.includes(state);
+}
+
 export function StateBadge({ state }: { state: JobState }) {
   const tx = useT();
   return <span className={`badge ${STATE_CLASS[state]}`}>{tx(STATE_LABEL[state])}</span>;
