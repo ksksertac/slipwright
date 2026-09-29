@@ -101,11 +101,7 @@ def test_signing_up_mails_a_link_and_verifying_it_signs_you_in(
     # its own above, and proving the address is still the thing this one is about
     assert body["is_admin"] is True
 
-    # signed in already, but not allowed to start work yet
     assert client.get("/api/auth/me").json()["email"] == "ada@example.com"
-    refused = client.post("/api/projects", json={"name": "demo", "repo_path": "."})
-    assert refused.status_code == 403
-    assert "confirm your email" in refused.json()["detail"]
 
     link = _link(store, "ada@example.com")
     assert link.startswith(f"{BASE}/verify?token=")

@@ -44,6 +44,8 @@ from slipwright.engine import (
     ProjectCloneError,
     UnknownScreen,
 )
+from slipwright.firstrun import WARNING as FIRST_RUN_WARNING
+from slipwright.firstrun import default_admin_still_open, ensure_default_admin
 from slipwright.orchestrator import IllegalTransitionError
 from slipwright.pipeline import Pipeline, pipeline
 from slipwright.providers import ProviderUnavailableError
@@ -324,6 +326,11 @@ def create_app(
     engine: Engine,
     *,
     resume_on_startup: bool = True,
+    # Off unless a caller asks: making an account changes what "the first user" means
+    # for everybody, and `slipwright user add` on a fresh server should still hand out
+    # the administrator it always did. The server that serves asks for it; a test, an
+    # embedded app and the CLI's own commands do not.
+    default_admin_wanted: bool = False,
     require_auth: bool = True,
     dev: bool = False,
     static_dir: Path | None = None,
@@ -347,6 +354,13 @@ def create_app(
         )
         if unprotected:
             log.warning("%s", unprotected)
+        # a server with nobody in it makes its first account, so that starting it is the
+        # whole of the setup; the login page says what the password is and a banner keeps
+        # saying so until it is changed (slipwright/firstrun.py)
+        if require_auth and default_admin_wanted:
+            ensure_default_admin(engine.raw_store)
+        elif require_auth and default_admin_still_open(engine.raw_store):
+            log.warning("%s", FIRST_RUN_WARNING)
         if resume_on_startup:
             threading.Thread(target=engine.ensure_standards_indexed, daemon=True).start()
         if resume_on_startup:

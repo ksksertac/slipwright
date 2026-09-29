@@ -412,7 +412,12 @@ def _serve(settings: Settings, args: argparse.Namespace) -> int:
     if args.no_auth:
         settings.require_auth = False
 
-    app = create_app(build_engine(settings), require_auth=settings.require_auth, dev=settings.dev)
+    app = create_app(
+        build_engine(settings),
+        require_auth=settings.require_auth,
+        dev=settings.dev,
+        default_admin_wanted=settings.default_admin,
+    )
     uvicorn.run(app, host=settings.host, port=settings.port, log_level="info")
     return 0
 

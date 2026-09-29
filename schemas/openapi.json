@@ -1296,6 +1296,34 @@
         "title": "Expectation",
         "type": "object"
       },
+      "FirstRun": {
+        "additionalProperties": false,
+        "description": "What the login page needs to know before anybody has signed in.",
+        "properties": {
+          "default_admin": {
+            "description": "The starting account is still on its default password, so the login page can say what it is -- and keep asking for it to be changed.",
+            "title": "Default Admin",
+            "type": "boolean"
+          },
+          "password": {
+            "default": "",
+            "title": "Password",
+            "type": "string"
+          },
+          "username": {
+            "default": "",
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "default_admin",
+          "password",
+          "username"
+        ],
+        "title": "FirstRun",
+        "type": "object"
+      },
       "GitHubIdentity": {
         "additionalProperties": false,
         "properties": {
@@ -8255,6 +8283,28 @@
         "summary": "Decline Invitation",
         "tags": [
           "teams"
+        ]
+      }
+    },
+    "/api/auth/first-run": {
+      "get": {
+        "description": "Public on purpose: it tells anybody who asks that the default password works.\n\nThat sounds like a leak and is the opposite of one. The password is a published\ndefault -- announcing it changes nothing for an attacker, who would try it first, and\nchanges everything for the person who has just started the server and is looking at a\nlogin form with nothing to type.",
+        "operationId": "first_run_api_auth_first_run_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FirstRun"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "First Run",
+        "tags": [
+          "auth"
         ]
       }
     },

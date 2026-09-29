@@ -1730,6 +1730,13 @@ export const TR: Record<string, string> = {
     "Burada henüz kimsenin hesabı yok. İlk hesap yöneticinin olur.",
   "Create the first account": "İlk hesabı oluştur",
   "Or on the server itself": "Ya da doğrudan sunucuda",
+  "Nobody has signed in here yet, so this server made you an account:":
+    "Buraya henüz kimse girmedi, o yüzden sunucu sana bir hesap açtı:",
+  "It is filled in below. Change it under Users once you are in.":
+    "Aşağıya yazıldı. Girdikten sonra Kullanıcılar'dan değiştir.",
+  "This server still lets anybody in with the password it started with. Change it before it is reachable from anywhere but this machine.":
+    "Bu sunucuya hâlâ kurulumla gelen parolayla girilebiliyor. Bu makinenin dışından erişilebilir olmadan önce değiştir.",
+  "Change it": "Değiştir",
   "Remote control": "Uzaktan Yönet",
   "Run it from Telegram, without opening this page.": "Telegram'dan yönet, bu sayfayı açmadan.",
   "Link your Telegram account once and the bot answers where things stand, starts a development when you ask it to, and brings your own gates to you with two buttons. It reads your account and nobody else's.":
