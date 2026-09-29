@@ -131,6 +131,12 @@ database and empties the schema per test. It is slower (~12 min) and worth it --
 what caught a GIN index that never built, a half-created database that could never be
 opened again, and an image with no driver in it.
 
+### Getting a change onto main
+
+`main` is protected by a ruleset: no direct pushes, only a pull request whose `test` check
+(`.github/workflows/docker.yml`) has passed. Push a branch and open a PR. Every merge to
+`main` publishes `ghcr.io/ksksertac/slipwright:latest`.
+
 ## Configuration
 
 | Variable | Default | What it decides |
