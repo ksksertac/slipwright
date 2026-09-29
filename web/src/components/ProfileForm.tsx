@@ -88,6 +88,9 @@ export function ProfileForm({
     if (cfg.provider) return { model: cfg.model, why: null };
     const fromDefault = fallback?.default_model;
     if (fromDefault) return { model: fromDefault, why: "default" as const };
+    // the default vendor has no model chosen, and the profile's is a Claude name it would
+    // not know: nothing will run here until one is picked under Settings -> Models
+    if (fallback?.needs_model) return { model: "", why: "default" as const };
     return { model: cfg.model, why: null };
   };
   const setRole = (role: (typeof ROLES)[number], patch: Partial<RoleConfig>) =>
@@ -211,7 +214,9 @@ export function ProfileForm({
                           provider={cfg.provider ?? defaultProvider}
                           value={run.model}
                           disabled={disabled || run.why !== null}
-                          title={run.why ? tx("the profile says {model}", { model: cfg.model }) : ""}
+                          title={
+                            run.why ? tx("the profile says {model}", { model: cfg.model }) : ""
+                          }
                           onChange={(model) => setRole(role, { model })}
                         />
                         {run.why === "pinned" && (

@@ -63,6 +63,7 @@ from slipwright.providers.registry import (
     Credentials,
     RoutingProvider,
     list_models,
+    model_on_default,
 )
 from slipwright.quota import Quotas
 from slipwright.roles import (
@@ -483,14 +484,27 @@ class Engine:
 
     def effective_routing(self, cfg: RoleConfig, role: RoleName | None = None) -> tuple[str, str]:
         """(provider, model) a role actually runs on right now: its assignment under
-        Agents, else the profile's provider, else the default provider and its model."""
+        Agents, else the profile's provider, else the default provider and its model.
+
+        The model is empty when the default provider has none chosen and the profile's
+        is another vendor's (``model_on_default``): what is shown and priced is then
+        "no model", which is the truth, rather than a Claude name nobody will call."""
         assigned = self.agent_routing(role.value) if role is not None else None
         if assigned is not None:
             return assigned
         if cfg.provider:
             return cfg.provider, cfg.model
         name = self.default_provider_name()
-        return name, self.default_model_for(name) or cfg.model
+        return name, model_on_default(name, self.default_model_for(name), cfg.model) or ""
+
+    def default_model_missing(self, name: str | None = None) -> bool:
+        """Whether an agent that follows the default -- or ``name``, were it the default --
+        would stop for want of a model. A provider nobody can call yet is not missing a
+        model; it is missing a key, and says so itself."""
+        name = name or self.default_provider_name()
+        if self.provider_credentials(name) is None:
+            return False
+        return model_on_default(name, self.default_model_for(name), "") is None
 
     # -- agent assignments -----------------------------------------------------------------
 
@@ -579,6 +593,7 @@ class Engine:
                     ),
                     "key_from_env": bool(env) and not stored,
                     "is_default": spec.name == default,
+                    "needs_model": self.default_model_missing(spec.name),
                     "default_model": data.get("default_model"),
                     "max_tokens": data.get("max_tokens"),
                     "default_max_tokens": spec.max_tokens,
@@ -612,6 +627,9 @@ class Engine:
             self.store.delete_setting(f"providers.{name}.api_key")
         elif api_key is not None and api_key.strip():
             self.store.set_setting(f"providers.{name}.api_key", api_key.strip(), secret=True)
+        # A default without a model is allowed: the models are listed from the key, so the
+        # key is saved before one can be picked. What is refused is *running* on it
+        # (``model_on_default``), and the Models page says so in the meantime.
         if make_default:
             self.store.set_setting("providers.default", name)
         else:

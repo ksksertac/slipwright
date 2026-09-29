@@ -173,7 +173,8 @@ function AgentCard({ agent: a }: { agent: AgentSummary }) {
                   : "follows Settings → Models"
             }
           >
-            {a.effective_model}
+            {/* empty when the default vendor has no model picked: nothing will run */}
+            {a.effective_model || <span className="text-bad">{tx("no model chosen")}</span>}
             <span className="faint">
               {" "}
               · {a.effective_provider}

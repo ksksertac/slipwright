@@ -234,7 +234,7 @@ export function AgentAboutTab({ agent }: { agent: AgentSummary }) {
         <dl className="kv about-facts">
           <dt>{tx("Model")}</dt>
           <dd className="mono">
-            {agent.effective_model}
+            {agent.effective_model || <span className="text-bad">{tx("no model chosen")}</span>}
             <span className="faint"> · {agent.effective_provider}</span>
           </dd>
           <dt>{tx("Thinking depth")}</dt>

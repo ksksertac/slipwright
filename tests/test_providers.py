@@ -235,12 +235,21 @@ def test_routing_provider_dispatches_by_role_provider() -> None:
             name="deepseek", api_key="sk-deep", base_url=PROVIDERS["deepseek"].default_base_url
         ),
     }
+    chosen: dict[str, str] = {}
     router = RoutingProvider(
-        creds.get, default=lambda: "openai", transport=httpx.MockTransport(handler)
+        creds.get,
+        default=lambda: "openai",
+        default_model=chosen.get,
+        transport=httpx.MockTransport(handler),
     )
     router.complete(_request("gpt-model", "openai"))
     router.complete(_request("deep-model", "deepseek"))
-    router.complete(_request("gpt-model", None))  # default
+    # a role naming no provider carries a Claude name, which OpenAI would not know: with
+    # no default model chosen for OpenAI it stops and says what to do, and sends nothing
+    with pytest.raises(ProviderUnavailableError, match="no model chosen for OpenAI"):
+        router.complete(_request("claude-opus-5", None))
+    chosen["openai"] = "gpt-model"
+    router.complete(_request("claude-opus-5", None))  # default, on OpenAI's own model
     assert [r["model"] for r in vendors["openai"].requests] == ["gpt-model", "gpt-model"]
     assert [r["model"] for r in vendors["deepseek"].requests] == ["deep-model"]
     assert "reasoning_effort" in vendors["openai"].requests[0]
@@ -493,17 +502,21 @@ def test_default_roles_follow_the_default_provider_and_its_default_model(
     assert [r["model"] for r in vendor.requests] == ["deep-model"]
     assert seed.roles[RoleName.PO].model != "deep-model"  # the profile still says Claude
 
-    # without a default model the profile's model is used as written
+    # without a default model there is no model to run on: the profile's is a Claude name,
+    # and sending it to DeepSeek is what once made a DeepSeek development look like
+    # Anthropic's -- in its log, its costs and its agents' cards
     engine.update_provider_settings("deepseek", default_model="")
-    assert engine.effective_routing(seed.roles[RoleName.PO]) == (
-        "deepseek",
-        seed.roles[RoleName.PO].model,
-    )
+    assert engine.effective_routing(seed.roles[RoleName.PO]) == ("deepseek", "")
+    assert {p["name"]: p for p in engine.provider_settings()}["deepseek"]["needs_model"]
+    stopped = engine.start(engine.create_job("y", repo).id)
+    assert stopped.state is JobState.FAILED
+    assert "no model chosen for DeepSeek" in (stopped.history[-1].detail or "")
+    assert [r["model"] for r in vendor.requests] == ["deep-model"], "nothing more was sent"
 
     with TestClient(create_app(engine, resume_on_startup=False, require_auth=False)) as client:
         agents = {a["role"]: a for a in client.get("/api/agents").json()}
         assert agents["po"]["effective_provider"] == "deepseek"
-        assert agents["po"]["effective_model"] == seed.roles[RoleName.PO].model
+        assert agents["po"]["effective_model"] == "", "no Claude name under DeepSeek"
         resp = client.put("/api/settings/providers/deepseek", json={"default_model": "deep-model"})
         assert resp.status_code == 200
         assert [p for p in resp.json() if p["name"] == "deepseek"][0][
@@ -723,3 +736,42 @@ def test_a_provider_with_nothing_behind_it_does_not_take_the_default(
         monkeypatch.delenv(spec.env_var, raising=False)
     engine.update_provider_settings("deepseek", base_url="https://elsewhere.example")
     assert engine.default_provider_name() == "anthropic", "nothing can answer yet"
+
+
+def test_a_claude_profile_runs_as_written_only_on_anthropic(
+    engine: Engine, seed: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The profiles a project starts from are written for Claude. On Anthropic nothing
+    has to be chosen; a ChatGPT plan runs on the plan's own default; any other vendor
+    needs its default model picked before an agent can run there."""
+    for spec in PROVIDERS.values():
+        monkeypatch.delenv(spec.env_var, raising=False)
+    po = seed.roles[RoleName.PO]
+    engine.update_provider_settings("anthropic", api_key="sk-a")
+    assert engine.effective_routing(po) == ("anthropic", po.model)
+    rows = {p["name"]: p for p in engine.provider_settings()}
+    assert rows["anthropic"]["needs_model"] is False
+    # a vendor with no key is missing a key, not a model: it says so itself
+    assert rows["deepseek"]["needs_model"] is False
+
+    engine.update_provider_settings("deepseek", api_key="sk-d", make_default=True)
+    assert {p["name"]: p for p in engine.provider_settings()}["deepseek"]["needs_model"]
+    engine.update_provider_settings("deepseek", default_model="deepseek-chat")
+    assert engine.effective_routing(po) == ("deepseek", "deepseek-chat")
+    assert not {p["name"]: p for p in engine.provider_settings()}["deepseek"]["needs_model"]
+
+
+def test_the_setup_wizard_does_not_call_a_key_without_a_model_ready(
+    client: TestClient, engine: Engine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for spec in PROVIDERS.values():
+        monkeypatch.delenv(spec.env_var, raising=False)
+
+    def model_step() -> bool:
+        steps = client.get("/api/onboarding").json()["steps"]
+        return next(s["done"] for s in steps if s["key"] == "model")
+
+    client.put("/api/settings/providers/deepseek", json={"api_key": "sk-d"})
+    assert model_step() is False, "a DeepSeek key alone still leaves every agent stopping"
+    client.put("/api/settings/providers/deepseek", json={"default_model": "deepseek-chat"})
+    assert model_step() is True
