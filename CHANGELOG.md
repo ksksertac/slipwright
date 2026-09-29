@@ -35,8 +35,13 @@ every gate.
 
 ### Models
 
-- Anthropic, OpenAI and five OpenAI-compatible vendors (DeepSeek, Google, Alibaba, Z.ai,
-  MiniMax). Each agent can be pinned to its own provider and model.
+- Anthropic, OpenAI and six OpenAI-compatible vendors (DeepSeek, Google, Alibaba, Z.ai,
+  MiniMax, OpenRouter). Each agent can be pinned to its own provider and model.
+- OpenRouter is one key for every vendor at once. Its catalogue is filtered to the models
+  that can answer in JSON, since that is what every agent is asked for and OpenRouter
+  drops the parameter rather than refusing; its key is proved against the endpoint that
+  checks keys, because its model list answers anyone; and its prices come from its own
+  catalogue, because a call bought through a reseller costs the reseller's rate.
 - What a development cost, against what it was expected to cost, broken down by agent,
   phase and model. The call log is re-priced on the way out, so a call made before its
   model had a price is counted once the table catches up.

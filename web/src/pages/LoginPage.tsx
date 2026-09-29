@@ -76,7 +76,8 @@ export function LoginPage() {
         <div className="brand">
           <BrandMark /> {tx("Slipwright")}
         </div>
-        <p className="muted small" style={{ textAlign: "center", marginBottom: 18 }}>
+        <h2 className="account-title">{asking ? tx("One more step") : tx("Welcome back")}</h2>
+        <p className="muted small account-hint">
           {tx("Multi-agent delivery, with you at every gate.")}
         </p>
         {signedOut === "removed" && (

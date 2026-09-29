@@ -171,7 +171,9 @@ def test_agents_ui_has_cards_and_detail_tabs() -> None:
     models_page = (web / "pages" / "settings" / "ModelsSettingsPage.tsx").read_text(
         encoding="utf-8"
     )
-    assert "default_model" in models_page and "useProviderModels" in models_page
+    # the provider's own models are still offered here; they come through the one picker
+    # every model field shares now (ModelPicker.tsx), not through a list of its own
+    assert "default_model" in models_page and "<ModelPicker" in models_page
     detail = (web / "pages" / "AgentDetailPage.tsx").read_text(encoding="utf-8")
     for expected in (
         # T12 put the agent's people between its setup and its standards

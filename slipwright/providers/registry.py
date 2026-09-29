@@ -31,6 +31,8 @@ GEMINI = "gemini"
 QWEN = "qwen"
 GLM = "glm"
 MINIMAX = "minimax"
+# every vendor at once behind one key, at the price OpenRouter charges (providers/openrouter.py)
+OPENROUTER = "openrouter"
 # a ChatGPT plan, through OpenAI's own Codex CLI rather than an API key (providers/codex.py)
 CHATGPT = "chatgpt"
 DEFAULT_PROVIDER = ANTHROPIC
@@ -121,6 +123,18 @@ PROVIDERS: dict[str, ProviderSpec] = {
         docs_url="https://www.minimax.io/platform/user-center/basic-information/interface-key",
         max_tokens=8_192,
     ),
+    OPENROUTER: ProviderSpec(
+        name=OPENROUTER,
+        label="OpenRouter",
+        env_var="OPENROUTER_API_KEY",
+        default_base_url="https://openrouter.ai/api/v1",
+        supports_effort=True,  # OpenAI's reasoning_effort is accepted as written
+        max_tokens_param="max_tokens",
+        docs_url="https://openrouter.ai/settings/keys",
+        # One number cannot fit a catalogue whose per-model ceiling runs from 4k to 900k.
+        # 32k is what the models a person is likely to pick will take; the rest is the
+        # "Max output tokens per call" field under Settings -> Models.
+    ),
     CHATGPT: ProviderSpec(
         name=CHATGPT,
         label="ChatGPT subscription (Codex)",
@@ -162,6 +176,17 @@ def build_client(
         if not creds.home:
             raise ProviderUnavailableError("ChatGPT is not signed in")
         return CodexProvider(Path(creds.home))
+    if creds.name == OPENROUTER:
+        from slipwright.providers.openrouter import OpenRouterProvider
+
+        return OpenRouterProvider(
+            creds.api_key,
+            creds.base_url,
+            supports_effort=spec.supports_effort,
+            max_tokens_param=spec.max_tokens_param,
+            max_tokens=creds.max_tokens or spec.max_tokens,
+            transport=transport,
+        )
     if creds.name == ANTHROPIC:
         from slipwright.providers.anthropic import AnthropicProvider
 
@@ -277,6 +302,7 @@ __all__ = [
     "GLM",
     "MINIMAX",
     "OPENAI",
+    "OPENROUTER",
     "QWEN",
     "PROVIDERS",
     "Credentials",

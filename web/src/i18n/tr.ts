@@ -834,8 +834,10 @@ export const TR: Record<string, string> = {
   "files, comma separated": "dosyalar, virgülle",
 
   // -- settings: models ---------------------------------------------------------------------------------------
-  "API keys for Anthropic, OpenAI and DeepSeek.":
-    "Anthropic, OpenAI ve DeepSeek için API anahtarları.",
+  "API keys for Anthropic, OpenAI, OpenRouter and the rest.":
+    "Anthropic, OpenAI, OpenRouter ve diğerleri için API anahtarları.",
+  "model id — leave empty to use each role's own":
+    "model kimliği — boş bırakırsan her rol kendi modelini kullanır",
   "API key": "API anahtarı",
   "paste a key": "bir anahtar yapıştır",
   "Get one at": "Buradan al:",
@@ -925,6 +927,8 @@ export const TR: Record<string, string> = {
   "Admins only.": "Yalnızca yöneticiler.",
   "For the CLI:": "CLI için:",
   "Multi-agent delivery, with you at every gate.": "Çok ajanlı teslimat, her kapıda sen varsın.",
+  "Welcome back": "Tekrar hoş geldin",
+  "One more step": "Bir adım kaldı",
   "Sign in": "Giriş yap",
   "Signing in…": "Giriş yapılıyor…",
 
