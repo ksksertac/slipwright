@@ -1,0 +1,184 @@
+<!doctype html>
+<!-- The Jira board, for the README's recording: demo_world.Jira drawn as a sprint board.
+     Every issue on it was opened by Slipwright's JiraSync and every move is one it made. -->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Jira</title>
+<style>
+  :root {
+    --bg: #ffffff; --col: #f4f5f7; --text: #172b4d; --muted: #5e6c84; --line: #dfe1e6;
+    --blue: #0c66e4; --story: #36b37e; --sub: #4bade8; --epic: #6554c0;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 14px/1.42 -apple-system, "Segoe UI", system-ui, Roboto, sans-serif;
+    display: flex; flex-direction: column;
+  }
+  header {
+    height: 56px; border-bottom: 1px solid var(--line); display: flex; align-items: center;
+    padding: 0 20px; gap: 14px;
+  }
+  .logo { display: flex; align-items: center; gap: 8px; font-weight: 700; color: var(--blue); font-size: 17px; }
+  .logo svg { width: 24px; height: 24px; }
+  .site { color: var(--muted); font-size: 13px; }
+  .grow { flex: 1; }
+  .who {
+    width: 30px; height: 30px; border-radius: 50%; background: #ff991f; color: #fff;
+    display: grid; place-items: center; font-weight: 700; font-size: 13px;
+  }
+  main { display: flex; flex: 1; min-height: 0; }
+  nav {
+    width: 220px; border-right: 1px solid var(--line); padding: 18px 14px; background: #fafbfc;
+  }
+  nav .proj { display: flex; gap: 10px; align-items: center; margin-bottom: 18px; }
+  nav .proj .icon {
+    width: 32px; height: 32px; border-radius: 6px; background: #6554c0; color: #fff;
+    display: grid; place-items: center; font-weight: 700;
+  }
+  nav .proj small { display: block; color: var(--muted); font-size: 12px; }
+  nav a {
+    display: block; padding: 7px 10px; border-radius: 4px; color: var(--muted);
+    text-decoration: none; font-size: 14px;
+  }
+  nav a.on { background: #e9f2ff; color: var(--blue); font-weight: 600; }
+  section.board { flex: 1; padding: 18px 24px; min-width: 0; display: flex; flex-direction: column; }
+  .crumbs { color: var(--muted); font-size: 13px; }
+  h1 { font-size: 24px; margin: 4px 0 4px; font-weight: 600; }
+  .sprint { color: var(--muted); font-size: 13px; margin-bottom: 14px; display: flex; gap: 16px; }
+  .sprint b { color: var(--text); }
+  .cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; flex: 1; min-height: 0; }
+  .col { background: var(--col); border-radius: 6px; padding: 10px 8px; overflow: hidden; }
+  .col h2 {
+    font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: .04em;
+    text-transform: uppercase; margin: 2px 6px 10px;
+  }
+  .col h2 span { font-weight: 400; margin-left: 6px; }
+  .card {
+    background: #fff; border-radius: 4px; padding: 10px 12px; margin-bottom: 8px;
+    box-shadow: 0 1px 1px rgba(9,30,66,.25), 0 0 1px rgba(9,30,66,.31);
+    transition: box-shadow .3s;
+  }
+  .card.sub { margin-left: 14px; }
+  .card .sum { font-size: 14px; margin-bottom: 8px; }
+  .card .meta { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+  .type { width: 16px; height: 16px; border-radius: 3px; display: inline-grid; place-items: center; }
+  .type svg { width: 10px; height: 10px; }
+  .type.story { background: var(--story); }
+  .type.sub { background: var(--sub); }
+  .epic {
+    background: #eae6ff; color: #403294; font-weight: 600; font-size: 11px; padding: 1px 6px;
+    border-radius: 3px; text-transform: uppercase; max-width: 180px; overflow: hidden;
+    white-space: nowrap; text-overflow: ellipsis;
+  }
+  .key { font-weight: 600; }
+  .grow2 { flex: 1; }
+  .bot {
+    width: 22px; height: 22px; border-radius: 50%; background: #0e1a2b url("/logo.png") center/70% no-repeat;
+  }
+  .moved { box-shadow: 0 0 0 2px #579dff, 0 4px 10px rgba(12,102,228,.25); }
+  .comment {
+    margin-top: 8px; background: #f7f8f9; border-left: 3px solid var(--blue); padding: 6px 8px;
+    font-size: 12px; color: var(--muted); word-break: break-all;
+  }
+  .empty { color: var(--muted); font-size: 13px; text-align: center; padding: 30px 10px; }
+</style>
+</head>
+<body>
+  <header>
+    <div class="logo">
+      <svg viewBox="0 0 24 24" fill="#0c66e4"><path d="M11.5 2 2 11.5l4.2 4.2L11.5 10.4l5.3 5.3L21 11.5z" opacity=".55"/><path d="M11.5 10.4 6.2 15.7 11.5 21l5.3-5.3z"/></svg>
+      Jira
+    </div>
+    <div class="site">acme.atlassian.net</div>
+    <div class="grow"></div>
+    <div class="who">A</div>
+  </header>
+  <main>
+    <nav>
+      <div class="proj"><div class="icon">N</div><div><b>Notes</b><small>Software project</small></div></div>
+      <a class="on">Board</a><a>Backlog</a><a>Timeline</a><a>Reports</a>
+    </nav>
+    <section class="board">
+      <div class="crumbs">Projects / Notes</div>
+      <h1>NOTES board</h1>
+      <div class="sprint"><span><b id="sprint">NOTES Sprint 7</b></span><span id="counts"></span></div>
+      <div class="cols" id="cols"></div>
+    </section>
+  </main>
+<script>
+  const COLS = ["To Do", "In Progress", "Done"];
+  const TICK = '<svg viewBox="0 0 10 10" fill="#fff"><path d="M1 5l3 3 5-6" stroke="#fff" stroke-width="1.6" fill="none"/></svg>';
+  const BOOK = '<svg viewBox="0 0 10 10" fill="#fff"><path d="M2 1h6v8L5 7 2 9z"/></svg>';
+  let seen = "";
+  const firstSeen = {};
+
+  function draw(s) {
+    const byKey = Object.fromEntries(s.issues.map((i) => [i.key, i]));
+    const epicOf = (i) => {
+      let p = i.parent ? byKey[i.parent] : null;
+      while (p && p.type !== "Epic") p = p.parent ? byKey[p.parent] : null;
+      return p;
+    };
+    // a board shows the work: stories with their sub-tasks under them; the epic is a label
+    const work = [];
+    for (const story of s.issues.filter((i) => i.type === "Story")) {
+      work.push(story);
+      for (const sub of s.issues.filter((i) => i.parent === story.key)) work.push(sub);
+    }
+    const cols = document.getElementById("cols");
+    cols.textContent = "";
+    const now = Date.now() / 1000;
+    for (const name of COLS) {
+      const col = document.createElement("div");
+      col.className = "col";
+      const mine = work.filter((i) => i.status === name);
+      col.innerHTML = `<h2>${name}<span>${mine.length}</span></h2>`;
+      if (!s.issues.length && name === "To Do") {
+        col.innerHTML += '<div class="empty">Nothing in this sprint yet</div>';
+      }
+      for (const i of mine) {
+        const card = document.createElement("div");
+        const sub = i.type !== "Story";
+        const recent = (i.moved && now - i.moved < 2.5) || now - i.created < 2.5;
+        card.className = "card" + (sub ? " sub" : "") + (recent ? " moved" : "");
+        const epic = epicOf(i);
+        card.innerHTML =
+          `<div class="sum"></div><div class="meta">` +
+          `<span class="type ${sub ? "sub" : "story"}">${sub ? TICK : BOOK}</span>` +
+          `<span class="key">${i.key}</span>` +
+          (epic ? `<span class="epic"></span>` : "") +
+          `<span class="grow2"></span><span class="bot" title="Slipwright"></span></div>`;
+        card.querySelector(".sum").textContent = i.summary;
+        if (epic) card.querySelector(".epic").textContent = epic.summary;
+        if (i.comments.length && i.type === "Story") {
+          const c = document.createElement("div");
+          c.className = "comment";
+          c.textContent = i.comments[i.comments.length - 1];
+          card.appendChild(c);
+        }
+        col.appendChild(card);
+      }
+      cols.appendChild(col);
+    }
+    const done = work.filter((i) => i.status === "Done").length;
+    document.getElementById("counts").textContent =
+      work.length ? `${done} of ${work.length} done` : "";
+  }
+
+  async function tick() {
+    try {
+      const s = await (await fetch("/demo/jira/state")).json();
+      // redrawn while a highlight is fading too, so a card loses its glow on time
+      const now = JSON.stringify(s) + Math.floor(Date.now() / 1000);
+      if (now !== seen) { seen = now; draw(s); }
+    } catch (e) { /* between answers */ }
+  }
+  tick();
+  setInterval(tick, 300);
+</script>
+</body>
+</html>

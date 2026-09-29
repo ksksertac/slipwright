@@ -1,0 +1,86 @@
+<!doctype html>
+<html>
+<head>
+<style>
+*{box-sizing:border-box}body{margin:0;font:15px/1.45 system-ui,-apple-system,Segoe UI,sans-serif;
+color:#1d2433;background:#f6f7fb}
+.tag{display:inline-block;background:#eef1ff;color:#3446c9;border-radius:999px;padding:2px 10px;
+font-size:12px;margin:0 6px 0 0}
+.primary{background:#3446c9;color:#fff;border:0;border-radius:8px;padding:9px 16px;font-weight:600;
+text-decoration:none;font-size:14px}
+input,textarea{font:inherit}
+
+body{background:#e9ebf3;display:flex;justify-content:center;padding:24px 0}
+.phone{width:360px;height:720px;background:#f6f7fb;border-radius:36px;border:10px solid #151a26;
+overflow:hidden;position:relative}header{padding:18px 20px 8px;display:flex;
+justify-content:space-between;align-items:center}h1{margin:0;font-size:26px}
+.search{margin:6px 16px 10px;width:calc(100% - 32px);padding:11px 14px;border:0;border-radius:12px;
+background:#e4e7f1}.chips{padding:0 16px 10px;white-space:nowrap;overflow:hidden}
+.chips .tag{padding:5px 12px}.chips .on{background:#3446c9;color:#fff}
+ul{list-style:none;margin:0;padding:0 16px}li{background:#fff;border-radius:14px;padding:13px 15px;
+margin-bottom:10px}.row{display:flex;justify-content:space-between}time{color:#8a91a8;font-size:12px}
+p{margin:4px 0 8px;color:#4a5270;font-size:14px}.fab{position:absolute;right:20px;bottom:24px;
+width:56px;height:56px;border-radius:18px;background:#3446c9;color:#fff;font-size:30px;
+display:grid;place-items:center;box-shadow:0 8px 20px rgba(52,70,201,.35)}</style>
+</head>
+<body>
+<div class="phone">
+<header>
+<h1>Notes</h1>
+<span class="tag">4</span>
+</header>
+<input class="search" placeholder="Search notes">
+<div class="chips">
+<span class="tag on">All</span>
+<span class="tag">work</span>
+<span class="tag">home</span>
+<span class="tag">books</span>
+<span class="tag">travel</span>
+</div>
+<ul>
+<li>
+<div class="row">
+<b>Standup, Tuesday</b>
+<time>10:24</time>
+</div>
+<p>Ship search before the demo; tags can follow.</p>
+<div>
+<span class="tag">work</span>
+</div>
+</li>
+<li>
+<div class="row">
+<b>Groceries</b>
+<time>Yesterday</time>
+</div>
+<p>Milk, eggs, the good coffee.</p>
+<div>
+<span class="tag">home</span>
+</div>
+</li>
+<li>
+<div class="row">
+<b>Reading list</b>
+<time>Mon</time>
+</div>
+<p>Designing Data-Intensive Applications, ch. 5</p>
+<div>
+<span class="tag">books</span>
+</div>
+</li>
+<li>
+<div class="row">
+<b>Trip to Porto</b>
+<time>Sep 21</time>
+</div>
+<p>Book the train by Friday.</p>
+<div>
+<span class="tag">travel</span>
+<span class="tag">home</span>
+</div>
+</li>
+</ul>
+<div class="fab">+</div>
+</div>
+</body>
+</html>

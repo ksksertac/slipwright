@@ -33,6 +33,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from slipwright import prices
+from slipwright.providers.registry import CHATGPT
 from slipwright.roles.specialists import specialist_for
 from slipwright.schemas.job import Job, JobState
 from slipwright.schemas.profile import Profile, RoleConfig, RoleName
@@ -60,6 +61,11 @@ class Spend(BaseModel):
     input_tokens: int = 0
     output_tokens: int = 0
     usd: float = 0.0
+    subscription_calls: int = Field(
+        default=0,
+        description="Calls a plan paid for rather than the token. Nought is their cost, "
+        "not an unknown one.",
+    )
     unpriced_calls: int = Field(
         default=0, description="Calls whose model had no stored price; not in ``usd``."
     )
@@ -96,6 +102,7 @@ class JobCost(BaseModel):
     )
     calls: int = 0
     unpriced_calls: int = 0
+    subscription_calls: int = 0
     by_role: list[Spend] = Field(default_factory=list)
     by_model: list[Spend] = Field(default_factory=list)
     by_phase: list[Spend] = Field(default_factory=list)
@@ -110,6 +117,7 @@ class ProjectCosts(BaseModel):
     spent_usd: float = 0.0
     expected_usd: float | None = None
     unpriced_calls: int = 0
+    subscription_calls: int = 0
     priced_models: int = Field(default=0, description="Models with a stored price.")
 
 
@@ -139,10 +147,23 @@ def call_cost(entry: dict[str, Any], lookup: Lookup) -> float | None:
     return None if price is None else round(price.cost(int(inp), int(out)), 6)
 
 
+def on_a_subscription(entry: dict[str, Any]) -> bool:
+    """Whether this call was paid for by a plan rather than by the token.
+
+    A ChatGPT plan is a flat monthly fee, so there is no price to look up and none
+    missing: nought is the right answer. Counting it as "unpriced" instead sent somebody
+    looking for a price to fill in that does not exist.
+    """
+    return str(entry.get("provider") or "") == CHATGPT
+
+
 def _add(row: Spend, entry: dict[str, Any], lookup: Lookup) -> None:
     row.calls += 1
     row.input_tokens += int(entry.get("input_tokens") or 0)
     row.output_tokens += int(entry.get("output_tokens") or 0)
+    if on_a_subscription(entry):
+        row.subscription_calls += 1
+        return
     cost = call_cost(entry, lookup)
     if cost is None:
         row.unpriced_calls += 1
@@ -264,7 +285,11 @@ def job_cost(
 ) -> JobCost:
     index = lookup or {}
     entries = _entries(job)
-    costs = [call_cost(e, index) for e in entries]
+    # a plan pays for its own calls, so they are nought rather than unknown and are not
+    # counted as a price somebody has to go and find
+    billed = [e for e in entries if not on_a_subscription(e)]
+    on_plan = len(entries) - len(billed)
+    costs = [call_cost(e, index) for e in billed]
     unpriced = sum(1 for c in costs if c is None)
     wanted = expectations(job, profile, averages or {}, index, route)
     known = [e.usd for e in wanted if e.usd is not None]
@@ -284,6 +309,7 @@ def job_cost(
         variance_usd=round(spent - expected, 6) if expected is not None else None,
         calls=len(entries),
         unpriced_calls=unpriced,
+        subscription_calls=on_plan,
         by_role=_group(entries, "role", index),
         by_model=_group(entries, "model", index),
         by_phase=_by_phase(entries, index),
@@ -316,6 +342,7 @@ def project_costs(
         spent_usd=round(sum(r.spent_usd for r in rows), 6),
         expected_usd=round(sum(known), 6) if known else None,
         unpriced_calls=sum(r.unpriced_calls for r in rows),
+        subscription_calls=sum(r.subscription_calls for r in rows),
         priced_models=len(stored_prices or []),
     )
 

@@ -1737,6 +1737,9 @@ export const TR: Record<string, string> = {
   "This server still lets anybody in with the password it started with. Change it before it is reachable from anywhere but this machine.":
     "Bu sunucuya hâlâ kurulumla gelen parolayla girilebiliyor. Bu makinenin dışından erişilebilir olmadan önce değiştir.",
   "Change it": "Değiştir",
+  "{n} call(s) ran on your ChatGPT plan, which is not billed per call.":
+    "{n} çağrı ChatGPT aboneliğinde koştu; abonelik çağrı başına ücretlendirilmez.",
+  "on a plan, not billed per call": "abonelikte, çağrı başına ücret yok",
   "Remote control": "Uzaktan Yönet",
   "Run it from Telegram, without opening this page.": "Telegram'dan yönet, bu sayfayı açmadan.",
   "Link your Telegram account once and the bot answers where things stand, starts a development when you ask it to, and brings your own gates to you with two buttons. It reads your account and nobody else's.":

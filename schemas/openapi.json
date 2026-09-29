@@ -2324,6 +2324,11 @@
           "state": {
             "$ref": "#/components/schemas/JobState"
           },
+          "subscription_calls": {
+            "default": 0,
+            "title": "Subscription Calls",
+            "type": "integer"
+          },
           "unpriced_calls": {
             "default": 0,
             "title": "Unpriced Calls",
@@ -2353,6 +2358,7 @@
           "request",
           "spent_usd",
           "state",
+          "subscription_calls",
           "unpriced_calls",
           "variance_usd"
         ],
@@ -4916,6 +4922,11 @@
             "title": "Spent Usd",
             "type": "number"
           },
+          "subscription_calls": {
+            "default": 0,
+            "title": "Subscription Calls",
+            "type": "integer"
+          },
           "unpriced_calls": {
             "default": 0,
             "title": "Unpriced Calls",
@@ -4928,6 +4939,7 @@
           "priced_models",
           "project_id",
           "spent_usd",
+          "subscription_calls",
           "unpriced_calls"
         ],
         "title": "ProjectCosts",
@@ -6072,6 +6084,12 @@
             "title": "Output Tokens",
             "type": "integer"
           },
+          "subscription_calls": {
+            "default": 0,
+            "description": "Calls a plan paid for rather than the token. Nought is their cost, not an unknown one.",
+            "title": "Subscription Calls",
+            "type": "integer"
+          },
           "unpriced_calls": {
             "default": 0,
             "description": "Calls whose model had no stored price; not in ``usd``.",
@@ -6090,6 +6108,7 @@
           "key",
           "label",
           "output_tokens",
+          "subscription_calls",
           "unpriced_calls",
           "usd"
         ],

@@ -1,0 +1,202 @@
+<!doctype html>
+<!-- The phone, for the README's recording: a Telegram chat drawn from demo_world.Telegram.
+     Every bot message here was sent by Slipwright's own notify/ code; the buttons post the
+     press back through the same Bot API stand-in, where the real bot picks it up. -->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Telegram</title>
+<style>
+  :root {
+    --bg: #0e1621; --panel: #17212b; --bubble: #182533; --mine: #2b5278;
+    --text: #f5f5f5; --muted: #708499; --link: #6ab3f3; --btn: #1f2c3a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: radial-gradient(1200px 700px at 30% 40%, #1b2838 0%, #0b1119 70%);
+    color: var(--text);
+    font: 15px/1.4 "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+    display: flex; align-items: center; justify-content: center; gap: 72px;
+  }
+  .caption { width: 380px; }
+  .caption .kicker {
+    color: var(--link); font-size: 14px; letter-spacing: .08em; text-transform: uppercase;
+    font-weight: 600;
+  }
+  .caption h1 { font-size: 34px; line-height: 1.2; margin: 10px 0 14px; font-weight: 600; }
+  .caption p { color: #9fb0c2; font-size: 17px; line-height: 1.5; margin: 0; }
+  .phone {
+    width: 400px; height: 740px; border-radius: 34px; background: var(--bg);
+    border: 10px solid #05080c; box-shadow: 0 30px 80px rgba(0,0,0,.55), 0 0 0 1px #2a3542;
+    display: flex; flex-direction: column; overflow: hidden; position: relative;
+  }
+  .top {
+    background: var(--panel); padding: 12px 16px; display: flex; align-items: center; gap: 12px;
+    border-bottom: 1px solid #0a1017;
+  }
+  .avatar {
+    width: 40px; height: 40px; border-radius: 50%; flex: none;
+    background: #0e1a2b url("/logo.png") center/70% no-repeat;
+  }
+  .top .name { font-weight: 600; }
+  .top .sub { color: var(--muted); font-size: 13px; }
+  .chat {
+    flex: 1; overflow-y: auto; padding: 12px 10px 8px; display: flex; flex-direction: column;
+    gap: 6px; scrollbar-width: none;
+    background:
+      radial-gradient(circle at 20% 20%, rgba(106,179,243,.04) 0 40px, transparent 41px),
+      radial-gradient(circle at 80% 60%, rgba(106,179,243,.035) 0 60px, transparent 61px),
+      var(--bg);
+  }
+  .chat::-webkit-scrollbar { display: none; }
+  .msg {
+    max-width: 86%; padding: 7px 11px 6px; border-radius: 14px; white-space: pre-wrap;
+    word-wrap: break-word; position: relative; font-size: 14.5px;
+  }
+  .msg .t { float: right; margin: 6px 0 -4px 10px; color: var(--muted); font-size: 11.5px; }
+  .bot { align-self: flex-start; background: var(--bubble); border-bottom-left-radius: 4px; }
+  .me { align-self: flex-end; background: var(--mine); border-bottom-right-radius: 4px; }
+  .me .t { color: #7fb2e5; }
+  .pressed {
+    align-self: center; background: rgba(23,33,43,.9); color: var(--muted); font-size: 13px;
+    padding: 3px 12px; border-radius: 12px;
+  }
+  .pressed b { color: var(--text); font-weight: 600; }
+  .kb { display: flex; gap: 5px; align-self: stretch; max-width: 86%; margin-top: -2px; }
+  .kb button {
+    flex: 1; background: var(--btn); color: var(--text); border: 0; border-radius: 9px;
+    padding: 9px 6px; font: 600 14px/1.2 inherit; cursor: pointer;
+  }
+  .kb button:hover { background: #283a4d; }
+  .fresh { animation: pop .35s ease-out; }
+  @keyframes pop { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
+  .bar {
+    background: var(--panel); padding: 8px 10px; display: flex; gap: 8px; align-items: center;
+    border-top: 1px solid #0a1017;
+  }
+  .bar input {
+    flex: 1; background: transparent; border: 0; color: var(--text); outline: none;
+    font: 15px inherit; padding: 8px 4px;
+  }
+  .bar input::placeholder { color: var(--muted); }
+  .bar button {
+    width: 38px; height: 38px; border-radius: 50%; border: 0; background: transparent;
+    color: var(--link); cursor: pointer; font-size: 20px;
+  }
+  .toast {
+    position: absolute; left: 50%; top: 76px; transform: translateX(-50%);
+    background: rgba(0,0,0,.78); color: #fff; padding: 9px 16px; border-radius: 10px;
+    font-size: 13.5px; max-width: 86%; text-align: center; opacity: 0; transition: opacity .2s;
+    pointer-events: none;
+  }
+  .toast.on { opacity: 1; }
+</style>
+</head>
+<body>
+  <div class="caption">
+    <div class="kicker" id="kicker">Telegram</div>
+    <h1 id="title">The gate comes to your phone</h1>
+    <p id="line">Slipwright's own bot asks the person the gate is waiting for.</p>
+  </div>
+  <div class="phone">
+    <div class="top">
+      <div class="avatar"></div>
+      <div><div class="name">Slipwright</div><div class="sub">bot</div></div>
+    </div>
+    <div class="chat" id="chat"></div>
+    <form class="bar" id="bar">
+      <input id="say" autocomplete="off" placeholder="Message" />
+      <button type="submit" aria-label="Send">&#10148;</button>
+    </form>
+    <div class="toast" id="toast"></div>
+  </div>
+<script>
+  const chat = document.getElementById("chat");
+  const toast = document.getElementById("toast");
+  let seen = "";
+  let known = new Set();
+  let lastToast = 0;
+
+  // the recording sets what the caption beside the phone says, scene by scene
+  window.caption = (kicker, title, line) => {
+    document.getElementById("kicker").textContent = kicker;
+    document.getElementById("title").textContent = title;
+    document.getElementById("line").textContent = line;
+  };
+
+  function draw(messages) {
+    chat.textContent = "";
+    for (const m of messages) {
+      const fresh = !known.has(m.message_id);
+      known.add(m.message_id);
+      if (m.from === "pressed") {
+        const pill = document.createElement("div");
+        pill.className = "pressed" + (fresh ? " fresh" : "");
+        pill.innerHTML = "Ada pressed <b></b>";
+        pill.querySelector("b").textContent = m.text;
+        chat.appendChild(pill);
+        continue;
+      }
+      const el = document.createElement("div");
+      el.className = "msg " + (m.from === "me" ? "me" : "bot") + (fresh ? " fresh" : "");
+      el.textContent = m.text;
+      const t = document.createElement("span");
+      t.className = "t";
+      t.textContent = m.at + (m.from === "me" ? "  ✓✓" : "");
+      el.appendChild(t);
+      chat.appendChild(el);
+      if (m.buttons && m.buttons.length) {
+        for (const row of m.buttons) {
+          const kb = document.createElement("div");
+          kb.className = "kb";
+          for (const b of row) {
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.textContent = b.text;
+            btn.onclick = () => post("press", { message_id: m.message_id, data: b.data });
+            kb.appendChild(btn);
+          }
+          chat.appendChild(kb);
+        }
+      }
+    }
+    chat.scrollTop = chat.scrollHeight;
+  }
+
+  async function post(what, body) {
+    await fetch("/demo/telegram/" + what, {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+    });
+    tick();
+  }
+
+  async function tick() {
+    try {
+      const s = await (await fetch("/demo/telegram/state")).json();
+      const now = JSON.stringify(s.messages);
+      if (now !== seen) { seen = now; draw(s.messages); }
+      if (s.toast && s.toast.at !== lastToast) {
+        lastToast = s.toast.at;
+        toast.textContent = s.toast.text;
+        toast.classList.add("on");
+        setTimeout(() => toast.classList.remove("on"), 2200);
+      }
+    } catch (e) { /* the server is between answers; the next tick will do */ }
+  }
+
+  document.getElementById("bar").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const input = document.getElementById("say");
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = "";
+    post("say", { text });
+  });
+
+  tick();
+  setInterval(tick, 250);
+</script>
+</body>
+</html>
