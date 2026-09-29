@@ -3466,6 +3466,10 @@ class Engine:
                 detail=gate.tail,
             )
 
+        # whether the last fix moved anything at all, decided before the record of it is
+        # overwritten: byte-identical output means the specialist changed nothing the
+        # command could notice, and the supervisor cannot see that from one attempt alone
+        repeated = job.data.last_build_output == gate.tail
         job.data.build_attempts += 1
         job.data.last_build_output = gate.tail
         job.data.rerun_only = False  # the specialist now fixes it the ordinary way
@@ -3480,7 +3484,7 @@ class Engine:
             f"build gate failed on phase {index + 1} "
             f"(attempt {job.data.build_attempts}/{self.max_build_attempts})"
         )
-        choice, reason = self._failed_gate_choice(job, index, gate.tail)
+        choice, reason = self._failed_gate_choice(job, index, gate.tail, repeated=repeated)
         if choice == "replan":
             job.data.feedback = (
                 f"phase {index + 1} failed the build gate {job.data.build_attempts} time(s); "
@@ -3595,7 +3599,9 @@ class Engine:
         self.store.update_state(job.id, job.state, note=note, detail=detail)
         job.history = self.store.get(job.id).history
 
-    def _failed_gate_choice(self, job: Job, index: int, output: str) -> tuple[str, str]:
+    def _failed_gate_choice(
+        self, job: Job, index: int, output: str, *, repeated: bool = False
+    ) -> tuple[str, str]:
         """The one decision code cannot make: after a failed build gate, does the same
         specialist fix it, does the architect re-plan, or does a human look? Without a
         supervisor (manual projects) the specialist fixes, as before."""
@@ -3613,7 +3619,14 @@ class Engine:
                     "phase": {"number": index + 1, **phases[index]},
                     "attempt": job.data.build_attempts,
                     "max_attempts": self.max_build_attempts,
+                    "repeated": repeated,
                     "output": output[-4000:],
+                    "commands": {
+                        # the commands are the profile's and no specialist can change
+                        # them; when one of these is what failed, only a re-plan helps
+                        "build_cmd": profile.build_cmd,
+                        "test_cmd": profile.test_cmd,
+                    },
                 },
                 "choices": {
                     "fix": "the same specialist tries again with the build output",
