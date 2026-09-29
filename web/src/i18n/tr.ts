@@ -1724,6 +1724,27 @@ export const TR: Record<string, string> = {
     "bu örnek proje: okumak için var, çalıştırmak için değil",
 
   // -- notifications ------------------------------------------------------------------------------------
+  "Remote control": "Uzaktan Yönet",
+  "Run it from Telegram, without opening this page.": "Telegram'dan yönet, bu sayfayı açmadan.",
+  "Link your Telegram account once and the bot answers where things stand, starts a development when you ask it to, and brings your own gates to you with two buttons. It reads your account and nobody else's.":
+    "Telegram hesabını bir kez bağla; bot işlerin nerede olduğunu söyler, istediğinde geliştirme başlatır ve senin kapılarını iki butonla sana getirir. Yalnızca senin hesabını okur, başkasınınkini değil.",
+  "What you can ask it": "Neler sorabilirsin",
+  "In your own words, or with a command. A command costs nothing — no model is asked what it meant.":
+    "Kendi cümlenle ya da komutla. Komut hiçbir şeye mal olmaz — ne demek istediğin modele sorulmaz.",
+  "which projects do I have": "hangi projelerim var",
+  "how is NoteApp doing": "NoteApp ne durumda",
+  "what is waiting for me": "onayımı bekleyen ne var",
+  "what did NoteApp cost": "NoteApp ne kadara mal oldu",
+  "why did the maths one stop": "matematik işi neden durdu",
+  "Starting work": "İş başlatmak",
+  "Say what you want built and it asks you to confirm before anything runs — reading a sentence is a guess, and a wrong guess would spend your own model credit. /yeni walks through it a question at a time; /proje opens a new project.":
+    "Ne yapılmasını istediğini yaz, hiçbir şey başlamadan önce onay ister — cümleden anlam çıkarmak bir tahmindir ve yanlış tahmin senin model kredini harcar. /yeni adım adım sorar, /proje yeni bir proje açar.",
+  "A group is told when an agent is waiting, when a development stops and when one finishes. It is told, never asked: anybody in the room could press a button, and a gate is its owner's to decide. Deciding from a chat of your own is Remote control.":
+    "Bir ajan onay beklediğinde, bir geliştirme durduğunda ya da bittiğinde grup haberdar edilir. Gruba söylenir, gruba sorulmaz: odadaki herkes butona basabilir, oysa kapı sahibinin kararıdır. Kendi sohbetinden karar vermek Uzaktan Yönet'te.",
+  "The owner of the account sets up where the team is told.":
+    "Takımın nereden haberdar olacağını hesabın sahibi ayarlar.",
+  "Telegram posts to the group through the bot: set its token under Remote control first.":
+    "Telegram gruba bot üzerinden yazar: önce Uzaktan Yönet'ten bot token'ını gir.",
   Notifications: "Bildirimler",
   "Agents reach your team where it already talks.":
     "Ajanlar ekibine zaten konuştuğu yerden ulaşır.",

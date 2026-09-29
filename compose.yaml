@@ -74,6 +74,10 @@ services:
       SLIPWRIGHT_QUOTA_MAX_RUNNING_JOBS: ${SLIPWRIGHT_QUOTA_MAX_RUNNING_JOBS:-0}
       SLIPWRIGHT_QUOTA_MAX_PROJECTS: ${SLIPWRIGHT_QUOTA_MAX_PROJECTS:-0}
       SLIPWRIGHT_QUOTA_MAX_DISK_MB: ${SLIPWRIGHT_QUOTA_MAX_DISK_MB:-0}
+      # Agents on a ChatGPT plan through the Codex CLI. Empty decides from the install:
+      # off once SLIPWRIGHT_DATABASE_URL or the docker runner is set, since that looks
+      # hosted. A single-person install on PostgreSQL sets 1 to keep it.
+      SLIPWRIGHT_CHATGPT_SUBSCRIPTION: ${SLIPWRIGHT_CHATGPT_SUBSCRIPTION:-}
     volumes:
       - slipwright-state:/data
       # checkouts, kept apart from the state directory so a job's own commands cannot

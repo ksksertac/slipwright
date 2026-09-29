@@ -32,9 +32,6 @@ const LABEL: Record<ChannelName, string> = {
 };
 const EVENTS: NotifyEvent[] = ["gate", "failed", "done"];
 
-type Part = "personal" | "group";
-const PARTS: Part[] = ["personal", "group"];
-const PART_LABEL: Record<Part, string> = { personal: "Personal", group: "Group" };
 const EVENT_LABEL: Record<NotifyEvent, string> = {
   gate: "An agent is waiting for approval",
   failed: "A development stopped",
@@ -166,15 +163,13 @@ const LINK_STEP: Record<ChannelName, string> = {
 export function NotificationsPage() {
   const tx = useT();
   const notify = useNotify();
-  const { tab = "telegram", part = "personal" } = useParams();
+  const { tab = "telegram" } = useParams();
   const current = (TABS as string[]).includes(tab) ? (tab as ChannelName) : "telegram";
-  const section: Part = part === "group" ? "group" : "personal";
 
   if (notify.isLoading) return <Loading />;
   if (notify.error) return <ErrorBox error={notify.error} />;
   const data = notify.data!;
   const channel = data.channels.find((c) => c.channel === current)!;
-  const links = data.links.filter((l) => l.channel === current);
 
   return (
     <div className="settings-flow">
@@ -184,20 +179,16 @@ export function NotificationsPage() {
       />
       <p className="muted">
         {tx(
-          "A group is told when an agent is waiting, when a development stops and when one finishes. Somebody who links their own chat account is also asked personally at the gates that are theirs, and can carry on or reject — with a reason — from there.",
+          "A group is told when an agent is waiting, when a development stops and when one finishes. It is told, never asked: anybody in the room could press a button, and a gate is its owner's to decide. Deciding from a chat of your own is Remote control.",
         )}
       </p>
 
       <nav className="tabs dotted">
         {TABS.map((t) => {
           const c = data.channels.find((x) => x.channel === t)!;
-          const state = c.group_ready || c.bot_ready ? "done" : "optional";
+          const state = c.group_ready ? "done" : "optional";
           return (
-            <NavLink
-              key={t}
-              to={`/notifications/${t}/${section}`}
-              className={t === current ? "active" : ""}
-            >
+            <NavLink key={t} to={`/notifications/${t}`} className={t === current ? "active" : ""}>
               <ChannelIcon channel={t} state={state} />
               {LABEL[t]}
             </NavLink>
@@ -205,41 +196,13 @@ export function NotificationsPage() {
         })}
       </nav>
 
-      {/* the two jobs a service does, one at a time: a member only ever has the first */}
-      {data.may_configure && (
-        <nav className="ps-tabs notify-parts" role="tablist">
-          {PARTS.map((p) => {
-            const ready = p === "group" ? channel.group_ready : channel.bot_ready;
-            return (
-              <NavLink
-                key={p}
-                to={`/notifications/${current}/${p}`}
-                role="tab"
-                aria-selected={p === section}
-                className={p === section ? "on" : ""}
-              >
-                {tx(PART_LABEL[p])}
-                {ready && <span className="notify-part-ready" aria-label={tx("ready")} />}
-              </NavLink>
-            );
-          })}
-        </nav>
-      )}
-
       <div className="notify-cards">
-        {data.may_configure && section === "group" && (
+        {data.may_configure ? (
           <GroupCard key={`g-${current}`} channel={channel} />
-        )}
-        {data.may_configure && section === "personal" && (
-          <BotCard key={`b-${current}`} channel={channel} />
-        )}
-        {(section === "personal" || !data.may_configure) && (
-          <LinkCard
-            key={`l-${current}`}
-            channel={channel}
-            links={links}
-            owner={data.may_configure}
-          />
+        ) : (
+          <p className="muted">
+            {tx("The owner of the account sets up where the team is told.")}
+          </p>
         )}
       </div>
     </div>
@@ -439,7 +402,7 @@ function GroupCard({ channel }: { channel: NotifyChannel }) {
       {needsBot && (
         <div className="callout notice small">
           {tx(
-            "Telegram posts to the group through the bot: set its token on the Personal tab first.",
+            "Telegram posts to the group through the bot: set its token under Remote control first.",
           )}
         </div>
       )}
@@ -448,7 +411,7 @@ function GroupCard({ channel }: { channel: NotifyChannel }) {
   );
 }
 
-function BotCard({ channel }: { channel: NotifyChannel }) {
+export function BotCard({ channel }: { channel: NotifyChannel }) {
   const tx = useT();
   const live = channel.bot_ready && channel.listening;
   const badge = !channel.bot_ready ? (
@@ -492,7 +455,7 @@ function BotCard({ channel }: { channel: NotifyChannel }) {
   );
 }
 
-function LinkCard({
+export function LinkCard({
   channel,
   links,
   owner,
