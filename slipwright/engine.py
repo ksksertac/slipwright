@@ -3052,7 +3052,22 @@ class Engine:
             "prices.last_fetch",
             {"at": utcnow().isoformat(), "rows": written, "source": prices.SOURCE_URL},
         )
-        return written
+        return written + self._refresh_openrouter_prices()
+
+    def _refresh_openrouter_prices(self) -> int:
+        """OpenRouter's own rates, alongside the table rather than inside it.
+
+        Its own catalogue is the only first-hand pricing any vendor publishes, and for
+        OpenRouter it is also the only correct one: the bill is OpenRouter's rate, not
+        the underlying vendor's. Kept separate so that OpenRouter being unreachable costs
+        the OpenRouter rows and not the four thousand the table just delivered.
+        """
+        try:
+            rows = prices.fetch_openrouter(transport=self.http_transport)
+        except prices.PriceFetchError as exc:
+            log.warning("OpenRouter prices were not refreshed: %s", exc)
+            return 0
+        return self.store.put_prices(rows, source="openrouter")
 
     def price_index(self) -> dict[tuple[str, str], dict[str, Any]]:
         return prices.index(self.store.list_prices())

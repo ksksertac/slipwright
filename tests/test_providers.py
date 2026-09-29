@@ -29,7 +29,11 @@ from tests.pipeline import full_engine
 
 
 class FakeVendor:
-    """One OpenAI-compatible endpoint (also answers Anthropic's /v1/models) per host."""
+    """One OpenAI-compatible endpoint (also answers Anthropic's /v1/models) per host.
+
+    It answers OpenRouter's two extra notes as well: ``/key``, the endpoint that proves a
+    key is real, and the ``supported_parameters`` every catalogue entry carries.
+    """
 
     def __init__(self, key: str, models: list[str]) -> None:
         self.key = key
@@ -44,8 +48,18 @@ class FakeVendor:
         api_key = request.headers.get("x-api-key", "")
         if auth != f"Bearer {self.key}" and api_key != self.key:
             return httpx.Response(401, json={"error": {"message": "Incorrect API key"}})
+        if request.url.path.endswith("/key"):
+            return httpx.Response(200, json={"data": {"label": "test"}})
         if request.url.path.endswith("/models"):
-            return httpx.Response(200, json={"data": [{"id": m} for m in self.models]})
+            return httpx.Response(
+                200,
+                json={
+                    "data": [
+                        {"id": m, "supported_parameters": ["response_format"]}
+                        for m in self.models
+                    ]
+                },
+            )
         if request.url.path.endswith("/chat/completions"):
             body = json.loads(request.content)
             self.requests.append(body)
@@ -453,7 +467,20 @@ def test_models_settings_page_and_role_provider_column_exist() -> None:
     ):
         assert expected in page, expected
     form = (web / "components" / "ProfileForm.tsx").read_text(encoding="utf-8")
-    assert "useProviderModels" in form and "provider: e.target.value" in form and "datalist" in form
+    assert "provider: e.target.value" in form
+
+    # One picker, in all three places a model is chosen, and it is a filterable text field
+    # rather than a dropdown: OpenRouter offers four hundred models behind a single key,
+    # and a <select> of four hundred cannot be typed into. It also has to stay a text
+    # field so a model released this morning can be used before it is listed.
+    picker = (web / "components" / "ModelPicker.tsx").read_text(encoding="utf-8")
+    assert "useProviderModels" in picker and "datalist" in picker and 'type="text"' in picker
+    for user in (
+        ("components", "ProfileForm.tsx"),
+        ("pages", "AgentDetailPage.tsx"),
+        ("pages", "settings", "ModelsSettingsPage.tsx"),
+    ):
+        assert "<ModelPicker" in (web.joinpath(*user)).read_text(encoding="utf-8"), user
     hooks = (web / "api" / "hooks.ts").read_text(encoding="utf-8")
     assert "/api/settings/providers" in hooks
     # an agent's page pins it to a provider and model and can test the connection

@@ -1,5 +1,6 @@
 import type { Permission, Profile, RoleConfig } from "../api/client";
-import { useAgents, useProviderModels, useProviders } from "../api/hooks";
+import { useAgents, useProviders } from "../api/hooks";
+import { ModelPicker } from "./ModelPicker";
 import { useT } from "../i18n";
 
 const ROLES = [
@@ -207,7 +208,7 @@ export function ProfileForm({
                     const run = effective(role, cfg);
                     return (
                       <>
-                        <ModelInput
+                        <ModelPicker
                           provider={cfg.provider ?? defaultProvider}
                           value={run.model}
                           disabled={disabled || run.why !== null}
@@ -279,44 +280,6 @@ export function ProfileForm({
         </tbody>
       </table>
     </div>
-  );
-}
-
-/** Free-text model id with the provider's model list as suggestions (when a key is set). */
-function ModelInput({
-  provider,
-  value,
-  disabled,
-  title = "",
-  onChange,
-}: {
-  provider: string;
-  value: string;
-  disabled: boolean;
-  title?: string;
-  onChange: (model: string) => void;
-}) {
-  const tx = useT();
-  const models = useProviderModels(provider);
-  const listId = `models-${provider}`;
-  return (
-    <>
-      <input
-        type="text"
-        className="mono"
-        list={listId}
-        value={value}
-        disabled={disabled}
-        title={title}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={tx("model id")}
-      />
-      <datalist id={listId}>
-        {(models.data?.models ?? []).map((m) => (
-          <option key={m} value={m} />
-        ))}
-      </datalist>
-    </>
   );
 }
 

@@ -25,6 +25,7 @@ import { useToast } from "../components/Toast";
 import { Empty, ErrorBox, Loading } from "../components/ui";
 import { useAuth } from "../auth/AuthProvider";
 import { useProviderModels, useProviders } from "../api/hooks";
+import { ModelPicker } from "../components/ModelPicker";
 import { AgentAboutTab } from "./AgentAboutTab";
 import { AgentStandardsTab } from "./AgentStandardsTab";
 import { AgentTeamTab } from "./AgentTeamTab";
@@ -157,8 +158,6 @@ function ModelCard({ agent }: { agent: AgentSummary }) {
   const spec = providers.data?.find((p) => p.name === provider);
   const defaultProvider = providers.data?.find((p) => p.is_default);
   const pinned = !!agent.assigned_provider;
-  const listed = models.data?.models ?? [];
-  const known = listed.length > 0;
 
   const pick = (name: string) => {
     setProvider(name);
@@ -215,43 +214,22 @@ function ModelCard({ agent }: { agent: AgentSummary }) {
         </div>
         <div className="field">
           <label>{tx("Model")}</label>
-          {provider && known ? (
-            <select
-              className="mono"
-              value={model}
-              disabled={!admin}
-              onChange={(e) => {
-                setModel(e.target.value);
-                setDirty(true);
-              }}
-            >
-              <option value="">{tx("pick a model…")}</option>
-              {model && !listed.includes(model) && <option value={model}>{model}</option>}
-              {listed.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <input
-              type="text"
-              className="mono"
-              value={model}
-              disabled={!admin || !provider}
-              placeholder={
-                !provider
-                  ? tx("the provider's default model")
-                  : spec && !spec.key_set
-                    ? tx("add a key under Settings → Models first")
-                    : tx("model id")
-              }
-              onChange={(e) => {
-                setModel(e.target.value);
-                setDirty(true);
-              }}
-            />
-          )}
+          <ModelPicker
+            provider={provider || null}
+            value={model}
+            disabled={!admin || !provider}
+            placeholder={
+              !provider
+                ? tx("the provider's default model")
+                : spec && !spec.key_set
+                  ? tx("add a key under Settings → Models first")
+                  : tx("model id")
+            }
+            onChange={(m) => {
+              setModel(m);
+              setDirty(true);
+            }}
+          />
           {provider && spec && !spec.key_set && (
             <span className="faint tiny">
               {tx("no API key for {provider}", { provider: spec.label })}

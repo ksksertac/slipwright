@@ -54,9 +54,26 @@ TABLE: dict[str, Any] = {
 }
 
 
+# OpenRouter's own catalogue, in the shape its `/models` endpoint answers in: dollars per
+# token, as strings, and a free model that really is free.
+CATALOGUE: dict[str, Any] = {
+    "data": [
+        {
+            "id": "anthropic/claude-opus-5",
+            "pricing": {"prompt": "0.000009", "completion": "0.000045"},
+        },
+        {"id": "meta/llama-free", "pricing": {"prompt": "0", "completion": "0"}},
+        {"id": "some/image-model", "pricing": {"image": "0.04"}},
+    ]
+}
+
+
 def _transport() -> httpx.MockTransport:
     def handler(request: httpx.Request) -> httpx.Response:
-        assert str(request.url) == prices.SOURCE_URL
+        url = str(request.url)
+        if url == prices.OPENROUTER_MODELS_URL:
+            return httpx.Response(200, content=json.dumps(CATALOGUE))
+        assert url == prices.SOURCE_URL
         return httpx.Response(200, content=json.dumps(TABLE))
 
     return httpx.MockTransport(handler)
@@ -70,7 +87,7 @@ def test_the_table_is_read_into_the_providers_we_call(store: JobStore) -> None:
     assert got[("gemini", "gemini-2.5-flash")] == (0.3, 2.5)  # the routing prefix is dropped
     # DashScope serves both Qwen and GLM, so one source row feeds two of our providers
     assert ("qwen", "glm-5.1") in got and ("glm", "glm-5.1") in got
-    # a reseller's rate is someone else's margin, not what this installation pays
+    # OpenRouter is priced from OpenRouter, so the table's guess at it is not taken
     assert not any(model == "some-reseller-model" for _, model in got)
     # a row with no token price at all (an audio model) is skipped rather than stored as 0
     assert not any(model == "whisper-1" for _, model in got)
@@ -124,14 +141,56 @@ def test_the_engine_refreshes_and_prices_a_model(
 
     written = engine.refresh_prices()
     # 2 Anthropic + 1 Gemini + the DashScope row counted once for Qwen and once for GLM;
-    # the spec header, the reseller and the audio model are not priced calls we make
-    assert written == 5
+    # the spec header, the reseller and the audio model are not priced calls we make.
+    # Then OpenRouter's own two token-priced models on top.
+    assert written == 7
 
     price = engine.price_of("anthropic", "claude-opus-5")
     assert price is not None and (price.input_usd, price.output_usd) == (5.0, 25.0)
     assert engine.price_of("anthropic", None) is None
     assert engine.price_of(None, "claude-opus-5") is None
+    # the table's own row is what "rows" counts; OpenRouter is fetched separately
     assert engine.store.get_setting("prices.last_fetch", {})["rows"] == 5
+
+
+def test_a_call_through_openrouter_is_priced_at_openrouters_rate(
+    store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
+) -> None:
+    """The same model costs a different amount through a reseller, and the reseller's
+    figure is the one that is paid. It comes from OpenRouter's own catalogue, so it is
+    stored against the id OpenRouter answers with -- vendor prefix and all."""
+    engine = full_engine(store, worktrees_root, seed, full_provider(seed, phases=1))
+    engine.http_transport = _transport()
+    engine.refresh_prices()
+
+    through = engine.price_of("openrouter", "anthropic/claude-opus-5")
+    assert through is not None and (through.input_usd, through.output_usd) == (9.0, 45.0)
+    direct = engine.price_of("anthropic", "claude-opus-5")
+    assert direct is not None and direct.input_usd == 5.0  # the same model, bought elsewhere
+
+    # a free model is priced at nothing, which is a price; it is not an unpriced call
+    free = engine.price_of("openrouter", "meta/llama-free")
+    assert free is not None and free.cost(1_000_000, 1_000_000) == 0.0
+    # a model that is not sold by the token has no rate to store
+    assert engine.price_of("openrouter", "some/image-model") is None
+
+
+def test_openrouter_being_unreachable_does_not_lose_the_table(
+    store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
+) -> None:
+    """Two sources, fetched independently: one of them down costs only its own rows."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if str(request.url) == prices.OPENROUTER_MODELS_URL:
+            return httpx.Response(503)
+        return httpx.Response(200, content=json.dumps(TABLE))
+
+    engine = full_engine(store, worktrees_root, seed, full_provider(seed, phases=1))
+    engine.http_transport = httpx.MockTransport(handler)
+
+    assert engine.refresh_prices() == 5
+    assert engine.price_of("anthropic", "claude-opus-5") is not None
+    assert engine.price_of("openrouter", "anthropic/claude-opus-5") is None
 
 
 def test_a_failed_fetch_leaves_the_stored_prices_alone(
@@ -158,7 +217,7 @@ def test_the_endpoints_list_refresh_and_override(
         assert client.get("/api/settings/prices").json()["prices"] == []
 
         body = client.post("/api/settings/prices/refresh").json()
-        assert len(body["prices"]) == 5 and body["last_fetch"]
+        assert len(body["prices"]) == 7 and body["last_fetch"]  # the table, and OpenRouter's
 
         only = client.get("/api/settings/prices", params={"provider": "anthropic"}).json()
         assert {p["model"] for p in only["prices"]} == {"claude-opus-5", "claude-haiku-4-5"}

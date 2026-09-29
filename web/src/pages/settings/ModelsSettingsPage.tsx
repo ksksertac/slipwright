@@ -3,20 +3,20 @@ import { describeError, type ProviderSettings } from "../../api/client";
 import {
   useChatGPTLogin,
   useChatGPTLogout,
-  useProviderModels,
   useProviders,
   useSaveProvider,
   useStartChatGPTLogin,
   useTestProvider,
 } from "../../api/hooks";
 import { Copyable } from "../../components/Copyable";
+import { ModelPicker } from "../../components/ModelPicker";
 import { useAuth } from "../../auth/AuthProvider";
 import { ErrorBox, Loading, PageHead } from "../../components/ui";
 import { IconCheck, IconChevron } from "../../components/icons";
 import { useT } from "../../i18n";
 
 /**
- * API keys for the model providers (Anthropic, OpenAI, DeepSeek). Which provider a role
+ * API keys for the model providers (Anthropic, OpenAI, OpenRouter, ...). Which provider a role
  * uses is chosen per project under Agents; the default applies to roles that name none.
  *
  * Every provider is one collapsed row — key, model and default at a glance — that opens
@@ -33,7 +33,7 @@ export function ModelsSettingsPage() {
     <div>
       <PageHead
         title={tx("Models")}
-        subtitle={tx("API keys for Anthropic, OpenAI and DeepSeek.")}
+        subtitle={tx("API keys for Anthropic, OpenAI, OpenRouter and the rest.")}
       />
       <p className="muted">
         {tx(
@@ -73,7 +73,6 @@ function ProviderCard({
   const admin = !!user?.is_admin;
   // a plan one signs in with, not a key one pastes (ChatGPT through the Codex CLI)
   const subscription = p.kind === "subscription";
-  const models = useProviderModels(p.key_set && open ? p.name : null);
   const modelValue = model ?? p.default_model ?? "";
 
   const submit = (e: FormEvent) => {
@@ -182,40 +181,20 @@ function ProviderCard({
           )}
           <div className="field">
             <label htmlFor={`${p.name}-model`}>{tx("Default model")}</label>
-            {models.data && models.data.models.length > 0 ? (
-              <select
-                id={`${p.name}-model`}
-                value={modelValue}
-                disabled={!admin}
-                onChange={(e) => setModel(e.target.value)}
-              >
-                <option value="">{tx("— not set: roles use the model in their profile —")}</option>
-                {!models.data.models.includes(modelValue) && modelValue && (
-                  <option value={modelValue}>{modelValue}</option>
-                )}
-                {models.data.models.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <input
-                id={`${p.name}-model`}
-                type="text"
-                className="mono"
-                value={modelValue}
-                disabled={!admin}
-                onChange={(e) => setModel(e.target.value)}
-                placeholder={
-                  p.key_set
-                    ? tx("model id")
-                    : subscription
-                      ? tx("sign in to list the models")
-                      : tx("add a key to list the models")
-                }
-              />
-            )}
+            <ModelPicker
+              id={`${p.name}-model`}
+              provider={p.key_set && open ? p.name : null}
+              value={modelValue}
+              disabled={!admin}
+              onChange={setModel}
+              placeholder={
+                p.key_set
+                  ? tx("model id — leave empty to use each role's own")
+                  : subscription
+                    ? tx("sign in to list the models")
+                    : tx("add a key to list the models")
+              }
+            />
             <div className="muted small">
               {p.is_default
                 ? tx("What every agent without a pinned provider runs on right now.")

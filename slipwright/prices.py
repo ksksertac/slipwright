@@ -29,8 +29,11 @@ SOURCE_URL = (
 PER_MILLION = 1_000_000
 
 # Slipwright's provider names -> the ones the price table uses in `litellm_provider`.
-# `openrouter` is deliberately absent: Slipwright calls the vendors directly, so an
-# OpenRouter row carries someone else's margin and is not what this installation pays.
+# `openrouter` is absent here, but no longer because its rows carry somebody else's
+# margin: when the call goes through OpenRouter that margin is exactly what is paid.
+# It is absent because OpenRouter publishes its own rates per model, to the token, in
+# the same `/models` response the picker is built from -- first-hand and current, where
+# this table is second-hand and a day behind. See `fetch_openrouter`.
 _PROVIDER_ALIASES: dict[str, tuple[str, ...]] = {
     "anthropic": ("anthropic",),
     "openai": ("openai", "text-completion-openai"),
@@ -109,6 +112,56 @@ def _rows(data: dict[str, Any]) -> list[dict[str, Any]]:
     return out
 
 
+OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models"
+
+
+def fetch_openrouter(
+    *, transport: httpx.BaseTransport | None = None, timeout_s: float = 30.0
+) -> list[dict[str, Any]]:
+    """What OpenRouter charges, from OpenRouter, in the rows ``put_prices`` writes.
+
+    The one vendor that does publish a pricing API, and the one where the public table
+    would be wrong anyway: what an OpenRouter call costs is OpenRouter's rate, not the
+    underlying vendor's. Needs no key -- the catalogue is public.
+
+    Prices come back as strings in dollars per token, which is how a model at three
+    dollars a million reads as ``"0.000003"``. Free models say ``"0"`` and are kept: a
+    call that cost nothing is a fact worth storing, and dropping the row would make it
+    an unpriced call instead.
+    """
+    try:
+        with httpx.Client(transport=transport, timeout=timeout_s) as client:
+            response = client.get(OPENROUTER_MODELS_URL)
+            response.raise_for_status()
+            data = response.json()
+    except (httpx.HTTPError, json.JSONDecodeError, ValueError) as exc:
+        raise PriceFetchError(f"could not read OpenRouter's prices: {exc}") from exc
+    entries = data.get("data") if isinstance(data, dict) else None
+    if not isinstance(entries, list):
+        raise PriceFetchError("OpenRouter's model list is not a list")
+    out: list[dict[str, Any]] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        model, pricing = entry.get("id"), entry.get("pricing")
+        if not model or not isinstance(pricing, dict):
+            continue
+        try:
+            inp = float(pricing["prompt"])
+            outp = float(pricing["completion"])
+        except (KeyError, TypeError, ValueError):
+            continue  # a model priced per request or per image, not per token
+        out.append(
+            {
+                "provider": "openrouter",
+                "model": str(model),
+                "input_usd": inp * PER_MILLION,
+                "output_usd": outp * PER_MILLION,
+            }
+        )
+    return out
+
+
 def candidates(model: str) -> list[str]:
     """The names one model might be stored under, most exact first. A vendor endpoint may
     answer with a routing prefix (``<prefix>/<id>``) where the price table holds the bare
@@ -155,12 +208,14 @@ def index(rows: list[dict[str, Any]]) -> dict[tuple[str, str], dict[str, Any]]:
 
 
 __all__ = [
+    "OPENROUTER_MODELS_URL",
     "PER_MILLION",
     "SOURCE_URL",
     "Price",
     "PriceFetchError",
     "candidates",
     "fetch",
+    "fetch_openrouter",
     "index",
     "resolve",
 ]
