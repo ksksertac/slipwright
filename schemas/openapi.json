@@ -5328,6 +5328,12 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "needs_model": {
+            "default": false,
+            "description": "A key is set but no default model is, and this vendor has no model of its own to fall back on: agents following it as the default would stop.",
+            "title": "Needs Model",
+            "type": "boolean"
           }
         },
         "required": [
@@ -5344,7 +5350,8 @@
           "kind",
           "label",
           "max_tokens",
-          "name"
+          "name",
+          "needs_model"
         ],
         "title": "ProviderSettings",
         "type": "object"

@@ -1738,6 +1738,14 @@ export const TR: Record<string, string> = {
   "Do not show this again": "Bir daha gösterme",
   "Back to setup": "Kuruluma dön",
 
+  // -- a default provider with no model chosen ----------------------------------------------------
+  "no model chosen": "model seçilmedi",
+  "pick a model": "bir model seç",
+  "Pick a default model above. Until you do, agents cannot run: the profiles name Claude models, which {label} does not know.":
+    "Yukarıdan bir varsayılan model seç. Seçene kadar ajanlar çalışamaz: profillerdeki modeller Claude modelleri ve {label} onları tanımıyor.",
+  "Pick a default model above before making {label} the default.":
+    "{label} sağlayıcısını varsayılan yapmadan önce yukarıdan bir varsayılan model seç.",
+
   // -- two-step sign-in ---------------------------------------------------------------------------
   "Turn on two-step sign-in": "İki adımlı girişi aç",
   "A code from your phone after your password. You can also do it later, under Security.":

@@ -1038,6 +1038,10 @@ label {
   background: var(--info-soft);
   color: var(--info-text);
 }
+/* a value that is missing where one is needed: "no model chosen" */
+.text-bad {
+  color: var(--bad-text);
+}
 .gate {
   border: 1px solid var(--accent);
   background: var(--accent-soft);

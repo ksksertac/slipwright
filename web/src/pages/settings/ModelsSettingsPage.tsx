@@ -100,7 +100,7 @@ function ProviderCard({
     ? subscription
       ? tx("sign in to use it")
       : tx("add a key to use it")
-    : modelValue || tx("no default model");
+    : modelValue || (p.needs_model ? tx("pick a model") : tx("no default model"));
 
   return (
     <details
@@ -115,7 +115,11 @@ function ProviderCard({
             {tx(p.label)}
             {p.is_default && <span className="tag">{tx("default")}</span>}
           </span>
-          <span className={`acc-sub${p.key_set && modelValue ? " mono" : ""}`}>{summary}</span>
+          <span
+            className={`acc-sub${p.key_set && modelValue ? " mono" : ""}${p.needs_model ? " text-bad" : ""}`}
+          >
+            {summary}
+          </span>
         </span>
         <span className="acc-right">
           {p.key_set && subscription ? (
@@ -224,6 +228,20 @@ function ProviderCard({
             </div>
           )}
         </div>
+        {p.needs_model && (
+          // the key is in and the models are listed from it, but none is chosen: an agent
+          // following this provider would be sent a Claude name, so it stops instead
+          <div className="callout hint">
+            {p.is_default
+              ? tx(
+                  "Pick a default model above. Until you do, agents cannot run: the profiles name Claude models, which {label} does not know.",
+                  { label: p.label },
+                )
+              : tx("Pick a default model above before making {label} the default.", {
+                  label: p.label,
+                })}
+          </div>
+        )}
         {save.error && <div className="callout error">{describeError(save.error)}</div>}
         {saved && <div className="callout notice">{tx("Saved.")}</div>}
         {admin && (

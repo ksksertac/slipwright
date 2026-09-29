@@ -86,6 +86,11 @@ class ProviderSettings(BaseModel):
     default_model: str | None = Field(
         default=None, description="What roles without a provider of their own run on here."
     )
+    needs_model: bool = Field(
+        default=False,
+        description="A key is set but no default model is, and this vendor has no model of "
+        "its own to fall back on: agents following it as the default would stop.",
+    )
     max_tokens: int | None = Field(default=None, description="Output limit override.")
     default_max_tokens: int = Field(description="The vendor's default output limit.")
     kind: Literal["api_key", "subscription"] = Field(
@@ -345,7 +350,11 @@ class Dismiss(BaseModel):
 
 def _onboarding(request: Request) -> Onboarding:
     eng = engine_for(request)
-    has_key = any(p["key_set"] for p in eng.provider_settings())
+    # done when an agent could actually run: a key alone for DeepSeek, with no model
+    # chosen, still leaves every agent stopping at its first call
+    has_key = any(p["key_set"] for p in eng.provider_settings()) and not (
+        eng.default_model_missing()
+    )
     has_host = any(s.token_set for s in eng.source_settings())
     # the same scope the settings above are read in: somebody on a team is getting the
     # account that invited them set up, not an account of their own

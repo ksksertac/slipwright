@@ -36,6 +36,14 @@ OPENROUTER = "openrouter"
 # a ChatGPT plan, through OpenAI's own Codex CLI rather than an API key (providers/codex.py)
 CHATGPT = "chatgpt"
 DEFAULT_PROVIDER = ANTHROPIC
+#: Whose model names a profile's roles carry when they name no provider of their own.
+#: Every profile a project starts from is written for Claude, so a role that follows the
+#: default provider brings a Claude model name with it -- one that means nothing anywhere
+#: else. It was once sent to DeepSeek as written, and the development ran, priced and
+#: showed itself as if it were on Anthropic.
+PROFILE_VENDOR = ANTHROPIC
+#: What Codex is asked for when nothing is chosen: whatever the ChatGPT plan gives it.
+PLAN_DEFAULT = "default"
 
 
 @dataclass(frozen=True)
@@ -220,6 +228,30 @@ CredentialsResolver = Callable[[str], Credentials | None]
 RoleRouting = Callable[[str], tuple[str, str] | None]
 
 
+def model_on_default(name: str, chosen: str | None, profile_model: str) -> str | None:
+    """The model a role without a provider of its own runs on at provider ``name``.
+
+    The default model chosen for that provider under Settings -> Models, when there is
+    one. Without it, the profile's own model -- but only on the vendor it was written for;
+    a plan's own default for ChatGPT; and for anybody else nothing, because there is no
+    name that vendor would understand. ``None`` is a question for the person, not a
+    guess: see ``model_missing``.
+    """
+    if chosen:
+        return chosen
+    if name == PROFILE_VENDOR:
+        return profile_model
+    if name == CHATGPT:
+        return PLAN_DEFAULT
+    return None
+
+
+def model_missing(name: str) -> str:
+    """What a development says when it stops for want of a model."""
+    label = PROVIDERS[name].label if name in PROVIDERS else name
+    return f"no model chosen for {label}: pick its default model under Settings → Models"
+
+
 class RoutingProvider:
     """Dispatches each request to the provider its role names, building clients lazily
     from whatever credentials the resolver returns at that moment (so a key entered in
@@ -278,7 +310,10 @@ class RoutingProvider:
         if provider:
             return provider, model
         name = self._default()
-        return name, self._default_model(name) or model
+        chosen = model_on_default(name, self._default_model(name), model)
+        if chosen is None:
+            raise ProviderUnavailableError(model_missing(name))
+        return name, chosen
 
     def complete(self, request: ModelRequest) -> ModelResponse:
         name, model = self.route(request.role.value, request.provider, request.model)
@@ -298,6 +333,8 @@ __all__ = [
     "CHATGPT",
     "DEEPSEEK",
     "DEFAULT_PROVIDER",
+    "PLAN_DEFAULT",
+    "PROFILE_VENDOR",
     "GEMINI",
     "GLM",
     "MINIMAX",
@@ -311,6 +348,8 @@ __all__ = [
     "RoleRouting",
     "RoutingProvider",
     "build_client",
+    "model_missing",
+    "model_on_default",
     "list_models",
     "provider_names",
 ]
