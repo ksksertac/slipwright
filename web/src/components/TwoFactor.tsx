@@ -62,6 +62,7 @@ export function TwoFactorSetup({ onDone }: { onDone?: () => void }) {
       </details>
       <form className="row twofa-confirm" onSubmit={submit}>
         <input
+          type="text"
           inputMode="numeric"
           autoComplete="one-time-code"
           placeholder="123456"

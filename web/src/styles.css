@@ -2150,6 +2150,39 @@ button.linkish:hover {
 .login .field {
   margin-bottom: 18px;
 }
+/* the second step's one field: six digits read off a phone, so they are drawn large,
+   evenly spaced and centred -- the shape of what is being copied */
+.login input.login-code {
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 24px;
+  font-weight: 500;
+  letter-spacing: 0.4em;
+  /* the spacing trails the last digit too; this puts the group back in the middle */
+  padding: 12px 14px 12px calc(14px + 0.4em);
+}
+.login input.login-code::placeholder {
+  color: var(--text-3);
+  opacity: 0.45;
+}
+.login-code-help {
+  margin-top: 8px;
+  text-align: center;
+}
+.login .field:has(.login-code) label {
+  text-align: center;
+}
+/* "sign in as somebody else" is a way back, not the next step: it should not shout louder
+   than the button above it */
+.login .text-btn {
+  font-size: 13px;
+  color: var(--text-2);
+  transition: color 0.12s;
+}
+.login .text-btn:hover {
+  color: var(--accent);
+  text-decoration: none;
+}
 .login .btn.primary {
   padding: 12px 16px;
   border-radius: 10px;
