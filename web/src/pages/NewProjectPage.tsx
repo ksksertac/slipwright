@@ -564,8 +564,13 @@ export function NewProjectPage() {
               {tx("Back")}
             </button>
           )}
+          {/* Two buttons in the same place, keyed apart. Unkeyed, React keeps one element and
+            flips its type: the click that moves to the last step re-renders it as "submit"
+            before the browser acts on the click, and the project is created there and then,
+            without its first development. */}
           {at < last ? (
             <button
+              key="continue"
               className="btn primary"
               type="button"
               disabled={!steps[at]!.ready}
@@ -574,7 +579,12 @@ export function NewProjectPage() {
               {tx("Continue")}
             </button>
           ) : (
-            <button className="btn primary" type="submit" disabled={!canSubmit || create.isPending}>
+            <button
+              key="create"
+              className="btn primary"
+              type="submit"
+              disabled={!canSubmit || create.isPending}
+            >
               {create.isPending
                 ? source === "github"
                   ? tx("Cloning…")

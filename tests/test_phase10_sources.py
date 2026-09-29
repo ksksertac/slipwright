@@ -485,3 +485,52 @@ def test_a_project_on_a_source_the_account_has_no_token_for_says_so(
     )
     with pytest.raises(SourceError, match="Bitbucket"):
         engine.host_for(project)
+
+
+def test_a_long_description_does_not_lose_the_repository(
+    store: JobStore, worktrees_root: Path, seed: Profile
+) -> None:
+    """GitHub takes 350 characters of description and refuses the request over that.
+
+    It arrived as "Repository creation failed" at the end of the new-project form, after
+    four pages of questions, because a project's description is somebody's paragraph about
+    what they are building and GitHub's is a one-line summary. The paragraph is clipped:
+    losing the tail of a sentence is a smaller thing than losing the repository, and the
+    whole of it is kept on the project either way.
+    """
+    from slipwright.sources.github import DESCRIPTION_LIMIT
+
+    sent: dict[str, Any] = {}
+
+    def host(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/user":
+            return httpx.Response(200, json={"login": "ada"})
+        sent.update(json.loads(request.content))
+        return httpx.Response(
+            201,
+            json={
+                "full_name": "ada/notes",
+                "private": True,
+                "default_branch": "main",
+                "html_url": "https://github.com/ada/notes",
+                "description": sent.get("description"),
+            },
+        )
+
+    engine = _engine(store, worktrees_root, seed)
+    engine.http_transport = httpx.MockTransport(host)
+    engine.update_source_settings(GITHUB, token="ghp_token")
+
+    paragraph = "Görevler herkeste ortak görünecek. " * 30  # comfortably over the limit
+    assert len(paragraph) > DESCRIPTION_LIMIT
+    made = engine.source_host(GITHUB).create_repo("notes", description=paragraph)
+
+    assert made.full_name == "ada/notes", "the repository was created, not refused"
+    assert len(sent["description"]) <= DESCRIPTION_LIMIT
+    assert sent["description"].endswith("…"), "and it shows that it was cut"
+    assert sent["description"].startswith("Görevler herkeste")
+
+    # a description that fits is sent as it is, with nothing added to it
+    short = "A small notes app"
+    engine.source_host(GITHUB).create_repo("notes", description=short)
+    assert sent["description"] == short

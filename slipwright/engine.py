@@ -610,9 +610,31 @@ class Engine:
             self.store.set_setting(f"providers.{name}.api_key", api_key.strip(), secret=True)
         if make_default:
             self.store.set_setting("providers.default", name)
+        else:
+            self.adopt_as_default(name)
         # a changed key or URL must not keep serving from a stale cached client
         if isinstance(self._provider, RoutingProvider):
             self._provider = None
+
+    def adopt_as_default(self, name: str) -> bool:
+        """The first provider that can actually answer becomes the default.
+
+        Anthropic is the default before anybody has connected anything, which is a fine
+        starting point and a trap the moment somebody connects something else: they sign
+        in with a ChatGPT plan, the page says so, and every agent still goes to Anthropic
+        and fails with "no API key". Nobody thinks of "default" as a separate decision
+        they have to make, because until they have two providers it is not one.
+
+        Only ever while nothing works: once a default can answer, changing it is the
+        person's business and the Models page has a button for it.
+        """
+        if self.provider_credentials(name) is None:
+            return False
+        if self.provider_credentials(self.default_provider_name()) is not None:
+            return False
+        self.store.set_setting("providers.default", name)
+        log.info("nothing else was connected, so %s is now the default provider", name)
+        return True
 
     def provider_models(self, name: str) -> list[str]:
         creds = self.provider_credentials(name)

@@ -287,7 +287,10 @@ def test_credentials_come_from_settings_then_environment(
     rows = {r["name"]: r for r in engine.provider_settings()}
     assert rows["openai"]["key_set"] and rows["openai"]["key_hint"] == "…ored"
     assert rows["openai"]["key_from_env"] is False
-    assert rows["anthropic"]["is_default"] is True
+    # the first provider that can answer took the default with it: nothing else could,
+    # and Anthropic being the default out of the box is a starting point, not a choice
+    assert rows["openai"]["is_default"] is True
+    assert rows["anthropic"]["is_default"] is False
     engine.update_provider_settings("deepseek", api_key="sk-d", make_default=True)
     assert engine.default_provider_name() == "deepseek"
     engine.update_provider_settings("openai", clear_key=True)
@@ -683,3 +686,40 @@ def test_the_profile_table_says_where_a_role_really_runs(engine: Engine, seed: P
         assert expected in form, expected
     # the box shows what answers, not what the profile happens to carry
     assert "value={run.model}" in form
+
+
+def test_the_first_provider_you_connect_becomes_the_default(
+    engine: Engine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Nobody thinks of "default" as a decision until they have two providers.
+
+    Anthropic is the default before anything is connected, which is fine until somebody
+    connects something else: they paste a DeepSeek key, the page says it is set, and every
+    agent still goes to Anthropic and fails with "no API key for Anthropic". So the first
+    provider that can actually answer takes the default with it.
+    """
+    for spec in PROVIDERS.values():
+        monkeypatch.delenv(spec.env_var, raising=False)
+    assert engine.default_provider_name() == "anthropic"
+    assert engine.provider_credentials("anthropic") is None
+
+    engine.update_provider_settings("deepseek", api_key="sk-mine")
+    assert engine.default_provider_name() == "deepseek"
+
+    # and it is taken only while nothing works: a second key does not move it back
+    engine.update_provider_settings("openai", api_key="sk-other")
+    assert engine.default_provider_name() == "deepseek"
+
+    # changing it stays the person's business
+    engine.update_provider_settings("openai", make_default=True)
+    assert engine.default_provider_name() == "openai"
+
+
+def test_a_provider_with_nothing_behind_it_does_not_take_the_default(
+    engine: Engine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Saving a base URL or a token limit is not connecting anything."""
+    for spec in PROVIDERS.values():
+        monkeypatch.delenv(spec.env_var, raising=False)
+    engine.update_provider_settings("deepseek", base_url="https://elsewhere.example")
+    assert engine.default_provider_name() == "anthropic", "nothing can answer yet"
