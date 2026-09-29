@@ -1724,6 +1724,54 @@ export const TR: Record<string, string> = {
   "Start your first project": "İlk projeni aç",
   "Pick a repository, or let Slipwright open a new one.":
     "Bir depo seç ya da Slipwright senin için yeni bir tane açsın.",
+  "Continue setup": "Kuruluma devam et",
+  "Step {n} of {total}": "Adım {n} / {total}",
+  "Already done": "Bu tamam",
+  "Skip for now": "Şimdilik atla",
+  "Do not show this again": "Bir daha gösterme",
+  "Back to setup": "Kuruluma dön",
+
+  // -- two-step sign-in ---------------------------------------------------------------------------
+  "Turn on two-step sign-in": "İki adımlı girişi aç",
+  "A code from your phone after your password. You can also do it later, under Security.":
+    "Şifreden sonra telefonundan bir kod. İstersen sonra da Güvenlik'ten açabilirsin.",
+  "Open an authenticator app on your phone — Google Authenticator, Microsoft Authenticator, 1Password or any other.":
+    "Telefonunda bir doğrulama uygulaması aç — Google Authenticator, Microsoft Authenticator, 1Password ya da başka biri.",
+  "Scan this code with it.": "Bu kodu onunla tara.",
+  "Type the six digits it shows.": "Gösterdiği altı haneyi yaz.",
+  "QR code for your authenticator app": "Doğrulama uygulaman için QR kod",
+  "Cannot scan? Enter the key by hand": "Taratamıyor musun? Anahtarı elle gir",
+  "Code from the app": "Uygulamadaki kod",
+  "Turn on": "Aç",
+  "Turn off": "Kapat",
+  "Two-step sign-in is on.": "İki adımlı giriş açık.",
+  "Keep these recovery codes somewhere safe. Each one gets you in once if you lose your phone. They will not be shown again.":
+    "Bu kurtarma kodlarını güvenli bir yerde sakla. Telefonunu kaybedersen her biri seni bir kez içeri alır. Bir daha gösterilmeyecekler.",
+  Download: "İndir",
+  "I have saved them": "Kaydettim",
+  "How you sign in. Yours alone: nobody else on the account can see it.":
+    "Nasıl giriş yaptığın. Yalnızca senin: hesaptaki başka kimse bunu göremez.",
+  "Two-step sign-in": "İki adımlı giriş",
+  on: "açık",
+  "After your password, a six-digit code from an app on your phone. Somebody who learns your password still cannot get in.":
+    "Şifrenden sonra telefonundaki uygulamadan altı haneli bir kod. Şifreni öğrenen biri yine de giremez.",
+  "Set up two-step sign-in": "İki adımlı girişi kur",
+  "Signing in asks for a code from your app.": "Giriş yaparken uygulamandaki kod da soruluyor.",
+  "{n} recovery code(s) left.": "{n} kurtarma kodun kaldı.",
+  "Running low: turn it off and on again for a fresh set.":
+    "Azalıyor: yeni bir set için kapatıp yeniden aç.",
+  "Turn two-step sign-in off": "İki adımlı girişi kapat",
+  "Code or recovery code": "Kod ya da kurtarma kodu",
+  "Code from your authenticator app": "Doğrulama uygulamandaki kod",
+  "Lost your phone? A recovery code works here too.":
+    "Telefonunu mu kaybettin? Kurtarma kodu da burada çalışır.",
+  Verify: "Doğrula",
+  "Sign in as somebody else": "Başka biri olarak giriş yap",
+  "Done. Now sign in — your account asks for the code from your app as well.":
+    "Tamam. Şimdi giriş yap — hesabın uygulamandaki kodu da istiyor.",
+  "On. Turn it off only for somebody who has lost both their phone and their recovery codes.":
+    "Açık. Yalnızca hem telefonunu hem kurtarma kodlarını kaybetmiş biri için kapat.",
+  "Turn off two-step sign-in for {name}?": "{name} için iki adımlı giriş kapatılsın mı?",
   "Example: a Notes app": "Örnek: Notlar uygulaması",
   "this is the example project: it is there to read, not to run":
     "bu örnek proje: okumak için var, çalıştırmak için değil",

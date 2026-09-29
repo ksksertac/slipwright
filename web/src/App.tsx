@@ -10,6 +10,7 @@ import {
   VerifyEmailPage,
 } from "./pages/AccountPages";
 import { DashboardPage } from "./pages/DashboardPage";
+import { SecurityPage } from "./pages/SecurityPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
 import { NewProjectPage } from "./pages/NewProjectPage";
 import { ProjectPage } from "./pages/ProjectPage";
@@ -68,6 +69,7 @@ export function App() {
         <Route path="/notifications/:tab" element={<NotificationsPage />} />
         {/* the old two-part links still land somewhere sensible */}
         <Route path="/notifications/:tab/:part" element={<NotificationsPage />} />
+        <Route path="/security" element={<SecurityPage />} />
         <Route path="/remote" element={<RemoteControlPage />} />
         <Route path="/remote/:tab" element={<RemoteControlPage />} />
         <Route

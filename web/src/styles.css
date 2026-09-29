@@ -5228,6 +5228,114 @@ tr.run-detail td {
   margin-right: 8px;
 }
 
+/* the same steps, one at a time, for somebody who has just arrived */
+.modal.wizard {
+  width: min(520px, 100%);
+}
+.wizard-rail {
+  list-style: none;
+  margin: 0;
+  padding: 14px 20px 0;
+  display: flex;
+  align-items: center;
+}
+.wizard-rail li {
+  display: flex;
+  align-items: center;
+  flex: 1;
+}
+.wizard-rail li:last-child {
+  flex: 0;
+}
+/* the line between one step and the next */
+.wizard-rail li:not(:last-child)::after {
+  content: "";
+  flex: 1;
+  height: 2px;
+  margin: 0 6px;
+  background: var(--line);
+}
+.wizard-rail li.done:not(:last-child)::after {
+  background: var(--good-text);
+  opacity: 0.5;
+}
+.wizard-rail button {
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+}
+.wizard-rail .onboarding-mark {
+  font-size: 12px;
+  font-weight: 600;
+}
+.wizard-rail li.done .onboarding-mark {
+  background: var(--good-soft);
+  color: var(--good-text);
+}
+.wizard-rail li.on .onboarding-mark {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 0 0 3px var(--surface), 0 0 0 5px var(--accent);
+}
+.wizard-body {
+  text-align: center;
+  padding: 24px 28px 28px;
+}
+.wizard-body h2 {
+  font-size: 18px;
+  margin: 12px 0 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.wizard-body > p {
+  margin: 0 auto 18px;
+  max-width: 380px;
+}
+.wizard-icon {
+  width: 56px;
+  height: 56px;
+  margin: 8px auto 0;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  background: var(--surface-3);
+  color: var(--accent);
+}
+.wizard-icon svg {
+  width: 26px;
+  height: 26px;
+}
+.wizard-body .btn svg {
+  width: 14px;
+  height: 14px;
+}
+.wizard-done {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--good-text);
+  font-weight: 500;
+}
+.wizard-done svg {
+  width: 16px;
+  height: 16px;
+}
+.wizard-foot {
+  justify-content: space-between;
+  align-items: center;
+}
+/* on the page a step sent somebody to: the way back to the wizard */
+.setup-return {
+  margin-bottom: 14px;
+}
+.setup-return svg {
+  width: 14px;
+  height: 14px;
+}
+
 /* -- the Phases tab: one accordion per phase ------------------------------------------
    Every phase of a development leaves a dozen entries behind -- the diffs, the gates, the
    sections its specialist read, the review. Shown at once that is a wall; a phase is a
@@ -5747,4 +5855,57 @@ tr.run-detail td {
   border-radius: var(--radius);
   background: var(--accent-soft);
   color: var(--accent);
+}
+
+/* two-step sign-in: the QR code and the recovery codes, in the wizard and on Security */
+.twofa {
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+}
+.twofa-steps {
+  margin: 0;
+  padding-left: 18px;
+  text-align: left;
+  justify-self: stretch;
+}
+/* white behind the code whatever the theme: a scanner reads contrast, not the palette */
+.twofa-qr {
+  width: 180px;
+  height: 180px;
+  background: #fff;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  image-rendering: pixelated;
+}
+.twofa-secret {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  word-break: break-all;
+}
+.twofa-confirm {
+  gap: 8px;
+  justify-content: center;
+}
+.twofa-confirm input {
+  width: 130px;
+  text-align: center;
+  font-size: 18px;
+  letter-spacing: 0.2em;
+}
+.twofa-codes {
+  list-style: none;
+  margin: 0;
+  padding: 12px 16px;
+  display: grid;
+  grid-template-columns: repeat(2, auto);
+  gap: 6px 24px;
+  background: var(--surface-3);
+  border-radius: var(--radius);
+}
+.twofa-codes code {
+  font-size: 14px;
+  letter-spacing: 0.05em;
 }

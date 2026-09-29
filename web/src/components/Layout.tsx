@@ -24,11 +24,13 @@ import {
   IconUsers,
   IconBell,
   IconMessage,
+  IconShield,
 } from "./icons";
 import { useTheme, type Theme } from "./theme";
 import { useT } from "../i18n";
 import { SUPPORT_DESK } from "../features";
 import { BuildWatch } from "./BuildWatch";
+import { SetupReturn } from "./Onboarding";
 
 const THEMES: { value: Theme; icon: React.ReactNode; title: string }[] = [
   { value: "light", icon: <IconSun />, title: "Light" },
@@ -153,6 +155,10 @@ export function Layout() {
           <NavLink to="/remote" data-nav="remote">
             <IconMessage /> {tx("Remote control")}
           </NavLink>
+          {/* the person's own sign-in, so ungated: a member has a password too */}
+          <NavLink to="/security" data-nav="security">
+            <IconShield /> {tx("Security")}
+          </NavLink>
           {owner && user?.is_admin && (
             <NavLink to="/settings/users" data-nav="users">
               <IconUsers /> {tx("Users")}
@@ -199,6 +205,7 @@ export function Layout() {
         <main className="content">
           <DefaultPasswordBanner />
           <UnverifiedBanner />
+          <SetupReturn />
           <Outlet />
         </main>
       </div>
