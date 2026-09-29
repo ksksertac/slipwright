@@ -23,6 +23,7 @@ import {
   IconTicket,
   IconUsers,
   IconBell,
+  IconMessage,
 } from "./icons";
 import { useTheme, type Theme } from "./theme";
 import { useT } from "../i18n";
@@ -120,6 +121,12 @@ export function Layout() {
               owner the links above render nothing, so this lands back beside Agents. */}
           <NavLink to="/notifications" data-nav="notifications">
             <IconBell /> {tx("Notifications")}
+          </NavLink>
+          {/* beside Notifications, because both are about the same chat -- but not the
+              same job: a group is told, and this is where somebody works from their own
+              chat. Ungated like Notifications, since a member links their account here */}
+          <NavLink to="/remote" data-nav="remote">
+            <IconMessage /> {tx("Remote control")}
           </NavLink>
           {owner && user?.is_admin && (
             <NavLink to="/settings/users" data-nav="users">

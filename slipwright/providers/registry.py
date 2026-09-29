@@ -62,7 +62,7 @@ PROVIDERS: dict[str, ProviderSpec] = {
     ),
     OPENAI: ProviderSpec(
         name=OPENAI,
-        label="OpenAI (ChatGPT)",
+        label="OpenAI (GPT)",
         env_var="OPENAI_API_KEY",
         default_base_url="https://api.openai.com/v1",
         supports_effort=True,

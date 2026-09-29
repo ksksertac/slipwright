@@ -22,6 +22,7 @@ import { AgentDetailPage } from "./pages/AgentDetailPage";
 import { UsersSettingsPage } from "./pages/settings/UsersSettingsPage";
 import { EmailSettingsPage } from "./pages/settings/EmailSettingsPage";
 import { NotificationsPage } from "./pages/settings/NotificationsPage";
+import { RemoteControlPage } from "./pages/RemoteControlPage";
 import { SupportPage } from "./pages/SupportPage";
 import { SUPPORT_DESK } from "./features";
 import { useT } from "./i18n";
@@ -65,7 +66,9 @@ export function App() {
         <Route path="/settings/email/:tab" element={<EmailSettingsPage />} />
         <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/notifications/:tab" element={<NotificationsPage />} />
+        {/* the old two-part links still land somewhere sensible */}
         <Route path="/notifications/:tab/:part" element={<NotificationsPage />} />
+        <Route path="/remote" element={<RemoteControlPage />} />
         <Route
           path="/support"
           element={SUPPORT_DESK ? <SupportPage /> : <Navigate to="/" replace />}

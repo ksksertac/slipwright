@@ -364,7 +364,10 @@ def test_provider_settings_endpoints(
     assert [r["name"] for r in rows] == [n for n, s in PROVIDERS.items() if s.kind == "api_key"]
     assert rows[0]["name"] == "anthropic"  # the built-in default comes first
     assert all(r["key_set"] is False for r in rows)
-    assert rows[1]["label"] == "OpenAI (ChatGPT)" and rows[2]["env_var"] == "DEEPSEEK_API_KEY"
+    by_name = {r["name"]: r for r in rows}
+    # "GPT", not "ChatGPT": this is the API key, and ChatGPT is the subscription beside it
+    assert by_name["openai"]["label"] == "OpenAI (GPT)"
+    assert by_name["deepseek"]["env_var"] == "DEEPSEEK_API_KEY"
     assert client.post("/api/settings/providers/openai/test").status_code == 400
     assert client.get("/api/settings/providers/bogus/models").status_code == 404
 
