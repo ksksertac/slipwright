@@ -1552,6 +1552,7 @@ export const TR: Record<string, string> = {
   "Sending…": "Gönderiliyor…",
   "Sent. Check your inbox.": "Gönderildi. Gelen kutuna bak.",
   "Back to sign in": "Girişe dön",
+  "you@example.com": "sen@ornek.com",
   "Forgot your password?": "Şifreni mi unuttun?",
   "We will mail you a link to set a new one.":
     "Yeni bir şifre belirlemen için sana bağlantı yollayacağız.",

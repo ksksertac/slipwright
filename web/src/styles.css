@@ -2204,9 +2204,26 @@ button.linkish:hover {
     inset 0 1px 0 rgb(255 255 255 / 22%),
     0 10px 24px -6px rgb(var(--glow) / 0.75);
 }
+/* waiting for input rather than broken: a dimmed gradient with grey text read as mud, so
+   an empty form shows the button as a quiet outline of the colour it will become */
 .login .btn.primary:disabled {
-  opacity: 0.55;
-  box-shadow: none;
+  opacity: 1;
+  background: var(--accent-soft);
+  color: color-mix(in srgb, var(--accent) 70%, var(--text-3));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+/* the way back out of an account page: an arrow says which way before the words do */
+.login .account-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.login .account-back::before {
+  content: "←";
+  transition: transform 0.15s;
+}
+.login .account-back:hover::before {
+  transform: translateX(-3px);
 }
 .login .account-foot a {
   color: var(--text-2);
