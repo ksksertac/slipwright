@@ -57,9 +57,20 @@ export function LoginPage() {
           </div>
         )}
         {noUsers ? (
+          /* A server somebody has just started. The first account is the administrator,
+             so this is a sign-up rather than an invitation -- and it happens here rather
+             than in a terminal, which is what it used to ask for. */
           <div className="callout hint" style={{ display: "block" }}>
-            {tx("No login exists yet. Create the first (admin) user on the server:")}
-            <pre style={{ marginTop: 8 }}>slipwright user add &lt;name&gt;</pre>
+            {tx("Nobody has an account here yet. The first one is the administrator's.")}
+            <div className="row" style={{ marginTop: 10 }}>
+              <Link className="btn primary" to="/signup">
+                {tx("Create the first account")}
+              </Link>
+            </div>
+            <details style={{ marginTop: 10 }}>
+              <summary className="small muted">{tx("Or on the server itself")}</summary>
+              <pre style={{ marginTop: 8 }}>slipwright user add &lt;name&gt;</pre>
+            </details>
           </div>
         ) : (
           <form onSubmit={submit}>

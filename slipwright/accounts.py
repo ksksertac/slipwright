@@ -126,7 +126,16 @@ class Accounts:
         ):
             raise TooManyAttempts("signup")
         user = self.store.create_user(
-            (name or address.split("@")[0]).strip(), password, email=address, is_admin=False
+            (name or address.split("@")[0]).strip(),
+            password,
+            email=address,
+            # None, not False: the store's own rule is that the first account in an empty
+            # database is the administrator, and somebody who has just started the server
+            # is that first account. Saying False here made a fresh installation hand out
+            # an account that could not reach Models, Email or Users -- so the only way in
+            # was a command in a terminal, which is a poor welcome and was never intended.
+            # On an installation that already has an administrator, this is still False.
+            is_admin=None,
         )
         self.send_verification(user, lang=lang)
         return user

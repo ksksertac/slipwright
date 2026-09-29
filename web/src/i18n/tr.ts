@@ -1726,6 +1726,10 @@ export const TR: Record<string, string> = {
   // -- notifications ------------------------------------------------------------------------------------
   "Connecting": "Bağlantı",
   "Asking where things are": "Durum sormak",
+  "Nobody has an account here yet. The first one is the administrator's.":
+    "Burada henüz kimsenin hesabı yok. İlk hesap yöneticinin olur.",
+  "Create the first account": "İlk hesabı oluştur",
+  "Or on the server itself": "Ya da doğrudan sunucuda",
   "Remote control": "Uzaktan Yönet",
   "Run it from Telegram, without opening this page.": "Telegram'dan yönet, bu sayfayı açmadan.",
   "Link your Telegram account once and the bot answers where things stand, starts a development when you ask it to, and brings your own gates to you with two buttons. It reads your account and nobody else's.":
