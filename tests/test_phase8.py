@@ -327,12 +327,13 @@ def test_legacy_dashboard_is_gone_and_readme_documents_the_flow() -> None:
     for expected in (
         "npm run build",
         "slipwright user add",
-        "Settings → GitHub",
+        # the page was renamed when Bitbucket joined GitHub; /settings/github redirects
+        "Settings → Sources",
         "New project",
         "New development",
-        "Approve the gates",
+        "Answer the gates",
         "Tests",
-        "PR link",
+        "pull request link",
     ):
         assert expected in readme, expected
 
