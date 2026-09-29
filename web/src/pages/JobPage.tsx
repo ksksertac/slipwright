@@ -37,7 +37,7 @@ import { DeploymentGate } from "../components/DeploymentGate";
 import { ProfileForm } from "../components/ProfileForm";
 import { StackPanel } from "../components/StackPanel";
 import { useToast } from "../components/Toast";
-import { Empty, ErrorBox, Loading, StateBadge, formatTime } from "../components/ui";
+import { Empty, ErrorBox, formatTime, hasFinished, Loading, StateBadge } from "../components/ui";
 import { sentenceCase, useT } from "../i18n";
 import { SayProvider, useSay } from "../i18n/said";
 import { Copyable } from "../components/Copyable";
@@ -91,6 +91,7 @@ function JobHead({ job, projectId }: { job: Job; projectId: string }) {
               <IconExternal /> {tx("Pull request")}
             </a>
           )}
+          <StopAction job={job} />
           <DeleteJobButton job={job} projectId={projectId} />
         </div>
       </div>
@@ -256,7 +257,7 @@ function DeleteJobButton({ job, projectId }: { job: Job; projectId: string }) {
   const toast = useToast();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
-  if (job.state !== "done" && job.state !== "failed") return null;
+  if (!hasFinished(job.state)) return null;
   return (
     <>
       <button className="btn danger" onClick={() => setOpen(true)}>
@@ -328,7 +329,6 @@ function GatePanel({ job }: { job: Job }) {
           {tx("Waiting for your approval of the {pending}", { pending: tx(pending) })}
         </strong>
         <GateActions job={job} compact />
-        <StopAction job={job} compact />
       </div>
       <Recommendation job={job} detailed />
       {job.state === "awaiting_backlog_approval" && <BacklogGate job={job} />}

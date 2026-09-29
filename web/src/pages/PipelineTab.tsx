@@ -23,7 +23,12 @@ import {
 } from "../api/hooks";
 import { AgentIcon, DomainBadge, ROLE_LABEL } from "../components/agents";
 import { BulkBar } from "../components/BulkBar";
-import { Recommendation, RetryActions, SkipDeploymentButton } from "../components/GateActions";
+import {
+  Recommendation,
+  RetryActions,
+  SkipDeploymentButton,
+  StopAction,
+} from "../components/GateActions";
 import { DeploymentGate } from "../components/DeploymentGate";
 import { DesignGate } from "../components/DesignGate";
 import { Detail } from "../components/Detail";
@@ -49,16 +54,7 @@ import {
 } from "../components/stages";
 import { StepDetailView } from "../components/StepDetail";
 import { useToast } from "../components/Toast";
-import {
-  Empty,
-  ErrorBox,
-  Loading,
-  Pager,
-  ProgressBar,
-  StateBadge,
-  sentence,
-  timeAgo,
-} from "../components/ui";
+import { Empty, ErrorBox, hasFinished, Loading, Pager, ProgressBar, sentence, StateBadge, timeAgo } from "../components/ui";
 import { useT, type T } from "../i18n";
 import { useSay } from "../i18n/said";
 import { JobDetail } from "./JobPage";
@@ -273,6 +269,13 @@ function LaneRow({
             <LaneRetry jobId={lane.job_id} />
           </span>
         )}
+        {/* stopping is wanted most while it is running and costing money, which is
+            exactly when the lane is shut and nothing else on this card offers it */}
+        {!open && !hasFinished(lane.state) && (
+          <span onClick={stop}>
+            <LaneStop jobId={lane.job_id} />
+          </span>
+        )}
         {/* the button is what a keyboard reaches; the click on the head is the mouse's */}
         <button type="button" className="lane-toggle" aria-expanded={open}>
           {tx("Details")}
@@ -454,6 +457,11 @@ function BriefPart({
 function LaneRetry({ jobId }: { jobId: string }) {
   const job = useJob(jobId);
   return job.data ? <RetryActions job={job.data} /> : null;
+}
+
+function LaneStop({ jobId }: { jobId: string }) {
+  const job = useJob(jobId);
+  return job.data ? <StopAction job={job.data} compact /> : null;
 }
 
 /** Card labels come from the server in English; the fixed ones translate, a phase

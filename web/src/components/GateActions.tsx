@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { describeError, type Job } from "../api/client";
+import { hasFinished } from "./ui";
 import {
   useApprove,
   useCancelJob,
@@ -56,7 +57,7 @@ export function StopAction({ job, compact = false }: { job: Job; compact?: boole
   const stop = useCancelJob(job.id);
   const team = useMyTeam();
   const [sure, setSure] = useState(false);
-  const running = !["done", "failed", "cancelled"].includes(job.state);
+  const running = !hasFinished(job.state);
   if (!running || !isOwner(team.data)) return null;
   if (!sure) {
     return (
