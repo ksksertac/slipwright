@@ -1253,6 +1253,11 @@ export const TR: Record<string, string> = {
   "{1} test cases proposed": "{1} test senaryosu önerildi",
   "No test cases came back — asking again": "Cevapta test senaryosu yoktu — yeniden soruluyor",
   "Tests written and passing ({1} files): {2}": "Testler yazıldı ve geçiyor ({1} dosya): {2}",
+  "{1} deployment scripts proposed for {2}": "{2} için {1} dağıtım betiği önerildi",
+  "{1} deployment files written, in {2} parts: {3}":
+    "{1} dağıtım dosyası yazıldı, {2} parçada: {3}",
+  "{1} deployment files written: {2}": "{1} dağıtım dosyası yazıldı: {2}",
+  "Nothing to deploy: {1}": "Dağıtılacak bir şey yok: {1}",
   "Jira, second try: {1}": "Jira, ikinci deneme: {1}",
   "Jira: {1}": "Jira: {1}",
   "Jira: {1} updates": "Jira: {1} güncelleme",
@@ -1724,7 +1729,7 @@ export const TR: Record<string, string> = {
     "bu örnek proje: okumak için var, çalıştırmak için değil",
 
   // -- notifications ------------------------------------------------------------------------------------
-  "Connecting": "Bağlantı",
+  Connecting: "Bağlantı",
   "Asking where things are": "Durum sormak",
   "Nobody has an account here yet. The first one is the administrator's.":
     "Burada henüz kimsenin hesabı yok. İlk hesap yöneticinin olur.",

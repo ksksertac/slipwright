@@ -293,8 +293,14 @@ def a_remote(at: Path) -> Path:
 
 def _phase_of(req: Any) -> int:
     """Which phase a specialist is being asked for, from the context it is handed."""
-    found = re.search(r'"current_phase":\s*\{\s*"number":\s*(\d+)', req.prompt)
-    return int(found.group(1)) if found else 1
+    # read as JSON rather than matched: the context is written with sorted keys, so the
+    # number is wherever the alphabet puts it, not first
+    marker = "Context:\n"
+    start = req.prompt.find(marker)
+    if start < 0:
+        return 1
+    context, _ = json.JSONDecoder().raw_decode(req.prompt, start + len(marker))
+    return int((context.get("current_phase") or {}).get("number", 1))
 
 
 def the_script(profile: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -447,6 +453,36 @@ def the_script(profile: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]
             "changes": [{"path": "tests/test_search.py", "content": TESTS}],
         }
 
+    # what the supervisor says, gate by gate: one answer for all of them reads, on camera,
+    # as a supervisor that is not looking
+    reasons = {
+        "backlog": ["Every part of the request has a task", "Nothing asked for is missing"],
+        "architecture": [
+            "Every task in the backlog has a phase",
+            "The API change is additive: existing callers see the same list",
+        ],
+        "design": ["Both screens cover the backlog's tasks", "Empty and no-match states drawn"],
+        "test cases": [
+            "Each backlog task has a case that exercises it",
+            "Nothing tests a behaviour the plan did not ask for",
+        ],
+        "written tests": ["All three cases are written and green", "They test through the API"],
+        "deployment": [
+            "The target matches the stack: one container, no state",
+            "Secrets come from the environment, none in the files",
+        ],
+    }
+
+    def supervise(req: Any) -> dict[str, Any]:
+        found = re.search(r'"gate":\s*"([^"]+)"', req.prompt)
+        return {
+            "summary": "Covers the request and nothing beyond it.",
+            "decision": "approve",
+            "confidence": 0.91,
+            "risk": "low",
+            "reasons": reasons.get(found.group(1) if found else "", ["Small, additive change"]),
+        }
+
     replies = {
         "po": backlog,
         "architect": plan,
@@ -462,16 +498,7 @@ def the_script(profile: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]
             "editor, as the Designer drew them. Deploys to ECS Fargate on merge: see "
             "`deployment/`. Covered by tests/test_search.py.",
         },
-        "supervisor": {
-            "summary": "Covers the request and nothing beyond it.",
-            "decision": "approve",
-            "confidence": 0.91,
-            "risk": "low",
-            "reasons": [
-                "Every task in the backlog has a phase",
-                "The API change is additive: existing callers see the same list",
-            ],
-        },
+        "supervisor": supervise,
     }
     asides = {
         "analysis": {
@@ -629,7 +656,8 @@ def main() -> int:
     try:
         # a recording has nobody to log in: the state directory is a throwaway and the
         # server is bound to this machine
-        app = create_app(engine, require_auth=False)
+        # and no price refresh: it reads a table off GitHub, and the demo is offline
+        app = create_app(engine, require_auth=False, price_refresh_s=0)
         demo_world.pages(app, telegram, jira)
         uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="warning")
     except KeyboardInterrupt:  # pragma: no cover - the person stopped the recording

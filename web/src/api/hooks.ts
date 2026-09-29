@@ -400,11 +400,19 @@ export function useWorkList(id: string) {
 
 /** What is on the branch. Read from git, so it answers while the development is still
  *  running as happily as it does when it has finished; `live` keeps it current while the
- *  agents are still committing. */
-export function useJobResult(id: string, enabled = true, live = false) {
+ *  agents are still committing.
+ *
+ *  `step` is how many steps the development has recorded. The branch only changes when
+ *  one is recorded, so each new step is a new question -- without it the last answer
+ *  could be one read between the tests and the deployment, and once the development was
+ *  finished nothing asked again: "What came out" showed the branch without the four
+ *  files DevOps had just written and pushed. */
+export function useJobResult(id: string, enabled = true, live = false, step = 0) {
   return useQuery({
-    queryKey: keys.jobResult(id),
+    queryKey: [...keys.jobResult(id), step],
     queryFn: () => api.get<JobResult>(`/api/jobs/${id}/result`),
+    // the previous step's answer stays on screen while the next is read, not a spinner
+    placeholderData: (previous) => previous,
     enabled,
     refetchInterval: live ? 20_000 : false,
   });
