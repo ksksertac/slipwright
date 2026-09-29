@@ -188,7 +188,14 @@ def outcome_message(
 ) -> Message:
     where = f"{project} · " if project else ""
     lines = [f"“{_clip(job.request, 200)}”"]
-    if kind == "failed":
+    if kind == "cancelled":
+        # somebody stopped it on purpose: not a failure, and the group is being told
+        # rather than asked, because it is already done
+        stopped = "geliştirme durduruldu" if lang == "tr" else "development was stopped"
+        headline = f"⊘ {where}{stopped}"
+        if error:
+            lines.append(_clip(error, 200))
+    elif kind == "failed":
         headline = f"✗ {where}" + ("geliştirme durdu" if lang == "tr" else "development stopped")
         if error:
             lines.append(_clip(error, 400))

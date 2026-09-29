@@ -23,6 +23,8 @@ const STATE_CLASS: Record<JobState, string> = {
   awaiting_decision: "wait",
   done: "ok",
   failed: "bad",
+  // stopped on purpose: settled, but not an achievement and not a fault
+  cancelled: "idle",
 };
 
 export const STATE_LABEL: Record<JobState, string> = {
@@ -44,6 +46,7 @@ export const STATE_LABEL: Record<JobState, string> = {
   awaiting_decision: "needs your decision",
   done: "done",
   failed: "failed",
+  cancelled: "stopped",
 };
 
 export function StateBadge({ state }: { state: JobState }) {

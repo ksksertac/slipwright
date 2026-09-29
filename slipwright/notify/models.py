@@ -12,8 +12,8 @@ CHANNELS: tuple[Channel, ...] = ("telegram", "slack", "discord", "teams")
 
 #: What a group channel can be told about. A gate is the one that asks somebody for
 #: something; the other two are news.
-Event = Literal["gate", "failed", "done"]
-EVENTS: tuple[Event, ...] = ("gate", "failed", "done")
+Event = Literal["gate", "failed", "done", "cancelled"]
+EVENTS: tuple[Event, ...] = ("gate", "failed", "done", "cancelled")
 
 
 class ChatLink(BaseModel):

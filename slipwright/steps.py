@@ -722,6 +722,10 @@ def _gate_groups(job: Job, card: StepCard) -> list[StepGroup]:
         material = [_backlog_groups(job)[0]]
     elif card.key == "architecture_gate":
         material = _architecture_groups(job)[:3]
+    elif card.key == "design_gate":
+        # the screens themselves, not only the yes: "what did I approve" is asked at the
+        # gate long after the Designer's own card has stopped being the obvious place
+        material = _design_groups(job)
     elif card.key.startswith("test_gate:1"):
         material = _qa_cases_groups(job)
     elif card.key == "deploy_gate":

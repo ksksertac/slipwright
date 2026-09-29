@@ -64,7 +64,7 @@ FIELDS: dict[str, tuple[str, ...]] = {
 }
 #: What a group is told when nobody has chosen: the gates, which are what somebody has to
 #: act on. Failures and finishes are one click away.
-DEFAULT_EVENTS = ["gate", "failed"]
+DEFAULT_EVENTS = ["gate", "failed", "cancelled"]
 
 
 def gate_marker(job: Job) -> str:

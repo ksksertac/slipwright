@@ -715,7 +715,8 @@
                   "enum": [
                     "gate",
                     "failed",
-                    "done"
+                    "done",
+                    "cancelled"
                   ],
                   "type": "string"
                 },
@@ -794,7 +795,8 @@
               "enum": [
                 "gate",
                 "failed",
-                "done"
+                "done",
+                "cancelled"
               ],
               "type": "string"
             },
@@ -3105,6 +3107,7 @@
           "awaiting_deploy_approval",
           "awaiting_decision",
           "done",
+          "cancelled",
           "failed"
         ],
         "title": "JobState",
@@ -9043,6 +9046,46 @@
           }
         },
         "summary": "Set Backlog"
+      }
+    },
+    "/api/jobs/{job_id}/cancel": {
+      "post": {
+        "description": "Stop a development. 409 when it has already ended.",
+        "operationId": "cancel_api_jobs__job_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel"
       }
     },
     "/api/jobs/{job_id}/deploy": {

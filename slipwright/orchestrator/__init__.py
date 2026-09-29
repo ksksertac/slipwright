@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 
-from slipwright.schemas.job import Job, JobState
+from slipwright.schemas.job import TERMINAL_STATES, Job, JobState
 from slipwright.store import JobStore
 
 LEGAL_TRANSITIONS: dict[JobState, tuple[JobState, ...]] = {
@@ -48,6 +48,7 @@ LEGAL_TRANSITIONS: dict[JobState, tuple[JobState, ...]] = {
     JobState.AWAITING_DEPLOY_APPROVAL: (JobState.DEVOPS,),
     JobState.DONE: (),
     JobState.FAILED: (),
+    JobState.CANCELLED: (),
 }
 
 # the decision gate (T9.7) can interrupt any working state and resumes into any of them
@@ -69,6 +70,13 @@ LEGAL_TRANSITIONS[JobState.FAILED] = _WORKING
 # a finished development can be run again a step at a time: the test cases, the tests, or
 # the DevOps push
 LEGAL_TRANSITIONS[JobState.DONE] = (JobState.BUILD_GATE, JobState.QA, JobState.DEVOPS)
+
+# Anywhere a development is still moving or still waiting, somebody may stop it. It is not
+# a failure and not a step: it is the answer to "this is not worth what it is spending",
+# which can be true at any point and is nobody's business but the account owner's.
+for _state, _edges in list(LEGAL_TRANSITIONS.items()):
+    if _state not in TERMINAL_STATES:
+        LEGAL_TRANSITIONS[_state] = (*_edges, JobState.CANCELLED)
 # a failed build gate may send the phase back to the architect (the supervisor's "replan")
 LEGAL_TRANSITIONS[JobState.BUILD_GATE] = (
     *LEGAL_TRANSITIONS[JobState.BUILD_GATE],

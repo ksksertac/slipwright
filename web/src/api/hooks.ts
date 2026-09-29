@@ -543,6 +543,20 @@ export function useRerunStep(jobId: string, projectId: string) {
 
 /** Plan a failed development a different way: back to the Product Owner and the Architect
  * with what should be tried instead, rather than back to the step that failed. */
+/** Stop a development, wherever it is. Whatever call is in flight finishes; nothing
+ *  further starts. */
+export function useCancelJob(jobId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<Job>(`/api/jobs/${jobId}/cancel`, {}),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.job(jobId) });
+      void qc.invalidateQueries({ queryKey: keys.projects });
+      void qc.invalidateQueries({ queryKey: keys.overview });
+    },
+  });
+}
+
 export function useReplanJob(jobId: string) {
   const qc = useQueryClient();
   return useMutation({

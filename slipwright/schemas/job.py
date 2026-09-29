@@ -40,6 +40,8 @@ class JobState(StrEnum):
     AWAITING_DEPLOY_APPROVAL = "awaiting_deploy_approval"  # the deployment scripts (T11.6)
     AWAITING_DECISION = "awaiting_decision"  # stuck (loop, or the supervisor asked): T9.7
     DONE = "done"
+    # somebody stopped it: not a failure, and not something to retry into
+    CANCELLED = "cancelled"
     FAILED = "failed"
 
 
@@ -54,7 +56,9 @@ APPROVAL_STATES: frozenset[JobState] = frozenset(
         JobState.AWAITING_DECISION,
     }
 )
-TERMINAL_STATES: frozenset[JobState] = frozenset({JobState.DONE, JobState.FAILED})
+TERMINAL_STATES: frozenset[JobState] = frozenset(
+    {JobState.DONE, JobState.FAILED, JobState.CANCELLED}
+)
 
 
 _CLOCK = threading.Lock()
