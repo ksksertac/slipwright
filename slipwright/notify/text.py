@@ -76,6 +76,10 @@ WORDS: dict[str, dict[str, str]] = {
         "chat_id": "Bu sohbetin kimliği: {id}",
         "test": "Slipwright deneme mesajı: bu kanal çalışıyor.",
         "empty_reason": "Reddetmek için bir neden yaz.",
+        "retry": "↻ Yeniden dene",
+        "retried_by": "↻ {name} yeniden başlattı",
+        "moved_on": "Bu geliştirme artık durmuyor; başka yerden yeniden başlatıldı.",
+        "owner_only": "Duran bir geliştirmeyi yeniden başlatmak yalnızca sahibinin işi.",
     },
     "en": {
         "approve": "✓ Continue",
@@ -99,6 +103,10 @@ WORDS: dict[str, dict[str, str]] = {
         "chat_id": "This chat's id: {id}",
         "test": "Slipwright test message: this channel works.",
         "empty_reason": "Write a reason to reject.",
+        "retry": "↻ Try again",
+        "retried_by": "↻ Started again by {name}",
+        "moved_on": "This development is no longer stopped; it was started again elsewhere.",
+        "owner_only": "Starting a stopped development again is for its owner only.",
     },
 }
 

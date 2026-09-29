@@ -84,18 +84,14 @@ class TelegramAdapter:
     def ask(self, address: dict[str, Any], msg: Message, prompt_id: str) -> dict[str, Any]:
         lang = self.lang
         text = msg.text()
-        sent = self.send(
-            address["chat_id"],
-            text,
-            reply_markup={
-                "inline_keyboard": [
-                    [
-                        {"text": word(lang, "approve"), "callback_data": f"a:{prompt_id}"},
-                        {"text": word(lang, "reject"), "callback_data": f"r:{prompt_id}"},
-                    ]
-                ]
-            },
-        )
+        if msg.kind == "failed":
+            row = [{"text": word(lang, "retry"), "callback_data": f"t:{prompt_id}"}]
+        else:
+            row = [
+                {"text": word(lang, "approve"), "callback_data": f"a:{prompt_id}"},
+                {"text": word(lang, "reject"), "callback_data": f"r:{prompt_id}"},
+            ]
+        sent = self.send(address["chat_id"], text, reply_markup={"inline_keyboard": [row]})
         return {"chat_id": address["chat_id"], "message_id": sent.get("message_id"), "text": text}
 
     def settle(self, address: dict[str, Any], ref: dict[str, Any], outcome: str) -> None:
@@ -149,6 +145,9 @@ class TelegramAdapter:
         return result
 
 
+#: What a button's callback data starts with, and the press it stands for.
+PRESSES = {"a": "approve", "r": "reject", "t": "retry"}
+
 _COMMAND = re.compile(r"^/(\w+)(?:@\w+)?(?:\s+(.*))?$", re.S)
 
 
@@ -178,13 +177,10 @@ def handle_update(notifier: Notifier, adapter: TelegramAdapter, update: dict[str
                     )
                 adapter.send(chat_id, answered)
             return
-        if action not in ("a", "r") or not prompt_id:
+        if action not in PRESSES or not prompt_id:
             return
         reply = notifier.on_press(
-            "telegram",
-            external_id=who,
-            prompt_id=prompt_id,
-            action="approve" if action == "a" else "reject",
+            "telegram", external_id=who, prompt_id=prompt_id, action=PRESSES[action]
         )
         try:
             adapter.call(

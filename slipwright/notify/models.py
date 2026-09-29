@@ -30,7 +30,8 @@ class ChatLink(BaseModel):
 
 
 class ChatPrompt(BaseModel):
-    """One "carry on or reject?" question, sent to one person about one gate visit."""
+    """One question sent to one person: "carry on or reject?" about one gate visit, or
+    "try again?" about one failure. ``marker`` says which of the two, and which visit."""
 
     id: str
     owner_id: str
@@ -41,13 +42,13 @@ class ChatPrompt(BaseModel):
     marker: str
     address: dict[str, Any] = Field(default_factory=dict)
     ref: dict[str, Any] = Field(default_factory=dict)
-    status: Literal["open", "reason", "approved", "rejected", "closed"] = "open"
+    status: Literal["open", "reason", "approved", "rejected", "retried", "closed"] = "open"
     created_at: datetime
     decided_at: datetime | None = None
 
     @property
     def answered(self) -> bool:
-        return self.status in ("approved", "rejected", "closed")
+        return self.status in ("approved", "rejected", "retried", "closed")
 
 
 __all__ = ["CHANNELS", "EVENTS", "Channel", "ChatLink", "ChatPrompt", "Event"]

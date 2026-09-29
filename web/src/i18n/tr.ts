@@ -1745,6 +1745,13 @@ export const TR: Record<string, string> = {
   "{n} call(s) ran on your ChatGPT plan, which is not billed per call.":
     "{n} çağrı ChatGPT aboneliğinde koştu; abonelik çağrı başına ücretlendirilmez.",
   "on a plan, not billed per call": "abonelikte, çağrı başına ücret yok",
+  "Stop": "Durdur",
+  "Stopping…": "Durduruluyor…",
+  "Yes, stop it": "Evet, durdur",
+  "stop this development; what it has built stays":
+    "bu geliştirmeyi durdur; o ana kadar yapılanlar kalır",
+  "stopped": "durduruldu",
+  "Somebody stopped a development": "Biri bir geliştirmeyi durdurdu",
   "Remote control": "Uzaktan Yönet",
   "Run it from Telegram, without opening this page.": "Telegram'dan yönet, bu sayfayı açmadan.",
   "Link your Telegram account once and the bot answers where things stand, starts a development when you ask it to, and brings your own gates to you with two buttons. It reads your account and nobody else's.":

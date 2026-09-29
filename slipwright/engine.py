@@ -144,7 +144,7 @@ from slipwright.standards.retrieval import Retrieval, core_text, retrieve
 from slipwright.store import ANY_OWNER, JobInProgress, JobStore, ProjectNotFound
 from slipwright.store.scoped import ScopedStore
 from slipwright.support import SupportDesk
-from slipwright.teams import Teams
+from slipwright.teams import Teams, failed_letter
 from slipwright.translate import OTHER_LANGUAGE, strings_of, translate
 from slipwright.workspace import Workspace
 from slipwright.workspace import git as g
@@ -2711,7 +2711,44 @@ class Engine:
             JobState.CANCELLED: "cancelled",
         }[job.state]
         notify_outcome(self, job, kind, error)
+        if job.state is JobState.FAILED:
+            self._mail_failure(job, error)
         return job
+
+    def _mail_failure(self, job: Job, error: str | None, lang: str = "tr") -> None:
+        """Write to the owner that their development stopped -- when there is a mail
+        server to write with. Unlike a gate letter this goes to the owner: nobody else may
+        retry it, and they are the one not looking at the page when it happens.
+
+        Only over SMTP. The outbox stands in for mail so that signing up works before a
+        server is configured; filling it with news nobody will read helps nobody.
+        """
+        if job.owner_id is None or not self.mail_settings().configured:
+            return
+        try:
+            user = self.raw_store.get_user(job.owner_id)
+            if not user.email or user.email_verified_at is None:
+                return
+            project = ""
+            if job.project_id:
+                with contextlib.suppress(ProjectNotFound):
+                    found = self.store.get_project(job.project_id)
+                    if found.is_demo:
+                        return
+                    project = found.name
+            root = (self.mail_settings().base_url or "").rstrip("/")
+            path = f"/projects/{job.project_id}/jobs/{job.id}" if job.project_id else "/"
+            letter = failed_letter(
+                lang,
+                link=f"{root}{path}",
+                request=job.request,
+                project=project,
+                error=(error or "")[:600],
+                name=user.username,
+            )
+            self.mailer().send(user.email, letter.subject, letter.body)
+        except Exception as exc:  # noqa: BLE001 - a lost letter must not change the outcome
+            log.warning("job %s: could not mail the owner about the failure: %s", job.id, exc)
 
     def _fail(self, job: Job, note: str, detail: str | None = None) -> Job:
         try:

@@ -187,6 +187,36 @@ def waiting_letter(
     )
 
 
+def failed_letter(
+    lang: str, *, link: str, request: str, project: str, error: str, name: str
+) -> Letter:
+    """To the owner: a development stopped and is waiting for them to say what next."""
+    where = f" ({project})" if project else ""
+    if lang == "tr":
+        return Letter(
+            subject=f"Slipwright: geliştirme durdu{where}",
+            body=(
+                f"Merhaba {name},\n\n"
+                f"“{request}” geliştirmesi başarısız oldu ve duruyor{where}.\n\n"
+                + (f"{error}\n\n" if error else "")
+                + "Sayfadan yeniden deneyebilir ya da farklı bir yol isteyebilirsin; "
+                'bağlı bir sohbetin varsa oradaki "Yeniden dene" düğmesi de aynı işi görür.\n\n'
+                f"{link}\n"
+            ),
+        )
+    return Letter(
+        subject=f"Slipwright: a development stopped{where}",
+        body=(
+            f"Hello {name},\n\n"
+            f"“{request}” failed and is stopped{where}.\n\n"
+            + (f"{error}\n\n" if error else "")
+            + "You can retry it from the page or ask for a different approach; if you have "
+            'linked a chat, its "Try again" button does the same.\n\n'
+            f"{link}\n"
+        ),
+    )
+
+
 def added_letter(lang: str, *, link: str, agent: str, owner: str, name: str) -> Letter:
     """For somebody who is already on the team and has just been given another agent.
 
@@ -481,6 +511,7 @@ __all__ = [
     "Membership",
     "Teams",
     "agent_for_gate",
+    "failed_letter",
     "invite_letter",
     "may_act_at",
     "removed_letter",
