@@ -95,9 +95,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const logout = useCallback(async () => {
-    await api.post<void>("/api/auth/logout");
-    qc.clear();
+    try {
+      await api.post<void>("/api/auth/logout");
+    } catch (error) {
+      // a session that had already ended is as logged out as one ended just now
+      if (!(error instanceof ApiError && error.status === 401)) throw error;
+    }
+    // "signed out" first, and only then everything else away. It used to empty the whole
+    // cache and then do this: that took the query this provider is watching out of it,
+    // the 401 went into a new one nobody was watching, and the app went on believing in
+    // the old user -- the login page sent the browser straight back to a dashboard of
+    // 401s, and logging out appeared to do nothing.
     qc.setQueryData(keys.me, { status: 401 });
+    qc.removeQueries({ predicate: (query) => query.queryKey[0] !== keys.me[0] });
   }, [qc]);
 
   const value = useMemo<AuthState>(() => {
@@ -116,16 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       acceptInvitation,
       logout,
     };
-  }, [
-    me.data,
-    me.isLoading,
-    login,
-    signUp,
-    verifyEmail,
-    resetPassword,
-    acceptInvitation,
-    logout,
-  ]);
+  }, [me.data, me.isLoading, login, signUp, verifyEmail, resetPassword, acceptInvitation, logout]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
