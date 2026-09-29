@@ -79,8 +79,9 @@ def up(job: Job, logs_root: Path, health_timeout: float = 30.0) -> int:
             stdin=subprocess.DEVNULL,
             env=project_env({"PORT": str(job.port)}),
             # each flag is a no-op on the other platform; together they give us a
-            # process group we can kill as a unit
-            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if _IS_WINDOWS else 0,
+            # process group we can kill as a unit. The Windows flag is looked up rather
+            # than named: it does not exist on POSIX, and type-checking there failed on it
+            creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0),
             start_new_session=not _IS_WINDOWS,
         )
     pid: int = proc.pid
