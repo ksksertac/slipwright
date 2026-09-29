@@ -9,6 +9,7 @@
 // Telegram only, deliberately. It is the one service whose bot pulls its own updates, so
 // a server on somebody's laptop answers without a public address, and the account behind
 // a press is proven by a code rather than assumed from a webhook.
+import { NavLink, useParams } from "react-router-dom";
 import { useNotify } from "../api/hooks";
 import { BotCard, LinkCard } from "./settings/NotificationsPage";
 import { ErrorBox, Loading, PageHead } from "../components/ui";
@@ -24,15 +25,25 @@ const ASKS: string[] = [
   "why did the maths one stop",
 ];
 
+/** Connecting it, and what to say to it once it is connected. Two tabs rather than one
+ *  long page: the setup is read once and the phrasebook is read every time after that,
+ *  and it was below two cards where nobody would scroll to it. */
+const TABS = ["setup", "ask"] as const;
+type Tab = (typeof TABS)[number];
+const TAB_LABEL: Record<Tab, string> = { setup: "Connecting", ask: "What you can ask it" };
+
 export function RemoteControlPage() {
   const tx = useT();
   const notify = useNotify();
+  const { tab } = useParams();
+  const current: Tab = tab === "ask" ? "ask" : "setup";
 
   if (notify.isLoading) return <Loading />;
   if (notify.error) return <ErrorBox error={notify.error} />;
   const data = notify.data!;
   const channel = data.channels.find((c) => c.channel === "telegram")!;
   const links = data.links.filter((l) => l.channel === "telegram");
+  const linked = links.some((l) => l.mine);
 
   return (
     <div className="settings-flow">
@@ -46,34 +57,60 @@ export function RemoteControlPage() {
         )}
       </p>
 
-      <div className="notify-cards">
-        {data.may_configure && <BotCard channel={channel} />}
-        <LinkCard channel={channel} links={links} owner={data.may_configure} />
+      <nav className="tabs dotted">
+        {TABS.map((t) => (
+          <NavLink key={t} to={`/remote/${t}`} className={t === current ? "active" : ""}>
+            {tx(TAB_LABEL[t])}
+            {t === "setup" && linked && <span className="notify-part-ready" />}
+          </NavLink>
+        ))}
+      </nav>
 
-        <section className="card">
-          <h3>{tx("What you can ask it")}</h3>
-          <p className="muted small">
-            {tx(
-              "In your own words, or with a command. A command costs nothing — no model is asked what it meant.",
-            )}
-          </p>
-          <ul className="small">
-            {ASKS.map((ask) => (
-              <li key={ask}>{tx(ask)}</li>
-            ))}
-          </ul>
-          <p className="small">
-            <code>/projeler</code> <code>/durum</code> <code>/bekleyen</code> <code>/calisan</code>{" "}
-            <code>/maliyet</code>
-          </p>
-          <h4>{tx("Starting work")}</h4>
-          <p className="muted small">
-            {tx(
-              "Say what you want built and it asks you to confirm before anything runs — reading a sentence is a guess, and a wrong guess would spend your own model credit. /yeni walks through it a question at a time; /proje opens a new project.",
-            )}
-          </p>
-        </section>
-      </div>
+      {current === "setup" ? (
+        <div className="notify-cards">
+          {data.may_configure && <BotCard channel={channel} />}
+          <LinkCard channel={channel} links={links} owner={data.may_configure} />
+        </div>
+      ) : (
+        <Phrasebook />
+      )}
+    </div>
+  );
+}
+
+function Phrasebook() {
+  const tx = useT();
+  return (
+    <div className="notify-cards">
+      <section className="card">
+        <h3>{tx("Asking where things are")}</h3>
+        <p className="muted small">
+          {tx(
+            "In your own words, or with a command. A command costs nothing — no model is asked what it meant.",
+          )}
+        </p>
+        <ul className="small">
+          {ASKS.map((ask) => (
+            <li key={ask}>{tx(ask)}</li>
+          ))}
+        </ul>
+        <p className="small">
+          <code>/projeler</code> <code>/durum</code> <code>/bekleyen</code> <code>/calisan</code>{" "}
+          <code>/maliyet</code>
+        </p>
+      </section>
+
+      <section className="card">
+        <h3>{tx("Starting work")}</h3>
+        <p className="muted small">
+          {tx(
+            "Say what you want built and it asks you to confirm before anything runs — reading a sentence is a guess, and a wrong guess would spend your own model credit. /yeni walks through it a question at a time; /proje opens a new project.",
+          )}
+        </p>
+        <p className="small">
+          <code>/yeni</code> <code>/proje</code> <code>/iptal</code>
+        </p>
+      </section>
     </div>
   );
 }

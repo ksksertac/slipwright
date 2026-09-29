@@ -179,19 +179,51 @@ tab per project shows what each development spent against what it was expected t
 Per-project budgets on tokens, wall-clock time and model calls stop a runaway development
 with a readable reason.
 
-### Agents reach you where you already talk
+### Remote control: run it from Telegram
+
+Link your Telegram account once, and you can answer gates, check on your projects and
+start new work from your phone without opening the app. The bot reads your account and
+nobody else's.
+
+<table>
+<tr>
+<td width="33%" valign="top"><img src="docs/screenshots/remote-gates.png" alt="Telegram: the bot is linked, a test-cases gate is approved, an architecture gate is rejected with a reason" /></td>
+<td width="33%" valign="top"><img src="docs/screenshots/remote-asking.png" alt="Telegram: /projects, /waiting and /status answered from the account's own developments" /></td>
+<td width="33%" valign="top"><img src="docs/screenshots/remote-starting.png" alt="Telegram: /new, one sentence, a confirmation with Yes and No buttons, and the development starts" /></td>
+</tr>
+<tr>
+<td valign="top"><b>A gate comes to you.</b> When an agent waits on a gate that is yours, the bot sends what is waiting, the supervisor's advice and a link. Press <b>Continue</b> to approve. Press <b>Reject</b> and the bot asks why; your answer goes back to the agent as feedback.</td>
+<td valign="top"><b>Ask where things stand.</b> <code>/projects</code>, <code>/waiting</code>, <code>/status</code>, <code>/running</code> and <code>/cost</code> are answered straight from your data, at no model cost. You can also just write a question in your own words.</td>
+<td valign="top"><b>Start a development.</b> <code>/new</code>, one sentence saying what should be built, and a <b>Yes</b>. Nothing starts until you confirm, because a development spends your own model credit. <code>/project</code> sets up a new project the same way.</td>
+</tr>
+</table>
+
+<img src="docs/screenshots/remote-page.png" alt="The Remote control page: the bot token, and linking your own Telegram account" />
+
+**Setting it up takes two minutes.** Create a bot with [@BotFather](https://t.me/BotFather),
+paste its token under **Remote control**, then press **Get a link code** and **Open in
+Telegram**. That opens the bot with a one-time code (good for 30 minutes) that proves the
+Telegram account is yours. Everybody on the account can link their own. From then on:
+
+- **A gate only goes to its own people.** It goes to the account owner, or to the person
+  who holds that agent, under the same rules as the web page. A button pressed by anybody
+  else does nothing.
+- **An answer counts once.** If a gate was answered elsewhere in the meantime (on the
+  page, or by somebody else), a late press is told so and changes nothing.
+- **Commands work in both languages**, English and Turkish (`/durum`, `/bekleyen`,
+  `/yeni`, …). `/cancel` drops a conversation halfway through.
+- **No public address needed.** The bot fetches its own updates, so it works from a
+  laptop behind a router.
+
+### Your team hears about it too
 
 <img src="docs/screenshots/notifications.png" alt="Notifications: Telegram, Slack, Discord and Microsoft Teams, with what a group is told" />
 
-- **Group notifications** in Telegram, Slack, Discord or Microsoft Teams: the group is told
-  when an agent is waiting, when a development stops and when one finishes. It is told,
-  never asked.
-- **Remote control** from Telegram: link your own chat account with a one-time code, and
-  the gates that are yours come to you with **Continue** and **Reject** buttons. A
-  rejection asks you why. You can also ask where a development is, or start a new one.
-
-Telegram, Slack and Discord connect outward, so they work from a laptop with no public
-address.
+A group in **Telegram**, **Slack**, **Discord** or **Microsoft Teams** is told when an
+agent is waiting, when a development stops (with the reason) and when one finishes (with
+the pull request). A group is told, never asked: anybody in the room could press a button,
+and a gate is its owner's to decide. Telegram, Slack and Discord connect outward, so they
+work without a public address.
 
 ### A team around the agents
 

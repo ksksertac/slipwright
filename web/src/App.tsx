@@ -69,6 +69,7 @@ export function App() {
         {/* the old two-part links still land somewhere sensible */}
         <Route path="/notifications/:tab/:part" element={<NotificationsPage />} />
         <Route path="/remote" element={<RemoteControlPage />} />
+        <Route path="/remote/:tab" element={<RemoteControlPage />} />
         <Route
           path="/support"
           element={SUPPORT_DESK ? <SupportPage /> : <Navigate to="/" replace />}
