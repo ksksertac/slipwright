@@ -15,6 +15,9 @@ every gate.
 - Seven gates a person answers: backlog, architecture, design, standards review, test
   cases, written tests, deployment. A stopped development can be retried, replanned with a
   note, or re-run a step at a time.
+- A development can be stopped wherever it is. Stopping is its own ending, not a failure:
+  no retry, no red, and the branch stays as it was. A call already in flight finishes,
+  since it is paid for; nothing after it begins.
 - Every development runs in its own git worktree, off its own branch. Nothing is committed
   to a default branch by an agent.
 - The agents never talk to each other. A deterministic state machine calls one at a time,
@@ -25,6 +28,10 @@ every gate.
 
 - Sign up with an email address, prove it, reset a password — all rate-limited, delivered
   over SMTP or held in an outbox when no mail server is configured.
+- Two-step sign-in with any authenticator app, optional and per person, with eight
+  one-time recovery codes. Each code works once; a letter's link does not sign in around
+  it; an administrator, or `slipwright user two-factor-off` on the server, lets back in
+  somebody who lost both phone and codes.
 - Everything has an owner. A row belonging to somebody else is *not found* rather than
   forbidden, the event stream filters at the source, and a job runs on its owner's
   credentials: model provider, Git token and Jira alike.
@@ -47,6 +54,12 @@ every gate.
   model had a price is counted once the table catches up.
 
 ### Running it
+
+- Starting the server is the whole of the setup: an empty installation makes `admin` /
+  `admin`, says so on the login page and keeps a banner up until it is changed.
+  `SLIPWRIGHT_DEFAULT_ADMIN=0` turns that off.
+- A setup wizard on first sign-in, one step at a time: model key, Git host, Jira, two-step
+  sign-in, first project — the optional ones with a "skip for now".
 
 - SQLite by default; PostgreSQL for a hosted installation, with Alembic migrations and one
   declared schema behind both.
