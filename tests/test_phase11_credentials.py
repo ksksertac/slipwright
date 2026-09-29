@@ -129,6 +129,38 @@ def test_a_job_is_run_on_its_owners_keys(engine: Engine, repo: Path) -> None:
     assert creds is not None and creds.api_key == "sk-ada"
 
 
+def test_a_projects_agents_are_translated_on_its_owners_keys(
+    engine: Engine, repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The page asks for a project's translations without naming an owner, and ``None``
+    is the installation's keys. A hosted install has none, so every account read its
+    agents in the project's language however the platform was set."""
+    from slipwright.providers import ProviderError
+    from slipwright.schemas.project import Project
+
+    project = engine.store.create_project(
+        Project(name="ada's", repo_path=repo, owner_id="ada", language="tr")
+    )
+    job = engine.create_job("x", project_id=project.id)
+    job.data.language = "tr"
+    job.data.backlog = {"epics": [{"title": "Soru havuzu tam 100 geçerli kayıt"}]}
+    engine.store.save(job)
+
+    paid_by: list[str | None] = []
+
+    class Refuses:
+        def complete(self, request: object) -> object:
+            raise ProviderError("not reached for real")
+
+    def provider_for(user_id: str | None) -> Refuses:
+        paid_by.append(user_id)
+        return Refuses()
+
+    monkeypatch.setattr(engine, "provider_for", provider_for)
+    engine.translations("en", project_id=project.id)
+    assert paid_by == ["ada"]
+
+
 # --- over HTTP -------------------------------------------------------------------------------
 
 

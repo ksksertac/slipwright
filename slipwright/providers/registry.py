@@ -31,6 +31,8 @@ GEMINI = "gemini"
 QWEN = "qwen"
 GLM = "glm"
 MINIMAX = "minimax"
+# a ChatGPT plan, through OpenAI's own Codex CLI rather than an API key (providers/codex.py)
+CHATGPT = "chatgpt"
 DEFAULT_PROVIDER = ANTHROPIC
 
 
@@ -44,6 +46,8 @@ class ProviderSpec:
     max_tokens_param: str
     docs_url: str
     max_tokens: int = 32_000  # the largest answer the vendor accepts in one call
+    # "api_key", or "subscription": signed in with a person's plan, no key to type
+    kind: str = "api_key"
 
 
 PROVIDERS: dict[str, ProviderSpec] = {
@@ -117,6 +121,16 @@ PROVIDERS: dict[str, ProviderSpec] = {
         docs_url="https://www.minimax.io/platform/user-center/basic-information/interface-key",
         max_tokens=8_192,
     ),
+    CHATGPT: ProviderSpec(
+        name=CHATGPT,
+        label="ChatGPT subscription (Codex)",
+        env_var="",
+        default_base_url="",
+        supports_effort=True,
+        max_tokens_param="",
+        docs_url="https://chatgpt.com/#settings/Security",
+        kind="subscription",
+    ),
 }
 
 
@@ -127,6 +141,7 @@ class Credentials(BaseModel):
     api_key: str
     base_url: str
     max_tokens: int | None = None  # overrides the vendor's default output limit
+    home: str | None = None  # a subscription's own sign-in directory, instead of a key
 
 
 def provider_names() -> list[str]:
@@ -139,6 +154,14 @@ def build_client(
     spec = PROVIDERS.get(creds.name)
     if spec is None:
         raise ProviderUnavailableError(f"unknown provider: {creds.name}")
+    if creds.name == CHATGPT:
+        from pathlib import Path
+
+        from slipwright.providers.codex import CodexProvider
+
+        if not creds.home:
+            raise ProviderUnavailableError("ChatGPT is not signed in")
+        return CodexProvider(Path(creds.home))
     if creds.name == ANTHROPIC:
         from slipwright.providers.anthropic import AnthropicProvider
 
@@ -204,6 +227,10 @@ class RoutingProvider:
         creds = self._resolve(name)
         if creds is None:
             spec = PROVIDERS[name]
+            if spec.kind == "subscription":
+                raise ProviderUnavailableError(
+                    f"{spec.label} is not signed in: Settings → Models → Sign in"
+                )
             raise ProviderUnavailableError(
                 f"no API key for {spec.label}: add one under Settings → Models "
                 f"or set {spec.env_var}"
@@ -243,6 +270,7 @@ class RoutingProvider:
 
 __all__ = [
     "ANTHROPIC",
+    "CHATGPT",
     "DEEPSEEK",
     "DEFAULT_PROVIDER",
     "GEMINI",

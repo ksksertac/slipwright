@@ -359,7 +359,9 @@ def test_provider_settings_endpoints(
     engine.http_transport = httpx.MockTransport(vendor.handler)
 
     rows = client.get("/api/settings/providers").json()
-    assert [r["name"] for r in rows] == list(PROVIDERS)
+    # a subscription (ChatGPT through Codex) is not a key and is offered only where it is
+    # switched on, which a test engine is not
+    assert [r["name"] for r in rows] == [n for n, s in PROVIDERS.items() if s.kind == "api_key"]
     assert rows[0]["name"] == "anthropic"  # the built-in default comes first
     assert all(r["key_set"] is False for r in rows)
     assert rows[1]["label"] == "OpenAI (ChatGPT)" and rows[2]["env_var"] == "DEEPSEEK_API_KEY"
@@ -624,17 +626,20 @@ def test_every_provider_is_reachable_with_its_own_client(
 ) -> None:
     """Each vendor in the registry can be configured, tested and assigned to an agent:
     Anthropic has its own client, the rest speak the OpenAI protocol on their own host."""
-    for spec in PROVIDERS.values():
+    # every vendor that takes a key; the ChatGPT subscription signs in instead and has its
+    # own tests (test_chatgpt_subscription.py)
+    keyed = {n: s for n, s in PROVIDERS.items() if s.kind == "api_key"}
+    for spec in keyed.values():
         monkeypatch.delenv(spec.env_var, raising=False)
-    vendors = {name: FakeVendor(f"sk-{name}", [f"{name}-model"]) for name in PROVIDERS}
+    vendors = {name: FakeVendor(f"sk-{name}", [f"{name}-model"]) for name in keyed}
 
     def route(request: httpx.Request) -> httpx.Response:
         host = request.url.host
-        name = next(n for n, s in PROVIDERS.items() if httpx.URL(s.default_base_url).host == host)
+        name = next(n for n, s in keyed.items() if httpx.URL(s.default_base_url).host == host)
         return vendors[name].handler(request)
 
     engine.http_transport = httpx.MockTransport(route)
-    for name, spec in PROVIDERS.items():
+    for name, spec in keyed.items():
         resp = client.put(f"/api/settings/providers/{name}", json={"api_key": f"sk-{name}"})
         assert resp.status_code == 200, (name, resp.text)
         row = next(r for r in resp.json() if r["name"] == name)

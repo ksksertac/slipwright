@@ -7,6 +7,7 @@ other one, translated once and cached by the source text.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -48,6 +49,22 @@ def test_strings_of_takes_the_agents_prose_and_leaves_the_humans_words_alone(
     assert job.request not in texts
     # and nothing that is not prose
     assert all(any(c.isalpha() for c in t) for t in texts)
+
+
+def test_the_summary_an_agent_wrote_into_a_steps_record_is_translated_too(
+    store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
+) -> None:
+    # the Product Owner's and QA's own account of their work lives only in the step's
+    # record; the drawer opening on a gate shows it first, so it must be in the bridge
+    _engine, _project, job = _run_to_backlog_gate(store, repo, worktrees_root, seed)
+    summaries = [
+        json.loads(step.detail)["summary"]
+        for step in job.history
+        if step.detail and step.detail.startswith("{") and "summary" in json.loads(step.detail)
+    ]
+    assert summaries, "the backlog step records the Product Owner's summary"
+    texts = strings_of(job)
+    assert all(s.strip() in texts for s in summaries if s.strip())
 
 
 def test_prose_in_note_lifts_only_what_an_agent_wrote() -> None:

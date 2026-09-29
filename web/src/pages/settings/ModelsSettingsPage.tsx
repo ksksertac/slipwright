@@ -1,6 +1,15 @@
 import { useState, type FormEvent } from "react";
 import { describeError, type ProviderSettings } from "../../api/client";
-import { useProviderModels, useProviders, useSaveProvider, useTestProvider } from "../../api/hooks";
+import {
+  useChatGPTLogin,
+  useChatGPTLogout,
+  useProviderModels,
+  useProviders,
+  useSaveProvider,
+  useStartChatGPTLogin,
+  useTestProvider,
+} from "../../api/hooks";
+import { Copyable } from "../../components/Copyable";
 import { useAuth } from "../../auth/AuthProvider";
 import { ErrorBox, Loading, PageHead } from "../../components/ui";
 import { IconCheck, IconChevron } from "../../components/icons";
@@ -62,6 +71,8 @@ function ProviderCard({
   const [maxTokens, setMaxTokens] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const admin = !!user?.is_admin;
+  // a plan one signs in with, not a key one pastes (ChatGPT through the Codex CLI)
+  const subscription = p.kind === "subscription";
   const models = useProviderModels(p.key_set && open ? p.name : null);
   const modelValue = model ?? p.default_model ?? "";
 
@@ -86,7 +97,11 @@ function ProviderCard({
   };
 
   // The one line to read when the row is shut: what this provider would run on.
-  const summary = !p.key_set ? tx("add a key to use it") : modelValue || tx("no default model");
+  const summary = !p.key_set
+    ? subscription
+      ? tx("sign in to use it")
+      : tx("add a key to use it")
+    : modelValue || tx("no default model");
 
   return (
     <details
@@ -98,63 +113,73 @@ function ProviderCard({
         <IconChevron className="acc-chev" />
         <span className="acc-title">
           <span className="acc-name">
-            {p.label}
+            {tx(p.label)}
             {p.is_default && <span className="tag">{tx("default")}</span>}
           </span>
           <span className={`acc-sub${p.key_set && modelValue ? " mono" : ""}`}>{summary}</span>
         </span>
         <span className="acc-right">
-          {p.key_set ? (
+          {p.key_set && subscription ? (
+            <span className="badge ok plain">
+              <IconCheck />
+              {tx("signed in")}
+            </span>
+          ) : p.key_set ? (
             <span className="badge ok plain">
               <IconCheck />
               {tx("key set")} {p.key_hint}{" "}
               {p.key_from_env ? tx("(from {env})", { env: p.env_var }) : ""}
             </span>
           ) : (
-            <span className="badge idle">{tx("no key")}</span>
+            <span className="badge idle">{subscription ? tx("not signed in") : tx("no key")}</span>
           )}
         </span>
       </summary>
       <form className="acc-body" onSubmit={submit}>
+        {subscription && <ChatGPTSignIn signedIn={p.key_set} admin={admin} />}
         <div className="grid-2">
-          <div className="field">
-            <label htmlFor={`${p.name}-key`}>{tx("API key")}</label>
-            <input
-              id={`${p.name}-key`}
-              type="password"
-              autoComplete="off"
-              value={key}
-              disabled={!admin}
-              onChange={(e) => setKey(e.target.value)}
-              placeholder={
-                p.key_set
-                  ? tx("set, ends with {hint}", { hint: p.key_hint ?? "" })
-                  : tx("paste a key")
-              }
-            />
-            <div className="muted small">
-              {tx("Get one at")}{" "}
-              <a href={p.docs_url} target="_blank" rel="noreferrer">
-                {p.docs_url.replace(/^https?:\/\//, "")}
-              </a>
-              ; {tx("or set")} <code>{p.env_var}</code> {tx("on the server.")}
+          {!subscription && (
+            <div className="field">
+              <label htmlFor={`${p.name}-key`}>{tx("API key")}</label>
+              <input
+                id={`${p.name}-key`}
+                type="password"
+                autoComplete="off"
+                value={key}
+                disabled={!admin}
+                onChange={(e) => setKey(e.target.value)}
+                placeholder={
+                  p.key_set
+                    ? tx("set, ends with {hint}", { hint: p.key_hint ?? "" })
+                    : tx("paste a key")
+                }
+              />
+              <div className="muted small">
+                {tx("Get one at")}{" "}
+                <a href={p.docs_url} target="_blank" rel="noreferrer">
+                  {p.docs_url.replace(/^https?:\/\//, "")}
+                </a>
+                ; {tx("or set")} <code>{p.env_var}</code> {tx("on the server.")}
+              </div>
             </div>
-          </div>
-          <div className="field">
-            <label htmlFor={`${p.name}-url`}>{tx("Base URL (optional)")}</label>
-            <input
-              id={`${p.name}-url`}
-              type="url"
-              className="mono"
-              value={baseUrl ?? p.base_url ?? ""}
-              disabled={!admin}
-              onChange={(e) => setBaseUrl(e.target.value)}
-              placeholder={p.default_base_url}
-            />
-            <div className="muted small">
-              {tx("Leave empty for {url}; set for proxies.", { url: p.default_base_url })}
+          )}
+          {!subscription && (
+            <div className="field">
+              <label htmlFor={`${p.name}-url`}>{tx("Base URL (optional)")}</label>
+              <input
+                id={`${p.name}-url`}
+                type="url"
+                className="mono"
+                value={baseUrl ?? p.base_url ?? ""}
+                disabled={!admin}
+                onChange={(e) => setBaseUrl(e.target.value)}
+                placeholder={p.default_base_url}
+              />
+              <div className="muted small">
+                {tx("Leave empty for {url}; set for proxies.", { url: p.default_base_url })}
+              </div>
             </div>
-          </div>
+          )}
           <div className="field">
             <label htmlFor={`${p.name}-model`}>{tx("Default model")}</label>
             {models.data && models.data.models.length > 0 ? (
@@ -182,7 +207,13 @@ function ProviderCard({
                 value={modelValue}
                 disabled={!admin}
                 onChange={(e) => setModel(e.target.value)}
-                placeholder={p.key_set ? tx("model id") : tx("add a key to list the models")}
+                placeholder={
+                  p.key_set
+                    ? tx("model id")
+                    : subscription
+                      ? tx("sign in to list the models")
+                      : tx("add a key to list the models")
+                }
               />
             )}
             <div className="muted small">
@@ -193,24 +224,26 @@ function ProviderCard({
                   )}
             </div>
           </div>
-          <div className="field">
-            <label htmlFor={`${p.name}-max`}>{tx("Max output tokens per call")}</label>
-            <input
-              id={`${p.name}-max`}
-              type="number"
-              min={0}
-              step={1024}
-              value={maxTokens ?? p.max_tokens ?? ""}
-              disabled={!admin}
-              onChange={(e) => setMaxTokens(e.target.value)}
-              placeholder={tx("{n} (vendor default)", { n: p.default_max_tokens })}
-            />
-            <div className="muted small">
-              {tx(
-                "How long one answer may be. Raise it if the vendor's newer models allow more; an agent that still hits the limit is asked for smaller parts automatically.",
-              )}
+          {!subscription && (
+            <div className="field">
+              <label htmlFor={`${p.name}-max`}>{tx("Max output tokens per call")}</label>
+              <input
+                id={`${p.name}-max`}
+                type="number"
+                min={0}
+                step={1024}
+                value={maxTokens ?? p.max_tokens ?? ""}
+                disabled={!admin}
+                onChange={(e) => setMaxTokens(e.target.value)}
+                placeholder={tx("{n} (vendor default)", { n: p.default_max_tokens })}
+              />
+              <div className="muted small">
+                {tx(
+                  "How long one answer may be. Raise it if the vendor's newer models allow more; an agent that still hits the limit is asked for smaller parts automatically.",
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </div>
         {save.error && <div className="callout error">{describeError(save.error)}</div>}
         {saved && <div className="callout notice">{tx("Saved.")}</div>}
@@ -236,7 +269,7 @@ function ProviderCard({
                 {tx("Use as default")}
               </button>
             )}
-            {p.key_set && !p.key_from_env && (
+            {p.key_set && !p.key_from_env && !subscription && (
               <button
                 type="button"
                 className="btn bad small"
@@ -259,5 +292,71 @@ function ProviderCard({
         )}
       </form>
     </details>
+  );
+}
+
+/**
+ * Signing in with a ChatGPT plan: the server runs OpenAI's own `codex login --device-auth`,
+ * which prints a link and a one-time code. The person opens the link, types the code,
+ * approves -- and the page, asking every few seconds, sees it land.
+ */
+function ChatGPTSignIn({ signedIn, admin }: { signedIn: boolean; admin: boolean }) {
+  const tx = useT();
+  const status = useChatGPTLogin(true);
+  const start = useStartChatGPTLogin();
+  const logout = useChatGPTLogout();
+  const waiting = status.data?.status === "waiting" && !signedIn;
+  const code = start.data?.status === "waiting" ? start.data : null;
+
+  return (
+    <div className="chatgpt-signin">
+      <p className="muted small" style={{ marginTop: 0 }}>
+        {tx(
+          "Runs the agents on your ChatGPT plan instead of API credit, through OpenAI's own Codex CLI on this server. First turn on “Enable device code sign-in for Codex” under ChatGPT → Settings → Security.",
+        )}
+      </p>
+      {signedIn ? (
+        <div className="row">
+          <span className="badge ok plain">
+            <IconCheck /> {tx("Signed in with ChatGPT")}
+          </span>
+          {admin && (
+            <button
+              type="button"
+              className="btn ghost small"
+              disabled={logout.isPending}
+              onClick={() => logout.mutate()}
+            >
+              {tx("Sign out")}
+            </button>
+          )}
+        </div>
+      ) : waiting && code ? (
+        <div className="chatgpt-code">
+          <div className="small">{tx("1. Open this page and sign in to ChatGPT:")}</div>
+          <a href={code.url ?? "#"} target="_blank" rel="noreferrer" className="mono small">
+            {code.url}
+          </a>
+          <div className="small">{tx("2. Enter this code there:")}</div>
+          <Copyable text={code.code ?? ""}>
+            <code className="chatgpt-code-value">{code.code}</code>
+          </Copyable>
+          <div className="faint small">{tx("Waiting for you to approve it…")}</div>
+        </div>
+      ) : (
+        admin && (
+          <button
+            type="button"
+            className="btn primary small"
+            disabled={start.isPending}
+            onClick={() => start.mutate()}
+          >
+            {start.isPending ? tx("Getting a code…") : tx("Sign in with ChatGPT")}
+          </button>
+        )
+      )}
+      {start.error && <div className="callout error">{describeError(start.error)}</div>}
+      {logout.error && <div className="callout error">{describeError(logout.error)}</div>}
+    </div>
   );
 }

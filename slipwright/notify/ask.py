@@ -24,12 +24,15 @@ from __future__ import annotations
 import json
 import logging
 import threading
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from slipwright.costs import project_costs
+from slipwright.pipeline import StepStatus, lane_for
 from slipwright.providers import ModelProvider, ModelRequest, ProviderError
 from slipwright.quota import QuotaExceeded
 from slipwright.schemas.job import APPROVAL_STATES, Job, JobState, utcnow
@@ -43,7 +46,24 @@ log = logging.getLogger(__name__)
 
 #: What may be asked. A question outside this list is answered "I do not know that one",
 #: which is the honest reply and also the one that cannot go wrong.
-Intent = Literal["projects", "status", "waiting", "running", "cost", "unknown"]
+Intent = Literal["projects", "status", "waiting", "running", "cost", "start", "unknown"]
+
+#: What somebody says to mean yes. The buttons are the usual way to answer, but a person
+#: who types instead is answering the same question, and anything that is not a yes is a
+#: no: the cost of misreading "yes" is a development nobody wanted.
+YES = ("evet", "e", "tamam", "olur", "basla", "başla", "yes", "y", "ok", "go")
+
+#: The prefix on this module's own button presses, so the channel can tell them apart from
+#: a gate's approve/reject.
+PRESS = "ask"
+
+
+@dataclass
+class Answer:
+    """What the bot says back, and the buttons under it if it asked something."""
+
+    text: str
+    buttons: list[tuple[str, str]] = field(default_factory=list)
 
 #: Typed as a command, the question costs nothing: no model is called to work out that
 #: ``/projeler`` means "projects". Turkish and English, with and without the slash.
@@ -61,6 +81,10 @@ COMMANDS: dict[str, Intent] = {
     "cost": "cost",
     "maliyet": "cost",
 }
+
+#: How many developments are described one by one. The counts beside them are over all of
+#: them, so a busy project still answers "how many are done" correctly.
+SHOWN = 5
 
 #: One person, this many questions an hour. Without it a linked chat is a free model,
 #: billed to whoever linked it.
@@ -107,6 +131,9 @@ WORDS: dict[str, dict[str, str]] = {
         "nothing_waiting": "Onayını bekleyen bir şey yok.",
         "nothing_running": "Şu an çalışan bir geliştirme yok.",
         "no_such_project": "Öyle bir proje bulamadım.",
+        "nothing_by_that_name": "\"{asked}\" diye bir proje ya da geliştirme bulamadım.",
+        "totals": "{all} geliştirme: {done} bitti, {going} sürüyor, {waiting} seni bekliyor, "
+        "{stopped} durdu.",
         "which_project": "Hangi proje? Numarasını ya da adını yaz.\n{list}",
         "what_request": "Ne yapılsın? Tek cümleyle yaz.\n(vazgeçmek için /iptal)",
         "started": "Başladı: {project} — {request}\nİlk kapıda sana geleceğim.",
@@ -119,6 +146,12 @@ WORDS: dict[str, dict[str, str]] = {
         "project_made": "Proje hazır: {name}. /yeni yazarak ilk geliştirmeyi başlatabilirsin.",
         "project_failed": "Proje kurulamadı: {why}",
         "cancelled": "Tamam, vazgeçtim.",
+        "yes": "✓ Evet",
+        "no": "✗ Hayır",
+        "expired": "O soru artık geçerli değil. Baştan yaz.",
+        "hello_again": "Seni tanıyamıyorum; hesabını yeniden bağla.",
+        "confirm": "{project} projesine şunu ekleyeyim mi?\n«{request}»\n"
+        'Evet demek için "evet" yaz, vazgeçmek için /iptal.',
         "not_owner": "Bu hesapta iş başlatmak hesabın sahibine ait.",
         "not_verified": "Önce e-posta adresini doğrulaman gerekiyor.",
         "demo": "Örnek proje salt okunur; kendi projende dene.",
@@ -135,6 +168,9 @@ WORDS: dict[str, dict[str, str]] = {
         "nothing_waiting": "Nothing is waiting for you.",
         "nothing_running": "Nothing is being worked on right now.",
         "no_such_project": "I could not find that project.",
+        "nothing_by_that_name": "I could not find a project or a development called \"{asked}\".",
+        "totals": "{all} development(s): {done} finished, {going} being worked on, "
+        "{waiting} waiting for you, {stopped} stopped.",
         "which_project": "Which project? Give its number or its name.\n{list}",
         "what_request": "What should be built? One sentence.\n(/cancel to stop)",
         "started": "Started: {project} — {request}\nI will come back to you at the first gate.",
@@ -147,6 +183,12 @@ WORDS: dict[str, dict[str, str]] = {
         "project_made": "{name} is ready. Type /new to start the first development.",
         "project_failed": "The project could not be set up: {why}",
         "cancelled": "Fine, dropped it.",
+        "yes": "✓ Yes",
+        "no": "✗ No",
+        "expired": "That question has gone stale. Say it again.",
+        "hello_again": "I do not know who you are; link your account again.",
+        "confirm": "Shall I start this on {project}?\n«{request}»\n"
+        'Say "yes" to go ahead, /cancel to drop it.',
         "not_owner": "Starting work belongs to the owner of the account.",
         "not_verified": "Confirm your email address first.",
         "demo": "The example project is read-only; try it on one of your own.",
@@ -167,9 +209,22 @@ class Question(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     intent: Intent
-    project: str = Field(
-        default="", description="The project the question is about, as the person named it."
+    subject: str = Field(
+        default="",
+        description="What the question is about, as the person named it: a project, or the "
+        "development itself. Empty when they asked about everything.",
     )
+
+    work: str = Field(
+        default="",
+        description="For `start` only: what they want built, in their own words, with the "
+        "project's name taken out of it.",
+    )
+
+    @property
+    def project(self) -> str:
+        """Kept because a command's argument is still written as the subject."""
+        return self.subject
 
 
 class Written(BaseModel):
@@ -199,6 +254,7 @@ def classify(
             "waiting (what is waiting for the person to approve)",
             "running (what is being worked on right now)",
             "cost (what has been spent)",
+            "start (they are asking for something to be built or changed)",
             "unknown (anything else at all)",
         ]
     )
@@ -212,7 +268,13 @@ def classify(
         system=_SYSTEM,
         prompt=(
             f"Which of these is the message asking for?\n{options}\n\n"
-            "If it names a project, put that name in `project`, exactly as written.\n"
+            "If it names something -- a project, or the development itself, in whatever "
+            "words the person used for it -- put that in `subject`, as written. People "
+            "name the work far more often than the project it sits in.\n"
+            "For `start`, `work` is what they want built, in their own words, with the "
+            "project's name taken out: \"add a checkbox to the notes project\" is subject "
+            "\"notes\" and work \"add a checkbox\". Asking how something is going is never "
+            "`start`.\n"
             "Answer `unknown` unless it is clearly one of the others.\n\n"
             + json.dumps({"message": text}, ensure_ascii=False)
             + "\n\nRespond with one JSON object matching this JSON Schema:\n"
@@ -253,6 +315,129 @@ def _pending(job: Job) -> str | None:
 def _headline(request: str) -> str:
     line = request.strip().splitlines()[0] if request.strip() else ""
     return line[:80] + "…" if len(line) > 80 else line
+
+
+def _why_it_stopped(job: Job) -> dict[str, Any] | None:
+    """What actually went wrong, for a development that stopped.
+
+    The transition that *entered* ``failed``, not the bookkeeping recorded on it
+    afterwards -- a Jira sync or a retrieval note lands after the failure and would be
+    read back as the reason. Its ``detail`` is where the real answer lives: the failing
+    test's output, the compiler, git's complaint. Only the end of it is sent, because
+    that is the part with the error in it and a chat message has a length limit.
+    """
+    if job.state is not JobState.FAILED:
+        return None
+    fall = next(
+        (
+            t
+            for t in reversed(job.history)
+            if t.to_state is JobState.FAILED and t.from_state is not JobState.FAILED
+        ),
+        None,
+    )
+    if fall is None:
+        return None
+    output = (fall.detail or job.data.last_build_output or "").strip()
+    return {
+        "step": fall.from_state.value,
+        "why": fall.note,
+        "output": output[-1200:] if output else None,
+    }
+
+
+def _how_it_is_going(job: Job, project_name: str) -> dict[str, Any]:
+    """One development, described the way the page describes it.
+
+    The first version handed the model three booleans -- created, not finished, not
+    waiting -- and got back a sentence that read out three booleans. What makes an answer
+    sound informed is not a better model but better material: which step of how many, the
+    name of the step being worked on, what it is waiting for, and the last thing that
+    happened. All of it is already computed for the pipeline lane.
+    """
+    lane = lane_for(job)
+    settled = (StepStatus.DONE, StepStatus.SKIPPED)
+    done = sum(1 for card in lane.steps if card.status in settled)
+    ahead = next((card for card in lane.steps if card.status not in settled), None)
+    note = job.history[-1].note if job.history else None
+    return {
+        "project": project_name,
+        "request": _headline(job.request),
+        "steps_done": done,
+        "steps_total": len(lane.steps),
+        # the step with somebody's hands on it, else the next one that has not run
+        "step": lane.running_label or (ahead.label if ahead else None),
+        "waiting_for_you": lane.pending_approval,
+        "finished": job.state is JobState.DONE,
+        "failed": job.state is JobState.FAILED,
+        "last_thing_that_happened": note,
+        "stopped_because": _why_it_stopped(job),
+    }
+
+
+def _wanted(jobs: list[Job], projects: list[Any], subject: str) -> list[Job]:
+    """The developments somebody meant, newest first.
+
+    They name the work -- "the maths question one" -- far more often than the project it
+    sits in, and answering "no such project" to the name of a development they started an
+    hour ago is the bot at its most useless.
+    """
+    newest = sorted(jobs, key=lambda j: j.created_at, reverse=True)
+    wanted = _fold(subject.strip())
+    if not wanted:
+        return newest
+    project = _match(projects, subject)
+    if project is not None:
+        return [j for j in newest if j.project_id == project.id]
+    stems = [_stem(w) for w in wanted.split() if len(w) > 3]
+    if not stems:
+        return []
+    # half the words, rounded down but never zero: "matematik geliştirmesi" should find a
+    # development that says "matematik" and nothing about "geliştirme", while "bir
+    # yazılım ne durumda" should find nothing rather than the newest thing on the list
+    enough = max(1, len(stems) // 2)
+    return [
+        j
+        for j in newest
+        if wanted in _fold(j.request)
+        or sum(s in _fold(j.request) for s in stems) >= enough
+    ]
+
+
+#: Somebody typing on a phone leaves the Turkish letters off as often as not, and the
+#: capital İ does not lower-case to the same thing as a capital I. Both sides of every
+#: comparison go through this, so "gelistirme" finds "geliştirme" and "NOTEAPP" finds
+#: "NoteApp".
+_FOLD = str.maketrans(
+    {
+        "ç": "c",
+        "ğ": "g",
+        "ı": "i",
+        "İ": "i",
+        "I": "i",
+        "ö": "o",
+        "ş": "s",
+        "ü": "u",
+        "â": "a",
+        "î": "i",
+        "û": "u",
+    }
+)
+
+
+def _fold(text: str) -> str:
+    return text.translate(_FOLD).casefold()
+
+
+def _stem(word: str) -> str:
+    """As much of a word as survives having something stuck on the end of it.
+
+    Turkish glues its suffixes on and softens the last consonant while doing it, so
+    ``matematik`` becomes ``matematiğin`` and a substring search finds nothing. Five
+    characters is before the join in almost every case, and short enough that the two
+    spellings agree on it.
+    """
+    return word[:5] if len(word) > 5 else word
 
 
 def gather(notifier: Notifier, user_id: str, question: Question) -> dict[str, Any]:
@@ -301,11 +486,7 @@ def gather(notifier: Notifier, user_id: str, question: Question) -> dict[str, An
     if question.intent == "running":
         return {
             "running": [
-                {
-                    "project": by_project.get(j.project_id or "", ""),
-                    "request": _headline(j.request),
-                    "step": j.state.value,
-                }
+                _how_it_is_going(j, by_project.get(j.project_id or "", ""))
                 for j in jobs
                 if not j.is_terminal and j.state not in APPROVAL_STATES
             ]
@@ -314,57 +495,86 @@ def gather(notifier: Notifier, user_id: str, question: Question) -> dict[str, An
     if question.intent == "cost":
         wanted = [named] if named else projects
         return {
-            "cost": [
-                {
-                    "project": p.name,
-                    "spent_usd": round(
-                        sum(j.data.cost_usd for j in jobs if j.project_id == p.id), 4
-                    ),
-                    "developments": sum(1 for j in jobs if j.project_id == p.id),
-                }
-                for p in wanted
-            ]
+            "cost": [_what_it_cost(engine, p, [j for j in jobs if j.project_id == p.id])
+                     for p in wanted]
         }
 
     if question.intent == "status":
-        if question.project and named is None:
-            return {"error": "no_such_project"}
-        wanted = [named] if named else projects
+        wanted_jobs = _wanted(jobs, projects, question.subject)
+        if question.subject and not wanted_jobs:
+            return {"error": "nothing_by_that_name", "asked_about": question.subject}
         return {
+            # counted over all of them, because "how many are done" is a question about
+            # the project and not about the handful that fits in a chat message
+            "totals": _totals(wanted_jobs),
+            # the newest handful: nobody asked for the whole history of a busy project
             "status": [
-                {
-                    "project": p.name,
-                    "developments": [
-                        {
-                            "request": _headline(j.request),
-                            "step": j.state.value,
-                            "waiting_for": _pending(j),
-                            "finished": j.is_terminal,
-                        }
-                        # the newest first, and never the whole history of a busy project
-                        for j in sorted(
-                            (j for j in jobs if j.project_id == p.id),
-                            key=lambda j: j.created_at,
-                            reverse=True,
-                        )[:3]
-                    ],
-                }
-                for p in wanted
-            ]
+                _how_it_is_going(j, by_project.get(j.project_id or "", ""))
+                for j in wanted_jobs[:SHOWN]
+            ],
         }
     return {}
 
 
+def _what_it_cost(engine: Any, project: Any, jobs: list[Job]) -> dict[str, Any]:
+    """What a project has spent and which agent spent it.
+
+    The same arithmetic the costs page does, not a second one: the log is re-priced on the
+    way out, so a call whose model had no price when it was made is counted once the price
+    table catches up. Summing ``job.data.cost_usd`` instead would quietly under-report
+    exactly those calls.
+    """
+    priced = project_costs(
+        project.id,
+        jobs,
+        profile=engine.project_profile(project),
+        stored_prices=engine.store.list_prices(),
+        history=jobs,
+        route=engine.effective_routing,
+    )
+    spend: dict[str, float] = {}
+    for row in priced.jobs:
+        for agent in row.by_role:
+            spend[agent.label or agent.key] = spend.get(agent.label or agent.key, 0.0) + agent.usd
+    return {
+        "project": project.name,
+        "spent_usd": round(priced.spent_usd, 4),
+        "expected_usd": priced.expected_usd,
+        "developments": len(jobs),
+        # biggest first: the question behind "what did it cost" is always "what is eating it"
+        "by_agent": [
+            {"agent": name, "usd": round(usd, 4)}
+            for name, usd in sorted(spend.items(), key=lambda kv: kv[1], reverse=True)
+            if usd > 0
+        ],
+        "calls_with_no_price": priced.unpriced_calls,
+    }
+
+
+def _totals(jobs: list[Job]) -> dict[str, int]:
+    """How the developments stand, all of them, whatever fits in the list below."""
+    return {
+        "developments": len(jobs),
+        "finished": sum(1 for j in jobs if j.state is JobState.DONE),
+        "stopped": sum(1 for j in jobs if j.state is JobState.FAILED),
+        "waiting_for_you": sum(1 for j in jobs if j.state in APPROVAL_STATES),
+        "being_worked_on": sum(
+            1 for j in jobs if not j.is_terminal and j.state not in APPROVAL_STATES
+        ),
+        "shown_below": min(len(jobs), SHOWN),
+    }
+
+
 def _match(projects: list[Any], name: str) -> Any | None:
     """The project somebody meant by what they typed, or None."""
-    wanted = name.strip().casefold()
+    wanted = _fold(name.strip())
     if not wanted:
         return None
     for project in projects:
-        if project.name.casefold() == wanted:
+        if _fold(project.name) == wanted:
             return project
     for project in projects:
-        if wanted in project.name.casefold():
+        if wanted in _fold(project.name):
             return project
     return None
 
@@ -395,24 +605,58 @@ def plain(lang: str, data: dict[str, Any]) -> str:
         rows = data["running"]
         if not rows:
             return _say(lang, "nothing_running")
-        return "\n".join(f"• {r['project']}: {r['request']} → {r['step']}" for r in rows)
+        return "\n".join(_one_line(r) for r in rows)
     if "cost" in data:
         rows = data["cost"]
         if not rows:
             return _say(lang, "no_projects")
-        return "\n".join(f"• {r['project']}: ${r['spent_usd']:.3f}" for r in rows)
+        out: list[str] = []
+        for r in rows:
+            expected = r.get("expected_usd")
+            gap = f" (beklenen ${expected:.3f})" if lang == "tr" and expected else ""
+            if expected and lang != "tr":
+                gap = f" (expected ${expected:.3f})"
+            out.append(f"• {r['project']}: ${r['spent_usd']:.3f}{gap}")
+            # three is enough to see where it went; the rest is rounding
+            out += [f"   {a['agent']}: ${a['usd']:.3f}" for a in r["by_agent"][:3]]
+        return "\n".join(out)
     if "status" in data:
         rows = data["status"]
         if not rows:
             return _say(lang, "no_projects")
-        out: list[str] = []
-        for row in rows:
-            out.append(f"• {row['project']}")
-            for dev in row["developments"]:
-                mark = "✓" if dev["finished"] else ("⏳" if dev["waiting_for"] else "…")
-                out.append(f"   {mark} {dev['request']} → {dev['waiting_for'] or dev['step']}")
-        return "\n".join(out)
+        totals = data.get("totals") or {}
+        head = _say(
+            lang,
+            "totals",
+            all=totals.get("developments", len(rows)),
+            done=totals.get("finished", 0),
+            going=totals.get("being_worked_on", 0),
+            waiting=totals.get("waiting_for_you", 0),
+            stopped=totals.get("stopped", 0),
+        )
+        return "\n".join([head, *(_one_line(r) for r in rows)])
     return _say(lang, "unknown")
+
+
+def _one_line(row: dict[str, Any]) -> str:
+    """One development on one line: where it is, out of how far, and what it wants."""
+    if row["failed"]:
+        mark = "x"
+    elif row["finished"]:
+        mark = "+"
+    elif row["waiting_for_you"]:
+        mark = "?"
+    else:
+        mark = "-"
+    where = row["waiting_for_you"] or row["step"] or ""
+    steps = f"{row['steps_done']}/{row['steps_total']}"
+    line = f"{mark} {row['project']}: {row['request']} - {where} {steps}"
+    stopped = row.get("stopped_because")
+    # without a model to phrase it, the reason still goes out: a listing that says a
+    # development stopped and not why is a listing somebody has to go and look things up
+    if stopped and stopped.get("why"):
+        line += f"\n   {stopped['why']}"
+    return line
 
 
 def write(
@@ -436,8 +680,26 @@ def write(
         system=_WRITE_SYSTEM,
         prompt=(
             f"Write the answer in {lang}, for a chat app: a couple of lines, no heading, "
-            "no markdown table. Keep every project name exactly as it is written here. "
-            "Say only what the data says.\n\n"
+            "no markdown table.\n"
+            "Say where things are, never what they are not: \"planning, 3 of 17 steps\" "
+            "rather than \"not finished, not waiting\". Never read a field name or a raw "
+            "state back to the person -- `step` and `waiting_for_you` are written in "
+            f"English and must come out as ordinary {lang}.\n"
+            "If something is waiting for them, say that first: it is the only part they "
+            "can act on.\n"
+            "If a development stopped, `stopped_because` is why: name the step it stopped "
+            "at and say what went wrong in one sentence of your own, then quote the two or "
+            "three lines of `output` that carry the actual error. Do not paste the whole "
+            "of it and do not diagnose beyond what it says.\n"
+            "For `cost`, give the total and then the two or three agents that spent the "
+            "most of it, in dollars as they are written. `expected_usd` is arithmetic "
+            "over what these agents have used before, so call it an expectation and never "
+            "a budget or a limit. Never add the numbers up yourself.\n"
+            "`totals` counts every development there is; the list beside it is only the "
+            "newest few, so give the counts as the counts and never as the length of the "
+            "list. Lead with them when there is more than one.\n"
+            "Keep project names and the person's own words for what they asked for "
+            "exactly as they are written here. Say only what the data says.\n\n"
             + json.dumps(data, ensure_ascii=False, indent=2)
             + "\n\nRespond with one JSON object matching this JSON Schema:\n"
             + json.dumps(Written.model_json_schema(), indent=2, sort_keys=True)
@@ -534,7 +796,73 @@ def begin(notifier: Notifier, user_id: str, flow: str) -> str:
     return _say(notifier.lang, "which_project", list=_listed(projects))
 
 
-def carry_on(notifier: Notifier, user_id: str, state: dict[str, Any], text: str) -> str:
+def propose(notifier: Notifier, user_id: str, question: Question) -> Answer | str:
+    """Somebody asked for something to be built, in one sentence, and is asked to confirm.
+
+    A sentence is a guess -- the classifier's, about what the words meant -- and a wrong
+    guess here starts a development and spends the account's own money on it. So the
+    sentence fills the form and stops one step short: the person sees the project and the
+    request as they will be saved, and says yes. Nothing is spent on a guess, and nobody
+    has to walk through three questions to say one thing.
+    """
+    lang = notifier.lang
+    refusal = _may_start(notifier, user_id)
+    if refusal:
+        return _say(lang, refusal)
+    engine = notifier.engine.for_user(user_id)
+    projects = [p for p in engine.store.list_projects(notifier.owner_key or None) if not p.is_demo]
+    if not projects:
+        return _say(lang, "no_projects")
+    work = question.work.strip()
+    if not work:
+        return begin(notifier, user_id, "new_job")
+    project = _match(projects, question.subject) if question.subject else None
+    if project is None and len(projects) == 1:
+        project = projects[0]
+    if project is None:
+        # the request is kept: after they pick the project it goes straight to the yes
+        _remember(notifier, user_id, flow="new_job", step="project", data={"request": work})
+        return _say(lang, "which_project", list=_listed(projects))
+    return _confirm(notifier, user_id, project, work)
+
+
+def _confirm(notifier: Notifier, user_id: str, project: Any, work: str) -> Answer:
+    """The question, with a button under each answer.
+
+    Typing "evet" still works -- somebody reading this on a watch, or in a channel whose
+    buttons did not come through, is answering the same question -- but the press is the
+    way it is meant to be answered: no spelling, and no chance of a "hayır" being read as
+    a new request.
+    """
+    lang = notifier.lang
+    _remember(
+        notifier,
+        user_id,
+        flow="new_job",
+        step="confirm",
+        data={"project_id": project.id, "request": work},
+    )
+    return Answer(
+        _say(lang, "confirm", project=project.name, request=work),
+        buttons=[(_say(lang, "yes"), f"{PRESS}:yes"), (_say(lang, "no"), f"{PRESS}:no")],
+    )
+
+
+def decide(notifier: Notifier, *, external_id: str, choice: str, channel: str = "telegram") -> str:
+    """A button under one of this module's own questions was pressed."""
+    link = notifier.store.chat_link_for(notifier.owner_key, channel, external_id)
+    if link is None:
+        return _say(notifier.lang, "hello_again")
+    waiting = _dialog(notifier, link.user_id)
+    if waiting is None:
+        return _say(notifier.lang, "expired")
+    # the press is routed through the same step a typed answer goes through, so the two
+    # cannot drift apart: one question, one place that decides what the answer means
+    said = carry_on(notifier, link.user_id, waiting, "evet" if choice == "yes" else "hayir")
+    return said.text if isinstance(said, Answer) else said
+
+
+def carry_on(notifier: Notifier, user_id: str, state: dict[str, Any], text: str) -> Answer | str:
     """The next step of a conversation, given what was just typed."""
     lang = notifier.lang
     engine = notifier.engine.for_user(user_id)
@@ -548,12 +876,23 @@ def carry_on(notifier: Notifier, user_id: str, state: dict[str, Any], text: str)
             project = _chosen(projects, text)
             if project is None:
                 return _say(lang, "pick_again")
+            # a sentence that already said what to build only needed the project
+            if data.get("request"):
+                return _confirm(notifier, user_id, project, str(data["request"]))
             data["project_id"] = project.id
             _remember(notifier, user_id, flow=flow, step="request", data=data)
             return _say(lang, "what_request")
         if step == "request":
             _forget(notifier, user_id)
             return _start_job(notifier, user_id, str(data.get("project_id") or ""), text)
+        if step == "confirm":
+            _forget(notifier, user_id)
+            # anything that is not a yes is a no: the expensive mistake is the other way
+            if _fold(text).strip(" .!?") not in YES:
+                return _say(lang, "cancelled")
+            return _start_job(
+                notifier, user_id, str(data.get("project_id") or ""), str(data.get("request") or "")
+            )
 
     if flow == "new_project":
         if step == "name":
@@ -592,6 +931,9 @@ def _start_job(notifier: Notifier, user_id: str, project_id: str, request: str) 
         pass
     try:
         job = engine.create_job(request.strip(), project_id=project.id)
+        # started here, as the API's ``_start`` does: ``resume`` only carries on a job that
+        # is already under way, and one left in ``created`` was never picked up by anything
+        job = engine.start(job.id, run=False)
     except Exception as exc:  # noqa: BLE001 - whatever it was, it is the person's answer
         log.warning("ask: could not start a development: %r", exc)
         return _say(lang, "refused", why=str(exc))
@@ -655,7 +997,12 @@ def _tell(notifier: Notifier, user_id: str, text: str) -> None:
 # --- the whole of it ----------------------------------------------------------------------
 
 
-def ask(notifier: Notifier, *, user_id: str, text: str) -> str | None:
+def _wrap(said: Answer | str) -> Answer:
+    """A step that only has something to say, beside one that also has buttons."""
+    return said if isinstance(said, Answer) else Answer(said)
+
+
+def ask(notifier: Notifier, *, user_id: str, text: str) -> Answer | None:
     """Answer a question typed into a linked chat, or None when it is not a question.
 
     ``None`` leaves the bot silent, which is what somebody chatting in a group wants.
@@ -664,14 +1011,14 @@ def ask(notifier: Notifier, *, user_id: str, text: str) -> str | None:
     typed = head.lstrip("/").lower()
     if typed in CANCEL:
         _forget(notifier, user_id)
-        return _say(notifier.lang, "cancelled")
+        return Answer(_say(notifier.lang, "cancelled"))
     if typed in FLOWS:
-        return begin(notifier, user_id, FLOWS[typed])
+        return _wrap(begin(notifier, user_id, FLOWS[typed]))
     # a conversation already under way owns whatever is typed next, so "login ekle" is
     # read as the answer it is rather than as a question about the word "login"
     waiting = _dialog(notifier, user_id)
     if waiting is not None:
-        return carry_on(notifier, user_id, waiting, text.strip())
+        return _wrap(carry_on(notifier, user_id, waiting, text.strip()))
 
     intent, rest = command_of(text)
     if intent is None and text.strip().startswith("/"):
@@ -679,7 +1026,7 @@ def ask(notifier: Notifier, *, user_id: str, text: str) -> str | None:
     store = notifier.store
     bucket = f"ask:{notifier.owner_key or '-'}:{user_id}"
     if store.hit_rate_limit(bucket, limit=ASK_LIMIT, window_s=ASK_WINDOW_S):
-        return _say(notifier.lang, "too_many")
+        return Answer(_say(notifier.lang, "too_many"))
 
     engine = notifier.engine.for_user(user_id)
     profile = engine.seed_profile
@@ -694,9 +1041,9 @@ def ask(notifier: Notifier, *, user_id: str, text: str) -> str | None:
         # a typed command is already the answer to "which question is this", and its rows
         # read perfectly well as a list: there is nothing for a model to add, and asking
         # one anyway would bill somebody for typing /projeler
-        question = Question(intent=intent, project=rest)
+        question = Question(intent=intent, subject=rest)
         try:
-            return plain(notifier.lang, gather(notifier, user_id, question))
+            return Answer(plain(notifier.lang, gather(notifier, user_id, question)))
         except Exception as exc:  # noqa: BLE001 - a chat message must never raise
             log.warning("ask: could not read the answer to %s: %r", question.intent, exc)
             return None
@@ -706,15 +1053,18 @@ def ask(notifier: Notifier, *, user_id: str, text: str) -> str | None:
         question = classify(text, provider=provider, profile=profile)
 
     if question.intent == "unknown":
-        return _say(notifier.lang, "unknown")
+        return Answer(_say(notifier.lang, "unknown"))
+    if question.intent == "start":
+        # the one intent that would write something: it asks rather than does
+        return _wrap(propose(notifier, user_id, question))
     try:
         data = gather(notifier, user_id, question)
     except Exception as exc:  # noqa: BLE001 - a chat message must never raise
         log.warning("ask: could not read the answer to %s: %r", question.intent, exc)
         return None
     if provider is None:
-        return plain(notifier.lang, data)
-    return write(data, lang=notifier.lang, provider=provider, profile=profile)
+        return Answer(plain(notifier.lang, data))
+    return Answer(write(data, lang=notifier.lang, provider=provider, profile=profile))
 
 
 __all__ = [

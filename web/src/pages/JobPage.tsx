@@ -722,7 +722,6 @@ function Phases({ job }: { job: Job }) {
   const opened = asked || live?.number;
   return (
     <section>
-      <h2>{tx("Phases")}</h2>
       <div className="phase-list">
         {groups.map((g) => (
           <PhasePanel key={g.number} job={job} group={g} open={g.number === opened} />
@@ -853,7 +852,6 @@ function Invocations({ job }: { job: Job }) {
   const tokens = log.reduce((n, e) => n + (e.input_tokens ?? 0) + (e.output_tokens ?? 0), 0);
   return (
     <section>
-      <h2>{tx("Model calls")}</h2>
       {/* Not folded: this was a <details> when it shared a long page with everything else,
           but the tab exists only to show this table, so opening it should show it. */}
       <div className="card">
@@ -914,7 +912,6 @@ function QaSection({ job }: { job: Job }) {
     return <Empty>{tx("QA has not proposed any test cases for this development.")}</Empty>;
   return (
     <section>
-      <h2>{tx("Test cases")}</h2>
       <TestCaseList cases={cases} />
     </section>
   );
@@ -929,7 +926,6 @@ function Steering({ job }: { job: Job }) {
   const inbox = job.data.inbox;
   return (
     <section>
-      <h2>{tx("Steering")}</h2>
       <div className="card">
         <p className="muted small">
           {tx("Messages reach the next role that runs; each is delivered exactly once.")}
@@ -1006,7 +1002,6 @@ function History({ job, projectId }: { job: Job; projectId: string }) {
   );
   return (
     <section>
-      <h2>{tx("History")}</h2>
       <div className="card">
         <ul className="feed">
           {items.map((item) => (

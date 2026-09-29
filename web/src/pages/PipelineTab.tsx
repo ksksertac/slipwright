@@ -4,7 +4,7 @@
 // own detail in place: the four stages, whatever needs a decision, and the tabs, the same
 // view its page shows. The step-by-step flow -- the cards grouped into stages and linked
 // by arrows, with a side panel per step -- is the first of those tabs.
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { describeError, type Job, type Lane, type Profile, type StepCard } from "../api/client";
 import {
@@ -17,11 +17,13 @@ import {
   useSetPlan,
   useSetProfile,
   useSetTestCases,
+  useSkipDeployment,
+  useSkipTests,
   useTransition,
 } from "../api/hooks";
 import { AgentIcon, DomainBadge, ROLE_LABEL } from "../components/agents";
 import { BulkBar } from "../components/BulkBar";
-import { Recommendation, RetryActions } from "../components/GateActions";
+import { Recommendation, RetryActions, SkipDeploymentButton } from "../components/GateActions";
 import { DeploymentGate } from "../components/DeploymentGate";
 import { DesignGate } from "../components/DesignGate";
 import { Detail } from "../components/Detail";
@@ -735,10 +737,11 @@ function GateEditor({ job, step }: { job: Job; step: StepCard }) {
   const tx = useT();
   const approve = useApprove(job.id);
   const reject = useReject(job.id);
+  const skipDeployment = useSkipDeployment(job.id);
   const toast = useToast();
   const [rejecting, setRejecting] = useState(false);
   const [feedback, setFeedback] = useState("");
-  const error = approve.error ?? reject.error;
+  const error = approve.error ?? reject.error ?? skipDeployment.error;
 
   return (
     <div className="gate" style={{ marginBottom: 14 }}>
@@ -763,9 +766,17 @@ function GateEditor({ job, step }: { job: Job; step: StepCard }) {
             <IconCheck /> {tx("Approve")}
           </button>
           {!rejecting ? (
-            <button className="btn bad small" onClick={() => setRejecting(true)}>
-              {tx("Reject…")}
-            </button>
+            <>
+              <button className="btn bad small" onClick={() => setRejecting(true)}>
+                {tx("Reject…")}
+              </button>
+              {step.key === "deploy_gate" && (
+                <SkipDeploymentButton
+                  mutation={skipDeployment}
+                  onSkipped={() => toast.ok(tx("Deployment skipped"))}
+                />
+              )}
+            </>
           ) : (
             <>
               <input
@@ -800,12 +811,15 @@ function SaveRow({
   saving,
   onSave,
   error,
+  extra,
 }: {
   jobId: string;
   dirty: boolean;
   saving: boolean;
   onSave: () => Promise<boolean>;
   error: string | null;
+  /** a gate's own further answer, beside Reject -- the test cases' "go on without tests" */
+  extra?: ReactNode;
 }) {
   const tx = useT();
   const approve = useApprove(jobId);
@@ -829,9 +843,12 @@ function SaveRow({
           <IconCheck /> {dirty ? tx("Save & approve") : tx("Approve")}
         </button>
         {!rejecting ? (
-          <button className="btn bad small" disabled={busy} onClick={() => setRejecting(true)}>
-            {tx("Reject…")}
-          </button>
+          <>
+            <button className="btn bad small" disabled={busy} onClick={() => setRejecting(true)}>
+              {tx("Reject…")}
+            </button>
+            {extra}
+          </>
         ) : (
           <>
             <input
@@ -1014,6 +1031,8 @@ function TestCasesGateEditor({ job }: { job: Job }) {
   const tx = useT();
   const server = job.data.test_cases as unknown as TestCaseShape[];
   const save = useSetTestCases(job.id);
+  const skipTests = useSkipTests(job.id);
+  const toast = useToast();
   const [draft, setDraft] = useState<TestCaseShape[]>(server);
   const [dirty, setDirty] = useState(false);
   const [seen, setSeen] = useState(server);
@@ -1051,7 +1070,30 @@ function TestCasesGateEditor({ job }: { job: Job }) {
         dirty={dirty}
         saving={save.isPending}
         onSave={onSave}
-        error={save.error ? describeError(save.error) : null}
+        error={
+          save.error
+            ? describeError(save.error)
+            : skipTests.error
+              ? describeError(skipTests.error)
+              : null
+        }
+        extra={
+          // GateActions offers this at the same gate; the drawer has its own row and once
+          // left it out, so the one answer that saves the most expensive step was missing
+          // exactly where the cases are read
+          <button
+            className="btn small"
+            disabled={save.isPending || skipTests.isPending}
+            onClick={() =>
+              skipTests.mutate(undefined, { onSuccess: () => toast.ok(tx("Tests skipped")) })
+            }
+            title={tx(
+              "no tests are written and the development goes straight to delivery; the cases stay on the record",
+            )}
+          >
+            {skipTests.isPending ? tx("Skipping…") : tx("Go on without tests")}
+          </button>
+        }
       />
     </>
   );

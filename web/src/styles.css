@@ -5722,3 +5722,29 @@ tr.run-detail td {
 .brief-group .rule:last-child {
   border-bottom: 0;
 }
+
+/* ChatGPT sign-in on the Models page: the link, and the code big enough to type from */
+.chatgpt-signin {
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+.chatgpt-code {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+}
+.chatgpt-code-value {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  padding: 6px 14px;
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  color: var(--accent);
+}

@@ -399,8 +399,10 @@ function DevelopmentsTab({ projectId }: { projectId: string }) {
 
       <div className="card flush">
         <div className="card-head">
-          <h3>{tx("Developments")}</h3>
-          <span className="faint small">{jobs.data?.length ?? 0}</span>
+          {/* the tab is called Developments already; the head only says how many */}
+          <span className="muted small">
+            {tx("{n} development(s)", { n: jobs.data?.length ?? 0 })}
+          </span>
         </div>
         {jobs.isLoading && (
           <div className="card-body">

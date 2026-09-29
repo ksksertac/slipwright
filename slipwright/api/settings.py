@@ -88,6 +88,10 @@ class ProviderSettings(BaseModel):
     )
     max_tokens: int | None = Field(default=None, description="Output limit override.")
     default_max_tokens: int = Field(description="The vendor's default output limit.")
+    kind: Literal["api_key", "subscription"] = Field(
+        default="api_key",
+        description="subscription: signed in with a person's plan (ChatGPT), not a key.",
+    )
 
 
 class ProviderSettingsIn(BaseModel):
@@ -405,6 +409,58 @@ def provider_models(name: str, request: Request) -> ProviderModels:
     except ProviderError as exc:
         status = 400 if "no API key" in str(exc) else 502
         raise HTTPException(status_code=status, detail=str(exc)) from exc
+
+
+# -- ChatGPT subscription ------------------------------------------------------------------------
+# Signing in runs ``codex login --device-auth`` on this server: it prints a link and a code,
+# the person opens the one and types the other, and the CLI stores the session in this
+# account's own Codex home. Nothing here sees a password or a token.
+
+
+class ChatGPTLogin(BaseModel):
+    status: Literal["signed_in", "waiting", "signed_out"]
+    url: str | None = Field(default=None, description="Where to enter the code.")
+    code: str | None = Field(default=None, description="The one-time code to enter there.")
+
+
+def _codex_home(request: Request) -> Path:
+    require_owner(request)
+    home = engine_for(request).codex_home()
+    if home is None:
+        raise HTTPException(
+            status_code=404,
+            detail="signing in with a ChatGPT plan is switched off on this installation",
+        )
+    return home
+
+
+@router.get("/settings/providers/chatgpt/login", response_model=ChatGPTLogin)
+def chatgpt_login_status(request: Request) -> ChatGPTLogin:
+    home = _codex_home(request)
+    return ChatGPTLogin(status=engine_for(request).codex_logins.status(home))
+
+
+@router.post("/settings/providers/chatgpt/login", response_model=ChatGPTLogin)
+def chatgpt_login(request: Request) -> ChatGPTLogin:
+    """Start a device-code sign-in and hand back the link and the code to enter there."""
+    home = _codex_home(request)
+    logins = engine_for(request).codex_logins
+    if logins.status(home) == "signed_in":
+        return ChatGPTLogin(status="signed_in")
+    try:
+        login = logins.start(home)
+    except ProviderError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return ChatGPTLogin(status="waiting", url=login.url, code=login.code)
+
+
+@router.delete("/settings/providers/chatgpt/login", response_model=ChatGPTLogin)
+def chatgpt_logout(request: Request) -> ChatGPTLogin:
+    home = _codex_home(request)
+    eng = engine_for(request)
+    eng.codex_logins.sign_out(home)
+    eng.update_provider_settings("chatgpt")  # drops the cached client of the old session
+    return ChatGPTLogin(status="signed_out")
 
 
 # -- model prices ------------------------------------------------------------------------------

@@ -9,6 +9,7 @@ import { BreakdownTree, type BreakdownShape, type PlanShape } from "./Breakdown"
 import { ViolationsTable, type ReviewRecord } from "./Review";
 import { DomainBadge } from "./agents";
 import { TestCaseList, type CaseShape } from "./TestCases";
+import { useSay, type Say } from "../i18n/said";
 
 type Dict = Record<string, unknown>;
 
@@ -30,6 +31,7 @@ function parseJson(text: string): unknown {
 
 export function Detail({ text }: { text: string | null | undefined }) {
   const tx = useT();
+  const say = useSay();
   if (!text) return <span className="muted">{tx("no detail")}</span>;
   if (looksLikeDiff(text))
     return (
@@ -45,7 +47,7 @@ export function Detail({ text }: { text: string | null | undefined }) {
       </Copyable>
     );
   const pretty = JSON.stringify(value, null, 2);
-  const blocks = layout(value, tx);
+  const blocks = layout(value, tx, say);
   if (blocks.length === 0)
     return (
       <Copyable text={pretty}>
@@ -65,8 +67,10 @@ export function Detail({ text }: { text: string | null | undefined }) {
   );
 }
 
-/** The parts of a record we know how to lay out, in reading order; empty when none. */
-function layout(value: unknown, tx: T): ReactNode[] {
+/** The parts of a record we know how to lay out, in reading order; empty when none.
+ *  The summary, decisions and goals are the agents' own prose, so they go through `say`;
+ *  the raw JSON below them stays exactly what was recorded. */
+function layout(value: unknown, tx: T, say: Say): ReactNode[] {
   // stage-one QA details written before the summary moved in are a bare array of cases
   if (isDictList(value) && value.length > 0 && value.every((c) => typeof c.name === "string"))
     return [<CaseList key="cases" cases={value as CaseShape[]} title={tx("Test cases")} />];
@@ -75,7 +79,7 @@ function layout(value: unknown, tx: T): ReactNode[] {
   if (isDictList(value.violations) && typeof value.verdict === "string") {
     const record = value as unknown as ReviewRecord;
     return [
-      record.summary ? <p key="summary">{record.summary}</p> : null,
+      record.summary ? <p key="summary">{say(record.summary)}</p> : null,
       <ViolationsTable key="violations" violations={record.violations} />,
     ].filter(Boolean);
   }
@@ -85,7 +89,7 @@ function layout(value: unknown, tx: T): ReactNode[] {
   if (summary)
     out.push(
       <p key="summary" className="lead">
-        {summary}
+        {say(summary)}
       </p>,
     );
 
@@ -95,7 +99,7 @@ function layout(value: unknown, tx: T): ReactNode[] {
         <h4>{tx("Decisions")}</h4>
         <ul>
           {value.decisions.map((d, i) => (
-            <li key={i}>{d}</li>
+            <li key={i}>{say(d)}</li>
           ))}
         </ul>
       </section>,
@@ -121,7 +125,7 @@ function layout(value: unknown, tx: T): ReactNode[] {
         <ol className="phases">
           {phases.map((p, i) => (
             <li key={i}>
-              {p.goal} <DomainBadge domain={p.domain} />
+              {say(p.goal)} <DomainBadge domain={p.domain} />
               {p.files && p.files.length > 0 && (
                 <span className="muted small mono"> — {p.files.join(", ")}</span>
               )}

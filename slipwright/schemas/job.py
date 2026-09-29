@@ -291,6 +291,12 @@ class JobData(BaseModel):
     deploy_written: list[str] = Field(
         default_factory=list, description="Deployment files written into the branch."
     )
+    deploy_skipped: bool = Field(
+        default=False,
+        description="The deployment proposal was read and deliberately not taken up: "
+        "DevOps writes no deployment files and opens the pull request with the code "
+        "alone. The deployment may be done by hand, or not wanted at all.",
+    )
     pr_url: str | None = None
     ci_attempts: int = Field(default=0, ge=0)
     inbox: list[InboxMessage] = Field(default_factory=list)

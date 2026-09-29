@@ -54,6 +54,7 @@ export type RoleConfig = Schemas["RoleConfig"];
 export type Permission = Schemas["Permission"];
 export type TestCaseIn = Schemas["TestCaseIn"];
 export type ProviderSettings = Schemas["ProviderSettings"];
+export type ChatGPTLogin = Schemas["ChatGPTLogin"];
 export type Overview = Schemas["Overview"];
 export type AgentSummary = Schemas["AgentSummary"];
 export type AgentRouting = Schemas["AgentRouting"];

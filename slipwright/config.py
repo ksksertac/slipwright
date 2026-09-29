@@ -48,6 +48,18 @@ class Settings:
     # Only a Docker install needs them; from source the paths are the host's already.
     host_work_dir: str | None = None
     host_repos: str | None = None
+    # Running the agents on a ChatGPT plan through the Codex CLI (providers/codex.py). A
+    # person's own plan, on their own machine: None decides from the installation -- on
+    # for a local one, off for anything that looks hosted (a database server, a container
+    # per command), where it would be strangers' plans spent on a shared machine.
+    chatgpt_subscription: bool | None = None
+
+    @property
+    def chatgpt_enabled(self) -> bool:
+        if self.chatgpt_subscription is not None:
+            return self.chatgpt_subscription
+        runner = os.environ.get("SLIPWRIGHT_RUNNER", "local").strip().lower()
+        return self.database_url is None and runner != "docker"
 
     @property
     def db_path(self) -> Path:
@@ -107,6 +119,10 @@ class Settings:
             settings.local_repos = Path(env["SLIPWRIGHT_LOCAL_REPOS"])
         settings.host_work_dir = env.get("SLIPWRIGHT_HOST_WORK_DIR") or None
         settings.host_repos = env.get("SLIPWRIGHT_HOST_REPOS") or None
+        if env.get("SLIPWRIGHT_CHATGPT_SUBSCRIPTION", "").strip():
+            settings.chatgpt_subscription = (
+                env["SLIPWRIGHT_CHATGPT_SUBSCRIPTION"].strip().lower() not in _OFF
+            )
         settings.dev = env.get("SLIPWRIGHT_DEV", "").strip().lower() not in ("", *_OFF)
         return settings
 
@@ -137,6 +153,8 @@ def build_engine(settings: Settings) -> Engine:
         provider=build_provider(settings.provider, seed),
     )
     engine.local_repos_root = settings.local_repos
+    if settings.chatgpt_enabled:
+        engine.codex_root = settings.state_dir / "codex"
     engine.host_paths = HostPaths(
         [
             (str(settings.work_dir), settings.host_work_dir or ""),

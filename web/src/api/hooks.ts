@@ -5,6 +5,7 @@ import {
   api,
   type ActivityItem,
   type ChannelName,
+  type ChatGPTLogin,
   type CheckoutPath,
   type NotifyChannel,
   type NotifyChannelIn,
@@ -489,6 +490,16 @@ export function useSkipTests(jobId: string) {
   });
 }
 
+/** Open the pull request without the deployment files. Only the deployment gate offers
+ *  it; the server refuses anywhere else. */
+export function useSkipDeployment(jobId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<Job>(`/api/jobs/${jobId}/skip-deployment`, {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.job(jobId) }),
+  });
+}
+
 export function useUndoAutoApproval(jobId: string) {
   const qc = useQueryClient();
   return useMutation({
@@ -862,6 +873,45 @@ export function useCreateSourceRepo(name: string) {
     mutationFn: (body: { name: string; private?: boolean; description?: string }) =>
       api.post<SourceRepo>(`/api/settings/sources/${name}/repos`, body),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.sourceRepos(name) }),
+  });
+}
+
+// -- a ChatGPT plan, through the Codex CLI ------------------------------------------------
+
+const chatgptLogin = ["settings", "providers", "chatgpt", "login"] as const;
+
+/** Where the sign-in stands. Asked every few seconds while a code is out, so the page
+ * notices the moment it is approved in the other tab. */
+export function useChatGPTLogin(enabled: boolean) {
+  const qc = useQueryClient();
+  return useQuery({
+    queryKey: chatgptLogin,
+    queryFn: async () => {
+      const state = await api.get<ChatGPTLogin>("/api/settings/providers/chatgpt/login");
+      if (state.status === "signed_in") void qc.invalidateQueries({ queryKey: keys.providers });
+      return state;
+    },
+    enabled,
+    refetchInterval: (q) => (q.state.data?.status === "waiting" ? 3000 : false),
+  });
+}
+
+export function useStartChatGPTLogin() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<ChatGPTLogin>("/api/settings/providers/chatgpt/login"),
+    onSuccess: (state) => qc.setQueryData(chatgptLogin, { status: state.status }),
+  });
+}
+
+export function useChatGPTLogout() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.delete<ChatGPTLogin>("/api/settings/providers/chatgpt/login"),
+    onSuccess: (state) => {
+      qc.setQueryData(chatgptLogin, state);
+      void qc.invalidateQueries({ queryKey: keys.providers });
+    },
   });
 }
 

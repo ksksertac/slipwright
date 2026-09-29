@@ -217,6 +217,11 @@ export const TR: Record<string, string> = {
   "Reject…": "Reddet…",
   "Go on without tests": "Testsiz devam et",
   "Skipping…": "Atlanıyor…",
+  "Tests skipped": "Testler atlandı",
+  "Go on without deployment": "Dağıtımsız devam et",
+  "Deployment skipped": "Dağıtım atlandı",
+  "no deployment files are written; the pull request carries the code alone and the plan stays on the record":
+    "dağıtım dosyası yazılmaz; pull request yalnızca kodu taşır, plan kayıtta kalır",
   "no tests are written and the development goes straight to delivery; the cases stay on the record":
     "test yazılmaz, geliştirme doğrudan teslime geçer; senaryolar kayıtta kalır",
   "Send rejection": "Reddi gönder",
@@ -1843,4 +1848,18 @@ export const TR: Record<string, string> = {
   Risks: "Riskler",
   Developers: "Geliştiriciler",
   "Every agent": "Tüm ajanlar",
+  "sign in to use it": "kullanmak için giriş yap",
+  "signed in": "giriş yapıldı",
+  "not signed in": "giriş yapılmadı",
+  "sign in to list the models": "modelleri görmek için giriş yap",
+  "Runs the agents on your ChatGPT plan instead of API credit, through OpenAI's own Codex CLI on this server. First turn on “Enable device code sign-in for Codex” under ChatGPT → Settings → Security.":
+    "Ajanları API bakiyesi yerine ChatGPT aboneliğinle, OpenAI'ın kendi Codex CLI'ı üzerinden bu sunucuda çalıştırır. Önce ChatGPT → Ayarlar → Güvenlik altında “Enable device code sign-in for Codex” seçeneğini aç.",
+  "Signed in with ChatGPT": "ChatGPT ile giriş yapıldı",
+  "Sign out": "Çıkış yap",
+  "1. Open this page and sign in to ChatGPT:": "1. Bu sayfayı aç ve ChatGPT'ye giriş yap:",
+  "2. Enter this code there:": "2. Oraya bu kodu gir:",
+  "Waiting for you to approve it…": "Onaylamanı bekliyor…",
+  "Getting a code…": "Kod alınıyor…",
+  "Sign in with ChatGPT": "ChatGPT ile giriş yap",
+  "ChatGPT subscription (Codex)": "ChatGPT aboneliği (Codex)",
 };

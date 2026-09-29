@@ -98,6 +98,10 @@ class Reply:
     final: str | None = None
     #: the person pressed "reject" and must say why before anything happens
     ask_reason: bool = False
+    #: (label, callback data) pairs to put under the message. A question the bot asks of
+    #: its own accord -- "shall I start this?" -- rather than a gate, which has its own
+    #: prompt rows and its own buttons.
+    buttons: list[tuple[str, str]] = field(default_factory=list)
 
 
 def _default_resume(engine: Engine) -> Callable[[str], None]:
@@ -394,7 +398,9 @@ class Notifier:
         # a linked person asking where things stand. Answered from the store, as them,
         # and never by letting a model near the database -- see notify/ask.py
         answer = ask(self, user_id=link.user_id, text=text)
-        return Reply(answer) if answer else None
+        if answer is None:
+            return None
+        return Reply(answer.text, buttons=answer.buttons)
 
     def _refusal(self, user_id: str, job: Job) -> str | None:
         """Why this person may not decide at this job's gate, or ``None``. The chat twin of

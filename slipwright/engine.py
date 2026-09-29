@@ -55,7 +55,9 @@ from slipwright.mail import Mailer, MailSettings, OutboxMailer, SmtpMailer
 from slipwright.notify.core import notify_gate, notify_outcome, settle_prompts
 from slipwright.orchestrator import IllegalTransitionError, Orchestrator
 from slipwright.providers import ModelProvider, ProviderUnavailableError
+from slipwright.providers.codex import Logins
 from slipwright.providers.registry import (
+    CHATGPT,
     DEFAULT_PROVIDER,
     PROVIDERS,
     Credentials,
@@ -339,6 +341,14 @@ class Engine:
         # what the checkouts are called on the person's own machine (Docker: /work is a
         # volume the host sees under another name); empty means they are already there
         self.host_paths = HostPaths()
+        # Where each account's ChatGPT sign-in (the Codex CLI's home) is kept. None switches
+        # the subscription provider off, which is what a hosted installation is: strangers'
+        # plans must not be spent on a shared machine. Under the state directory, never
+        # the work directory, so a job's commands cannot find a session by relative path.
+        self.codex_root: Path | None = None
+        # the sign-ins in progress; one object, shared by every per-account copy, because a
+        # sign-in outlives the request that started it
+        self.codex_logins = Logins()
         self._standards_index: StandardsIndex | None = None
         self._standards_editor: StandardsEditor | None = None
         self.orchestrator = Orchestrator(store)
@@ -504,11 +514,23 @@ class Engine:
             )
         self.store.set_setting(f"agents.{role.value}", {"provider": provider, "model": model})
 
+    def codex_home(self) -> Path | None:
+        """This account's own Codex sign-in directory; None when the feature is off."""
+        if self.codex_root is None:
+            return None
+        who = self.store.scoped_to if isinstance(self.store, ScopedStore) else ""
+        return self.codex_root / (who or "installation")
+
     def provider_credentials(self, name: str) -> Credentials | None:
         """Stored key first, else the vendor's environment variable; None when neither."""
         spec = PROVIDERS.get(name)
         if spec is None:
             return None
+        if name == CHATGPT:
+            home = self.codex_home()
+            if home is None or not (home / "auth.json").is_file():
+                return None
+            return Credentials(name=name, api_key="", base_url="", home=str(home))
         data: dict[str, Any] = self.store.get_setting(f"providers.{name}", {}) or {}
         key = self.store.get_setting(f"providers.{name}.api_key") or os.environ.get(spec.env_var)
         if not key:
@@ -524,10 +546,15 @@ class Engine:
         default = self.default_provider_name()
         out: list[dict[str, Any]] = []
         for spec in PROVIDERS.values():
+            if spec.name == CHATGPT and self.codex_home() is None:
+                continue  # switched off here: not offered at all
             data: dict[str, Any] = self.store.get_setting(f"providers.{spec.name}", {}) or {}
             stored = self.store.get_setting(f"providers.{spec.name}.api_key")
-            env = os.environ.get(spec.env_var)
+            env = os.environ.get(spec.env_var) if spec.env_var else None
             key = stored or env
+            if spec.kind == "subscription":
+                # no key: "set" means signed in, and the hint says with what
+                key = "ChatGPT" if self.provider_credentials(spec.name) else None
             out.append(
                 {
                     "name": spec.name,
@@ -537,12 +564,17 @@ class Engine:
                     "default_base_url": spec.default_base_url,
                     "base_url": data.get("base_url"),
                     "key_set": bool(key),
-                    "key_hint": f"…{str(key)[-4:]}" if key else None,
+                    "key_hint": (
+                        (key if spec.kind == "subscription" else f"…{str(key)[-4:]}")
+                        if key
+                        else None
+                    ),
                     "key_from_env": bool(env) and not stored,
                     "is_default": spec.name == default,
                     "default_model": data.get("default_model"),
                     "max_tokens": data.get("max_tokens"),
                     "default_max_tokens": spec.max_tokens,
+                    "kind": spec.kind,
                 }
             )
         return out
@@ -1028,11 +1060,17 @@ class Engine:
         if not missing:
             return out
         profile = self.seed_profile
+        payer = None if owner_id == ANY_OWNER else owner_id
         if project_id is not None:
             with contextlib.suppress(ProjectNotFound):
-                profile = self.project_profile(self.store.get_project(project_id))
+                project = self.store.get_project(project_id)
+                profile = self.project_profile(project)
+                # the project's prose is translated on the keys its agents wrote it with.
+                # The endpoint passes no owner, and ``None`` is the installation's keys: a
+                # hosted install has none, so every account read its agents untranslated
+                payer = project.owner_id
         try:
-            provider = self.provider_for(None if owner_id == ANY_OWNER else owner_id)
+            provider = self.provider_for(payer)
         except ProviderUnavailableError:
             return out
         for written in sorted({by_source[t] for t in missing}):
@@ -1641,6 +1679,32 @@ class Engine:
             job,
             JobState.DEVOPS,
             note=f"skipped the tests: {len(job.data.test_cases)} case(s) were not written",
+        )
+        return self._run(job) if run else job
+
+    def skip_deployment(self, job_id: str, *, run: bool = True) -> Job:
+        """Read the deployment proposal and go on without it: the pull request carries the
+        code and no ``deployment/`` files.
+
+        The same reasoning as ``skip_tests``. Rejecting means "propose it again", and a
+        person who deploys by hand, or does not deploy this at all, has no proposal they
+        would accept -- rejecting over and over only pays DevOps to keep proposing. The
+        plan stays on the record so the gate shows what was passed over.
+        """
+        job = self.store.get(job_id)
+        if job.state is not JobState.AWAITING_DEPLOY_APPROVAL:
+            raise NotAwaitingApproval(job)
+        scripts = (job.data.deploy or {}).get("scripts") or []
+        job.data.deploy_skipped = True
+        job.data.devops_stage = 2
+        job.data.feedback = None
+        job.data.reject_rounds = 0
+        job.data.output_hashes = {}
+        self.store.save(job)
+        job = self.orchestrator.transition(
+            job,
+            JobState.DEVOPS,
+            note=f"skipped the deployment: {len(scripts)} script(s) were not written",
         )
         return self._run(job) if run else job
 
@@ -3693,7 +3757,7 @@ class Engine:
         that was approved and quietly dropped is worse than one that never ran.
         """
         plan = job.data.deploy or {}
-        if job.data.deploy_written or not plan.get("scripts"):
+        if job.data.deploy_written or job.data.deploy_skipped or not plan.get("scripts"):
             return None
         profile = self._profile(job)
         worktree = require_worktree(job)

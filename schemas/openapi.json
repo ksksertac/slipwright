@@ -867,6 +867,50 @@
         "title": "ChannelView",
         "type": "object"
       },
+      "ChatGPTLogin": {
+        "properties": {
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The one-time code to enter there.",
+            "title": "Code"
+          },
+          "status": {
+            "enum": [
+              "signed_in",
+              "waiting",
+              "signed_out"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where to enter the code.",
+            "title": "Url"
+          }
+        },
+        "required": [
+          "code",
+          "status",
+          "url"
+        ],
+        "title": "ChatGPTLogin",
+        "type": "object"
+      },
       "CheckoutPath": {
         "properties": {
           "host_path": {
@@ -2370,6 +2414,12 @@
             "description": "The deployment proposal: target, services, scripts, notes. Approved (and possibly edited) by a person before anything is written.",
             "title": "Deploy"
           },
+          "deploy_skipped": {
+            "default": false,
+            "description": "The deployment proposal was read and deliberately not taken up: DevOps writes no deployment files and opens the pull request with the code alone. The deployment may be done by hand, or not wanted at all.",
+            "title": "Deploy Skipped",
+            "type": "boolean"
+          },
           "deploy_written": {
             "description": "Deployment files written into the branch.",
             "items": {
@@ -2717,6 +2767,7 @@
           "ci_attempts",
           "cost_usd",
           "deploy",
+          "deploy_skipped",
           "deploy_written",
           "design",
           "design_approvals",
@@ -5193,6 +5244,16 @@
             "title": "Key Set",
             "type": "boolean"
           },
+          "kind": {
+            "default": "api_key",
+            "description": "subscription: signed in with a person's plan (ChatGPT), not a key.",
+            "enum": [
+              "api_key",
+              "subscription"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
           "label": {
             "title": "Label",
             "type": "string"
@@ -5225,6 +5286,7 @@
           "key_from_env",
           "key_hint",
           "key_set",
+          "kind",
           "label",
           "max_tokens",
           "name"
@@ -9572,6 +9634,46 @@
         "summary": "Retry"
       }
     },
+    "/api/jobs/{job_id}/skip-deployment": {
+      "post": {
+        "description": "Open the pull request without the deployment files. Only at the deployment\ngate; 409 anywhere else.",
+        "operationId": "skip_deployment_api_jobs__job_id__skip_deployment_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Skip Deployment"
+      }
+    },
     "/api/jobs/{job_id}/skip-tests": {
       "post": {
         "description": "Go on without tests. Only at the test-cases gate; 409 anywhere else.",
@@ -11815,6 +11917,66 @@
           }
         },
         "summary": "Get Providers",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/settings/providers/chatgpt/login": {
+      "delete": {
+        "operationId": "chatgpt_logout_api_settings_providers_chatgpt_login_delete",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatGPTLogin"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Chatgpt Logout",
+        "tags": [
+          "settings"
+        ]
+      },
+      "get": {
+        "operationId": "chatgpt_login_status_api_settings_providers_chatgpt_login_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatGPTLogin"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Chatgpt Login Status",
+        "tags": [
+          "settings"
+        ]
+      },
+      "post": {
+        "description": "Start a device-code sign-in and hand back the link and the code to enter there.",
+        "operationId": "chatgpt_login_api_settings_providers_chatgpt_login_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatGPTLogin"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Chatgpt Login",
         "tags": [
           "settings"
         ]

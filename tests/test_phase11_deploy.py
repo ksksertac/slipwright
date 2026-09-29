@@ -307,6 +307,39 @@ def test_the_pull_request_mentions_the_deployment(seeded: Engine, repo: Path) ->
     assert "`deployment/deploy.sh`" in draft
 
 
+def test_the_deployment_can_be_skipped_and_the_pull_request_still_opens(
+    seeded: Engine, repo: Path
+) -> None:
+    """Somebody who deploys by hand, or not at all, has no proposal they would accept;
+    rejecting only pays DevOps to propose again. Skipping writes nothing and delivers
+    the code on its own."""
+    job = _to_deploy_gate(seeded, repo)
+    job = seeded.skip_deployment(job.id)
+
+    assert job.state is JobState.DONE
+    assert job.data.deploy_skipped is True
+    assert job.data.deploy_written == []
+    assert job.worktree_path is not None
+    assert not (job.worktree_path / DEPLOY_FOLDER).exists(), "nothing was to be written"
+    assert job.data.pr_url == "https://example.test/pr/1"
+    assert any("skipped the deployment: 3 script(s)" in (t.note or "") for t in job.history)
+    # the proposal stays on the record; the pull request does not claim a deployment
+    assert (job.data.deploy or {}).get("target") == "aws"
+    from slipwright.roles.devops import draft_description
+
+    assert "## Deployment" not in draft_description(job)
+
+
+def test_skip_deployment_endpoint(client: TestClient, seeded: Engine, repo: Path) -> None:
+    job = _to_deploy_gate(seeded, repo)
+    resp = client.post(f"/api/jobs/{job.id}/skip-deployment")
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["data"]["deploy_skipped"] is True
+    # it is an answer to this gate only: asking again, or of a job not there, is a 409
+    assert client.post(f"/api/jobs/{job.id}/skip-deployment").status_code == 409
+    assert client.post("/api/jobs/nope/skip-deployment").status_code == 404
+
+
 def test_the_deployment_gate_can_be_answered() -> None:
     """The deployment gate had no approve and no reject anywhere.
 

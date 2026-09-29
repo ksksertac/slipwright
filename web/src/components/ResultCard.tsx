@@ -50,9 +50,15 @@ export function ResultCard({ job, compact = false }: { job: Job; compact?: boole
   return (
     <div className="card result">
       <div className="row spread">
-        <h3 style={{ margin: 0 }}>
-          {finished ? tx("What came out of it") : tx("What is on the branch so far")}
-        </h3>
+        {/* under the development's "What came out" tab the tab is the title; the project
+            page shows the card on its own and needs one */}
+        {compact ? (
+          <h3 style={{ margin: 0 }}>
+            {finished ? tx("What came out of it") : tx("What is on the branch so far")}
+          </h3>
+        ) : (
+          <span />
+        )}
         <span className={`badge ${r.merged ? "ok" : finished ? "idle" : "work"}`}>
           {r.merged
             ? tx("merged into {branch}", { branch: r.base_branch })

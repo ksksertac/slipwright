@@ -6,6 +6,7 @@ import {
   useReject,
   useReplanJob,
   useRetryJob,
+  useSkipDeployment,
   useSkipTests,
 } from "../api/hooks";
 import { isOwner, mayActAt } from "../api/gates";
@@ -207,6 +208,7 @@ export function GateActions({ job, compact = false }: { job: Job; compact?: bool
   const approve = useApprove(job.id);
   const reject = useReject(job.id);
   const skipTests = useSkipTests(job.id);
+  const skipDeployment = useSkipDeployment(job.id);
   const team = useMyTeam();
   const [rejecting, setRejecting] = useState(false);
   const [feedback, setFeedback] = useState("");
@@ -214,6 +216,9 @@ export function GateActions({ job, compact = false }: { job: Job; compact?: bool
   // has a third answer: not "these cases are wrong" but "this one is not worth testing".
   // Rejecting keeps the meaning it has everywhere else -- QA writes the cases again.
   const canSkipTests = job.state === "awaiting_test_approval" && job.data.qa_stage === 1;
+  // the same at the deployment gate: somebody who deploys by hand, or not at all, has no
+  // proposal they would accept, and rejecting only pays DevOps to propose again
+  const canSkipDeployment = job.state === "awaiting_deploy_approval";
   // What the supervisor asked for, already written out. Retyping a numbered paragraph of
   // it into the box was the only way to act on it, so the box opens holding it -- to send
   // as it stands, to edit, or to clear and say something else entirely.
@@ -235,7 +240,7 @@ export function GateActions({ job, compact = false }: { job: Job; compact?: bool
       </div>
     );
   }
-  const error = approve.error ?? reject.error ?? skipTests.error;
+  const error = approve.error ?? reject.error ?? skipTests.error ?? skipDeployment.error;
 
   return (
     <div className={compact ? "row" : "gate"}>
@@ -282,6 +287,7 @@ export function GateActions({ job, compact = false }: { job: Job; compact?: bool
                 {skipTests.isPending ? tx("Skipping…") : tx("Go on without tests")}
               </button>
             )}
+            {canSkipDeployment && <SkipDeploymentButton mutation={skipDeployment} />}
           </>
         ) : (
           <>
@@ -320,5 +326,29 @@ export function GateActions({ job, compact = false }: { job: Job; compact?: bool
       )}
       {error && <div className="callout error">{describeError(error)}</div>}
     </div>
+  );
+}
+
+/** "Open the pull request without deployment files" -- shared by the gate row here and
+ *  the pipeline drawer, which answers the deployment gate with its own buttons. */
+export function SkipDeploymentButton({
+  mutation,
+  onSkipped,
+}: {
+  mutation: ReturnType<typeof useSkipDeployment>;
+  onSkipped?: () => void;
+}) {
+  const tx = useT();
+  return (
+    <button
+      className="btn small"
+      disabled={mutation.isPending}
+      onClick={() => mutation.mutate(undefined, { onSuccess: onSkipped })}
+      title={tx(
+        "no deployment files are written; the pull request carries the code alone and the plan stays on the record",
+      )}
+    >
+      {mutation.isPending ? tx("Skipping…") : tx("Go on without deployment")}
+    </button>
   );
 }

@@ -127,7 +127,25 @@ def strings_of(job: Job) -> list[str]:
         prose = step.note and prose_in_note(step.note)
         if prose:
             out.append(prose)
+        summary = _summary_in_detail(step.detail)
+        if summary:
+            out.append(summary)
     return _clean(out)
+
+
+def _summary_in_detail(detail: str | None) -> str | None:
+    """The agent's own account of a step, where the step's record is a JSON object that
+    carries one. The QA's word on its cases and the Product Owner's on the backlog live
+    nowhere else -- not in the job's data -- so without this the drawer that opens on them
+    showed the one paragraph a person reads first in the project's language."""
+    if not detail or not detail.lstrip().startswith("{"):
+        return None  # a diff or a build log: not prose, and not worth parsing
+    try:
+        record = json.loads(detail)
+    except ValueError:
+        return None
+    summary = record.get("summary") if isinstance(record, dict) else None
+    return summary if isinstance(summary, str) else None
 
 
 def _clean(texts: list[str]) -> list[str]:

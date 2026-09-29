@@ -1010,6 +1010,19 @@ def create_app(
         background.add_task(_resume, eng, job.id)
         return job
 
+    @api.post("/jobs/{job_id}/skip-deployment", response_model=Job)
+    def skip_deployment(job_id: str, request: Request, background: BackgroundTasks) -> Job:
+        """Open the pull request without the deployment files. Only at the deployment
+        gate; 409 anywhere else."""
+        eng = engine_for(request)
+        _may_act(request, _get(eng, job_id, request))
+        try:
+            job = eng.skip_deployment(job_id, run=False)
+        except NotAwaitingApproval as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        background.add_task(_resume, eng, job.id)
+        return job
+
     @api.get("/jobs/{job_id}/design", response_model=DesignReview)
     def design_review(job_id: str, request: Request) -> DesignReview:
         """The screens of this development, with where each one stands."""

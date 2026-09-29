@@ -11,12 +11,14 @@ every later press is checked against.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import re
 from typing import TYPE_CHECKING, Any
 
 import httpx
 
+from slipwright.notify.ask import PRESS, decide
 from slipwright.notify.base import HttpFactory, NotifyError, settled_text
 from slipwright.notify.text import Message, word
 
@@ -159,6 +161,23 @@ def handle_update(notifier: Notifier, adapter: TelegramAdapter, update: dict[str
         who = str((press.get("from") or {}).get("id", ""))
         chat_id = ((press.get("message") or {}).get("chat") or {}).get("id")
         action, _, prompt_id = data.partition(":")
+        if action == PRESS:
+            # a question the bot asked of its own accord, not a gate: answered in
+            # notify/ask.py, and the buttons come away so it cannot be answered twice
+            answered = decide(notifier, external_id=who, choice=prompt_id)
+            with contextlib.suppress(NotifyError):
+                adapter.call(
+                    "answerCallbackQuery", callback_query_id=press.get("id"), text=answered[:190]
+                )
+            if chat_id is not None and (press.get("message") or {}).get("message_id"):
+                with contextlib.suppress(NotifyError):
+                    adapter.call(
+                        "editMessageReplyMarkup",
+                        chat_id=chat_id,
+                        message_id=(press.get("message") or {})["message_id"],
+                    )
+                adapter.send(chat_id, answered)
+            return
         if action not in ("a", "r") or not prompt_id:
             return
         reply = notifier.on_press(
@@ -220,7 +239,14 @@ def handle_update(notifier: Notifier, adapter: TelegramAdapter, update: dict[str
             text=text,
         )
     if said is not None and said.text:
-        adapter.send(chat.get("id"), said.text)
+        extra: dict[str, Any] = {}
+        if said.buttons:
+            extra["reply_markup"] = {
+                "inline_keyboard": [
+                    [{"text": label, "callback_data": data} for label, data in said.buttons]
+                ]
+            }
+        adapter.send(chat.get("id"), said.text, **extra)
 
 
 __all__ = ["TelegramAdapter", "handle_update"]
