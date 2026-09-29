@@ -87,6 +87,22 @@ any point and restart it: in-flight jobs resume, jobs waiting on you keep waitin
 
 ## Getting started
 
+### From the published image
+
+Every push to `main` publishes `ghcr.io/ksksertac/slipwright:latest` (for amd64 and arm64);
+a `v1.2.3` tag publishes `:1.2.3` as well. Nothing to clone or build:
+
+```sh
+docker run -d --name slipwright -p 8500:8500     -v slipwright-state:/data -v slipwright-work:/work     ghcr.io/ksksertac/slipwright:latest                 # http://localhost:8500
+docker exec slipwright slipwright user add ada           # first login (admin)
+```
+
+Model keys can be entered under Settings → Models, or passed with `-e ANTHROPIC_API_KEY=…`.
+Keep `/data` and `/work` as two separate volumes: `/data` holds the key that decrypts every
+stored credential, and a job's own commands must not be able to reach it from a checkout.
+The sandbox image for `SLIPWRIGHT_RUNNER=docker` is published beside it as
+`ghcr.io/ksksertac/slipwright-runner` — point `SLIPWRIGHT_RUNNER_IMAGE` at it.
+
 ### With Docker (recommended for a local install)
 
 Everything Slipwright needs — the API, the web UI, `git`, `gh`, `uv`/Python and Node for
@@ -109,6 +125,29 @@ docker compose exec slipwright slipwright user add ada   # first login (admin)
   out in `compose.yaml`.
 - `SLIPWRIGHT_PROVIDER=scripted docker compose up` runs the whole pipeline with canned
   model replies, no keys needed.
+
+### On PostgreSQL
+
+The SQLite file is the default and needs nothing. To keep everything in PostgreSQL
+instead, add to `.env`:
+
+```sh
+SLIPWRIGHT_DATABASE_URL=postgresql+psycopg://slipwright:slipwright@postgres/slipwright
+COMPOSE_PROFILES=postgres       # so a plain `docker compose up` starts the database too
+```
+
+then, if the installation already has people and projects in its SQLite file:
+
+```sh
+docker compose up --build -d
+docker compose exec slipwright slipwright db copy   # SQLite file -> PostgreSQL
+docker compose restart slipwright                   # pick up in-flight work from the copy
+```
+
+`db copy` refuses a database that already has accounts, so running it twice does no
+harm, and it leaves the SQLite file where it was: removing `SLIPWRIGHT_DATABASE_URL`
+goes back to it. Stored credentials travel still encrypted, so keep the same
+`SLIPWRIGHT_SECRET_KEY` -- or, without one, the same `/data` volume, where `secret.key` is.
 
 ### From source
 
@@ -185,7 +224,19 @@ Settings come from the environment (or `serve` flags):
 | `SLIPWRIGHT_SECRET_KEY` | generated into the state dir | Fernet key for stored tokens |
 | `SLIPWRIGHT_DEV` | `0` | allow the Vite dev server origin (CORS) |
 
+| `SLIPWRIGHT_CHATGPT_SUBSCRIPTION` | on locally, off when hosted | offer **ChatGPT subscription (Codex)** under Settings → Models |
+
 Model provider keys come from Settings → Models or the environment variables above.
+
+**A ChatGPT plan instead of API credit.** On an installation you run for yourself, Settings
+→ Models offers *ChatGPT subscription (Codex)*: **Sign in with ChatGPT** shows a link and a
+one-time code (turn on *Enable device code sign-in for Codex* under ChatGPT → Settings →
+Security first), and from then on any agent can be pinned to it. Slipwright does not talk to
+ChatGPT itself — it runs OpenAI's own Codex CLI (`codex exec`), signed in with your account,
+and each account's session lives under the state directory. It is off on a hosted
+installation (PostgreSQL or `SLIPWRIGHT_RUNNER=docker`), where it would be other people's
+plans on a shared machine. A Claude subscription is deliberately not offered: Anthropic does
+not allow third-party products to sign in with claude.ai — use an API key.
 DevOps pushes and opens pull requests through the `gh` CLI,
 using the stored GitHub token when one is set.
 

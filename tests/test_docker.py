@@ -9,7 +9,8 @@ ROOT = Path(__file__).resolve().parent.parent
 
 def test_dockerfile_builds_ui_and_ships_the_toolchains() -> None:
     dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
-    assert "FROM node:" in dockerfile and "npm run build" in dockerfile
+    # the UI stage runs on the build machine's own platform, so it may carry --platform
+    assert "node:22-bookworm-slim AS web" in dockerfile and "npm run build" in dockerfile
     assert "FROM python:3.12" in dockerfile
     for tool in ("git", " gh ", "nodejs", "/uv "):
         assert tool in dockerfile, tool

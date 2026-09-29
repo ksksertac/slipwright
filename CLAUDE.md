@@ -110,6 +110,7 @@ uv run ruff check . && uv run mypy     # lint and types
 cd web && npm run build                # the server serves web/dist from slipwright/api/static
 uv run python scripts/export_schema.py # after any API model change
 cd web && node scripts/gen-api.mjs     # then regenerate the TypeScript client
+uv run slipwright db copy              # an installation's SQLite file -> SLIPWRIGHT_DATABASE_URL
 ```
 
 The web UI is **built, not served from source**: a change is invisible until
@@ -140,6 +141,7 @@ opened again, and an image with no driver in it.
 | `SLIPWRIGHT_RUNNER` | `local` | `docker` for a container per command |
 | `SLIPWRIGHT_QUOTA_MAX_*` | `0` (off) | running jobs, projects, disk |
 | `SLIPWRIGHT_DEMO_PROJECT` | on | the worked example a new account starts with |
+| `SLIPWRIGHT_CHATGPT_SUBSCRIPTION` | on locally, off when hosted | agents on a ChatGPT plan via the Codex CLI |
 | `SLIPWRIGHT_SECRET_KEY` | generated in the state dir | encrypts stored credentials. **Required** with PostgreSQL |
 
 ## How to write here

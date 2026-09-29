@@ -6,7 +6,9 @@
 #   docker compose exec slipwright slipwright user add ada
 #
 # Stage 1: build the web UI ----------------------------------------------------------------
-FROM node:22-bookworm-slim AS web
+# On the build machine's own platform: its output is static files, the same for every
+# architecture, and building it under emulation for arm64 is several times slower.
+FROM --platform=$BUILDPLATFORM node:22-bookworm-slim AS web
 WORKDIR /src/web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci --no-audit --no-fund
@@ -38,6 +40,10 @@ RUN apt-get update \
     && apt-get update \
     && apt-get install -y --no-install-recommends gh nodejs \
     && rm -rf /var/lib/apt/lists/*
+
+# OpenAI's Codex CLI: how a ChatGPT plan runs the agents (providers/codex.py). Signed in per
+# account from Settings -> Models; each session is kept under /data, never under /work.
+RUN npm install -g @openai/codex && npm cache clean --force
 
 # uv: runs Slipwright and is the package manager of the example (Python) profile
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/

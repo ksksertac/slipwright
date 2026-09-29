@@ -117,7 +117,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-auth", action="store_true", help="serve without login (trusted local use only)"
     )
 
-    user = sub.add_parser("user", help="manage logins (works directly on the state dir)")
+    user = sub.add_parser("user", help="manage logins (works directly on the database)")
     usub = user.add_subparsers(dest="user_command", required=True)
     uadd = usub.add_parser("add", help="create a login; the first one becomes admin")
     uadd.add_argument("name")
@@ -125,11 +125,21 @@ def build_parser() -> argparse.ArgumentParser:
     uadd.add_argument("--admin", action="store_true", help="make this user an admin")
     usub.add_parser("list", help="list logins")
 
-    token = sub.add_parser("token", help="bearer tokens (works directly on the state dir)")
+    token = sub.add_parser("token", help="bearer tokens (works directly on the database)")
     tsub = token.add_subparsers(dest="token_command", required=True)
     tnew = tsub.add_parser("new", help="issue a token for a user and print it once")
     tnew.add_argument("name", help="username")
     tnew.add_argument("--label", default="cli")
+
+    db = sub.add_parser("db", help="the database itself (works directly on it)")
+    dsub = db.add_subparsers(dest="db_command", required=True)
+    dcopy = dsub.add_parser(
+        "copy", help="copy everything from the local SQLite file into SLIPWRIGHT_DATABASE_URL"
+    )
+    dcopy.add_argument(
+        "--from", dest="source", type=Path, default=None,
+        help="the SQLite file to read (default: jobs.sqlite3 in the state dir)",
+    )
 
     standards = sub.add_parser("standards", help="standards corpus and its search index")
     ssub = standards.add_subparsers(dest="standards_command", required=True)
@@ -192,6 +202,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _token_cmd(settings, args)
     if args.command == "standards":
         return _standards(settings, args)
+    if args.command == "db":
+        return _db(settings, args)
 
     try:
         if args.command == "project":
@@ -266,10 +278,47 @@ def _project(base_url: str, args: argparse.Namespace) -> int:
 
 
 def _open_store(settings: Settings) -> Any:
+    from slipwright.secrets import load_or_create_key
     from slipwright.store import JobStore
 
     settings.state_dir.mkdir(parents=True, exist_ok=True)
-    return JobStore(settings.db_path)
+    # the database the server uses, with the key the server uses: this once opened the
+    # SQLite file unconditionally, so on an installation moved to PostgreSQL `user add`
+    # created a login the server never saw
+    return JobStore(settings.database, secret_key=load_or_create_key(settings.state_dir))
+
+
+def _db(settings: Settings, args: argparse.Namespace) -> int:
+    from slipwright.store.copy import TargetNotEmpty, copy_database, count_rows
+    from slipwright.store.db import Database, DatabaseUnavailable
+
+    if settings.database_url is None:
+        print("error: set SLIPWRIGHT_DATABASE_URL to the database to copy into",
+              file=sys.stderr)
+        return 1
+    source_path = args.source or settings.db_path
+    if not source_path.is_file():
+        print(f"error: no SQLite database at {source_path}", file=sys.stderr)
+        return 1
+    source, target = Database(source_path), Database(settings.database_url)
+    try:
+        counts = copy_database(
+            source, target, progress=lambda name, n: print(f"  {name:<24} {n}")
+        )
+        # read back rather than trust the counter: this is the moment to find out
+        if count_rows(target) != counts:
+            print("error: the copy does not match its source", file=sys.stderr)
+            return 1
+    except (TargetNotEmpty, DatabaseUnavailable) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    finally:
+        source.dispose()
+        target.dispose()
+    print(f"copied {sum(counts.values())} rows from {source_path}")
+    # stored credentials travel encrypted; without the same key they read back as nothing
+    print("keep SLIPWRIGHT_SECRET_KEY (or the secret.key beside the SQLite file) unchanged")
+    return 0
 
 
 def _user(settings: Settings, args: argparse.Namespace) -> int:
