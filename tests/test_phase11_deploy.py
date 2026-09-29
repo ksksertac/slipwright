@@ -180,6 +180,53 @@ def test_approving_writes_the_scripts_into_the_deployment_folder(
     assert job.data.pr_url == "https://example.test/pr/1"
 
 
+def _as_the_feed_reads(note: str) -> str | None:
+    """What the activity feed shows for an engine note: the first rule in
+    web/src/i18n/notes.ts that matches it, the way `noteText` walks them. None when no
+    rule does, which the feed shows as the note itself."""
+    import re
+
+    source = Path("web/src/i18n/notes.ts").read_text(encoding="utf-8")
+    rules = re.findall(r're:\s*/((?:\\/|[^/\n])+)/,\s*out:\s*"([^"]*)"', source)
+    for pattern, out in rules:
+        if re.search(pattern.replace("\\/", "/"), note):
+            return out
+    return None
+
+
+def test_a_deployment_that_was_written_does_not_read_as_a_failure(
+    seeded: Engine, repo: Path
+) -> None:
+    """Every note DevOps leaves starts "devops: ", and the feed's rule for "devops: ..."
+    was written for the ones that end a development -- no token, a push refused. The
+    proposal and the written files matched it too, so a deployment written, pushed and
+    merged read in History as "DevOps could not finish: 4 deployment file(s) written"."""
+    job = seeded.approve(_to_deploy_gate(seeded, repo).id)
+    assert job.state is JobState.DONE
+
+    said = [t.note for t in job.history if (t.note or "").startswith("devops:")]
+    assert any("proposed" in n for n in said) and any("written" in n for n in said)
+    for note in said:
+        shown = _as_the_feed_reads(note)
+        assert shown is not None and "could not finish" not in shown, (note, shown)
+    # and the failures still say so
+    failure = _as_the_feed_reads("devops: no token for GitHub")
+    assert failure is not None and "could not finish" in failure
+
+
+def test_what_came_out_is_read_again_when_the_development_moves() -> None:
+    """The result card asked every twenty seconds while the development ran and stopped
+    asking when it finished. The deployment is written, pushed and the development done
+    within a second, so the last answer was the branch before DevOps: the finished page
+    listed five files and offered a merge of the branch the pull request had nine on."""
+    web = Path("web/src")
+    card = (web / "components" / "ResultCard.tsx").read_text(encoding="utf-8")
+    assert "job.history.length" in card, "each recorded step must be a new question"
+    hooks = (web / "api" / "hooks.ts").read_text(encoding="utf-8")
+    hook = hooks[hooks.index("export function useJobResult") :][:600]
+    assert "step" in hook and "queryKey: [...keys.jobResult(id), step]" in hook
+
+
 def test_the_person_can_edit_the_proposal_before_approving(
     seeded: Engine, client: TestClient, repo: Path
 ) -> None:

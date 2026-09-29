@@ -1194,6 +1194,18 @@ def create_app(
         result: JobResult = eng.job_result(job_id)
         return result
 
+    @api.post("/jobs/{job_id}/cancel", response_model=Job)
+    def cancel(job_id: str, request: Request) -> Job:
+        """Stop a development. 409 when it has already ended."""
+        eng = engine_for(request)
+        _refuse_if_demo(request, _get(eng, job_id, request))
+        try:
+            return eng.cancel(job_id, by=require_owner(request).username)
+        except NotAwaitingApproval as exc:
+            raise HTTPException(
+                status_code=409, detail="this development has already ended"
+            ) from exc
+
     @api.post("/jobs/{job_id}/retry", response_model=Job)
     def retry(
         job_id: str, request: Request, background: BackgroundTasks, body: Retry | None = None

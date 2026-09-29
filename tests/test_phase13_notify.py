@@ -23,6 +23,7 @@ from fastapi.testclient import TestClient
 
 from slipwright.api import create_app
 from slipwright.engine import Engine
+from slipwright.mail import read_outbox
 from slipwright.notify import msteams
 from slipwright.notify.core import Notifier
 from slipwright.notify.discord import DiscordAdapter, handle_dispatch
@@ -715,3 +716,168 @@ def test_a_database_written_before_notifications_upgrades_into_one(tmp_path: Pat
         assert {"chat_links", "chat_codes", "chat_prompts"} <= tables
     finally:
         db.dispose()
+
+
+# -- a failure, and trying again from the chat -------------------------------------------------
+
+
+def _fails(eng: Engine, job_id: str, why: str = "mobile_ui failed: provider_rejected") -> None:
+    """Stop the development the way a phase that gave up does, and let the engine tell
+    whoever it tells."""
+    eng.store.update_state(job_id, JobState.FAILED, note=why)
+    eng._notify_outcome(eng.store.get(job_id))
+
+
+def _retried(eng: Engine, job_id: str) -> int:
+    return sum(1 for t in eng.store.get(job_id).history if (t.note or "").startswith("retried"))
+
+
+def test_a_failure_reaches_its_owner_with_a_button_that_tries_again(
+    eng: Engine, owner: TestClient, store: JobStore, repo: Path, chat: FakeChat
+) -> None:
+    _set(owner, "telegram", secrets={"token": TG_TOKEN})
+    notifier = _quiet(eng, _owner_id(store))
+    _link_telegram(owner, notifier, 42)
+    job_id = _start(owner, repo)
+    _fails(eng, job_id)
+
+    told = _asked(chat)[-1].body
+    assert told["chat_id"] == 42
+    assert "geliştirme durdu" in told["text"] and "provider_rejected" in told["text"]
+    buttons = told["reply_markup"]["inline_keyboard"][0]
+    assert [b["text"] for b in buttons] == ["↻ Yeniden dene"]
+
+    _press(notifier, 42, buttons[0]["callback_data"])
+    assert eng.store.get(job_id).state is not JobState.FAILED
+    assert _retried(eng, job_id) == 1
+    edited = chat.to("/editMessageText")[-1].body
+    assert "↻ Ada yeniden başlattı" in edited["text"] and "reply_markup" not in edited
+
+
+def test_a_retry_button_pressed_after_the_page_retried_it_does_nothing(
+    eng: Engine, owner: TestClient, store: JobStore, repo: Path, chat: FakeChat
+) -> None:
+    _set(owner, "telegram", secrets={"token": TG_TOKEN})
+    notifier = _quiet(eng, _owner_id(store))
+    _link_telegram(owner, notifier, 42)
+    job_id = _start(owner, repo)
+    _fails(eng, job_id)
+    retry = _asked(chat)[-1].body["reply_markup"]["inline_keyboard"][0][0]["callback_data"]
+
+    assert owner.post(f"/api/jobs/{job_id}/retry").status_code == 200  # on the web page
+    assert "başka yerden yeniden başlatıldı" in chat.to("/editMessageText")[-1].body["text"]
+
+    _press(notifier, 42, retry)
+    assert _retried(eng, job_id) == 1
+
+
+def test_a_button_from_an_earlier_failure_does_not_retry_a_later_one(
+    eng: Engine, owner: TestClient, store: JobStore, repo: Path, chat: FakeChat
+) -> None:
+    _set(owner, "telegram", secrets={"token": TG_TOKEN})
+    notifier = _quiet(eng, _owner_id(store))
+    _link_telegram(owner, notifier, 42)
+    job_id = _start(owner, repo)
+    _fails(eng, job_id)
+    first = _asked(chat)[-1].body["reply_markup"]["inline_keyboard"][0][0]["callback_data"]
+    eng.retry(job_id, run=False)
+    _fails(eng, job_id, "the same wall again")
+
+    _press(notifier, 42, first)
+    assert eng.store.get(job_id).state is JobState.FAILED
+    assert _retried(eng, job_id) == 1
+
+
+def test_only_the_owner_is_offered_a_retry(
+    eng: Engine, owner: TestClient, store: JobStore, repo: Path, chat: FakeChat
+) -> None:
+    _set(owner, "telegram", secrets={"token": TG_TOKEN})
+    _invite(owner, role="architect")
+    app = create_app(eng, resume_on_startup=False, require_auth=True)
+    with TestClient(app) as member:
+        _accept(member, store)
+        notifier = _quiet(eng, _owner_id(store))
+        _link_telegram(member, notifier, 77)
+        job_id = _start(owner, repo)
+        gate = _asked(chat)
+        _fails(eng, job_id)
+        # moving a stopped development is the owner's; the Architect is not asked
+        assert _asked(chat) == gate
+
+
+def test_a_failure_is_mailed_to_the_owner_when_there_is_a_mail_server(
+    eng: Engine, owner: TestClient, store: JobStore, repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    job_id = _start(owner, repo)
+    _fails(eng, job_id)
+    # no server: the outbox stands in for account letters, not for news
+    assert not [m for m in read_outbox(store, to="owner@acme.com") if "durdu" in m["subject"]]
+
+    letters: list[tuple[str, str, str]] = []
+
+    class Recording:
+        def send(self, to: str, subject: str, body: str) -> None:
+            letters.append((to, subject, body))
+
+    eng.update_mail_settings(transport="smtp", host="smtp.example", from_address="sw@example")
+    monkeypatch.setattr(eng, "mailer", lambda: Recording())
+    eng.retry(job_id, run=False)
+    _fails(eng, job_id)
+
+    assert len(letters) == 1
+    to, subject, body = letters[0]
+    assert to == "owner@acme.com" and "geliştirme durdu" in subject
+    assert "provider_rejected" in body and f"{BASE}/projects/" in body and job_id in body
+
+
+def test_discord_offers_a_retry_and_its_button_starts_it_again(
+    eng: Engine, owner: TestClient, store: JobStore, repo: Path, chat: FakeChat
+) -> None:
+    _set(owner, "discord", secrets={"bot_token": "x" * 40})
+    notifier = _quiet(eng, _owner_id(store))
+    adapter = notifier.adapter("discord")
+    assert isinstance(adapter, DiscordAdapter)
+    code = owner.post("/api/notify/link-code").json()["code"]
+    handle_dispatch(
+        notifier,
+        adapter,
+        "MESSAGE_CREATE",
+        {"author": {"id": "U9", "username": "ada"}, "channel_id": "DM1", "content": code},
+    )
+    job_id = _start(owner, repo)
+    _fails(eng, job_id)
+
+    told = [c for c in chat.to("/channels/DM1/messages") if c.method == "POST"][-1].body
+    buttons = told["components"][0]["components"]
+    assert [b["label"] for b in buttons] == ["↻ Yeniden dene"]
+    assert buttons[0]["custom_id"].startswith("sw:t:")
+
+    handle_dispatch(
+        notifier,
+        adapter,
+        "INTERACTION_CREATE",
+        {
+            "id": "I2",
+            "token": "tok",
+            "type": 3,
+            "user": {"id": "U9"},
+            "data": {"custom_id": buttons[0]["custom_id"]},
+        },
+    )
+    assert eng.store.get(job_id).state is not JobState.FAILED
+    patched = [c for c in chat.calls if c.method == "PATCH"][-1].body
+    assert patched["components"] == [] and "yeniden başlattı" in patched["content"]
+
+
+def test_a_gate_button_forged_onto_a_failure_does_nothing(
+    eng: Engine, owner: TestClient, store: JobStore, repo: Path, chat: FakeChat
+) -> None:
+    _set(owner, "telegram", secrets={"token": TG_TOKEN})
+    notifier = _quiet(eng, _owner_id(store))
+    _link_telegram(owner, notifier, 42)
+    job_id = _start(owner, repo)
+    _fails(eng, job_id)
+    retry = _asked(chat)[-1].body["reply_markup"]["inline_keyboard"][0][0]["callback_data"]
+
+    _press(notifier, 42, "a:" + retry.partition(":")[2])
+    assert eng.store.get(job_id).state is JobState.FAILED

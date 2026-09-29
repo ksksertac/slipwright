@@ -19,9 +19,9 @@ Nothing moves past a gate until a person says yes.
 
 <br />
 
-<img src="docs/demo.gif" alt="From the Agents page to a new project: its first request is typed in, the brief is approved, and the development stops for a person at the architecture, test-case and written-test gates before it finishes" />
+<img src="docs/demo.gif" alt="From the Agents page to a new project linked to Jira. The backlog and plan are approved and become issues on the Jira board; the Designer's screens are opened at full size, web and mobile, and approved; QA's test cases are approved from Telegram; the tasks move to Done on the board; DevOps proposes an AWS deployment on ECS Fargate, writes the Dockerfile, task definition, deploy script and workflow, pushes the branch and opens the pull request; and the bot answers /status" />
 
-<sub>Recorded against the scripted provider — no model, no key. <code>uv run python scripts/demo.py</code> sets the same thing up.</sub>
+<sub>Recorded against the scripted provider — no model, no key. Telegram, Jira and GitHub are local stand-ins that Slipwright's own code talks to: the press on the phone is what approves the gate, and the branch is really pushed. <code>uv run python scripts/demo.py</code> sets the same thing up.</sub>
 
 <br />
 

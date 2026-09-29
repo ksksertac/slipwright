@@ -1,0 +1,92 @@
+<!doctype html>
+<html>
+<head>
+<style>
+*{box-sizing:border-box}body{margin:0;font:15px/1.45 system-ui,-apple-system,Segoe UI,sans-serif;
+color:#1d2433;background:#f6f7fb}
+.tag{display:inline-block;background:#eef1ff;color:#3446c9;border-radius:999px;padding:2px 10px;
+font-size:12px;margin:0 6px 0 0}
+.primary{background:#3446c9;color:#fff;border:0;border-radius:8px;padding:9px 16px;font-weight:600;
+text-decoration:none;font-size:14px}
+input,textarea{font:inherit}
+
+header{display:flex;align-items:center;justify-content:space-between;padding:22px 40px;
+background:#fff;border-bottom:1px solid #e6e8f0}h1{margin:0;font-size:22px}
+main{display:grid;grid-template-columns:220px 1fr;gap:32px;padding:28px 40px}
+aside h3{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#6b7390;margin:0 0 10px}
+aside a{display:flex;justify-content:space-between;padding:7px 10px;border-radius:6px;color:#1d2433;
+text-decoration:none}aside a.on{background:#eef1ff;color:#3446c9;font-weight:600}
+.search{width:100%;padding:12px 16px;border:1px solid #d9dcea;border-radius:10px;background:#fff;
+margin-bottom:18px}ul{list-style:none;margin:0;padding:0;display:grid;
+grid-template-columns:1fr 1fr;gap:14px}li{background:#fff;border:1px solid #e6e8f0;border-radius:12px;
+padding:16px 18px}.row{display:flex;justify-content:space-between}time{color:#8a91a8;font-size:13px}
+p{margin:6px 0 10px;color:#4a5270}</style>
+</head>
+<body>
+<header>
+<h1>Notes</h1>
+<a class="primary">+ New note</a>
+</header>
+<main>
+<aside>
+<h3>Tags</h3>
+<a class="on">All notes <span>4</span>
+</a>
+<a>work <span>1</span>
+</a>
+<a>home <span>2</span>
+</a>
+<a>books <span>1</span>
+</a>
+<a>travel <span>1</span>
+</a>
+</aside>
+<section>
+<input class="search" placeholder="Search notes">
+<ul>
+<li>
+<div class="row">
+<b>Standup, Tuesday</b>
+<time>10:24</time>
+</div>
+<p>Ship search before the demo; tags can follow.</p>
+<div>
+<span class="tag">work</span>
+</div>
+</li>
+<li>
+<div class="row">
+<b>Groceries</b>
+<time>Yesterday</time>
+</div>
+<p>Milk, eggs, the good coffee.</p>
+<div>
+<span class="tag">home</span>
+</div>
+</li>
+<li>
+<div class="row">
+<b>Reading list</b>
+<time>Mon</time>
+</div>
+<p>Designing Data-Intensive Applications, ch. 5</p>
+<div>
+<span class="tag">books</span>
+</div>
+</li>
+<li>
+<div class="row">
+<b>Trip to Porto</b>
+<time>Sep 21</time>
+</div>
+<p>Book the train by Friday.</p>
+<div>
+<span class="tag">travel</span>
+<span class="tag">home</span>
+</div>
+</li>
+</ul>
+</section>
+</main>
+</body>
+</html>

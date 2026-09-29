@@ -1253,6 +1253,11 @@ export const TR: Record<string, string> = {
   "{1} test cases proposed": "{1} test senaryosu önerildi",
   "No test cases came back — asking again": "Cevapta test senaryosu yoktu — yeniden soruluyor",
   "Tests written and passing ({1} files): {2}": "Testler yazıldı ve geçiyor ({1} dosya): {2}",
+  "{1} deployment scripts proposed for {2}": "{2} için {1} dağıtım betiği önerildi",
+  "{1} deployment files written, in {2} parts: {3}":
+    "{1} dağıtım dosyası yazıldı, {2} parçada: {3}",
+  "{1} deployment files written: {2}": "{1} dağıtım dosyası yazıldı: {2}",
+  "Nothing to deploy: {1}": "Dağıtılacak bir şey yok: {1}",
   "Jira, second try: {1}": "Jira, ikinci deneme: {1}",
   "Jira: {1}": "Jira: {1}",
   "Jira: {1} updates": "Jira: {1} güncelleme",
@@ -1724,7 +1729,7 @@ export const TR: Record<string, string> = {
     "bu örnek proje: okumak için var, çalıştırmak için değil",
 
   // -- notifications ------------------------------------------------------------------------------------
-  "Connecting": "Bağlantı",
+  Connecting: "Bağlantı",
   "Asking where things are": "Durum sormak",
   "Nobody has an account here yet. The first one is the administrator's.":
     "Burada henüz kimsenin hesabı yok. İlk hesap yöneticinin olur.",
@@ -1737,6 +1742,16 @@ export const TR: Record<string, string> = {
   "This server still lets anybody in with the password it started with. Change it before it is reachable from anywhere but this machine.":
     "Bu sunucuya hâlâ kurulumla gelen parolayla girilebiliyor. Bu makinenin dışından erişilebilir olmadan önce değiştir.",
   "Change it": "Değiştir",
+  "{n} call(s) ran on your ChatGPT plan, which is not billed per call.":
+    "{n} çağrı ChatGPT aboneliğinde koştu; abonelik çağrı başına ücretlendirilmez.",
+  "on a plan, not billed per call": "abonelikte, çağrı başına ücret yok",
+  "Stop": "Durdur",
+  "Stopping…": "Durduruluyor…",
+  "Yes, stop it": "Evet, durdur",
+  "stop this development; what it has built stays":
+    "bu geliştirmeyi durdur; o ana kadar yapılanlar kalır",
+  "stopped": "durduruldu",
+  "Somebody stopped a development": "Biri bir geliştirmeyi durdurdu",
   "Remote control": "Uzaktan Yönet",
   "Run it from Telegram, without opening this page.": "Telegram'dan yönet, bu sayfayı açmadan.",
   "Link your Telegram account once and the bot answers where things stand, starts a development when you ask it to, and brings your own gates to you with two buttons. It reads your account and nobody else's.":

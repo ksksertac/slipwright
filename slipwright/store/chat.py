@@ -192,7 +192,7 @@ class ChatStoreMixin:
         values: dict[str, Any] = {}
         if status is not None:
             values["status"] = status
-            if status in ("approved", "rejected", "closed"):
+            if status in ("approved", "rejected", "retried", "closed"):
                 values["decided_at"] = utcnow().isoformat()
         if ref is not None:
             values["ref_json"] = json.dumps(ref)
@@ -211,7 +211,9 @@ class ChatStoreMixin:
                 .values(
                     status=to,
                     decided_at=(
-                        utcnow().isoformat() if to in ("approved", "rejected", "closed") else None
+                        utcnow().isoformat()
+                        if to in ("approved", "rejected", "retried", "closed")
+                        else None
                     ),
                 )
             )

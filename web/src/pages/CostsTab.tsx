@@ -29,7 +29,8 @@ export function CostsTab({ projectId }: { projectId: string }) {
   if (costs.isLoading) return <Loading rows={4} />;
   if (costs.error) return <ErrorBox error={costs.error} />;
   if (!costs.data) return null;
-  const { jobs, spent_usd, expected_usd, unpriced_calls, priced_models } = costs.data;
+  const { jobs, spent_usd, expected_usd, unpriced_calls, subscription_calls, priced_models } =
+    costs.data;
 
   if (priced_models === 0) {
     return (
@@ -53,6 +54,15 @@ export function CostsTab({ projectId }: { projectId: string }) {
           tone={expected_usd === null ? "" : spent_usd > expected_usd ? "bad" : "ok"}
         />
       </div>
+      {subscription_calls > 0 && (
+        /* not the same thing as a missing price: a plan is a flat fee, so nought is the
+           answer rather than the absence of one, and there is nothing to go and fill in */
+        <div className="muted small">
+          {tx("{n} call(s) ran on your ChatGPT plan, which is not billed per call.", {
+            n: subscription_calls,
+          })}
+        </div>
+      )}
       {unpriced_calls > 0 && (
         <div className="muted small">
           {tx("{n} call(s) ran on a model with no stored price and are not in these totals.", {
@@ -144,6 +154,11 @@ function Breakdown({ title, rows, roles }: { title: string; rows: Spend[]; roles
             {row.unpriced_calls > 0 && (
               <span className="faint tiny" title={tx("calls with no stored price")}>
                 +{row.unpriced_calls}
+              </span>
+            )}
+            {row.subscription_calls > 0 && (
+              <span className="faint tiny" title={tx("on a plan, not billed per call")}>
+                ∞{row.subscription_calls}
               </span>
             )}
           </li>

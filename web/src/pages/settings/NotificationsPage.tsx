@@ -30,11 +30,12 @@ const LABEL: Record<ChannelName, string> = {
   discord: "Discord",
   teams: "Microsoft Teams",
 };
-const EVENTS: NotifyEvent[] = ["gate", "failed", "done"];
+const EVENTS: NotifyEvent[] = ["gate", "failed", "cancelled", "done"];
 
 const EVENT_LABEL: Record<NotifyEvent, string> = {
   gate: "An agent is waiting for approval",
   failed: "A development stopped",
+  cancelled: "Somebody stopped a development",
   done: "A development finished",
 };
 

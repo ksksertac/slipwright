@@ -24,7 +24,7 @@ export function ResultCard({ job, compact = false }: { job: Job; compact?: boole
   // nothing to read before the branch exists; after that there is something to show at
   // every step, and it is asked for again while the agents are still committing to it
   const started = Boolean(job.data.base_commit);
-  const result = useJobResult(job.id, compact ? finished : started, !finished);
+  const result = useJobResult(job.id, compact ? finished : started, !finished, job.history.length);
 
   if (compact && !finished) return null;
   if (result.isLoading) return compact ? null : <Loading rows={3} />;

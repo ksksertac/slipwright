@@ -144,7 +144,7 @@ from slipwright.standards.retrieval import Retrieval, core_text, retrieve
 from slipwright.store import ANY_OWNER, JobInProgress, JobStore, ProjectNotFound
 from slipwright.store.scoped import ScopedStore
 from slipwright.support import SupportDesk
-from slipwright.teams import Teams
+from slipwright.teams import Teams, failed_letter
 from slipwright.translate import OTHER_LANGUAGE, strings_of, translate
 from slipwright.workspace import Workspace
 from slipwright.workspace import git as g
@@ -403,6 +403,10 @@ class Engine:
             JobState.DEVOPS: self._devops,
         }
         self._locks: defaultdict[str, threading.Lock] = defaultdict(threading.Lock)
+        #: Developments somebody has asked to stop. A running one cannot be interrupted
+        #: mid-call -- the model is already answering and the answer is already paid for
+        #: -- so the run loop reads this between steps and stops before the next one.
+        self._cancelled: set[str] = set()
         # one analysis or intake round at a time per project (T11.2)
         self._brief_locks: defaultdict[str, threading.Lock] = defaultdict(threading.Lock)
         # one test run at a time per checkout, so runs never trample each other's files
@@ -2122,6 +2126,37 @@ class Engine:
         job = self.orchestrator.transition(job, back, note=f"re-run by hand: {step}")
         return self._run(job) if run else job
 
+    def cancel(self, job_id: str, *, by: str | None = None) -> Job:
+        """Stop a development, wherever it is.
+
+        The answer to "this is not worth what it is spending", which can be true at any
+        point: mid-phase, or sitting at a gate nobody is going to answer. It is not a
+        failure -- nothing went wrong -- so it does not land in ``failed``, is not offered
+        a retry, and does not count against anything.
+
+        What it cannot do is interrupt a call that is already in flight. The model is
+        answering and that answer is already paid for, so the stop takes effect between
+        steps: whatever was running finishes, and nothing further begins. A development
+        that is not running at all stops here and now.
+        """
+        job = self.store.get(job_id)
+        if job.is_terminal:
+            raise NotAwaitingApproval(job)
+        note = "stopped" + (f" by {by}" if by else "")
+        # free means nothing is running it, so this is the one that has to do the work;
+        # busy means the run loop owns the job and will see the flag between steps
+        lock = self._locks[job.id]
+        if lock.acquire(blocking=False):
+            try:
+                self._cancelled.discard(job.id)
+                job = self.orchestrator.transition(job, JobState.CANCELLED, note=note)
+            finally:
+                lock.release()
+            return self._notify_outcome(job)
+        self._cancelled.add(job.id)
+        self.store.update_state(job.id, job.state, note=f"{note}: finishing the step it is on")
+        return self.store.get(job.id)
+
     def retry(self, job_id: str, *, run: bool = True, feedback: str | None = None) -> Job:
         """Continue a failed job from the step it failed in. Counters that made it give up
         (build attempts, retries, review rounds, CI fixes) start over; everything built so
@@ -2595,6 +2630,12 @@ class Engine:
             # questions still open in people's chats about where it was are now moot
             settle_prompts(self, job)
             while job.state in WORKING_STATES:
+                if job.id in self._cancelled:
+                    self._cancelled.discard(job.id)
+                    job = self.orchestrator.transition(
+                        job, JobState.CANCELLED, note="stopped: nothing further was started"
+                    )
+                    return self._notify_outcome(job)
                 handler = self.handlers.get(job.state)
                 if handler is None:
                     log.warning("no handler for state %s; job %s left as is", job.state, job.id)
@@ -2650,7 +2691,7 @@ class Engine:
         """Tell the groups that asked that a development finished or stopped. Once per
         arrival, on the same ``notified`` markers the gate letters use, so a restart does
         not announce a failure twice and a retried one that fails again does."""
-        if job.state not in (JobState.DONE, JobState.FAILED):
+        if job.state not in (JobState.DONE, JobState.FAILED, JobState.CANCELLED):
             return job
         visits = sum(
             1 for t in job.history if t.to_state is job.state and t.from_state is not job.state
@@ -2661,13 +2702,53 @@ class Engine:
         job.data.notified.append(marker)
         job = self.store.save(job)
         error = None
+        if job.state in (JobState.FAILED, JobState.CANCELLED):
+            last = next((t for t in reversed(job.history) if t.to_state is job.state), None)
+            error = last.note if last else None
+        kind = {
+            JobState.DONE: "done",
+            JobState.FAILED: "failed",
+            JobState.CANCELLED: "cancelled",
+        }[job.state]
+        notify_outcome(self, job, kind, error)
         if job.state is JobState.FAILED:
-            failure = next(
-                (t for t in reversed(job.history) if t.to_state is JobState.FAILED), None
-            )
-            error = failure.note if failure else None
-        notify_outcome(self, job, "done" if job.state is JobState.DONE else "failed", error)
+            self._mail_failure(job, error)
         return job
+
+    def _mail_failure(self, job: Job, error: str | None, lang: str = "tr") -> None:
+        """Write to the owner that their development stopped -- when there is a mail
+        server to write with. Unlike a gate letter this goes to the owner: nobody else may
+        retry it, and they are the one not looking at the page when it happens.
+
+        Only over SMTP. The outbox stands in for mail so that signing up works before a
+        server is configured; filling it with news nobody will read helps nobody.
+        """
+        if job.owner_id is None or not self.mail_settings().configured:
+            return
+        try:
+            user = self.raw_store.get_user(job.owner_id)
+            if not user.email or user.email_verified_at is None:
+                return
+            project = ""
+            if job.project_id:
+                with contextlib.suppress(ProjectNotFound):
+                    found = self.store.get_project(job.project_id)
+                    if found.is_demo:
+                        return
+                    project = found.name
+            root = (self.mail_settings().base_url or "").rstrip("/")
+            path = f"/projects/{job.project_id}/jobs/{job.id}" if job.project_id else "/"
+            letter = failed_letter(
+                lang,
+                link=f"{root}{path}",
+                request=job.request,
+                project=project,
+                error=(error or "")[:600],
+                name=user.username,
+            )
+            self.mailer().send(user.email, letter.subject, letter.body)
+        except Exception as exc:  # noqa: BLE001 - a lost letter must not change the outcome
+            log.warning("job %s: could not mail the owner about the failure: %s", job.id, exc)
 
     def _fail(self, job: Job, note: str, detail: str | None = None) -> Job:
         try:

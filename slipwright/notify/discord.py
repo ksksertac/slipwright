@@ -29,6 +29,9 @@ LIMIT = 2000
 #: GUILD_MESSAGES is not needed; direct messages are the only text the bot reads.
 INTENTS = 1 << 12  # DIRECT_MESSAGES
 
+#: The middle of a button's custom id, and the press it stands for.
+PRESSES = {"a": "approve", "r": "reject", "t": "retry"}
+
 # interaction and response types, by their Discord numbers
 PING, COMPONENT, MODAL_SUBMIT = 1, 3, 5
 PONG, REPLY, DEFERRED_UPDATE, MODAL = 1, 4, 6, 9
@@ -101,28 +104,23 @@ class DiscordAdapter:
             {
                 "content": text,
                 "allowed_mentions": {"parse": []},
-                "components": [
-                    {
-                        "type": 1,
-                        "components": [
-                            {
-                                "type": 2,
-                                "style": 3,  # green
-                                "label": word(self.lang, "approve"),
-                                "custom_id": f"sw:a:{prompt_id}",
-                            },
-                            {
-                                "type": 2,
-                                "style": 4,  # red
-                                "label": word(self.lang, "reject"),
-                                "custom_id": f"sw:r:{prompt_id}",
-                            },
-                        ],
-                    }
-                ],
+                "components": [{"type": 1, "components": self._buttons(msg, prompt_id)}],
             },
         )
         return {"channel": channel, "message_id": body.get("id"), "text": text}
+
+    def _buttons(self, msg: Message, prompt_id: str) -> list[dict[str, Any]]:
+        def button(style: int, label: str, action: str) -> dict[str, Any]:
+            return {
+                "type": 2,
+                "style": style,
+                "label": word(self.lang, label),
+                "custom_id": f"sw:{action}:{prompt_id}",
+            }
+
+        if msg.kind == "failed":
+            return [button(1, "retry", "t")]  # blurple
+        return [button(3, "approve", "a"), button(4, "reject", "r")]  # green, red
 
     def settle(self, address: dict[str, Any], ref: dict[str, Any], outcome: str) -> None:
         if not ref.get("message_id"):
@@ -234,12 +232,9 @@ def handle_dispatch(
         return
     _, action, prompt_id = parts
 
-    if data.get("type") == COMPONENT and action in ("a", "r"):
+    if data.get("type") == COMPONENT and action in PRESSES:
         reply = notifier.on_press(
-            "discord",
-            external_id=who,
-            prompt_id=prompt_id,
-            action="approve" if action == "a" else "reject",
+            "discord", external_id=who, prompt_id=prompt_id, action=PRESSES[action]
         )
         if reply.ask_reason:
             adapter.respond(data, adapter.reason_modal(prompt_id))

@@ -210,6 +210,25 @@ const RULES: Rule[] = [
     prose: [2],
   },
 
+  // -- DevOps ----------------------------------------------------------------------------
+  // Ahead of the "devops: ..." failure rule below, which matches every one of these too:
+  // a deployment written and pushed was once read back as "DevOps could not finish".
+  {
+    re: /^devops: (\d+) deployment script\(s\) proposed for (\w+)$/,
+    out: "{1} deployment scripts proposed for {2}",
+  },
+  {
+    re: /^devops: (\d+) deployment file\(s\) written in (\d+) parts — (.*)$/,
+    out: "{1} deployment files written, in {2} parts: {3}",
+    prose: [3],
+  },
+  {
+    re: /^devops: (\d+) deployment file\(s\) written — (.*)$/,
+    out: "{1} deployment files written: {2}",
+    prose: [2],
+  },
+  { re: /^devops: nothing to deploy — (.*)$/, out: "Nothing to deploy: {1}", prose: [1] },
+
   // -- Jira and the standards library ----------------------------------------------------
   { re: /^jira \(retry\): (.*)$/, out: "Jira, second try: {1}", lists: [1] },
   { re: /^jira \(\w+\): (.*)$/, out: "Jira: {1}", lists: [1] },

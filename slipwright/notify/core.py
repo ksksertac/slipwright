@@ -14,6 +14,10 @@ protocol. Three rules hold it up:
   colleague, the development re-planned -- is told so and does nothing. Otherwise an old
   message could approve a gate its reader has never seen.
 
+A failure is asked about the same way: its owner gets "try again?" in their own chat,
+the prompt carries which failure it was, and a press after the development has already
+been retried from the page -- or has failed again since -- does nothing.
+
 Nothing here may stop a development: every call out is caught and logged.
 """
 
@@ -37,7 +41,7 @@ from slipwright.notify.msteams import TeamsAdapter
 from slipwright.notify.slack import SlackAdapter
 from slipwright.notify.telegram import TelegramAdapter
 from slipwright.notify.text import Message, gate_message, outcome_message, test_message, word
-from slipwright.schemas.job import APPROVAL_STATES, Job, utcnow
+from slipwright.schemas.job import APPROVAL_STATES, Job, JobState, utcnow
 from slipwright.teams import agent_for_gate, may_act_at
 
 if TYPE_CHECKING:
@@ -64,7 +68,7 @@ FIELDS: dict[str, tuple[str, ...]] = {
 }
 #: What a group is told when nobody has chosen: the gates, which are what somebody has to
 #: act on. Failures and finishes are one click away.
-DEFAULT_EVENTS = ["gate", "failed"]
+DEFAULT_EVENTS = ["gate", "failed", "cancelled"]
 
 
 def gate_marker(job: Job) -> str:
@@ -76,6 +80,22 @@ def gate_marker(job: Job) -> str:
         1 for t in job.history if t.to_state is job.state and t.from_state is not job.state
     )
     return f"{job.state.value}:{visits}"
+
+
+def failure_marker(job: Job) -> str:
+    """Which failure a stopped job is at: ``failed:2`` the second time it failed. Empty
+    when it has not. What a "try again" button is tied to, as a gate's is to its visit."""
+    if job.state is not JobState.FAILED:
+        return ""
+    visits = sum(
+        1 for t in job.history if t.to_state is job.state and t.from_state is not job.state
+    )
+    return f"{job.state.value}:{visits}"
+
+
+def current_marker(job: Job) -> str:
+    """What a question about this job must be about to still be answerable."""
+    return gate_marker(job) or failure_marker(job)
 
 
 @dataclass
@@ -313,15 +333,73 @@ class Notifier:
             asked.append(prompt)
         return asked
 
+    def offer_retry(self, job: Job, *, error: str | None = None) -> list[ChatPrompt]:
+        """Tell the owner, in their own chat, that the development stopped, with a button
+        to try it again. Only the owner: retrying is theirs, never a member's (``_refusal``
+        says the same when the button is pressed). The worked example is never offered --
+        it has nothing to run."""
+        marker = failure_marker(job)
+        if not marker or self._is_demo(job):
+            return []
+        msg: Message | None = None
+        asked: list[ChatPrompt] = []
+        for link in self.store.chat_links(self.owner_key):
+            adapter = self.adapter(link.channel)
+            if adapter is None or not adapter.has_bot:
+                continue
+            if self.owner_key and link.user_id != job.owner_id:
+                continue
+            if msg is None:
+                msg = outcome_message(
+                    job,
+                    "failed",
+                    project=self._project(job),
+                    link=self._link(job),
+                    lang=self.lang,
+                    error=error,
+                )
+            prompt = self.store.add_chat_prompt(
+                owner_id=self.owner_key,
+                user_id=link.user_id,
+                channel=link.channel,
+                external_id=link.external_id,
+                job_id=job.id,
+                marker=marker,
+                address=link.address,
+            )
+            try:
+                # a message of kind "failed" is asked with one button: try again
+                ref = adapter.ask(link.address, msg, prompt.id)
+            except NotifyError as exc:
+                log.warning(
+                    "job %s: could not offer a retry to %s on %s: %s",
+                    job.id,
+                    link.label,
+                    link.channel,
+                    exc,
+                )
+                self.store.set_chat_prompt(prompt.id, status="closed")
+                continue
+            self.store.set_chat_prompt(prompt.id, ref=ref)
+            asked.append(prompt)
+        return asked
+
+    def _stale(self, prompt: ChatPrompt) -> str:
+        """What an unanswerable question comes to: a gate decided elsewhere, or a failure
+        that is no longer the one the question was about."""
+        if prompt.marker.startswith(f"{JobState.FAILED.value}:"):
+            return word(self.lang, "moved_on")
+        return word(self.lang, "decided_elsewhere")
+
     def settle(self, job: Job) -> int:
-        """Close every question about a gate visit this job is no longer at. Called when
-        the job moves, whoever moved it: the web page, the API, another chat."""
-        marker = gate_marker(job)
+        """Close every question about a gate visit -- or a failure -- this job is no longer
+        at. Called when the job moves, whoever moved it: the web page, the API, a chat."""
+        marker = current_marker(job)
         closed = 0
         for prompt in self.store.open_chat_prompts(job.id):
             if prompt.marker == marker:
                 continue
-            self._finish(prompt, word(self.lang, "decided_elsewhere"), status="closed")
+            self._finish(prompt, self._stale(prompt), status="closed")
             closed += 1
         return closed
 
@@ -402,17 +480,24 @@ class Notifier:
             return None
         return Reply(answer.text, buttons=answer.buttons)
 
+    def _is_demo(self, job: Job) -> bool:
+        if not job.project_id:
+            return False
+        try:
+            return bool(self.store.get_project(job.project_id).is_demo)
+        except Exception:  # noqa: BLE001 - a missing project has no demo flag
+            return False
+
     def _refusal(self, user_id: str, job: Job) -> str | None:
         """Why this person may not decide at this job's gate, or ``None``. The chat twin of
-        the API's ``_may_act``."""
-        if job.project_id:
-            try:
-                if self.store.get_project(job.project_id).is_demo:
-                    return word(self.lang, "demo")
-            except Exception:  # noqa: BLE001 - a missing project has no demo flag
-                pass
+        the API's ``_may_act`` -- and, for a failed job, of ``require_owner`` on the retry
+        endpoint: moving a stopped development is the owner's alone."""
+        if self._is_demo(job):
+            return word(self.lang, "demo")
         if not self.owner_key or user_id == job.owner_id:
             return None
+        if job.state is JobState.FAILED:
+            return word(self.lang, "owner_only")
         try:
             user = self.store.get_user(user_id)
         except KeyError:
@@ -444,18 +529,26 @@ class Notifier:
         if link is None or link.user_id != prompt.user_id:
             return Reply(word(self.lang, "not_linked"))
         if prompt.answered:
-            return Reply(word(self.lang, "decided_elsewhere"))
+            return Reply(self._stale(prompt))
         try:
             job = self.store.get(prompt.job_id)
         except KeyError:
-            self._finish(prompt, word(self.lang, "decided_elsewhere"), status="closed")
-            return Reply(word(self.lang, "decided_elsewhere"))
-        if gate_marker(job) != prompt.marker:
+            self._finish(prompt, self._stale(prompt), status="closed")
+            return Reply(self._stale(prompt))
+        if current_marker(job) != prompt.marker:
             self.settle(job)
-            return Reply(word(self.lang, "decided_elsewhere"))
+            return Reply(self._stale(prompt))
         refused = self._refusal(link.user_id, job)
         if refused is not None:
             return Reply(refused)
+        # each question offers its own buttons: a failure only "try again", a gate only
+        # "carry on" and "reject". Anything else arriving is a forged press
+        if job.state is JobState.FAILED:
+            if action != "retry":
+                return Reply(word(self.lang, "not_yours"))
+            return self._retry(prompt, job, link, external_id)
+        if action not in ("approve", "reject"):
+            return Reply(word(self.lang, "not_yours"))
 
         reason = (reason or "").strip() or None
         if action == "reject" and reason is None:
@@ -492,6 +585,32 @@ class Notifier:
         self.resume(job.id)
         return Reply(outcome, final=outcome)
 
+    def _retry(self, prompt: ChatPrompt, job: Job, link: ChatLink, external_id: str) -> Reply:
+        """The "try again" button: what the page's Retry does, on the owner's word."""
+        if not self.store.claim_chat_prompt(prompt.id, ("open",), "retried"):
+            return Reply(self._stale(prompt))
+        name = link.label or external_id
+        with contextlib.suppress(KeyError):
+            name = self.store.get_user(link.user_id).username
+        from slipwright.engine import NotAwaitingApproval
+
+        try:
+            self.engine.retry(job.id, run=False)
+        except NotAwaitingApproval:
+            self._finish(prompt, self._stale(prompt), status="closed")
+            return Reply(self._stale(prompt))
+        except Exception as exc:  # noqa: BLE001 - whatever it was, it is the presser's answer
+            log.warning("job %s: retry from %s failed: %r", job.id, prompt.channel, exc)
+            self.store.set_chat_prompt(prompt.id, status="open")
+            return Reply(word(self.lang, "failed", error=str(exc)))
+        outcome = word(self.lang, "retried_by", name=name)
+        self._finish(prompt, outcome, status=None)
+        for other in self.store.open_chat_prompts(job.id):
+            if other.marker == prompt.marker:
+                self._finish(other, outcome, status="closed")
+        self.resume(job.id)
+        return Reply(outcome, final=outcome)
+
 
 def notify_gate(engine: Engine, job: Job) -> None:
     """The engine's one call when a job arrives at a gate. Never raises."""
@@ -504,8 +623,13 @@ def notify_gate(engine: Engine, job: Job) -> None:
 
 
 def notify_outcome(engine: Engine, job: Job, kind: str, error: str | None = None) -> None:
+    """The groups hear of every outcome they asked for; a failure is also put to its owner
+    in their own chat, with a button to try again."""
     try:
-        Notifier(engine, job.owner_id).announce(job, kind, error=error)
+        notifier = Notifier(engine, job.owner_id)
+        notifier.announce(job, kind, error=error)
+        if kind == "failed":
+            notifier.offer_retry(job, error=error)
     except Exception:  # noqa: BLE001
         log.exception("job %s: chat notification failed", job.id)
 
@@ -526,6 +650,8 @@ __all__ = [
     "ChannelConfig",
     "Notifier",
     "Reply",
+    "current_marker",
+    "failure_marker",
     "gate_marker",
     "notify_gate",
     "notify_outcome",

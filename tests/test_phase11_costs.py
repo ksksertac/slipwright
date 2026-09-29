@@ -432,3 +432,32 @@ def test_a_call_counts_every_attempt_it_paid_for(
     # exactly the attempt that was cut off -- the one that used to vanish
     assert backend[0]["input_tokens"] == 1200
     assert backend[0]["output_tokens"] == 8192
+
+
+def test_a_subscription_call_costs_nothing_rather_than_an_unknown_amount() -> None:
+    """A ChatGPT plan is a flat monthly fee, so there is no price to look up.
+
+    Counting those calls as "unpriced" put a line on the costs page telling somebody that
+    calls had run on a model with no stored price — which reads as a gap to go and fill,
+    and there is nothing to fill it with.
+    """
+    from slipwright.costs import job_cost
+    from slipwright.schemas.job import Job, JobState
+
+    job = Job(request="x", repo_path=Path("."))
+    job.state = JobState.DONE
+    job.data.invocation_log = [
+        {"role": "po", "provider": "chatgpt", "model": "default",
+         "input_tokens": 900, "output_tokens": 300},
+        {"role": "qa", "provider": "deepseek", "model": "never-priced",
+         "input_tokens": 500, "output_tokens": 100},
+    ]
+
+    costs = job_cost(job, profile=None, averages={}, lookup={})
+    assert costs.spent_usd == 0.0
+    assert costs.subscription_calls == 1, "the plan paid for it; nought is the answer"
+    assert costs.unpriced_calls == 1, "and the other one is genuinely unknown"
+
+    by_role = {row.key: row for row in costs.by_role}
+    assert by_role["po"].subscription_calls == 1 and by_role["po"].unpriced_calls == 0
+    assert by_role["qa"].unpriced_calls == 1 and by_role["qa"].subscription_calls == 0

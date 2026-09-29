@@ -25,6 +25,8 @@ log = logging.getLogger(__name__)
 
 API = "https://slack.com/api"
 REJECT_VIEW = "slipwright_reject"
+#: A button's action id, and the press it stands for.
+PRESSES = {"sw_approve": "approve", "sw_reject": "reject", "sw_retry": "retry"}
 
 
 def _escape(text: str) -> str:
@@ -101,27 +103,29 @@ class SlackAdapter:
                     {
                         "type": "actions",
                         "block_id": "slipwright",
-                        "elements": [
-                            {
-                                "type": "button",
-                                "action_id": "sw_approve",
-                                "style": "primary",
-                                "text": {"type": "plain_text", "text": word(self.lang, "approve")},
-                                "value": prompt_id,
-                            },
-                            {
-                                "type": "button",
-                                "action_id": "sw_reject",
-                                "style": "danger",
-                                "text": {"type": "plain_text", "text": word(self.lang, "reject")},
-                                "value": prompt_id,
-                            },
-                        ],
+                        "elements": self._buttons(msg, prompt_id),
                     },
                 ],
             },
         )
         return {"channel": body.get("channel"), "ts": body.get("ts"), "text": text}
+
+    def _buttons(self, msg: Message, prompt_id: str) -> list[dict[str, Any]]:
+        def button(action: str, style: str, label: str) -> dict[str, Any]:
+            return {
+                "type": "button",
+                "action_id": action,
+                "style": style,
+                "text": {"type": "plain_text", "text": word(self.lang, label)},
+                "value": prompt_id,
+            }
+
+        if msg.kind == "failed":
+            return [button("sw_retry", "primary", "retry")]
+        return [
+            button("sw_approve", "primary", "approve"),
+            button("sw_reject", "danger", "reject"),
+        ]
 
     def settle(self, address: dict[str, Any], ref: dict[str, Any], outcome: str) -> None:
         if not ref.get("ts"):
@@ -219,15 +223,11 @@ def handle_envelope(
         if not actions:
             return None
         action = actions[0]
-        if action.get("action_id") not in ("sw_approve", "sw_reject"):
+        pressed = PRESSES.get(str(action.get("action_id") or ""))
+        if pressed is None:
             return None
         prompt_id = str(action.get("value") or "")
-        reply = notifier.on_press(
-            "slack",
-            external_id=who,
-            prompt_id=prompt_id,
-            action="approve" if action["action_id"] == "sw_approve" else "reject",
-        )
+        reply = notifier.on_press("slack", external_id=who, prompt_id=prompt_id, action=pressed)
         if reply.ask_reason and payload.get("trigger_id"):
             adapter.ask_reason(str(payload["trigger_id"]), prompt_id)
         elif not reply.final:

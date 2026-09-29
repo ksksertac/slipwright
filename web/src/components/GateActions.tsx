@@ -2,6 +2,7 @@ import { useState } from "react";
 import { describeError, type Job } from "../api/client";
 import {
   useApprove,
+  useCancelJob,
   useMyTeam,
   useReject,
   useReplanJob,
@@ -46,6 +47,45 @@ export function failureOf(job: Job) {
 /** What a failed development can be offered: carry on from where it stopped, or -- when the
  * plan itself is what failed -- have it planned a different way, which is where a note
  * belongs. */
+/** Stopping a development, wherever it is. Not a failure and not a step: the answer to
+ *  "this is not worth what it is spending", which can be true mid-phase or at a gate
+ *  nobody is going to answer. Whatever call is in flight finishes -- it is already paid
+ *  for -- and nothing further starts. The owner's, like retry and replan. */
+export function StopAction({ job, compact = false }: { job: Job; compact?: boolean }) {
+  const tx = useT();
+  const stop = useCancelJob(job.id);
+  const team = useMyTeam();
+  const [sure, setSure] = useState(false);
+  const running = !["done", "failed", "cancelled"].includes(job.state);
+  if (!running || !isOwner(team.data)) return null;
+  if (!sure) {
+    return (
+      <button
+        className={`btn ghost ${compact ? "tiny" : "small"}`}
+        onClick={() => setSure(true)}
+        title={tx("stop this development; what it has built stays")}
+      >
+        {tx("Stop")}
+      </button>
+    );
+  }
+  return (
+    <span className="row">
+      <button
+        className={`btn bad ${compact ? "tiny" : "small"}`}
+        disabled={stop.isPending}
+        onClick={() => stop.mutate(undefined, { onSettled: () => setSure(false) })}
+      >
+        {stop.isPending ? tx("Stopping…") : tx("Yes, stop it")}
+      </button>
+      <button className={`btn ${compact ? "tiny" : "small"}`} onClick={() => setSure(false)}>
+        {tx("Cancel")}
+      </button>
+      {stop.error && <span className="error small">{describeError(stop.error)}</span>}
+    </span>
+  );
+}
+
 export function RetryActions({ job }: { job: Job }) {
   const tx = useT();
   const retry = useRetryJob(job.id);
@@ -190,12 +230,14 @@ export function Recommendation({ job, detailed = false }: { job: Job; detailed?:
       )}
       {s.decision === "reject" && s.feedback && (
         <div className="small muted" style={{ marginTop: 4 }}>
-          {tx("suggested feedback: ")}{say(s.feedback)}
+          {tx("suggested feedback: ")}
+          {say(s.feedback)}
         </div>
       )}
       {s.blockers && s.blockers.length > 0 && (
         <div className="small muted" style={{ marginTop: 4 }}>
-          {tx("not approved automatically: ")}{s.blockers.join(", ")}
+          {tx("not approved automatically: ")}
+          {s.blockers.join(", ")}
         </div>
       )}
     </div>
@@ -264,9 +306,7 @@ export function GateActions({ job, compact = false }: { job: Job; compact?: bool
               <button
                 className="btn bad small"
                 disabled={reject.isPending}
-                onClick={() =>
-                  reject.mutate(suggested, { onSuccess: () => setFeedback("") })
-                }
+                onClick={() => reject.mutate(suggested, { onSuccess: () => setFeedback("") })}
                 title={suggested}
               >
                 {reject.isPending ? tx("Sending…") : tx("Send the supervisor's changes")}

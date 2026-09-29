@@ -44,6 +44,10 @@ SCOPE = "https://api.botframework.com/.default"
 SKEW_S = 300
 
 
+#: What a card's submit carries as ``sw``, and the press it stands for.
+PRESSES = {"a": "approve", "r": "reject", "t": "retry"}
+
+
 def _card(body: list[dict[str, Any]], actions: list[dict[str, Any]]) -> dict[str, Any]:
     return {
         "contentType": "application/vnd.microsoft.card.adaptive",
@@ -167,6 +171,22 @@ class TeamsAdapter:
             raise NotifyError(f"teams webhook: HTTP {response.status_code}: {response.text[:200]}")
 
     def ask(self, address: dict[str, Any], msg: Message, prompt_id: str) -> dict[str, Any]:
+        if msg.kind == "failed":
+            # nothing to explain for a retry: no text field, one button
+            return self._send_card(
+                address,
+                msg,
+                _blocks(msg),
+                [
+                    {
+                        "type": "Action.Submit",
+                        "title": word(self.lang, "retry"),
+                        "style": "positive",
+                        "data": {"sw": "t", "p": prompt_id},
+                    },
+                    *_open(msg, self.lang),
+                ],
+            )
         body = [
             *_blocks(msg),
             {
@@ -191,6 +211,15 @@ class TeamsAdapter:
             },
             *_open(msg, self.lang),
         ]
+        return self._send_card(address, msg, body, actions)
+
+    def _send_card(
+        self,
+        address: dict[str, Any],
+        msg: Message,
+        body: list[dict[str, Any]],
+        actions: list[dict[str, Any]],
+    ) -> dict[str, Any]:
         sent = self._activity(
             "POST",
             self._conversation(address),
@@ -315,12 +344,12 @@ def handle_activity(notifier: Notifier, adapter: TeamsAdapter, activity: dict[st
         "user": who,
     }
     value = activity.get("value")
-    if isinstance(value, dict) and value.get("sw") in ("a", "r"):
+    if isinstance(value, dict) and value.get("sw") in PRESSES:
         reply = notifier.on_press(
             "teams",
             external_id=who,
             prompt_id=str(value.get("p") or ""),
-            action="approve" if value["sw"] == "a" else "reject",
+            action=PRESSES[str(value["sw"])],
             reason=str(value.get("reason") or "").strip() or None,
         )
         if reply.ask_reason:

@@ -26,6 +26,7 @@ import {
   GateActions,
   Recommendation,
   RetryActions,
+  StopAction,
   failureOf,
   pendingApproval,
 } from "../components/GateActions";
@@ -327,6 +328,7 @@ function GatePanel({ job }: { job: Job }) {
           {tx("Waiting for your approval of the {pending}", { pending: tx(pending) })}
         </strong>
         <GateActions job={job} compact />
+        <StopAction job={job} compact />
       </div>
       <Recommendation job={job} detailed />
       {job.state === "awaiting_backlog_approval" && <BacklogGate job={job} />}
