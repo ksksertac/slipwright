@@ -929,6 +929,8 @@ export const TR: Record<string, string> = {
   "Multi-agent delivery, with you at every gate.": "Çok ajanlı teslimat, her kapıda sen varsın.",
   "Welcome back": "Tekrar hoş geldin",
   "One more step": "Bir adım kaldı",
+  "Enter the code your authenticator app shows for Slipwright.":
+    "Doğrulama uygulamanın Slipwright için gösterdiği kodu gir.",
   "Sign in": "Giriş yap",
   "Signing in…": "Giriş yapılıyor…",
 
@@ -1550,6 +1552,7 @@ export const TR: Record<string, string> = {
   "Sending…": "Gönderiliyor…",
   "Sent. Check your inbox.": "Gönderildi. Gelen kutuna bak.",
   "Back to sign in": "Girişe dön",
+  "you@example.com": "sen@ornek.com",
   "Forgot your password?": "Şifreni mi unuttun?",
   "We will mail you a link to set a new one.":
     "Yeni bir şifre belirlemen için sana bağlantı yollayacağız.",

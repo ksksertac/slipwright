@@ -78,7 +78,9 @@ export function LoginPage() {
         </div>
         <h2 className="account-title">{asking ? tx("One more step") : tx("Welcome back")}</h2>
         <p className="muted small account-hint">
-          {tx("Multi-agent delivery, with you at every gate.")}
+          {asking
+            ? tx("Enter the code your authenticator app shows for Slipwright.")
+            : tx("Multi-agent delivery, with you at every gate.")}
         </p>
         {signedOut === "removed" && (
           <div className="callout error" style={{ display: "block" }}>
@@ -124,15 +126,20 @@ export function LoginPage() {
             {asking ? (
               <div className="field">
                 <label htmlFor="code">{tx("Code from your authenticator app")}</label>
+                {/* typed, or none of the field styles reach it and it is drawn as the
+                    browser's bare box */}
                 <input
                   id="code"
+                  className="login-code"
+                  type="text"
                   inputMode="numeric"
+                  placeholder="000000"
                   autoComplete="one-time-code"
                   value={code}
                   onChange={(e) => setCode(e.target.value)}
                   autoFocus
                 />
-                <div className="muted small" style={{ marginTop: 6 }}>
+                <div className="muted small login-code-help">
                   {tx("Lost your phone? A recovery code works here too.")}
                 </div>
               </div>

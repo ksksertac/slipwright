@@ -71,6 +71,7 @@ export function SignupPage() {
             id="email"
             type="email"
             autoComplete="email"
+            placeholder={tx("you@example.com")}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             autoFocus
@@ -193,7 +194,9 @@ export function VerifyEmailPage() {
         </button>
       )}
       <p className="muted small account-foot">
-        <Link to="/login">{tx("Back to sign in")}</Link>
+        <Link className="account-back" to="/login">
+          {tx("Back to sign in")}
+        </Link>
       </p>
     </Frame>
   );
@@ -231,7 +234,9 @@ export function ForgotPasswordPage() {
         hint={tx("If that address has an account, a link is on its way.")}
       >
         <p className="muted small account-foot">
-          <Link to="/login">{tx("Back to sign in")}</Link>
+          <Link className="account-back" to="/login">
+            {tx("Back to sign in")}
+          </Link>
         </p>
       </Frame>
     );
@@ -249,6 +254,7 @@ export function ForgotPasswordPage() {
             id="email"
             type="email"
             autoComplete="email"
+            placeholder={tx("you@example.com")}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             autoFocus
@@ -265,7 +271,9 @@ export function ForgotPasswordPage() {
         </button>
       </form>
       <p className="muted small account-foot">
-        <Link to="/login">{tx("Back to sign in")}</Link>
+        <Link className="account-back" to="/login">
+          {tx("Back to sign in")}
+        </Link>
       </p>
     </Frame>
   );
