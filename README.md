@@ -117,6 +117,11 @@ because it is expensive and not always wanted:
 - **Go on without deployment.** You deploy by hand, or not at all. DevOps writes no
   deployment files and still opens the pull request with the code.
 
+And when a development has gone somewhere nobody wants, **Stop** it, wherever it is.
+Stopping is not failing: nothing went wrong, so there is no red and no retry, and the
+branch with everything built so far stays where it is. A call already in flight is
+allowed to finish, because its answer is already paid for; nothing after it begins.
+
 ### One pipeline for every development
 
 <img src="docs/screenshots/pipeline.png" alt="The project pipeline: one line per development, a finished one opened to its request, plan and four stages" />
@@ -241,6 +246,22 @@ edit only at *that agent's* gates: the backlog belongs to the Product Owner's ho
 plan to the Architect's, the test list to QA's. They see no settings and cannot start
 developments. Work arriving at their gate is mailed to them.
 
+### Two-step sign-in
+
+<table>
+<tr>
+<td width="50%" valign="top"><b>Turn it on in a minute.</b> Scan a QR code with any authenticator app (Google Authenticator, Microsoft Authenticator, 1Password, …) and type the six digits back. Eight recovery codes are shown once, to copy or download, for the day the phone is lost.</td>
+<td width="50%" valign="top"><b>Then every sign-in asks for a code</b> after the password. Each code and each recovery code works once. A link from a letter (verification, password reset, invitation) no longer signs you in around it: it does its job and sends you to sign in with the code.</td>
+</tr>
+</table>
+
+It is **optional and per person**. The setup wizard offers it with a **Skip for now**, and
+the **Security** page keeps offering it to everybody, team members included. Turning it
+off asks for your password *and* a code. Somebody who has lost both phone and recovery
+codes can have it taken off by an administrator (the Users page), and an installation
+whose only administrator is locked out has `slipwright user two-factor-off <name>`. The
+secret is stored encrypted with the installation key, like every other credential.
+
 ### In your language
 
 The interface is in English and Turkish. An agent writes in the project's own language,
@@ -258,8 +279,8 @@ the project's language.
 | Model keys | the installation's | each account's own |
 | Quotas | off | on |
 
-Signing up, email verification, password reset, per-account keys and quotas, and a
-container per command are all there for a shared server. None of it is on by default, so
+Signing up, email verification, password reset, two-step sign-in, per-account keys and
+quotas, and a container per command are all there for a shared server. None of it is on by default, so
 a local install stays a single command.
 
 ---
@@ -278,12 +299,29 @@ Every push to `main` publishes `ghcr.io/ksksertac/slipwright:latest` (amd64 and 
 docker run -d --name slipwright -p 8500:8500 \
     -v slipwright-state:/data -v slipwright-work:/work \
     ghcr.io/ksksertac/slipwright:latest                 # http://localhost:8500
-docker exec -it slipwright slipwright user add ada      # first login (becomes admin)
 ```
+
+Open the page and sign in: a server with nobody on it yet makes an account for you,
+`admin` / `admin`, and the login page says so. Change the password under **Settings →
+Users**; until you do, a banner keeps reminding you.
 
 Keep `/data` and `/work` as **two separate volumes**. `/data` holds the key that decrypts
 every stored credential, and a development's own commands must not be able to reach it
 from a checkout.
+
+**Updating keeps your work.** Everything lives in the two volumes, not in the container,
+so pull the new image and start a new container on the same volumes:
+
+```sh
+docker pull ghcr.io/ksksertac/slipwright:latest
+docker stop slipwright && docker rm slipwright       # the container, not the volumes
+docker run -d --name slipwright -p 8500:8500 \
+    -v slipwright-state:/data -v slipwright-work:/work \
+    ghcr.io/ksksertac/slipwright:latest
+```
+
+The database is migrated at start, and developments that were running carry on. Never
+`docker volume rm` or `docker compose down -v` an installation you want to keep.
 
 </details>
 
@@ -295,9 +333,11 @@ the projects it works on. There is no separate database or queue to run.
 
 ```sh
 cp .env.example .env                    # optional: API keys, a stable SLIPWRIGHT_SECRET_KEY
-docker compose up --build -d            # http://localhost:8500
-docker compose exec slipwright slipwright user add ada   # first login (becomes admin)
+docker compose up --build -d            # http://localhost:8500; sign in as admin / admin
 ```
+
+To update: `git pull && docker compose up --build -d`. The volumes, and everything in them,
+stay.
 
 - **Local checkouts.** The folder named by `SLIPWRIGHT_REPOS` in `.env` (default
   `./repos/`) is mounted at `/repos`, so a checkout at `<that folder>/myapp` is registered
@@ -318,23 +358,34 @@ docker compose exec slipwright slipwright user add ada   # first login (becomes 
 uv sync                                  # Python side
 cd web && npm install && npm run build   # web UI -> slipwright/api/static/
 cd ..
-uv run slipwright user add ada           # first login (prompted for a password; becomes admin)
-uv run slipwright serve                  # http://127.0.0.1:8500
+uv run slipwright serve                  # http://127.0.0.1:8500; sign in as admin / admin
 ```
 
 </details>
 
 ### 2. Connect your accounts
 
-Open the app and log in. A **Getting set up** card on the dashboard walks you through it:
+The first time you sign in, a **setup wizard** takes you through it one step at a time,
+starting at the first thing still to do. Each step's button opens the page where it is
+done, and **Back to setup** on that page brings you back to the next one. Anything
+optional has a **Skip for now**.
 
-1. **Settings → Models.** Paste a key for at least one provider and click **Test
-   connection**. A key in the server's environment (`ANTHROPIC_API_KEY`,
-   `OPENAI_API_KEY`, …) is used when none is stored.
-2. **Settings → Sources.** Add a GitHub or Bitbucket token. It clones private
-   repositories, pushes branches and opens pull requests.
-3. **Settings → Jira** *(optional).* Enter the site URL, email and API token. The approved
-   backlog is then mirrored there.
+1. **A model key** (Settings → Models). Paste a key for at least one provider, click **Test
+   connection** and pick its default model. A key in the server's environment
+   (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, …) is used when none is stored. One
+   **OpenRouter** key reaches every vendor at once.
+2. **GitHub or Bitbucket** (Settings → Sources). A token to clone private repositories,
+   push branches and open pull requests.
+3. **Jira** *(optional).* The site URL, email and API token; the approved backlog is then
+   mirrored there.
+4. **Two-step sign-in** *(optional).* Done right in the wizard: scan, type six digits, keep
+   the recovery codes.
+5. **Your first project.**
+
+Close it and it waits as a checklist on the dashboard, with **Continue
+setup**; the next sign-in offers it again until the required steps are done or you say
+**Do not show this again**. Which steps are done is read from what is really configured,
+so removing a key puts its step back.
 
 ### 3. Build something
 
@@ -371,6 +422,10 @@ uv run slipwright reject <job-id> "use poetry, not pip"
 uv run slipwright message <job-id> "keep the public API unchanged"
 ```
 
+On the server itself, `slipwright user add <name>` makes a login, `slipwright user
+two-factor-off <name>` lets back in somebody who lost both phone and recovery codes, and
+`slipwright db copy` moves an installation's SQLite file into PostgreSQL.
+
 The JSON API is documented at `/docs`, and `GET /api/events` streams server-sent events
 for every change. `slipwright serve --no-auth` skips the login for trusted local use.
 
@@ -389,6 +444,7 @@ Settings come from the environment (or `serve` flags):
 | `SLIPWRIGHT_PORT` | `8500` | API and web UI port |
 | `SLIPWRIGHT_PORT_RANGE` | `8100-8999` | ports handed to developments' live environments |
 | `SLIPWRIGHT_AUTH` | `1` | `0` serves without login |
+| `SLIPWRIGHT_DEFAULT_ADMIN` | `1` | `0` stops an empty server making `admin` / `admin`. Set it on anything reachable from the internet |
 | `SLIPWRIGHT_RUNNER` | `local` | `docker` runs every build and test command in a throwaway container |
 | `SLIPWRIGHT_QUOTA_MAX_*` | `0` (off) | per-account limits on running developments, projects and disk |
 | `SLIPWRIGHT_DEMO_PROJECT` | on | the worked example a new account starts with |
