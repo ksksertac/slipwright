@@ -927,6 +927,8 @@ export const TR: Record<string, string> = {
   "Admins only.": "Yalnızca yöneticiler.",
   "For the CLI:": "CLI için:",
   "Multi-agent delivery, with you at every gate.": "Çok ajanlı teslimat, her kapıda sen varsın.",
+  "Welcome back": "Tekrar hoş geldin",
+  "One more step": "Bir adım kaldı",
   "Sign in": "Giriş yap",
   "Signing in…": "Giriş yapılıyor…",
 
