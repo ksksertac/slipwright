@@ -106,6 +106,21 @@ def _src(name: str) -> str:
     return (WEB / "src" / name).read_text(encoding="utf-8")
 
 
+def test_logging_out_lands_on_the_login_page() -> None:
+    """Logging out cleared the whole query cache and then wrote "signed out" into it. The
+    clear had taken away the very query the app reads the user from, so the "signed out"
+    landed in a new one nobody was watching: the app still believed in the old user, the
+    login page sent the browser straight back, and what was left was the dashboard,
+    stuck, asking the server for things with a session that no longer existed."""
+    auth = _src("auth/AuthProvider.tsx")
+    logout = auth[auth.index("const logout = useCallback") :][:1500]
+    assert "qc.clear()" not in logout, "the query the app reads the user from must survive"
+    signed_out = logout.index("qc.setQueryData(keys.me, { status: 401 })")
+    assert signed_out < logout.index("qc.removeQueries"), "signed out first, the rest after"
+    # a session that had already ended is logged out too, not an error that strands you
+    assert "error.status === 401" in logout
+
+
 def test_login_and_projects_pages_use_the_api() -> None:
     login = _src("pages/LoginPage.tsx")
     assert "slipwright user add" in login  # empty state explains how to create the first user
