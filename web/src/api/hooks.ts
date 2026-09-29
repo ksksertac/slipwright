@@ -67,6 +67,8 @@ import {
   type TestCaseIn,
   type TestRun,
   type Transition,
+  type TwoFactorSetup,
+  type TwoFactorStatus,
   type User,
 } from "./client";
 
@@ -77,6 +79,7 @@ export const keys = {
   overview: ["overview"] as const,
   agents: ["agents"] as const,
   onboarding: ["onboarding"] as const,
+  twoFactor: ["me", "two-factor"] as const,
   activityAll: (role: string) => ["activity", role] as const,
   projects: ["projects"] as const,
   project: (id: string) => ["projects", id] as const,
@@ -824,6 +827,60 @@ export function useSetPassword() {
   return useMutation({
     mutationFn: ({ id, password }: { id: string; password: string }) =>
       api.put<void>(`/api/users/${id}/password`, { password }),
+  });
+}
+
+// -- two-step sign-in: the person's own, whoever they are ---------------------------------
+
+export function useTwoFactor() {
+  return useQuery({
+    queryKey: keys.twoFactor,
+    queryFn: () => api.get<TwoFactorStatus>("/api/auth/two-factor"),
+  });
+}
+
+/** A fresh secret to scan. Signing in does not change until a code from it comes back. */
+export function useStartTwoFactor() {
+  return useMutation({
+    mutationFn: () => api.post<TwoFactorSetup>("/api/auth/two-factor/setup"),
+  });
+}
+
+/** Everything that says whether it is on: the user, its status and the setup wizard.
+ *  Not refreshed the moment it is turned on: the wizard would see its step done and take
+ *  the recovery codes off the screen before anybody had written them down. The setup
+ *  calls this once they have been put away. */
+export function useTwoFactorChanged() {
+  const qc = useQueryClient();
+  return () => {
+    void qc.invalidateQueries({ queryKey: keys.me });
+    void qc.invalidateQueries({ queryKey: keys.onboarding });
+    void qc.invalidateQueries({ queryKey: keys.users });
+  };
+}
+
+export function useEnableTwoFactor() {
+  return useMutation({
+    mutationFn: (code: string) =>
+      api.post<{ recovery_codes: string[] }>("/api/auth/two-factor/enable", { code }),
+  });
+}
+
+export function useDisableTwoFactor() {
+  const changed = useTwoFactorChanged();
+  return useMutation({
+    mutationFn: (body: { password: string; code: string }) =>
+      api.post<User>("/api/auth/two-factor/disable", body),
+    onSuccess: changed,
+  });
+}
+
+/** An administrator's: for somebody who lost both the phone and the recovery codes. */
+export function useResetTwoFactor() {
+  const changed = useTwoFactorChanged();
+  return useMutation({
+    mutationFn: (userId: string) => api.delete<User>(`/api/users/${userId}/two-factor`),
+    onSuccess: changed,
   });
 }
 

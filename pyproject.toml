@@ -17,6 +17,7 @@ dependencies = [
     "alembic>=1.13",
     # the Slack (Socket Mode) and Discord (gateway) bots connect outward over a websocket
     "websockets>=13",
+    "segno>=1.6",
 ]
 
 [project.optional-dependencies]

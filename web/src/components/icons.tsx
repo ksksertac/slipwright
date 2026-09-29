@@ -201,3 +201,9 @@ export const IconChevron = (p: P) => (
     <path d="M9 5l7 7-7 7" />
   </svg>
 );
+export const IconShield = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M12 3 5 6v5c0 4.5 3 8.3 7 10 4-1.7 7-5.5 7-10V6l-7-3Z" />
+    <path d="m9 12 2 2 4-4" />
+  </svg>
+);

@@ -14,6 +14,8 @@ export type WorkList = Schemas["WorkList"];
 export type WorkGroup = Schemas["WorkGroup"];
 export type WorkItem = Schemas["WorkItem"];
 export type Version = Schemas["Version"];
+export type TwoFactorStatus = Schemas["TwoFactorStatus"];
+export type TwoFactorSetup = Schemas["TwoFactorSetup"];
 export type Board = Schemas["Board"];
 export type ProjectCosts = Schemas["ProjectCosts"];
 export type JobCost = Schemas["JobCost"];
@@ -130,6 +132,9 @@ export class ApiError extends Error {
   constructor(
     public status: number,
     public detail: string,
+    /** The password was right and a code from the authenticator app is what is still
+     *  missing (`required`) or was wrong (`invalid`); null for every other refusal. */
+    public twoFactor: string | null = null,
   ) {
     super(detail);
   }
@@ -142,6 +147,7 @@ export const UNAUTHORIZED_EVENT = "slipwright:unauthorized";
  * browser is about to land, and read once. */
 const SIGNED_OUT_HEADER = "x-slipwright-signed-out";
 const SIGNED_OUT_KEY = "slipwright:signed-out";
+const TWO_FACTOR_HEADER = "x-slipwright-two-factor";
 
 export function takeSignedOutReason(): string | null {
   try {
@@ -187,7 +193,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
       typeof data === "object" && data !== null && "detail" in data
         ? formatDetail((data as { detail: unknown }).detail)
         : text || resp.statusText;
-    throw new ApiError(resp.status, detail);
+    throw new ApiError(resp.status, detail, resp.headers.get(TWO_FACTOR_HEADER));
   }
   return data as T;
 }

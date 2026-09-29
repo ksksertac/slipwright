@@ -4,6 +4,7 @@ import {
   useCreateUser,
   useDeleteUser,
   useIssueToken,
+  useResetTwoFactor,
   useRevokeToken,
   useSetPassword,
   useTokens,
@@ -153,6 +154,7 @@ function UserRow({
 function UserDetails({ user, me, onDelete }: { user: User; me: User; onDelete: () => void }) {
   const tx = useT();
   const setPassword = useSetPassword();
+  const resetTwoFactor = useResetTwoFactor();
   const tokens = useTokens(user.id);
   const issue = useIssueToken(user.id);
   const revoke = useRevokeToken(user.id);
@@ -191,6 +193,36 @@ function UserDetails({ user, me, onDelete }: { user: User; me: User; onDelete: (
         {setPassword.isSuccess && <div className="callout notice">{tx("Password changed.")}</div>}
         {setPassword.error && (
           <div className="callout error">{describeError(setPassword.error)}</div>
+        )}
+        {/* somebody who lost the phone and the recovery codes: without this the only way
+            back is the command line. Their own is turned off on their Security page, which
+            asks for a code -- an administrator's word is the exception, not the route */}
+        {user.two_factor && user.id !== me.id && (
+          <div style={{ marginTop: 16 }}>
+            <h3>{tx("Two-step sign-in")}</h3>
+            <p className="muted small">
+              {tx(
+                "On. Turn it off only for somebody who has lost both their phone and their recovery codes.",
+              )}
+            </p>
+            <button
+              className="btn small"
+              disabled={resetTwoFactor.isPending}
+              onClick={() => {
+                if (
+                  window.confirm(
+                    tx("Turn off two-step sign-in for {name}?", { name: user.username }),
+                  )
+                )
+                  resetTwoFactor.mutate(user.id);
+              }}
+            >
+              {tx("Turn two-step sign-in off")}
+            </button>
+            {resetTwoFactor.error && (
+              <div className="callout error">{describeError(resetTwoFactor.error)}</div>
+            )}
+          </div>
         )}
         {user.id !== me.id && (
           <div style={{ marginTop: 16 }}>

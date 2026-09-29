@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 
+from slipwright import twofactor
 from slipwright.accounts import LOGIN_LIMIT, RESET_LIMIT, WINDOW_S, TooManyAttempts
 from slipwright.auth import (
     SESSION_COOKIE,
@@ -61,6 +62,7 @@ def engine_for(request: Request) -> Engine:
         return engine
     return engine.for_user(str(user.tenant_id))
 
+
 #: Told to the browser when a session is refused for a reason worth showing on the login
 #: page. The application clears it as soon as it has been read once.
 SIGNED_OUT_HEADER = "X-Slipwright-Signed-Out"
@@ -68,6 +70,11 @@ SIGNED_OUT_HEADER = "X-Slipwright-Signed-Out"
 SIGNED_OUT_REMOVED = "removed"
 #: The invitation was never answered, so there is no account to come in with.
 SIGNED_OUT_INVITED = "invited"
+
+#: Said with a 401 when the password was right and a code from the authenticator app is
+#: what is still missing (``required``) or what was wrong (``invalid``). The login page
+#: reads it to ask for the code, rather than parsing the words.
+TWO_FACTOR_HEADER = "X-Slipwright-Two-Factor"
 
 PUBLIC_PATHS = frozenset(
     {
@@ -102,6 +109,11 @@ class Credentials(BaseModel):
 
     username: str = Field(min_length=1)
     password: str = Field(min_length=1)
+    code: str | None = Field(
+        default=None,
+        description="From the authenticator app, or a recovery code; only asked of an "
+        "account with two-step sign-in on.",
+    )
 
 
 class SignUp(BaseModel):
@@ -336,6 +348,48 @@ def login(body: Credentials, request: Request, response: Response) -> User:
         # a suspended account says exactly what a wrong password says: it was closed by
         # an administrator, and confirming that it exists is not this endpoint's business
         raise HTTPException(status_code=401, detail="wrong username or password")
+    if user.two_factor:
+        _second_step(store, user, body.code)
+    start_session(store, user, request, response)
+    return user
+
+
+def _second_step(store: JobStore, user: User, code: str | None) -> None:
+    """Refuse unless ``code`` is good. Only reached once the password was right.
+
+    Stateless on purpose: the browser sends the password again with the code, so there
+    is no half-signed-in session to steal or to expire. Codes are rationed per *account*
+    as well as per identifier, because somebody who has the password could otherwise
+    take turns between the address and the username to double their guesses.
+    """
+    if not code or not code.strip():
+        raise HTTPException(
+            status_code=401,
+            detail="enter the code from your authenticator app",
+            headers={TWO_FACTOR_HEADER: "required"},
+        )
+    if store.hit_rate_limit(f"2fa:{user.id}", limit=LOGIN_LIMIT, window_s=WINDOW_S):
+        raise HTTPException(status_code=429, detail="too many attempts; try again later")
+    if not store.check_two_factor(user.id, code):
+        raise HTTPException(
+            status_code=401,
+            detail="that code is not right, or it has been used already",
+            headers={TWO_FACTOR_HEADER: "invalid"},
+        )
+
+
+def session_from_link(store: JobStore, user: User, request: Request, response: Response) -> User:
+    """A letter's link ends with a session -- unless the account asks for a code.
+
+    A verification or reset link proves the mailbox, not the phone: signing in from one
+    would make two-step sign-in exactly as strong as the email account. What the link was
+    for has been done by now; the person is sent on to sign in with the second step."""
+    if user.two_factor:
+        raise HTTPException(
+            status_code=401,
+            detail="done; now sign in, with the code from your authenticator app",
+            headers={TWO_FACTOR_HEADER: "required"},
+        )
     start_session(store, user, request, response)
     return user
 
@@ -368,8 +422,7 @@ def verify_email(body: TokenOnly, request: Request, response: Response) -> User:
     user = _engine(request).accounts().verify(body.token)
     if user is None:
         raise HTTPException(status_code=400, detail="this link is no longer valid")
-    start_session(_store(request), user, request, response)
-    return user
+    return session_from_link(_store(request), user, request, response)
 
 
 @router.post("/auth/resend-verification", status_code=202)
@@ -410,8 +463,7 @@ def reset_password(body: ResetPassword, request: Request, response: Response) ->
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     if user is None:
         raise HTTPException(status_code=400, detail="this link is no longer valid")
-    start_session(_store(request), user, request, response)
-    return user
+    return session_from_link(_store(request), user, request, response)
 
 
 @router.post("/auth/logout", status_code=204)
@@ -425,6 +477,99 @@ def logout(request: Request, response: Response) -> None:
 @router.get("/auth/me", response_model=User)
 def me(request: Request) -> User:
     return current_user(request)
+
+
+# -- two-step sign-in -----------------------------------------------------------------------
+
+
+class TwoFactorStatus(BaseModel):
+    enabled: bool
+    recovery_codes_left: int = Field(
+        description="Unspent recovery codes; worth a warning when it runs low."
+    )
+
+
+class TwoFactorSetup(BaseModel):
+    """What an authenticator app needs: scan ``qr``, or type ``secret`` in by hand."""
+
+    secret: str
+    uri: str
+    qr: str = Field(description="The QR code, as an SVG data: URI.")
+
+
+class TwoFactorCode(BaseModel):
+    code: str = Field(min_length=1, max_length=32)
+
+
+class TwoFactorOff(BaseModel):
+    password: str = Field(min_length=1)
+    code: str = Field(min_length=1, max_length=32)
+
+
+class RecoveryCodes(BaseModel):
+    recovery_codes: list[str]
+
+
+def _person(request: Request) -> User:
+    """Somebody signed in as themselves. The anonymous user of an app without logins has
+    no account to put a second step on."""
+    user = current_user(request)
+    if user.id == "anonymous":
+        raise HTTPException(status_code=400, detail="there is no account to secure here")
+    return user
+
+
+@router.get("/auth/two-factor", response_model=TwoFactorStatus)
+def two_factor_status(request: Request) -> TwoFactorStatus:
+    user = _person(request)
+    left = _store(request).recovery_codes_left(user.id) if user.two_factor else 0
+    return TwoFactorStatus(enabled=user.two_factor, recovery_codes_left=left)
+
+
+@router.post("/auth/two-factor/setup", response_model=TwoFactorSetup)
+def two_factor_setup(request: Request) -> TwoFactorSetup:
+    """A new secret to scan. Signing in is unchanged until a code from it comes back."""
+    user = _person(request)
+    try:
+        secret = _store(request).start_two_factor(user.id)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    uri = twofactor.provisioning_uri(secret, user.email or user.username)
+    return TwoFactorSetup(secret=secret, uri=uri, qr=twofactor.qr_svg(uri))
+
+
+@router.post("/auth/two-factor/enable", response_model=RecoveryCodes)
+def two_factor_enable(body: TwoFactorCode, request: Request) -> RecoveryCodes:
+    """Turn it on with a code that proves the app has the secret; returns the recovery
+    codes, which are never shown again."""
+    user = _person(request)
+    store = _store(request)
+    if store.hit_rate_limit(f"2fa:{user.id}", limit=LOGIN_LIMIT, window_s=WINDOW_S):
+        raise HTTPException(status_code=429, detail="too many attempts; try again later")
+    try:
+        codes = store.enable_two_factor(user.id, body.code)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if codes is None:
+        raise HTTPException(status_code=400, detail="that code is not right; try the next one")
+    return RecoveryCodes(recovery_codes=codes)
+
+
+@router.post("/auth/two-factor/disable", response_model=User)
+def two_factor_disable(body: TwoFactorOff, request: Request) -> User:
+    """Turn it off. Asks for the password *and* a code: a session left open on a shared
+    machine must not be enough to take the second step away."""
+    user = _person(request)
+    store = _store(request)
+    if store.hit_rate_limit(f"2fa:{user.id}", limit=LOGIN_LIMIT, window_s=WINDOW_S):
+        raise HTTPException(status_code=429, detail="too many attempts; try again later")
+    if not store.check_password(user.id, body.password):
+        raise HTTPException(status_code=400, detail="wrong password")
+    if not user.two_factor:
+        return user
+    if not store.check_two_factor(user.id, body.code):
+        raise HTTPException(status_code=400, detail="that code is not right")
+    return store.disable_two_factor(user.id)
 
 
 # -- user administration -------------------------------------------------------------------
@@ -479,6 +624,17 @@ def set_password(user_id: str, body: NewPassword, request: Request) -> None:
     store = _store(request)
     _get_user(store, user_id)
     store.set_password(user_id, body.password)
+
+
+@router.delete("/users/{user_id}/two-factor", response_model=User)
+def reset_two_factor(user_id: str, request: Request) -> User:
+    """An administrator takes the second step off somebody who lost their phone and
+    their recovery codes. The only way back in for them short of the database, so it is
+    the administrator's -- the same people who may already reset a password."""
+    require_admin(request)
+    store = _store(request)
+    _get_user(store, user_id)
+    return store.disable_two_factor(user_id)
 
 
 @router.put("/users/{user_id}/status", response_model=User)
@@ -559,6 +715,7 @@ __all__ = [
     "SIGNED_OUT_HEADER",
     "SIGNED_OUT_INVITED",
     "SIGNED_OUT_REMOVED",
+    "TWO_FACTOR_HEADER",
     "Credentials",
     "auth_dependency",
     "current_user",
@@ -566,5 +723,6 @@ __all__ = [
     "require_owner",
     "resolve_user",
     "router",
+    "session_from_link",
     "start_session",
 ]
