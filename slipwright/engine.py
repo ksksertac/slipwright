@@ -407,6 +407,10 @@ class Engine:
         self._brief_locks: defaultdict[str, threading.Lock] = defaultdict(threading.Lock)
         # one test run at a time per checkout, so runs never trample each other's files
         self._checkout_locks: defaultdict[str, threading.Lock] = defaultdict(threading.Lock)
+        # one standards reindex at a time: two jobs starting together both found the
+        # index stale, both rebuilt it, and the second insert of the same section failed
+        # its UNIQUE constraint and took that job's phase down with it
+        self._reindex_lock = threading.RLock()
         # ports held by jobs that outlived a previous process must stay taken
         self.workspace.reserve_ports(store.list())
 
@@ -1176,6 +1180,13 @@ class Engine:
     ) -> dict[str, Any]:
         """Index one layer: the shipped corpus, an account's rewritten pages, or a
         project's overrides. Skipped when nothing has changed since the last pass."""
+        # the fingerprint is read under the lock, so whoever waited finds the work done
+        with self._reindex_lock:
+            return self._reindex_standards(project_id, owner_id=owner_id, force=force)
+
+    def _reindex_standards(
+        self, project_id: str | None, *, owner_id: str | None, force: bool
+    ) -> dict[str, Any]:
         index = self.standards_index
         if owner_id is not None:
             return self._reindex_user_standards(index, owner_id, force=force)
@@ -1444,11 +1455,22 @@ class Engine:
     @staticmethod
     def _ensure_git_repository(path: Path) -> None:
         """A plain folder becomes a repository with everything in it committed, so jobs
-        can branch from it; an existing repository is left exactly as it is."""
-        if (path / ".git").exists():
+        can branch from it; an existing repository is left exactly as it is.
+
+        One that has never had a commit is finished the same way as a plain folder. Git
+        2.42 and later branch a worktree from nothing without complaint, but the git in
+        the image (Debian's 2.39) says "not a valid object name: 'HEAD'", so the first
+        development of such a project could never start there."""
+        is_repo = (path / ".git").exists()
+        has_commit = (
+            is_repo
+            and g.run(path, "rev-parse", "--verify", "--quiet", "HEAD", check=False).returncode == 0
+        )
+        if has_commit:
             return
         try:
-            g.run(path, "init", "-q", "-b", "main")
+            if not is_repo:
+                g.run(path, "init", "-q", "-b", "main")
             g.run(path, "add", "-A")
             g.run(
                 path,

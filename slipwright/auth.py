@@ -178,7 +178,11 @@ def verify_password(password: str, stored: str) -> bool:
 
 
 def new_secret() -> str:
-    return secrets.token_urlsafe(32)
+    # never led by '-': one in 64 were, and `slipwright --token <secret>` then read the
+    # token as an option of its own and refused to run
+    while (secret := secrets.token_urlsafe(32)).startswith("-"):
+        pass
+    return secret
 
 
 def token_hash(secret: str) -> str:

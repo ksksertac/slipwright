@@ -339,6 +339,8 @@ def test_a_projects_commands_see_nothing_that_was_not_named(
     }
     for name, value in secrets.items():
         monkeypatch.setenv(name, value)
+    # a CI runner sets its own (GitHub's is "true"), which is passed through as it is
+    monkeypatch.delenv("CI", raising=False)
 
     env = project_env()
     assert leaks(env, list(secrets.values())) == [], "a secret reached a project's command"
