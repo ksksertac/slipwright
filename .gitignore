@@ -27,3 +27,8 @@ web/*.tsbuildinfo
 /repos/*
 !/repos/.gitkeep
 .env
+
+# coverage writes this on every run; it is a binary that changes every time
+.coverage
+.coverage.*
+htmlcov/

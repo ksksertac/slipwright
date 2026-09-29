@@ -19,6 +19,12 @@ Nothing moves past a gate until a person says yes.
 
 <br />
 
+<img src="docs/demo.gif" alt="A development moving through its gates: the backlog is approved, the phases build, QA proposes its test cases and DevOps opens the pull request" />
+
+<sub>Recorded against the scripted provider — no model, no key. <code>uv run python scripts/demo.py</code> sets the same thing up.</sub>
+
+<br />
+
 <img src="docs/screenshots/gate-test-cases.png" alt="A development waiting at the test-cases gate, with the supervisor's recommendation and QA's proposed cases open for editing" />
 
 </div>

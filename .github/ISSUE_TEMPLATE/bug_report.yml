@@ -1,0 +1,62 @@
+name: Bug report
+description: Something behaved differently from what it said it would
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        If a development stopped, the transition that entered `failed` carries the reason
+        and the output — the job page's **History** tab, or the bot's answer to "why did
+        it stop". That is usually the whole answer.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+      placeholder: |
+        I approved the test cases and the development stopped at the build gate with…
+    validations:
+      required: true
+
+  - type: textarea
+    id: detail
+    attributes:
+      label: What it said
+      description: >
+        The failure note and its detail, or the error from the page. Paste the text
+        rather than a screenshot where you can — it is searchable for the next person.
+      render: text
+
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Which model answered
+      options:
+        - Anthropic
+        - OpenAI
+        - DeepSeek
+        - Google (Gemini)
+        - Alibaba (Qwen)
+        - Z.ai (GLM)
+        - MiniMax
+        - scripted (no model)
+        - not sure
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The build shown at the foot of the sidebar, or the commit you are on.
+
+  - type: dropdown
+    id: how
+    attributes:
+      label: How you are running it
+      options:
+        - uv run slipwright serve
+        - Docker (compose)
+        - Docker with PostgreSQL
+        - something else

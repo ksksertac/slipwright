@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: How it is put together
+    url: https://github.com/ksksertac/slipwright/blob/main/CLAUDE.md
+    about: What the pieces are and which rules are easy to break. Read before a first patch.
+  - name: What was deliberately left for later
+    url: https://github.com/ksksertac/slipwright/blob/main/TASKS.md
+    about: The long-form record of how this was built, phase by phase.

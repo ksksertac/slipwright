@@ -1,7 +1,12 @@
 # Slipwright — Build Task List
 
-A multi-agent SDLC harness. Analyst, Planner, Developer, QA and DevOps agents run each
-job in its own git worktree, with human approval gates between phases.
+A multi-agent SDLC harness. A Product Owner, an Architect, a Designer, specialists, QA
+and DevOps build each development in its own git worktree, and a person approves at every
+gate.
+
+The tasks below keep the names the roles had when they were written: the Analyst became
+the Architect and the Planner's job moved into it. They are the record of how this was
+built, so they are left as they were rather than tidied into the present tense.
 
 ## How to use this file
 

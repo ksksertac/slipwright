@@ -24,6 +24,7 @@ from slipwright.schemas.profile import Profile
 from slipwright.schemas.project import Project
 from slipwright.sources import BITBUCKET, GITHUB, SOURCES, SourceError
 from slipwright.store import JobStore
+from slipwright.workspace import git as g
 from tests.pipeline import full_engine, full_provider
 
 WORKSPACE = "acme"
@@ -403,6 +404,40 @@ def _drive(engine: Engine, job: Job) -> Job:
         else:
             job = engine.resume(job.id)
     return job
+
+
+def test_a_checkout_with_nowhere_to_push_finishes_rather_than_crashing(
+    store: JobStore, worktrees_root: Path, seed: Profile, repo: Path
+) -> None:
+    """A folder on somebody's machine, no remote, no token: the ordinary local case.
+
+    ``_done_locally`` was written for exactly this -- "nothing was pushed, the branch is
+    ready in the checkout" -- and could not be reached. DevOps asked for the host first,
+    that raised for the missing token, and the development died at the last step with a
+    traceback about GitHub for a project that had never named one.
+    """
+    engine = _engine(store, worktrees_root, seed)  # no token for any source
+    project = engine.create_project(Project(name="local only", repo_path=repo))
+    assert not g.has_remote(repo), "this test is about a checkout with no remote"
+
+    job = _drive(engine, engine.start(engine.create_job("health", project_id=project.id).id))
+    assert job.state is JobState.DONE, job.history[-1].note
+    assert job.data.pr_url is None
+    assert "nothing was pushed" in (job.history[-1].note or "")
+
+
+def test_a_project_that_names_a_host_still_fails_without_a_token(
+    store: JobStore, worktrees_root: Path, seed: Profile, repo: Path, remote: Path
+) -> None:
+    """The other half: a remote exists, so the missing token is a real problem and says so
+    rather than quietly finishing as though there were nowhere to push."""
+    engine = _engine(store, worktrees_root, seed)
+    project = engine.create_project(
+        Project(name="theirs", repo_path=repo, source=BITBUCKET, github_repo=REPO)
+    )
+    job = _drive(engine, engine.start(engine.create_job("health", project_id=project.id).id))
+    assert job.state is JobState.FAILED
+    assert "no token for Bitbucket" in (job.history[-1].note or "")
 
 
 def test_a_development_pushes_to_the_source_its_project_names(

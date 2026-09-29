@@ -1,7 +1,7 @@
 [project]
 name = "slipwright"
 version = "0.1.0"
-description = "A multi-agent SDLC harness: Analyst, Planner, Developer, QA and DevOps agents run each job in its own git worktree, with human approval gates between phases."
+description = "A multi-agent SDLC harness: a Product Owner, an Architect, a Designer, specialists, QA and DevOps build each development in its own git worktree, and a person approves at every gate."
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.12,<3.13"
