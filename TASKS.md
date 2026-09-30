@@ -156,7 +156,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 | 12 | T12.2 The invitation and the address it takes | [x] |
 | 12 | T12.3 What a member may do | [x] |
 | 12 | T12.4 Told when work arrives, told when it ends | [x] |
-| 14 | T14.1 A phase names its platform; per-platform commands | [ ] |
+| 14 | T14.1 A phase names its platform; per-platform commands | [x] |
 | 14 | T14.2 What nothing here can build is deferred, not failed | [ ] |
 | 14 | T14.3 Pairing, and the worker's side of the API | [ ] |
 | 14 | T14.4 `slipwright worker` on the Mac | [ ] |
@@ -1297,17 +1297,24 @@ The shape, decided with the user before any of it was written:
 
 ### T14.1 — A phase names its platform, and the profile says how to build each
 **Done when**
-- [ ] `PlanPhase.platform: ios | android | None`, required for `domain: mobile` and refused
-  elsewhere; the Architect is told what each platform needs and that no phase may depend on
-  an iOS or Android phase (so they can always wait until last)
-- [ ] `Profile.platforms: {ios|android: {build_cmd, test_cmd}}`; the project's own
-  `build_cmd`/`test_cmd` build everything *else*, so a Windows gate never tries Xcode
-- [ ] A platform phase's build gate runs that platform's commands; QA's final gate runs the
-  project's commands and then every platform's, each where it can be built
-- [ ] `gates/toolchains.py` answers `can_build(platform)`: iOS on macOS with `xcodebuild`;
+- [x] `PlanPhase.platform: ios | android | None` on a mobile phase that writes one app's
+  native project, refused on any other domain; `None` for mobile code both apps share
+  (React Native, Flutter). The Architect is told what each platform needs and that nothing
+  may depend on a platform phase (so it can always wait until last)
+- [x] `Profile.platforms: [{platform, build_cmd, test_cmd}]` -- a list, because a map with
+  free-form keys is a schema some vendors' structured output refuses; the project's own
+  `build_cmd`/`test_cmd` build everything *else*, so a Windows gate never tries Xcode.
+  A plan naming a platform the profile cannot build is refused, from the Architect and
+  from the gate editors alike
+- [x] A platform phase's build gate runs that platform's commands; QA's final gate runs the
+  project's commands and then every platform's that can be built here, and says so for one
+  that cannot
+- [x] `gates/toolchains.py` answers `can_build(platform)`: iOS on macOS with `xcodebuild`;
   Android with a JDK and an SDK, and never on Linux arm64 (aapt2 has no build there)
-- [ ] The architecture gate shows each platform's commands and lets them be edited, as it
-  does the project's
+- [x] The architecture gate shows each platform's commands and lets them be edited, and the
+  pipeline card says which app a phase builds
+
+> Verified by `tests/test_phase14_platforms.py`.
 
 ### T14.2 — What nothing here can build is deferred, not failed
 **Done when**

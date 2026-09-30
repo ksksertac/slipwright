@@ -121,7 +121,11 @@ patterns. Say in `summary` which backend contracts you relied on and which are m
 If a `design` section is present it is the approved design for this phase's screens: build
 those screens, with the states and interactions it names, and follow its `principles`. It
 says what the screen is and does, never how to write it -- the code is yours. Where it is
-silent, decide and say so in `summary`; where you cannot build what it asks, say why.""",
+silent, decide and say so in `summary`; where you cannot build what it asks, say why.
+When `current_phase.platform` names `ios` or `android`, the phase is that app's native
+project alone (Swift/SwiftUI with an Xcode project, or Kotlin with Gradle) and is built
+with that platform's commands from the profile; leave shared code and the other platform
+as they are.""",
 }
 
 

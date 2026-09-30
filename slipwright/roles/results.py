@@ -17,7 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_vali
 
 from slipwright.schemas.brief import Category as BriefCategory
 from slipwright.schemas.job import Job, new_job_id
-from slipwright.schemas.profile import Profile, RoleName
+from slipwright.schemas.profile import Platform, Profile, RoleName
 
 
 class JiraActionType(StrEnum):
@@ -104,6 +104,25 @@ class PlanPhase(BaseModel):
         description="Which specialist implements the phase: backend, web, mobile, infra "
         "(DevOps), docs or general (the generic developer).",
     )
+    platform: Platform | None = Field(
+        default=None,
+        description="For a mobile phase that builds one platform's app: ios or android. "
+        "None for mobile code shared by both (React Native, Flutter) and for every other "
+        "domain. The phase is built with that platform's commands, where it can be built.",
+    )
+
+    @model_validator(mode="after")
+    def _platform_is_mobile(self) -> PlanPhase:
+        if self.platform is not None and self.domain != "mobile":
+            raise ValueError(f"only a mobile phase names a platform, not a {self.domain} one")
+        return self
+
+
+def unbuilt_platforms(phases: list[PlanPhase], profile: Profile) -> list[str]:
+    """Platforms a phase names that the profile has no commands for -- a phase nobody
+    could build, found before anybody approves it."""
+    have = set(profile.platform_names())
+    return sorted({p.platform for p in phases if p.platform and p.platform not in have})
 
 
 class StackChoice(BaseModel):
@@ -212,6 +231,12 @@ class ArchitectResult(RoleOutput):
             if phase.task_id in seen:
                 raise ValueError(f"task {phase.task_id!r} has more than one phase")
             seen.add(phase.task_id)
+        missing = unbuilt_platforms(self.phases, self.profile)
+        if missing:
+            raise ValueError(
+                f"phases are built for {', '.join(missing)} but profile.platforms has no "
+                "commands for it"
+            )
         return self
 
 
@@ -544,4 +569,5 @@ __all__ = [
     "SupervisorResult",
     "TestCase",
     "result_schema_for",
+    "unbuilt_platforms",
 ]

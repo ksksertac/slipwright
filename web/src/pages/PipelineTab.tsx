@@ -561,6 +561,11 @@ function StepCardView({
             : tx(step.status)}
         </span>
         <DomainBadge domain={step.domain ?? undefined} />
+        {step.platform && (
+          <span className="tag" title={tx("platform")}>
+            {step.platform === "ios" ? "iOS" : "Android"}
+          </span>
+        )}
         {step.elapsed_s !== null && step.elapsed_s !== undefined && (
           <span className="faint tiny took">{elapsed(step.elapsed_s)}</span>
         )}

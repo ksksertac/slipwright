@@ -53,12 +53,19 @@ def build_gate(
     worktree: Path,
     timeout_s: float = DEFAULT_TIMEOUT_S,
     runner: Runner | None = None,
+    platform: str | None = None,
 ) -> GateResult:
-    """Run ``build_cmd`` then ``test_cmd``; stop at the first failure."""
+    """Run ``build_cmd`` then ``test_cmd``; stop at the first failure.
+
+    With a ``platform``, that platform's own pair instead (``Profile.platforms``), labelled
+    with its name so a failure says which app it was.
+    """
     chosen = runner or build_runner()
     chunks: list[str] = []
     started = time.monotonic()
-    for label, cmd in (("build", profile.build_cmd), ("test", profile.test_cmd)):
+    build_cmd, test_cmd = profile.commands_for(platform)
+    prefix = f"{platform} " if platform else ""
+    for label, cmd in ((f"{prefix}build", build_cmd), (f"{prefix}test", test_cmd)):
         code, output = run_command(cmd, worktree, timeout_s, chosen)
         chunks.append(f"$ {cmd}\n{output.rstrip()}\n[{label}: exit {code}]")
         if code != 0:

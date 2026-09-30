@@ -4785,6 +4785,37 @@
         "title": "PlanEdit",
         "type": "object"
       },
+      "PlatformCommands": {
+        "additionalProperties": false,
+        "description": "How one platform's app is built and tested, apart from the rest of the project.\n\nApart on purpose: the project's own commands must not reach for Xcode, or a machine that\nhas none would fail every phase of a development that happens to have an iOS app in it.",
+        "properties": {
+          "build_cmd": {
+            "minLength": 1,
+            "title": "Build Cmd",
+            "type": "string"
+          },
+          "platform": {
+            "enum": [
+              "ios",
+              "android"
+            ],
+            "title": "Platform",
+            "type": "string"
+          },
+          "test_cmd": {
+            "minLength": 1,
+            "title": "Test Cmd",
+            "type": "string"
+          }
+        },
+        "required": [
+          "platform",
+          "build_cmd",
+          "test_cmd"
+        ],
+        "title": "PlatformCommands",
+        "type": "object"
+      },
       "Profile": {
         "additionalProperties": false,
         "properties": {
@@ -4802,6 +4833,14 @@
             "minLength": 1,
             "title": "Package Manager",
             "type": "string"
+          },
+          "platforms": {
+            "description": "Build and test commands per mobile platform (ios, android), kept out of build_cmd/test_cmd so the project's own commands never need Xcode or an Android SDK.",
+            "items": {
+              "$ref": "#/components/schemas/PlatformCommands"
+            },
+            "title": "Platforms",
+            "type": "array"
           },
           "port": {
             "description": "Default port the project listens on.",
@@ -7010,6 +7049,17 @@
             ],
             "title": "Phase"
           },
+          "platform": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Platform"
+          },
           "recommendation": {
             "anyOf": [
               {
@@ -7082,6 +7132,7 @@
           "outputs",
           "pending",
           "phase",
+          "platform",
           "recommendation",
           "risk",
           "role",

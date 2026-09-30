@@ -36,7 +36,7 @@ from slipwright import prices
 from slipwright.accounts import Accounts
 from slipwright.events import EventBus
 from slipwright.gates import DEFAULT_TIMEOUT_S as GATE_TIMEOUT_S
-from slipwright.gates import GateResult, build_gate, run_command
+from slipwright.gates import GateResult, build_gate, run_command, toolchains
 from slipwright.gates.runner import Runner, build_runner
 from slipwright.githost import CiState, CiStatus, GitHost, GitHostError, NoRemote
 from slipwright.github import GitHubClient, GitHubError, GitHubSettings
@@ -97,6 +97,7 @@ from slipwright.roles.results import (
     QAResult,
     StackChoice,
     SupervisorResult,
+    unbuilt_platforms,
 )
 from slipwright.roles.specialists import specialist_for
 from slipwright.schemas.attachment import Attachment, Reading, Scope
@@ -1895,6 +1896,12 @@ class Engine:
         job = self.store.get(job_id)
         if job.state is not JobState.AWAITING_ARCHITECTURE_APPROVAL:
             raise NotAwaitingApproval(job)
+        phases = [PlanPhase.model_validate(p) for p in self._phases(job)]
+        missing = unbuilt_platforms(phases, profile)
+        if missing:
+            # the plan still has phases for it: taking its commands away would leave them
+            # with nothing to be built by
+            raise InvalidEdit(f"the plan has {', '.join(missing)} phases; keep their commands")
         job.profile = profile
         return self.store.save(job)
 
@@ -1948,6 +1955,11 @@ class Engine:
             raise InvalidEdit(str(exc)) from exc
         if not phases:
             raise InvalidEdit("a plan needs at least one phase")
+        missing = unbuilt_platforms(phases, job.profile) if job.profile else []
+        if missing:
+            raise InvalidEdit(
+                f"no commands build {', '.join(missing)}: add them to the profile first"
+            )
         mapping = architect.phase_task_map(phases, [t.id for t in breakdown.tasks()])
         if isinstance(mapping, str):
             raise InvalidEdit(f"plan does not match the backlog: {mapping}")
@@ -3354,8 +3366,9 @@ class Engine:
             raise RuntimeError(f"job {job.id} has no approved profile")
         return job.profile
 
-    def _run_gate(self, job: Job) -> GateResult:
-        """Build and test the worktree, wherever this installation runs commands.
+    def _run_gate(self, job: Job, platform: str | None = None) -> GateResult:
+        """Build and test the worktree, wherever this installation runs commands -- the
+        project's own commands, or with ``platform`` that mobile app's (T14.1).
 
         The specialist that wrote the phase has to hold ``run_commands`` for its build to
         be executed. The permission existed from the start and was never checked, which
@@ -3369,11 +3382,11 @@ class Engine:
             return GateResult(
                 ok=False,
                 output=(
-                    f"$ {profile.build_cmd}\n"
+                    f"$ {profile.commands_for(platform)[0]}\n"
                     f"[refused: {role.value} does not have the run_commands permission]"
                 ),
             )
-        kwargs: dict[str, Any] = {"runner": self.runner}
+        kwargs: dict[str, Any] = {"runner": self.runner, "platform": platform}
         if self.gate_timeout_s is not None:
             kwargs["timeout_s"] = self.gate_timeout_s
         with self._checkout_locks[str(require_worktree(job))]:
@@ -3381,6 +3394,25 @@ class Engine:
         if job.project_id is not None:
             self.record_gate_run(job, gate)
         return gate
+
+    def _final_gate(self, job: Job) -> GateResult:
+        """The whole project, once QA's tests are written: its own commands, then every
+        mobile platform's that can be built here. One that cannot is said, not failed --
+        where it gets built is the waiting state's business (T14.2), not this gate's."""
+        gate = self._run_gate(job)
+        profile = self._profile(job)
+        outputs = [gate.output]
+        seconds = gate.seconds
+        for platform in profile.platform_names():
+            if not gate.ok:
+                break
+            if not toolchains.can_build(platform):
+                outputs.append(f"[{platform}: not built here -- this machine cannot build it]")
+                continue
+            gate = self._run_gate(job, platform)
+            outputs.append(gate.output)
+            seconds += gate.seconds
+        return GateResult(ok=gate.ok, output="\n\n".join(outputs), seconds=seconds)
 
     @staticmethod
     def _phases(job: Job) -> list[dict[str, Any]]:
@@ -3702,11 +3734,13 @@ class Engine:
     def _build_gate(self, job: Job) -> Job:
         phases = self._phases(job)
         index = job.data.phase_index
-        gate = self._run_gate(job)
+        # a phase that builds one platform's app is built with that platform's commands
+        platform = phases[index].get("platform") if index < len(phases) else None
+        gate = self._run_gate(job, platform)
         # the tester reads a failure first: a test that asserts something nobody agreed to
         # is QA's own to correct, and the gate runs again without a specialist touching it
         while not gate.ok and self._qa_gate_triage(job, index, gate.tail):
-            gate = self._run_gate(job)
+            gate = self._run_gate(job, platform)
         if gate.ok:
             job.data.build_attempts = 0
             job.data.last_build_output = None
@@ -4089,7 +4123,7 @@ class Engine:
             touched = apply_changes(job, profile, RoleName.QA, result.output.changes)
             g.stage_all(worktree)
             test_diff = g.staged_diff(worktree)
-            gate = self._run_gate(job)
+            gate = self._final_gate(job)
             if gate.ok:
                 g.commit(worktree, "slipwright: tests")
                 job.data.feedback = None

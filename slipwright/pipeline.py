@@ -37,6 +37,7 @@ class StepCard(BaseModel):
     label: str
     role: RoleName | None = None
     domain: str | None = None
+    platform: str | None = None  # a mobile phase built for one app: ios or android (T14.1)
     gate: bool = False
     editable: bool = False  # the gate's material can be changed before approval
     pending: str | None = None  # what the human is asked to approve, when waiting
@@ -380,6 +381,7 @@ def _phase_cards(job: Job, r: _Reader) -> list[StepCard]:
                 label=f"{LABEL[role]}: {phase.get('goal', '')}",
                 role=role,
                 domain=str(phase.get("domain") or "general"),
+                platform=phase.get("platform"),
                 status=status,
                 phase=number,
                 task_title=titles.get(str(phase.get("task_id"))),

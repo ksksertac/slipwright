@@ -1,4 +1,4 @@
-import type { Permission, Profile, RoleConfig } from "../api/client";
+import type { Permission, PlatformCommands, Profile, RoleConfig } from "../api/client";
 import { useAgents, useProviders } from "../api/hooks";
 import { ModelPicker } from "./ModelPicker";
 import { useT } from "../i18n";
@@ -171,6 +171,45 @@ export function ProfileForm({
           </Field>
         </div>
       </section>
+
+      {/* the mobile apps' own commands: kept apart so the project's never needs Xcode or an
+        Android SDK, and shown here because they run as they are written, like the others */}
+      {(value.platforms ?? []).length > 0 && (
+        <section className="profile-block">
+          <div className="profile-block-head">{tx("Mobile apps")}</div>
+          {(value.platforms ?? []).map((entry, i) => {
+            const setEntry = (patch: Partial<PlatformCommands>) =>
+              set({
+                platforms: (value.platforms ?? []).map((e, j) =>
+                  j === i ? { ...e, ...patch } : e,
+                ),
+              });
+            const name = entry.platform === "ios" ? "iOS" : "Android";
+            return (
+              <div className="grid-2" key={entry.platform}>
+                <Field label={tx("{platform} build command", { platform: name })}>
+                  <input
+                    type="text"
+                    className="mono"
+                    value={entry.build_cmd}
+                    disabled={disabled}
+                    onChange={(e) => setEntry({ build_cmd: e.target.value })}
+                  />
+                </Field>
+                <Field label={tx("{platform} test command", { platform: name })}>
+                  <input
+                    type="text"
+                    className="mono"
+                    value={entry.test_cmd}
+                    disabled={disabled}
+                    onChange={(e) => setEntry({ test_cmd: e.target.value })}
+                  />
+                </Field>
+              </div>
+            );
+          })}
+        </section>
+      )}
 
       <h3 style={{ marginTop: 8 }}>{tx("Roles")}</h3>
       <table>
