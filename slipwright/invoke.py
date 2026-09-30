@@ -33,7 +33,17 @@ from slipwright.providers import (
 from slipwright.roles.results import RESULT_SCHEMAS, RoleOutput, result_schema_for
 from slipwright.schemas.profile import Profile, RoleName, ThinkingDepth
 
-DEFAULT_TIMEOUT_S = 600.0
+#: How long one model call may take before it is given up on.
+#:
+#: Ten minutes was the old figure, and it was the expensive choice. A call that is still
+#: going at ten minutes is not hung, it is writing: the vendor has generated those tokens
+#: and will charge for them whether the answer is read or thrown away. Giving up pays in
+#: full for nothing and then sends the whole prompt again. A Mobile Developer asked for
+#: thirty-one files hit this twice in a row and produced neither answer.
+#:
+#: So the number is now long enough that reaching it really does mean something is wrong,
+#: rather than that the work was large. ``SLIPWRIGHT_MODEL_TIMEOUT_S`` moves it.
+DEFAULT_TIMEOUT_S = 1800.0
 _FENCE = re.compile(r"^\s*```(?:json)?\s*(.*?)\s*```\s*$", re.DOTALL)
 
 
@@ -87,6 +97,11 @@ class RoleResult(BaseModel):
     standards: list[str] | None = None  # chunk ids retrieved into the prompt (T9.4)
     attempts: int = 1  # how many calls it took (T9.7)
     prompt_chars: int | None = None  # size of the prompt sent (T9.7)
+    #: Attempts the vendor was generating for when we gave up on them. Their tokens are
+    #: not in ``usage`` and never will be -- a timeout returns no usage block -- but they
+    #: were written and they were charged for. Counted so the bill can say so instead of
+    #: quietly reading as though those minutes were free.
+    unreported_attempts: int = 0
 
     @property
     def ok(self) -> bool:

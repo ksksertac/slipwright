@@ -29,7 +29,15 @@ export function CostsTab({ projectId }: { projectId: string }) {
   if (costs.isLoading) return <Loading rows={4} />;
   if (costs.error) return <ErrorBox error={costs.error} />;
   if (!costs.data) return null;
-  const { jobs, spent_usd, expected_usd, unpriced_calls, subscription_calls, priced_models } =
+  const {
+    jobs,
+    spent_usd,
+    expected_usd,
+    unpriced_calls,
+    subscription_calls,
+    timed_out_calls,
+    priced_models,
+  } =
     costs.data;
 
   if (priced_models === 0) {
@@ -68,6 +76,14 @@ export function CostsTab({ projectId }: { projectId: string }) {
           {tx("{n} call(s) ran on a model with no stored price and are not in these totals.", {
             n: unpriced_calls,
           })}
+        </div>
+      )}
+      {timed_out_calls > 0 && (
+        <div className="muted small">
+          {tx(
+            "{n} call(s) were given up on while the model was still writing. They were charged for, but no vendor reports the tokens of a call it never finished answering, so they are not in these totals.",
+            { n: timed_out_calls },
+          )}
         </div>
       )}
       {jobs.length === 0 ? (
@@ -159,6 +175,14 @@ function Breakdown({ title, rows, roles }: { title: string; rows: Spend[]; roles
             {row.subscription_calls > 0 && (
               <span className="faint tiny" title={tx("on a plan, not billed per call")}>
                 ∞{row.subscription_calls}
+              </span>
+            )}
+            {row.timed_out_calls > 0 && (
+              <span
+                className="faint tiny"
+                title={tx("timed out while writing: charged for, amount never reported")}
+              >
+                ⧗{row.timed_out_calls}
               </span>
             )}
           </li>

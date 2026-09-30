@@ -13,6 +13,7 @@ from pathlib import Path
 
 from slipwright.engine import Engine
 from slipwright.hostpaths import HostPaths
+from slipwright.invoke import DEFAULT_TIMEOUT_S
 from slipwright.providers import ModelProvider
 from slipwright.schemas.profile import Profile, load_profile
 from slipwright.secrets import load_or_create_key
@@ -57,6 +58,9 @@ class Settings:
     # for a local one, off for anything that looks hosted (a database server, a container
     # per command), where it would be strangers' plans spent on a shared machine.
     chatgpt_subscription: bool | None = None
+    # How long one model call may take (``slipwright.invoke.DEFAULT_TIMEOUT_S``). None
+    # keeps that default; a slow vendor or a large phase may want more.
+    model_timeout_s: float | None = None
 
     @property
     def chatgpt_enabled(self) -> bool:
@@ -129,6 +133,8 @@ class Settings:
             settings.chatgpt_subscription = (
                 env["SLIPWRIGHT_CHATGPT_SUBSCRIPTION"].strip().lower() not in _OFF
             )
+        if env.get("SLIPWRIGHT_MODEL_TIMEOUT_S", "").strip():
+            settings.model_timeout_s = float(env["SLIPWRIGHT_MODEL_TIMEOUT_S"])
         settings.dev = env.get("SLIPWRIGHT_DEV", "").strip().lower() not in ("", *_OFF)
         return settings
 
@@ -157,6 +163,7 @@ def build_engine(settings: Settings) -> Engine:
         Workspace(settings.worktrees_root, PortAllocator(start=lo, end=hi)),
         seed_profile=seed,
         provider=build_provider(settings.provider, seed),
+        timeout_s=settings.model_timeout_s or DEFAULT_TIMEOUT_S,
     )
     engine.local_repos_root = settings.local_repos
     if settings.chatgpt_enabled:

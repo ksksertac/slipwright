@@ -461,3 +461,83 @@ def test_a_subscription_call_costs_nothing_rather_than_an_unknown_amount() -> No
     by_role = {row.key: row for row in costs.by_role}
     assert by_role["po"].subscription_calls == 1 and by_role["po"].unpriced_calls == 0
     assert by_role["qa"].unpriced_calls == 1 and by_role["qa"].subscription_calls == 0
+
+
+def test_a_call_given_up_on_is_counted_even_though_nobody_says_what_it_cost(
+    store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
+) -> None:
+    """A timeout is the one failure that leaves money behind and no record of it.
+
+    The model was writing when we stopped waiting: those tokens exist and the vendor
+    charges for them, but a call that never finished answering returns no usage block, so
+    nothing arrives to add up. Every other failure reports what it burned and is already
+    counted. This one read as though those minutes had been free -- which is what "it
+    feels like it is eating tokens in the background" is describing.
+    """
+    from slipwright.providers import ProviderTimeoutError
+
+    provider = full_provider(seed, phases=1)
+    answer = provider.replies[RoleName.BACKEND]
+    attempts = {"n": 0}
+
+    def time_out_once(_req: Any) -> Any:
+        attempts["n"] += 1
+        if attempts["n"] == 1:
+            raise ProviderTimeoutError("read timed out")  # no tokens: none will ever come
+        return answer
+
+    provider.replies[RoleName.BACKEND] = time_out_once
+    engine = full_engine(store, worktrees_root, seed, provider)
+    job = engine.approve(engine.approve(engine.start(engine.create_job("x", repo).id).id).id)
+
+    backend = [e for e in job.data.invocation_log if e["role"] == "backend"]
+    assert backend and backend[0]["attempts"] == 2
+    assert backend[0]["unreported_attempts"] == 1
+
+    costs = job_cost(job, profile=seed)
+    assert costs.timed_out_calls == 1
+    # and it stays out of the money, because the amount is unknown rather than nought
+    by_role = {r.key: r for r in costs.by_role}
+    assert by_role["backend"].timed_out_calls == 1
+
+
+def test_one_model_call_gets_long_enough_that_a_timeout_means_something_is_wrong() -> None:
+    """Ten minutes was the expensive choice.
+
+    A call still running at ten minutes is not hung, it is writing, and the vendor bills
+    those tokens whether the answer is read or thrown away. Giving up paid in full for
+    nothing and then sent the whole prompt again -- a Mobile Developer asked for
+    thirty-one files hit it twice and produced neither answer. The budget is now long
+    enough that reaching it really does mean something is wrong.
+    """
+    from slipwright.config import Settings, build_engine
+    from slipwright.invoke import DEFAULT_TIMEOUT_S
+
+    assert DEFAULT_TIMEOUT_S >= 1800
+
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        base = {"SLIPWRIGHT_STATE_DIR": tmp}
+        assert Settings.from_env(base).model_timeout_s is None
+        eng = build_engine(Settings.from_env(base))
+        assert eng.timeout_s == DEFAULT_TIMEOUT_S
+        eng.store.close()
+
+        # and an installation whose vendor is slower, or whose phases are larger, says so
+        slower = Settings.from_env({**base, "SLIPWRIGHT_MODEL_TIMEOUT_S": "3600"})
+        assert slower.model_timeout_s == 3600.0
+        eng = build_engine(slower)
+        assert eng.timeout_s == 3600.0
+        eng.store.close()
+
+
+def test_the_architect_is_told_a_phase_has_to_fit_in_one_answer() -> None:
+    """The other half of the same bill. A phase is written by one model call, so a phase
+    naming thirty-one files does not come back slowly -- it does not come back, and every
+    attempt at it is charged for. Splitting is the Product Owner's job, and the Architect
+    is the one who can see that it is needed."""
+    from slipwright.roles.architect import INSTRUCTIONS
+
+    assert "one model call" in INSTRUCTIONS
+    assert "handful of files" in INSTRUCTIONS
