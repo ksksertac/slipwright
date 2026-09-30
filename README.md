@@ -295,8 +295,9 @@ a local install stays a single command.
 <details open>
 <summary><b>From the published image</b> (nothing to clone or build)</summary>
 
-Every push to `main` publishes `ghcr.io/ksksertac/slipwright:latest` (amd64 and arm64); a
-`v1.2.3` tag publishes `:1.2.3` as well.
+Every merge to `main` is a release: it publishes `ghcr.io/ksksertac/slipwright:latest`
+(amd64 and arm64) together with its own number, the next patch after the newest release
+(`:0.2.1`, then `:0.2.2`, …), and a `:0.2` that follows the newest of them.
 
 ```sh
 docker run -d --name slipwright -p 8500:8500 \
@@ -339,7 +340,7 @@ docker run -d --name slipwright -p 8500:8500     -v slipwright-state:/data -v sl
 `--group-add` is the socket's group on the host (`0` on Docker Desktop; `stat -c %g
 /var/run/docker.sock` on Linux). Access to the socket is access to the host, so give it
 only to a server you trust with that. Without it the button says what to run instead.
-Releases are the `v1.2.3` tags, not every push to `main`.
+Every merge to `main` is a release, numbered one patch up from the last.
 
 </details>
 

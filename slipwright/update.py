@@ -22,9 +22,10 @@ anonymous volume, and a container made again from the image would get a fresh, e
 one -- so every volume the old container had is carried over by name, whether anybody
 declared it or not.
 
-Releases are the registry's semantic-version tags (``v1.2.3`` pushed to git publishes
-``1.2.3``), never ``latest``: every merge to main is ``latest``, and a button that lit up
-on every merge would be a button nobody reads.
+Releases are the registry's semantic-version tags, never ``latest`` or ``sha-…``. Every
+merge to main is one: CI takes the newest ``v1.2.3`` tag, publishes the next patch
+(``1.2.4``) and tags it. A bigger step is a ``v1.3.0`` tag pushed by hand, and the patches
+count on from there.
 """
 
 from __future__ import annotations
@@ -90,8 +91,15 @@ def version_key(text: str) -> tuple[int, int, int] | None:
 
 
 def running_version() -> str:
-    """The version this code was released as: ``pyproject.toml``'s, which a release tag
-    must match (CI checks)."""
+    """The version this code was released as. A published image carries it in
+    ``SLIPWRIGHT_VERSION``, written by CI from the release tag it computed: every merge to
+    main is a release, and ``pyproject.toml`` cannot follow -- CI may not commit to a
+    protected main. A source checkout has no such variable and reports ``pyproject.toml``'s.
+
+    The variable is the image's own, so a container made again from the next release gets
+    the next release's (``recreated`` drops what the old image set)."""
+    if released := os.environ.get("SLIPWRIGHT_VERSION", "").strip():
+        return released
     try:
         return package_version("slipwright")
     except PackageNotFoundError:  # pragma: no cover - always installed, even from source
