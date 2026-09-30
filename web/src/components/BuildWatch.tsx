@@ -2,13 +2,21 @@
 //
 // - the page is older than the server: a deploy happened under an open tab, and the tab
 //   is still running the bundle it loaded. Reloading is the whole fix.
-// - the server is older than the newest release: somebody has to install it. Anybody using
-//   the screen may, with one press; the server pulls the release and restarts on it,
-//   keeping every project, setting and development (slipwright/update.py).
+// - the server is older than the newest release: somebody has to install it. The corner
+//   says so in two words; the dialog behind it says what the release is, what changes
+//   and what happens on "Update now" -- the server pulls it and restarts on it, keeping
+//   every project, setting and development (slipwright/update.py). Anybody using the
+//   screen may press it.
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { api, describeError } from "../api/client";
 import type { UpdateStatus, Version } from "../api/client";
 import { useT } from "../i18n";
+import { Markdown } from "../pages/AgentStandardsTab";
+import { Copyable } from "./Copyable";
+import { IconExternal } from "./icons";
+import { Modal } from "./Modal";
+import { timeAgo } from "./ui";
 
 const EVERY_MS = 60_000;
 // while an install is under way the server goes away and comes back; asked often, so the
@@ -21,11 +29,11 @@ export function BuildWatch() {
   const [stale, setStale] = useState(false);
   const [build, setBuild] = useState("");
   const [update, setUpdate] = useState<UpdateStatus | null>(null);
+  const [open, setOpen] = useState(false);
   // pressed on this page: from here on, the server answering with another version is
   // the install finishing, and the page reloads by itself
   const [installing, setInstalling] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [showHow, setShowHow] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -62,21 +70,9 @@ export function BuildWatch() {
     }
   }, [installing, update]);
 
-  const install = async (u: UpdateStatus, version: string) => {
-    const lines = [
-      tx(
-        "Install version {v}? The server restarts on it; projects, settings and history are kept.",
-        { v: version },
-      ),
-    ];
-    if (u.running_jobs > 0)
-      lines.push(
-        tx("{n} development(s) running now will carry on from the step they were on.", {
-          n: u.running_jobs,
-        }),
-      );
-    if (u.backup) lines.push(tx("A copy of the database is taken first."));
-    if (!window.confirm(lines.join("\n\n"))) return;
+  const busy = installing !== null || update?.state === "pulling" || update?.state === "restarting";
+
+  const install = async (version: string) => {
     setError(null);
     try {
       setUpdate(await api.post<UpdateStatus>("/api/update", { version }));
@@ -86,65 +82,160 @@ export function BuildWatch() {
     }
   };
 
-  const stamp = (
-    <div className="faint tiny build-stamp">
-      {update ? tx("version {v} · build {id}", { v: update.current, id: build }) : null}
-      {!update && build ? tx("build {id}", { id: build }) : null}
-    </div>
-  );
-  const offer = update?.latest ? renderOffer(update, update.latest) : null;
-
-  function renderOffer(u: UpdateStatus, version: string) {
-    const busy = installing !== null || u.state === "pulling" || u.state === "restarting";
-    const failed = error ?? (u.state === "failed" ? u.error : null);
-    return (
-      <div className="build-update">
-        {busy ? (
-          <button className="btn small build-stale" disabled>
-            <span className="spinner" />
-            {u.state === "pulling"
-              ? tx("Downloading version {v}…", { v: version })
-              : tx("Restarting on version {v}…", { v: version })}
-          </button>
-        ) : (
-          <button
-            className="btn small primary build-stale"
-            onClick={() => (u.can_install ? void install(u, version) : setShowHow(!showHow))}
-          >
-            {tx("Install version {v}", { v: version })}
-          </button>
-        )}
-        {u.notes_url ? (
-          <a className="faint tiny build-notes" href={u.notes_url} target="_blank" rel="noreferrer">
-            {tx("What's new")}
-          </a>
-        ) : null}
-        {failed && !busy ? (
-          <div className="tiny build-error">{tx("The update failed: {error}", { error: failed })}</div>
-        ) : null}
-        {showHow && !u.can_install ? (
-          <div className="tiny build-how">
-            {u.blocked === "source"
-              ? tx("This server runs from source. Update it with:")
-              : tx(
-                  "This server cannot reach Docker, so it cannot install by itself. Mount /var/run/docker.sock into its container, or run:",
-                )}
-            <code>{u.command}</code>
-          </div>
-        ) : null}
-      </div>
-    );
-  }
-
   return (
     <>
-      {stamp}
+      <div className="faint tiny build-stamp">
+        {update
+          ? tx("version {v} · build {id}", { v: update.current, id: build })
+          : build
+            ? tx("build {id}", { id: build })
+            : null}
+      </div>
       {stale && !installing ? (
         <button className="btn small primary build-stale" onClick={() => window.location.reload()}>
           {tx("New version — reload")}
         </button>
       ) : null}
-      {offer}
+      {update?.latest ? (
+        <button className="btn small build-stale build-offer" onClick={() => setOpen(true)}>
+          <span className="build-dot" />
+          {busy ? tx("Updating…") : tx("New version · {v}", { v: update.latest })}
+        </button>
+      ) : null}
+      {/* into the body, not the sidebar: a sticky sidebar is a stacking context of its
+          own, and the page beside it painted over a dialog kept inside it */}
+      {open && update?.latest
+        ? createPortal(
+            <UpdateDialog
+              update={update}
+              version={update.latest}
+              busy={busy}
+              error={error ?? (update.state === "failed" ? update.error : null) ?? null}
+              onInstall={() => void install(update.latest as string)}
+              onClose={() => setOpen(false)}
+            />,
+            document.body,
+          )
+        : null}
     </>
+  );
+}
+
+function UpdateDialog({
+  update,
+  version,
+  busy,
+  error,
+  onInstall,
+  onClose,
+}: {
+  update: UpdateStatus;
+  version: string;
+  busy: boolean;
+  error: string | null;
+  onInstall: () => void;
+  onClose: () => void;
+}) {
+  const tx = useT();
+  return (
+    <Modal
+      title={tx("New version")}
+      onClose={onClose}
+      footer={
+        update.can_install ? (
+          <>
+            <button className="btn" onClick={onClose}>
+              {busy ? tx("Close") : tx("Later")}
+            </button>
+            <button className="btn primary" disabled={busy} onClick={onInstall}>
+              {busy ? tx("Updating…") : tx("Update now")}
+            </button>
+          </>
+        ) : (
+          <button className="btn" onClick={onClose}>
+            {tx("Close")}
+          </button>
+        )
+      }
+    >
+      <div className="update-versions">
+        <div>
+          <div className="faint tiny">{tx("Installed")}</div>
+          <div className="update-version">{update.current}</div>
+        </div>
+        <div className="update-arrow faint">→</div>
+        <div>
+          <div className="faint tiny">{tx("New version")}</div>
+          <div className="update-version new">{version}</div>
+          {update.published_at ? (
+            <div className="faint tiny">
+              {tx("released {when}", { when: timeAgo(update.published_at) })}
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="update-notes-head">
+        <h4>{tx("What's new")}</h4>
+        {update.notes_url ? (
+          <a className="tiny" href={update.notes_url} target="_blank" rel="noreferrer">
+            {tx("On GitHub")} <IconExternal />
+          </a>
+        ) : null}
+      </div>
+      <div className="update-notes">
+        {update.notes ? (
+          <Markdown text={update.notes} />
+        ) : (
+          <div className="faint small">{tx("No notes were written for this release.")}</div>
+        )}
+      </div>
+
+      {busy ? (
+        <div className="callout notice update-progress">
+          <span className="build-dot" />
+          <div>
+            {update.state === "pulling"
+              ? tx("Downloading version {v}…", { v: version })
+              : tx("Restarting on version {v}…", { v: version })}{" "}
+            {tx("The page reloads by itself when it is ready.")}
+          </div>
+        </div>
+      ) : update.can_install ? (
+        <ul className="update-facts small">
+          <li>
+            {tx(
+              "The server restarts on the new version; it takes a minute or two. Projects, settings and history are kept.",
+            )}
+          </li>
+          {update.running_jobs > 0 ? (
+            <li>
+              {tx("{n} development(s) running now will carry on from the step they were on.", {
+                n: update.running_jobs,
+              })}
+            </li>
+          ) : null}
+          {update.backup ? <li>{tx("A copy of the database is taken first.")}</li> : null}
+          <li>{tx("If the new version does not start, the old one is put back by itself.")}</li>
+        </ul>
+      ) : (
+        <div className="callout hint update-how">
+          <div>
+            {update.blocked === "source"
+              ? tx("This server runs from source. Update it with:")
+              : tx(
+                  "This server cannot reach Docker, so it cannot install by itself. Mount /var/run/docker.sock into its container, or run:",
+                )}
+            <Copyable text={update.command}>
+              <pre>{update.command}</pre>
+            </Copyable>
+          </div>
+        </div>
+      )}
+
+      {error && !busy ? (
+        <div className="callout error">{tx("The update failed: {error}", { error })}</div>
+      ) : null}
+    </Modal>
   );
 }

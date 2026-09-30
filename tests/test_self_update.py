@@ -25,11 +25,14 @@ from slipwright.schemas.profile import Profile
 from slipwright.store import JobStore
 from slipwright.update import (
     DockerError,
+    ReleaseNotes,
     Updater,
     backup_sqlite,
+    changelog_section,
     helper_body,
     latest_release,
     recreated,
+    release_notes,
     replace,
 )
 from tests.pipeline import full_engine, full_provider
@@ -195,6 +198,73 @@ def test_a_registry_that_cannot_be_reached_offers_nothing_and_breaks_nothing() -
     updater = Updater(image=IMAGE, current="0.1.0", registry=down)
     assert updater.check() is None
     assert updater.status().latest is None
+
+
+CHANGELOG = """# Changelog
+
+## 0.2.10
+
+Not this one.
+
+## 0.2.1
+
+- The corner offers a newer release.
+- One press installs it.
+
+## 0.2.0
+
+The one before.
+"""
+
+
+def test_a_releases_notes_are_its_own_section_of_the_changelog() -> None:
+    assert changelog_section(CHANGELOG, "0.2.1") == (
+        "- The corner offers a newer release.\n- One press installs it."
+    )
+    assert changelog_section(CHANGELOG, "9.9.9") == ""
+
+
+def _github(release: dict[str, Any] | None) -> httpx.Client:
+    def answer(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "api.github.com":
+            return httpx.Response(200, json=release) if release else httpx.Response(404)
+        assert request.url.path == "/acme/slipwright/v0.2.1/CHANGELOG.md"
+        return httpx.Response(200, text=CHANGELOG)
+
+    return httpx.Client(transport=httpx.MockTransport(answer))
+
+
+def test_a_written_release_is_what_the_dialog_shows() -> None:
+    release = {"body": "## Highlights\n- Faster.", "published_at": "2026-10-01T09:00:00Z"}
+    notes = release_notes(IMAGE, "0.2.1", _github(release))
+    assert notes is not None
+    assert notes.text == "## Highlights\n- Faster."
+    assert notes.published_at is not None and notes.published_at.day == 1
+
+
+def test_a_tag_pushed_without_a_release_falls_back_to_the_changelog() -> None:
+    notes = release_notes(IMAGE, "0.2.1", _github(None))
+    assert notes is not None
+    assert notes.text.startswith("- The corner offers a newer release.")
+
+
+def test_notes_travel_with_the_release_they_describe() -> None:
+    asked: list[str] = []
+
+    def source(image: str, version: str) -> ReleaseNotes:
+        asked.append(version)
+        return ReleaseNotes(f"notes of {version}")
+
+    updater = Updater(
+        image=IMAGE, current="0.1.0", registry=lambda _: "0.2.0", notes_source=source
+    )
+    updater.check()
+    updater.check()
+    assert updater.status().notes == "notes of 0.2.0"
+    assert asked == ["0.2.0"]  # published notes do not change; asked once
+    updater.registry = lambda _: "0.1.0"
+    updater.check()
+    assert updater.status().notes is None
 
 
 def test_an_installation_can_turn_the_check_off(monkeypatch: pytest.MonkeyPatch) -> None:

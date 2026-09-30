@@ -7828,6 +7828,18 @@
             "description": "A newer release, when there is one; otherwise null.",
             "title": "Latest"
           },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What the newer release changes, in Markdown, when known.",
+            "title": "Notes"
+          },
           "notes_url": {
             "anyOf": [
               {
@@ -7837,8 +7849,21 @@
                 "type": "null"
               }
             ],
-            "description": "What the newer release changes.",
+            "description": "The newer release's page.",
             "title": "Notes Url"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When it was released.",
+            "title": "Published At"
           },
           "running_jobs": {
             "description": "Developments in flight on the whole server. They carry on after the restart, from the step they were on.",
@@ -7865,7 +7890,9 @@
           "current",
           "error",
           "latest",
+          "notes",
           "notes_url",
+          "published_at",
           "running_jobs",
           "state"
         ],

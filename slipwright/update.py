@@ -143,6 +143,66 @@ def notes_url(image: str, version: str) -> str | None:
     return f"https://github.com/{repo}/releases/tag/v{version}"
 
 
+@dataclass
+class ReleaseNotes:
+    """What a release changes, in the words it was published with (Markdown)."""
+
+    text: str
+    published_at: datetime | None = None
+
+
+def release_notes(image: str, version: str, client: httpx.Client) -> ReleaseNotes | None:
+    """The GitHub release's own text; failing that, the release's section of the
+    changelog as it stood at its tag. A tag pushed without a release written for it is
+    the ordinary case, and the changelog is written either way.
+
+    Only for images on GHCR, whose repository is the one on GitHub. Never raises: notes
+    that cannot be fetched leave a dialog with the version and nothing else, which is
+    still enough to install it.
+    """
+    registry, repo = split_image(image)
+    if registry != "ghcr.io":
+        return None
+    try:
+        resp = net.request(
+            client,
+            "GET",
+            f"https://api.github.com/repos/{repo}/releases/tags/v{version}",
+            headers={"Accept": "application/vnd.github+json"},
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            body = str(data.get("body") or "").strip()
+            published = data.get("published_at")
+            when = datetime.fromisoformat(published) if published else None
+            if body:
+                return ReleaseNotes(body, when)
+        else:
+            when = None
+        resp = net.request(
+            client, "GET", f"https://raw.githubusercontent.com/{repo}/v{version}/CHANGELOG.md"
+        )
+        if resp.status_code != 200:
+            return ReleaseNotes("", when) if when else None
+        section = changelog_section(resp.text, version)
+        return ReleaseNotes(section, when) if section or when else None
+    except (httpx.HTTPError, ValueError) as exc:
+        log.info("could not fetch the notes of %s: %s", version, exc)
+        return None
+
+
+def changelog_section(changelog: str, version: str) -> str:
+    """The body under ``## <version>`` in a changelog, up to the next ``## ``."""
+    lines = changelog.splitlines()
+    heading = re.compile(rf"^##\s+v?{re.escape(version)}(\s|$)")
+    for i, line in enumerate(lines):
+        if heading.match(line):
+            rest = lines[i + 1 :]
+            end = next((j for j, ln in enumerate(rest) if ln.startswith("## ")), len(rest))
+            return "\n".join(rest[:end]).strip()
+    return ""
+
+
 # -- the Docker daemon -------------------------------------------------------------------
 
 
@@ -517,6 +577,8 @@ class Status:
     current: str
     latest: str | None
     notes_url: str | None
+    notes: str | None
+    published_at: datetime | None
     blocked: Blocked | None
     state: State
     error: str | None
@@ -536,8 +598,12 @@ class Updater:
     in_container: bool = field(default_factory=lambda: Path("/.dockerenv").exists())
     docker_factory: Callable[[str], Docker] = EngineAPI
     registry: Callable[[str], str | None] | None = None
+    #: Where a release's notes come from; ``None`` asks GitHub, unless ``registry`` is
+    #: stood in for too -- a test offering a release that does not exist has none.
+    notes_source: Callable[[str, str], ReleaseNotes | None] | None = None
 
     latest: str | None = None
+    notes: ReleaseNotes | None = None
     state: State = "idle"
     error: str | None = None
     _docker: Docker | None = field(default=None, repr=False)
@@ -572,8 +638,20 @@ class Updater:
             log.info("could not ask %s for releases: %s", self.image, exc)
             return self.latest
         mine, theirs = version_key(self.current), version_key(newest or "")
-        self.latest = newest if (mine and theirs and theirs > mine) else None
+        offered = newest if (mine and theirs and theirs > mine) else None
+        # asked once per release, not on every check: they do not change once published
+        if offered != self.latest or (offered and self.notes is None):
+            self.notes = self._notes(offered) if offered else None
+        self.latest = offered
         return self.latest
+
+    def _notes(self, version: str) -> ReleaseNotes | None:
+        if self.notes_source is not None:
+            return self.notes_source(self.image, version)
+        if self.registry is not None:
+            return None
+        with httpx.Client(timeout=15.0) as client:
+            return release_notes(self.image, version, client)
 
     def _probe(self) -> None:
         """Whether this server can reach the daemon and find itself there. Asked once: a
@@ -608,6 +686,8 @@ class Updater:
             current=self.current,
             latest=self.latest,
             notes_url=notes_url(self.image, self.latest) if self.latest else None,
+            notes=(self.notes.text or None) if self.notes else None,
+            published_at=self.notes.published_at if self.notes else None,
             blocked=self.blocked(),
             state=self.state,
             error=self.error,
@@ -730,14 +810,17 @@ __all__ = [
     "DockerError",
     "EngineAPI",
     "Status",
+    "ReleaseNotes",
     "UpdateRefused",
     "Updater",
     "backup_sqlite",
+    "changelog_section",
     "checker",
     "helper_body",
     "latest_release",
     "own_container",
     "recreated",
+    "release_notes",
     "replace",
     "running_version",
     "version_key",

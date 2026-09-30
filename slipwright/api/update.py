@@ -9,6 +9,7 @@ server can do with it is the update its owner would have done anyway, a little e
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Request
@@ -25,7 +26,11 @@ class UpdateStatus(BaseModel):
     latest: str | None = Field(
         default=None, description="A newer release, when there is one; otherwise null."
     )
-    notes_url: str | None = Field(default=None, description="What the newer release changes.")
+    notes_url: str | None = Field(default=None, description="The newer release's page.")
+    notes: str | None = Field(
+        default=None, description="What the newer release changes, in Markdown, when known."
+    )
+    published_at: datetime | None = Field(default=None, description="When it was released.")
     can_install: bool = Field(description="Whether the button can install it by itself.")
     blocked: Literal["no_docker", "source"] | None = Field(
         default=None,
@@ -62,6 +67,8 @@ def _status(request: Request) -> UpdateStatus:
         current=status.current,
         latest=status.latest,
         notes_url=status.notes_url,
+        notes=status.notes,
+        published_at=status.published_at,
         can_install=status.blocked is None,
         blocked=status.blocked,
         command=status.command,
