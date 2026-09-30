@@ -84,24 +84,37 @@ export function BuildWatch() {
 
   return (
     <>
-      <div className="faint tiny build-stamp">
-        {update
-          ? tx("version {v} · build {id}", { v: update.current, id: build })
-          : build
-            ? tx("build {id}", { id: build })
-            : null}
+      {/* one child of the sidebar, not three: each child is spaced like a section, and the
+          version with its buttons is one small thing -- spaced apart, the button arriving
+          with a new release pushed the menu into a scrollbar */}
+      <div className="build-corner">
+        {/* the version is what a person reads; the build id only tells two builds of it
+            apart, so it waits under the pointer rather than taking a line of the corner */}
+        <div
+          className="faint tiny build-stamp"
+          title={update && build ? tx("build {id}", { id: build }) : undefined}
+        >
+          {update
+            ? tx("version {v}", { v: update.current })
+            : build
+              ? tx("build {id}", { id: build })
+              : null}
+        </div>
+        {stale && !installing ? (
+          <button
+            className="btn small primary build-stale"
+            onClick={() => window.location.reload()}
+          >
+            {tx("New version — reload")}
+          </button>
+        ) : null}
+        {update?.latest ? (
+          <button className="btn small build-stale build-offer" onClick={() => setOpen(true)}>
+            <span className="build-dot" />
+            {busy ? tx("Updating…") : tx("New version · {v}", { v: update.latest })}
+          </button>
+        ) : null}
       </div>
-      {stale && !installing ? (
-        <button className="btn small primary build-stale" onClick={() => window.location.reload()}>
-          {tx("New version — reload")}
-        </button>
-      ) : null}
-      {update?.latest ? (
-        <button className="btn small build-stale build-offer" onClick={() => setOpen(true)}>
-          <span className="build-dot" />
-          {busy ? tx("Updating…") : tx("New version · {v}", { v: update.latest })}
-        </button>
-      ) : null}
       {/* into the body, not the sidebar: a sticky sidebar is a stacking context of its
           own, and the page beside it painted over a dialog kept inside it */}
       {open && update?.latest

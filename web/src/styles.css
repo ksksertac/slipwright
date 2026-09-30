@@ -255,13 +255,13 @@ p {
   flex: 0 0 var(--sidebar-w);
   background: var(--surface);
   border-right: 1px solid var(--line);
-  padding: 18px 12px;
+  padding: 14px 12px 12px;
   position: sticky;
   top: 0;
   height: 100vh;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 10px;
 }
 .brand {
   display: flex;
@@ -368,14 +368,14 @@ p {
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--text-3);
-  padding: 12px 10px 4px;
+  padding: 8px 10px 4px;
 }
 .nav a {
   display: flex;
   align-items: center;
   gap: 10px;
   color: var(--text-2);
-  padding: 8px 10px;
+  padding: 6px 10px;
   border-radius: var(--radius-sm);
   font-weight: 500;
 }
@@ -464,7 +464,7 @@ p {
 .sidebar-foot {
   margin-top: auto;
   border-top: 1px solid var(--line);
-  padding-top: 12px;
+  padding-top: 10px;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -4223,13 +4223,17 @@ details.acc[open] .acc-chev {
 
 /* which build the page is running, and the offer to reload when it is no longer the one
    the server serves */
+.build-corner {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
 .build-stamp {
-  padding: 10px 10px 0;
+  padding: 0 10px;
   letter-spacing: 0.02em;
 }
 .build-stale {
-  margin: 8px 12px 0;
-  width: calc(100% - 24px);
+  width: 100%;
   justify-content: center;
 }
 /* a newer release: two words in the corner, the rest in the dialog behind them */

@@ -77,7 +77,7 @@ export const TR: Record<string, string> = {
   "{day}.{month}": "{day}.{month}",
   "build {id}": "sürüm {id}",
   "New version — reload": "Yeni sürüm var — yenile",
-  "version {v} · build {id}": "sürüm {v} · derleme {id}",
+  "version {v}": "sürüm {v}",
   "New version · {v}": "Yeni sürüm · {v}",
   "New version": "Yeni sürüm",
   "Updating…": "Güncelleniyor…",
