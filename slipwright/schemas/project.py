@@ -102,6 +102,11 @@ class Project(BaseModel):
         "is handed an empty one and builds without knowing what the project is, so the "
         "request waits here instead. Cleared the moment its job is created.",
     )
+    pending_title: str = Field(
+        default="",
+        description="The short name the first development was given beside its request; "
+        "held and cleared with it.",
+    )
     jira_project_key: str | None = None
     language: Language = Field(
         default="tr",

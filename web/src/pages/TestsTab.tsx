@@ -15,7 +15,7 @@ import {
   useTestRuns,
 } from "../api/hooks";
 import { IconFlask, IconPlay } from "../components/icons";
-import { Empty, ErrorBox, Loading, timeAgo } from "../components/ui";
+import { Empty, ErrorBox, Loading, nameOf, timeAgo } from "../components/ui";
 import { useLang, useT, type T } from "../i18n";
 import { Copyable } from "../components/Copyable";
 
@@ -127,7 +127,7 @@ export function TestsTab({ projectId }: { projectId: string }) {
             <option value="">{tx("on the main branch")}</option>
             {withWorktree.map((j) => (
               <option key={j.id} value={j.id}>
-                {tx("in the development: {request}", { request: j.request.slice(0, 50) })}
+                {tx("in the development: {request}", { request: nameOf(j) })}
               </option>
             ))}
           </select>
@@ -178,7 +178,7 @@ export function TestsTab({ projectId }: { projectId: string }) {
                 <option value="">{tx("any development")}</option>
                 {(jobs.data ?? []).map((j) => (
                   <option key={j.id} value={j.id}>
-                    {j.request.slice(0, 50)}
+                    {nameOf(j)}
                   </option>
                 ))}
               </select>
@@ -274,7 +274,7 @@ export function TestsTab({ projectId }: { projectId: string }) {
                             to={`/projects/${projectId}/jobs/${run.job_id}`}
                             onClick={(e) => e.stopPropagation()}
                           >
-                            {job?.request.slice(0, 40) ?? run.job_id}
+                            {job ? nameOf(job) : run.job_id}
                           </Link>
                         ) : (
                           <span className="muted">{tx("main branch")}</span>

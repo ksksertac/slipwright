@@ -125,6 +125,13 @@ export function timeAgo(iso: string | null | undefined): string {
  * The rest of the line is left exactly as it was typed, because lowering it would spell
  * "API" and "Jira" wrong. A line typed entirely in capitals is the one exception: there
  * the shouting is not something anybody meant to keep, so it is brought back down. */
+/** What a development is called: the short name it was given. The server names every
+ * job, deriving one for whatever came without; the request is only the fallback for a
+ * page that has not caught up with it. The request itself is the brief, not a label. */
+export function nameOf(x: { title?: string | null; request: string }): string {
+  return sentence(x.title?.trim() || x.request);
+}
+
 export function sentence(text: string): string {
   const s = text.trimStart();
   if (!s) return text;

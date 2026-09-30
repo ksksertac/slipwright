@@ -48,6 +48,7 @@ class ActivityItem(BaseModel):
 
     job_id: str
     job_request: str
+    job_title: str = ""  # the development's short name: what a row is labelled with
     project_id: str | None = None
     index: int  # position in ``job.history``; the detail endpoint takes it
     at: datetime
@@ -65,6 +66,7 @@ class JobProgress(BaseModel):
     job_id: str
     project_id: str | None = None
     request: str
+    title: str = ""  # the short name; ``request`` is the whole brief
     state: JobState
     pending_approval: str | None
     #: which agent the gate belongs to, so a page knows whose approval it is waiting for
@@ -269,6 +271,7 @@ def job_progress(job: Job) -> JobProgress:
         job_id=job.id,
         project_id=job.project_id,
         request=job.request,
+        title=job.title,
         state=job.state,
         pending_approval=pending_approval(job),
         agent=agent_for_gate(job.state),
@@ -439,6 +442,7 @@ def job_activity(job: Job) -> list[ActivityItem]:
             ActivityItem(
                 job_id=job.id,
                 job_request=job.request,
+                job_title=job.title,
                 project_id=job.project_id,
                 index=index,
                 at=t.at,

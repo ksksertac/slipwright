@@ -384,7 +384,7 @@ export function useDeleteProject() {
 export function useStartJob(projectId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { request: string; attachments?: string[] }) =>
+    mutationFn: (body: { request: string; title: string; attachments?: string[] }) =>
       api.post<Job>(`/api/projects/${projectId}/jobs`, body),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.project(projectId) }),
   });
@@ -636,6 +636,20 @@ export function useRetryJob(jobId: string) {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: keys.job(jobId) });
       void qc.invalidateQueries({ queryKey: keys.projects });
+    },
+  });
+}
+
+/** Another name for a development; the request and the branch stay as they are. */
+export function useRenameJob(jobId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (title: string) => api.patch<Job>(`/api/jobs/${jobId}`, { title }),
+    onSuccess: (job) => {
+      qc.setQueryData(keys.job(jobId), job);
+      // every list it is named in: the project's tabs, the dashboard, the activity
+      void qc.invalidateQueries({ queryKey: keys.projects });
+      void qc.invalidateQueries({ queryKey: keys.job(jobId) });
     },
   });
 }
