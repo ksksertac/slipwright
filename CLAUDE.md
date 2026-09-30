@@ -152,6 +152,7 @@ opened again, and an image with no driver in it.
 | `SLIPWRIGHT_QUOTA_MAX_*` | `0` (off) | running jobs, projects, disk |
 | `SLIPWRIGHT_DEMO_PROJECT` | on | the worked example a new account starts with |
 | `SLIPWRIGHT_CHATGPT_SUBSCRIPTION` | on locally, off when hosted | agents on a ChatGPT plan via the Codex CLI |
+| `SLIPWRIGHT_MODEL_TIMEOUT_S` | `1800` | how long one model call may take; a call given up on is billed in full |
 | `SLIPWRIGHT_SECRET_KEY` | generated in the state dir | encrypts stored credentials. **Required** with PostgreSQL |
 | `SLIPWRIGHT_UPDATE_IMAGE` | `ghcr.io/ksksertac/slipwright` | where releases are looked for; `off` stops asking |
 
