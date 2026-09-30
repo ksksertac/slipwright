@@ -15,6 +15,14 @@ def _git(repo: Path, *args: str) -> str:
     ).stdout
 
 
+@pytest.fixture(autouse=True)
+def _no_release_check(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A test that starts the server's background work would otherwise ask GHCR which
+    releases exist: slow, flaky offline, and nothing any test is about. The ones that are
+    about it hand the app an ``Updater`` of their own."""
+    monkeypatch.setenv("SLIPWRIGHT_UPDATE_IMAGE", "off")
+
+
 @pytest.fixture
 def repo(tmp_path: Path) -> Path:
     """A small git repository with one commit on ``main``."""

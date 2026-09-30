@@ -92,6 +92,14 @@ services:
       # daemon is access to the host -- so it is the *server* that is trusted with it,
       # never a job's own command, which only ever sees the inside of its container.
       # - /var/run/docker.sock:/var/run/docker.sock
+      #
+      # The same socket is what lets the "Install version …" button under the version in
+      # the corner install a newer release by itself: the server pulls it and a helper
+      # container makes this one again on it, with the same volumes. Without the socket
+      # the button says what to run instead. The image runs as uid 1000, so the socket
+      # has to be writable by a group it is in -- the socket's group id on the host
+      # (`stat -c %g /var/run/docker.sock`; 0 on Docker Desktop):
+      # group_add: ["${DOCKER_GID:-0}"]
     restart: unless-stopped
 
   # Only started with `--profile postgres`, so the default single-service setup is

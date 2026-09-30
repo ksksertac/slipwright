@@ -61,6 +61,7 @@ slipwright/
   translate.py        agent prose in the language it was not written in
   brief/discovery     what a project *is*, before any development starts
   worklist.py         what a development will do, grouped by agent
+  update.py           a newer release, offered in the corner and installed on a press
   steps.py            what one pipeline step actually produced
   costs.py + prices.py  what a development cost against what it was expected to
   support.py          the support desk
@@ -152,6 +153,7 @@ opened again, and an image with no driver in it.
 | `SLIPWRIGHT_DEMO_PROJECT` | on | the worked example a new account starts with |
 | `SLIPWRIGHT_CHATGPT_SUBSCRIPTION` | on locally, off when hosted | agents on a ChatGPT plan via the Codex CLI |
 | `SLIPWRIGHT_SECRET_KEY` | generated in the state dir | encrypts stored credentials. **Required** with PostgreSQL |
+| `SLIPWRIGHT_UPDATE_IMAGE` | `ghcr.io/ksksertac/slipwright` | where releases are looked for; `off` stops asking |
 
 ## How to write here
 
@@ -184,6 +186,13 @@ behaviour deliberately changed, rewrite it to state the new rule -- do not weake
 - **`Permission.RUN_COMMANDS` and `NETWORK` were declared for a long time and never
   checked.** The first is enforced now. If you add a permission, enforce it in the same
   commit or do not add it.
+- **A release is installed from the page** (`update.py`). The server cannot replace its
+  own container, so a helper started from the *new* image does it over the Docker socket,
+  carrying every volume over by name -- an anonymous `/data` included, which a naive
+  re-create would hand an empty one. A release's migrations run against the database the
+  previous release left; one that fails its health check is swapped back, but the
+  schema is not, so a migration must leave the database usable by the release before.
+  A release tag must equal `pyproject.toml`'s version (CI checks).
 - **Positional assertions rot.** A test that asserted on `provider_settings()[2]` broke
   the day a vendor was added. Look things up by name.
 

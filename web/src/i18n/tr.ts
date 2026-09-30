@@ -77,6 +77,31 @@ export const TR: Record<string, string> = {
   "{day}.{month}": "{day}.{month}",
   "build {id}": "sürüm {id}",
   "New version — reload": "Yeni sürüm var — yenile",
+  "version {v} · build {id}": "sürüm {v} · derleme {id}",
+  "New version · {v}": "Yeni sürüm · {v}",
+  "New version": "Yeni sürüm",
+  "Updating…": "Güncelleniyor…",
+  Installed: "Kurulu olan",
+  "released {when}": "{when} yayınlandı",
+  "What's new": "Neler yeni",
+  "On GitHub": "GitHub'da",
+  "No notes were written for this release.": "Bu sürüm için not yazılmamış.",
+  Later: "Sonra",
+  "Update now": "Şimdi güncelle",
+  "Downloading version {v}…": "{v} sürümü indiriliyor…",
+  "Restarting on version {v}…": "{v} sürümüyle yeniden başlatılıyor…",
+  "The page reloads by itself when it is ready.": "Hazır olunca sayfa kendini yeniler.",
+  "The server restarts on the new version; it takes a minute or two. Projects, settings and history are kept.":
+    "Sunucu yeni sürümle yeniden başlar; bir iki dakika sürer. Projeler, ayarlar ve geçmiş olduğu gibi kalır.",
+  "{n} development(s) running now will carry on from the step they were on.":
+    "Şu an çalışan {n} geliştirme kaldığı adımdan devam edecek.",
+  "A copy of the database is taken first.": "Önce veritabanının bir kopyası alınır.",
+  "If the new version does not start, the old one is put back by itself.":
+    "Yeni sürüm açılmazsa eskisine kendiliğinden geri dönülür.",
+  "The update failed: {error}": "Güncelleme olmadı: {error}",
+  "This server runs from source. Update it with:": "Bu sunucu kaynaktan çalışıyor. Şununla güncelle:",
+  "This server cannot reach Docker, so it cannot install by itself. Mount /var/run/docker.sock into its container, or run:":
+    "Bu sunucu Docker'a erişemiyor, kendi kendine kuramaz. Container'ına /var/run/docker.sock bağla ya da şunu çalıştır:",
   "{running} running · {waiting} waiting for approval · {done} done · {failed} failed · last activity {when}":
     "{running} çalışıyor · {waiting} onay bekliyor · {done} tamam · {failed} başarısız · son hareket {when}",
   "What came out of it": "Ne çıktı ortaya",

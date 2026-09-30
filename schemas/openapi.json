@@ -7751,6 +7751,154 @@
         "title": "TwoFactorStatus",
         "type": "object"
       },
+      "UpdateIn": {
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "title": "UpdateIn",
+        "type": "object"
+      },
+      "UpdateStatus": {
+        "properties": {
+          "backup": {
+            "description": "Whether the database is copied before installing.",
+            "title": "Backup",
+            "type": "boolean"
+          },
+          "blocked": {
+            "anyOf": [
+              {
+                "enum": [
+                  "no_docker",
+                  "source"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why it cannot: no_docker -- the Docker socket is not mounted; source -- the server is not running in a container.",
+            "title": "Blocked"
+          },
+          "can_install": {
+            "description": "Whether the button can install it by itself.",
+            "title": "Can Install",
+            "type": "boolean"
+          },
+          "command": {
+            "description": "What to run instead, when it cannot.",
+            "title": "Command",
+            "type": "string"
+          },
+          "current": {
+            "description": "The release this server runs.",
+            "title": "Current",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "latest": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A newer release, when there is one; otherwise null.",
+            "title": "Latest"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What the newer release changes, in Markdown, when known.",
+            "title": "Notes"
+          },
+          "notes_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The newer release's page.",
+            "title": "Notes Url"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When it was released.",
+            "title": "Published At"
+          },
+          "running_jobs": {
+            "description": "Developments in flight on the whole server. They carry on after the restart, from the step they were on.",
+            "title": "Running Jobs",
+            "type": "integer"
+          },
+          "state": {
+            "default": "idle",
+            "enum": [
+              "idle",
+              "pulling",
+              "restarting",
+              "failed"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "backup",
+          "blocked",
+          "can_install",
+          "command",
+          "current",
+          "error",
+          "latest",
+          "notes",
+          "notes_url",
+          "published_at",
+          "running_jobs",
+          "state"
+        ],
+        "title": "UpdateStatus",
+        "type": "object"
+      },
       "User": {
         "additionalProperties": false,
         "properties": {
@@ -13841,6 +13989,68 @@
           }
         },
         "summary": "Get All Translations"
+      }
+    },
+    "/api/update": {
+      "get": {
+        "description": "What runs and what is out. Cheap: the registry is asked in the background, not\nhere, so every open page may ask this as often as it likes.",
+        "operationId": "get_update_api_update_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Update",
+        "tags": [
+          "update"
+        ]
+      },
+      "post": {
+        "description": "Install the release on offer. Answers at once; the server restarts on the new\nversion shortly after, and the page notices it has.",
+        "operationId": "install_update_api_update_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Install Update",
+        "tags": [
+          "update"
+        ]
       }
     },
     "/api/users": {

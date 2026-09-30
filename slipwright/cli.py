@@ -14,6 +14,9 @@ slipwright user list                  list logins
 slipwright token new <name>           issue a bearer token for the CLI (SLIPWRIGHT_TOKEN)
 slipwright standards reindex          rebuild the standards index (works on the state dir)
 slipwright standards search "<q>"     see which sections a task would retrieve
+slipwright self-update --container <id> --image <ref>
+                                      replace a container with one on a newer image
+                                      (what the server's "install" button starts)
 
 Client commands authenticate with --token or the SLIPWRIGHT_TOKEN environment variable.
 """
@@ -145,6 +148,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="the SQLite file to read (default: jobs.sqlite3 in the state dir)",
     )
 
+    upd = sub.add_parser(
+        "self-update",
+        help="make a container again on a newer image, keeping its volumes (see update.py)",
+    )
+    upd.add_argument("--container", required=True, help="the container to replace")
+    upd.add_argument("--image", required=True, help="the image to run it on")
+
     standards = sub.add_parser("standards", help="standards corpus and its search index")
     ssub = standards.add_subparsers(dest="standards_command", required=True)
     sre = ssub.add_parser("reindex", help="rebuild the index from the Markdown corpus")
@@ -208,6 +218,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _standards(settings, args)
     if args.command == "db":
         return _db(settings, args)
+    if args.command == "self-update":
+        return _self_update(args)
 
     try:
         if args.command == "project":
@@ -402,6 +414,22 @@ def _standards(settings: Settings, args: argparse.Namespace) -> int:
         return 1
     finally:
         engine.store.close()
+    return 0
+
+
+def _self_update(args: argparse.Namespace) -> int:
+    """Run inside the helper container the server starts, never by hand on a live one: it
+    stops the container it is pointed at."""
+    import httpx
+
+    from slipwright.update import DockerError, EngineAPI, replace
+
+    try:
+        replace(EngineAPI(), args.container, args.image, say=lambda m: print(m, flush=True))
+    except (DockerError, OSError, httpx.HTTPError) as exc:
+        # the last line is what the server shows on the button once it is back
+        print(f"update failed: {exc}", flush=True)
+        return 1
     return 0
 
 

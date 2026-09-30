@@ -354,6 +354,14 @@ p {
   flex-direction: column;
   gap: 2px;
 }
+/* On a short screen the menu scrolls, not the corner under it: the version, and the
+   buttons that appear beneath it when there is a newer one, were pushed below the edge
+   of a sidebar that is exactly as tall as the window. */
+.sidebar > .nav {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
 .nav-label {
   font-size: 11px;
   font-weight: 600;
@@ -543,9 +551,11 @@ p {
     flex-wrap: wrap;
     align-items: center;
   }
-  .nav {
+  .nav,
+  .sidebar > .nav {
     flex-direction: row;
     flex-wrap: wrap;
+    overflow: visible;
   }
   .nav-label {
     display: none;
@@ -4153,6 +4163,76 @@ details.acc[open] .acc-chev {
   margin: 8px 12px 0;
   width: calc(100% - 24px);
   justify-content: center;
+}
+/* a newer release: two words in the corner, the rest in the dialog behind them */
+.build-offer {
+  gap: 7px;
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
+}
+.build-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: pulse 1.4s infinite;
+}
+.update-versions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.update-version {
+  font-size: 20px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.update-version.new {
+  color: var(--accent);
+}
+.update-arrow {
+  font-size: 18px;
+}
+.update-notes-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 18px 0 6px;
+}
+.update-notes-head h4 {
+  margin: 0;
+}
+.update-notes-head a svg {
+  width: 12px;
+  height: 12px;
+  vertical-align: -1px;
+}
+.update-notes {
+  max-height: 260px;
+  overflow: auto;
+  padding: 2px 2px 2px 0;
+}
+.update-facts {
+  margin: 14px 0 0;
+  padding-left: 18px;
+  color: var(--text-2);
+}
+.update-facts li + li {
+  margin-top: 4px;
+}
+.update-progress {
+  align-items: center;
+}
+.update-how pre {
+  margin: 8px 0 0;
+  padding-right: 72px; /* room for the copy button over its corner */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 /* ---------------------------------------------------------------------------------------
