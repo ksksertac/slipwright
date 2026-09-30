@@ -234,6 +234,8 @@ def test_a_database_from_before_comes_through_with_it_off(tmp_path: Path) -> Non
         with db.begin() as conn:
             for column in ("totp_secret", "totp_enabled_at", "totp_last_step", "totp_recovery"):
                 conn.execute(text(f"ALTER TABLE users DROP COLUMN {column}"))
+            # and what the revisions after it add, since those replay on top (0010)
+            conn.execute(text("DROP TABLE attachments"))
             conn.execute(
                 text(
                     "INSERT INTO users (id, username, email, status, password_hash,"

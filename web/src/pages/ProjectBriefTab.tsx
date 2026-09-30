@@ -11,7 +11,16 @@ import {
   type BriefView,
   type IntakeQuestion,
 } from "../api/client";
-import { useAnalyseProject, useBrief, useIntake, useProject, useSaveBrief } from "../api/hooks";
+import { isOwner } from "../api/gates";
+import {
+  useAnalyseProject,
+  useBrief,
+  useIntake,
+  useMyTeam,
+  useProject,
+  useSaveBrief,
+} from "../api/hooks";
+import { ProjectFiles } from "../components/Attachments";
 import { AgentIcon, ROLE_LABEL } from "../components/agents";
 import {
   IconAlert,
@@ -76,6 +85,7 @@ export function ProjectBriefTab({ projectId }: { projectId: string }) {
   const tx = useT();
   const project = useProject(projectId);
   const brief = useBrief(projectId, true);
+  const owner = isOwner(useMyTeam().data);
 
   if (brief.isLoading || project.isLoading) return <Loading />;
   if (brief.error) return <ErrorBox error={brief.error} />;
@@ -96,6 +106,9 @@ export function ProjectBriefTab({ projectId }: { projectId: string }) {
               )}
         </p>
       </div>
+
+      {/* before the panel, so the files are there when the agents are first asked */}
+      <ProjectFiles projectId={projectId} readOnly={!owner || project.data.is_demo} />
 
       {view.kind === "intake" && !view.brief.intake?.done ? (
         <IntakePanel projectId={projectId} view={view} />

@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   api,
   type ActivityItem,
+  type Attachment,
   type ChannelName,
   type ChatGPTLogin,
   type CheckoutPath,
@@ -92,6 +93,9 @@ export const keys = {
   translations: (id: string | null, lang: string) => ["translations", id ?? "all", lang] as const,
   testRuns: (id: string) => ["projects", id, "test-runs"] as const,
   brief: (id: string) => ["projects", id, "brief"] as const,
+  // under the project, so the live stream's per-project invalidation reaches them
+  attachments: (id: string, jobId?: string) =>
+    ["projects", id, "attachments", jobId ?? "project"] as const,
   job: (id: string) => ["jobs", id] as const,
   transition: (id: string, index: number) => ["jobs", id, "history", index] as const,
   step: (id: string, key: string) => ["jobs", id, "steps", key] as const,
@@ -378,8 +382,58 @@ export function useDeleteProject() {
 export function useStartJob(projectId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (request: string) => api.post<Job>(`/api/projects/${projectId}/jobs`, { request }),
+    mutationFn: (body: { request: string; attachments?: string[] }) =>
+      api.post<Job>(`/api/projects/${projectId}/jobs`, body),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.project(projectId) }),
+  });
+}
+
+// -- attachments: files the person gives the agents ------------------------------------------
+
+/** The project's own files; with ``jobId``, that development's as well. Asked again while
+ *  one is still being read, so the reading appears without a reload. */
+export function useAttachments(projectId: string, jobId?: string) {
+  return useQuery({
+    queryKey: keys.attachments(projectId, jobId),
+    queryFn: () =>
+      api.get<Attachment[]>(
+        `/api/projects/${projectId}/attachments${jobId ? `?job_id=${jobId}` : ""}`,
+      ),
+    refetchInterval: (q) =>
+      (q.state.data ?? []).some(
+        (a) => a.reading_state === "pending" || a.reading_state === "reading",
+      )
+        ? 3000
+        : false,
+  });
+}
+
+export function useUploadAttachment(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ file, draft }: { file: File; draft?: boolean }) => {
+      const form = new FormData();
+      form.append("file", file);
+      if (draft) form.append("draft", "true");
+      return api.upload<Attachment>(`/api/projects/${projectId}/attachments`, form);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["projects", projectId, "attachments"] }),
+  });
+}
+
+export function useDeleteAttachment(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete<void>(`/api/attachments/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["projects", projectId, "attachments"] }),
+  });
+}
+
+export function useReadAttachmentAgain(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.post<Attachment>(`/api/attachments/${id}/read`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["projects", projectId, "attachments"] }),
   });
 }
 

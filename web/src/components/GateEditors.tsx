@@ -2,6 +2,7 @@
 // order, domains, task titles) and the test-case list. Each is a controlled component;
 // the caller decides when to save. The shapes mirror the engine's dicts.
 import { DOMAIN_LABEL } from "./agents";
+import { Sources, type SourceRef } from "./Attachments";
 import { IconPlus, IconTrash } from "./icons";
 import { useT } from "../i18n";
 
@@ -15,6 +16,8 @@ export interface StoryShape {
   id: string;
   title: string;
   description?: string;
+  /** the attached files it was drawn from: kept through an edit, shown under the title */
+  sources?: SourceRef[];
   tasks: TaskShape[];
 }
 export interface EpicShape {
@@ -54,10 +57,14 @@ export function BacklogEditor({
   value,
   onChange,
   disabled = false,
+  projectId,
+  jobId,
 }: {
   value: BreakdownShape;
   onChange: (next: BreakdownShape) => void;
   disabled?: boolean;
+  projectId?: string | null;
+  jobId?: string;
 }) {
   const tx = useT();
   const update = (fn: (draft: BreakdownShape) => void) => {
@@ -91,6 +98,7 @@ export function BacklogEditor({
                       update((d) => (d.epics[ei]!.stories[si]!.title = e.target.value))
                     }
                   />
+                  <Sources sources={story.sources} projectId={projectId} jobId={jobId} />
                   <button
                     className="btn ghost icon small"
                     title={tx("Add task")}

@@ -52,7 +52,10 @@ it is built, tested and run, where and how it is deployed, and anything an agent
 be careful with. Write only what the repository shows you — no advice, no plans, no
 improvements, and nothing you had to guess. Ten to twenty entries is typical; if the
 repository is too small to fill them, write fewer. `summary` is the one-paragraph account
-for the person who will approve this list."""
+for the person who will approve this list.
+If an `attachments` section is present, the person attached documents about the project:
+what they say it is for and must do belongs in the brief too, as facts of their own,
+where the code does not already show it."""
 
 INTAKE_INSTRUCTIONS = """\
 You are the Product Owner and the repository is empty: nothing exists yet, so everything
@@ -69,7 +72,10 @@ showing the kind of answer you expect. When the answers are enough to start — 
 with `ready: true`, a `story` and `items`. `story` is the first development's request,
 written as the person would have written it if they knew how: two short paragraphs, what
 to build and what done looks like, no technology choices. `items` is the project brief
-drawn from the answers, one fact per entry in its category."""
+drawn from the answers, one fact per entry in its category.
+If an `attachments` section is present, the person attached documents and screens about
+the product: read them first, and never ask what they already answer. Draw the brief from
+the files and the answers together."""
 
 
 # Read in full for the analysis: manifests say what the stack is, CI says how it is built
@@ -133,6 +139,7 @@ def analyse(
     provider: ModelProvider | None = None,
     timeout_s: float | None = None,
     feedback: str | None = None,
+    attachments: dict[str, Any] | None = None,
 ) -> RoleResult:
     """The Architect reads an existing checkout and proposes the brief."""
     context: dict[str, Any] = {
@@ -146,6 +153,8 @@ def analyse(
     }
     if feedback:
         context["feedback"] = feedback
+    if attachments:
+        context["attachments"] = attachments
     kwargs = {} if timeout_s is None else {"timeout_s": timeout_s}
     return invoke_role(
         RoleName.ARCHITECT,
@@ -166,6 +175,7 @@ def interview(
     language: str,
     provider: ModelProvider | None = None,
     timeout_s: float | None = None,
+    attachments: dict[str, Any] | None = None,
 ) -> RoleResult:
     """The Product Owner asks the next round, or finishes with the story."""
     context: dict[str, Any] = {
@@ -183,6 +193,8 @@ def interview(
             for r in intake.rounds
         ],
     }
+    if attachments:
+        context["attachments"] = attachments
     kwargs = {} if timeout_s is None else {"timeout_s": timeout_s}
     return invoke_role(
         RoleName.PO,

@@ -11,17 +11,30 @@ import hashlib
 import logging
 import queue
 import threading
+import urllib.parse
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Literal, cast
 
-from fastapi import APIRouter, BackgroundTasks, Depends, FastAPI, HTTPException, Request
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    FastAPI,
+    File,
+    Form,
+    HTTPException,
+    Request,
+    Response,
+    UploadFile,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from slipwright import attachments as attached
 from slipwright.activity import (
     ActivityItem,
     AgentSummary,
@@ -50,6 +63,7 @@ from slipwright.orchestrator import IllegalTransitionError
 from slipwright.pipeline import Pipeline, pipeline
 from slipwright.providers import ProviderUnavailableError
 from slipwright.quota import QuotaExceeded, warn_if_unprotected
+from slipwright.schemas.attachment import Attachment
 from slipwright.schemas.brief import BriefEdit, ProjectBrief
 from slipwright.schemas.job import Job, JobResult, JobState, Transition
 from slipwright.schemas.profile import Profile, RoleName
@@ -64,6 +78,7 @@ from slipwright.schemas.testrun import TestRun
 from slipwright.steps import StepDetail, step_detail
 from slipwright.store import (
     ANY_OWNER,
+    AttachmentNotFound,
     JobInProgress,
     JobNotFound,
     ProjectInUse,
@@ -85,6 +100,8 @@ class NewJob(BaseModel):
 
 class NewProjectJob(BaseModel):
     request: str = Field(min_length=1)
+    # files chosen on the form: drafts uploaded to the project, handed to this development
+    attachments: list[str] = Field(default_factory=list)
 
 
 class NewProject(BaseModel):
@@ -199,6 +216,17 @@ class DesignScreen(BaseModel):
             "when the screen has a single drawing, which is what a screen on one platform "
             "and every screen drawn before surfaces existed has."
         ),
+    )
+    reference: DesignReference | None = None
+
+
+class DesignReference(BaseModel):
+    """The attached screen a design keeps to, and where the page can show it."""
+
+    file: str
+    page: int | None = None
+    url: str | None = Field(
+        default=None, description="A picture of it; None when the file is no longer there."
     )
 
 
@@ -713,7 +741,14 @@ def create_app(
         require_verified(request)
         eng = engine_for(request)
         _get_project(eng, project_id, request)
-        return _start(eng, eng.create_job(body.request, project_id=project_id), background)
+        if body.attachments:
+            # checked before the development exists: one that could not have its files
+            # would start without them, and the Product Owner would plan without them
+            _drafts(eng, project_id, body.attachments, request)
+        job = eng.create_job(body.request, project_id=project_id)
+        # handed over before it starts, so the Product Owner's first look includes them
+        eng.store.claim_drafts(project_id, body.attachments, job.id, _owner(request))
+        return _start(eng, job, background)
 
     @api.get("/projects/{project_id}/jobs", response_model=list[Job])
     def list_project_jobs(project_id: str, request: Request) -> list[Job]:
@@ -764,6 +799,14 @@ def create_app(
             stored_prices=eng.store.list_prices(),
             history=eng.store.list(owner_id=owner),  # every job of this account teaches the average
             route=eng.effective_routing,  # the model that will answer, not the one named
+            readings=[
+                call
+                for a in eng.store.list_attachments(
+                    project_id, owner, scopes=("project", "job", "draft")
+                )
+                if a.reading is not None
+                for call in a.reading.calls
+            ],
         )
 
     @api.get("/projects/{project_id}/activity", response_model=list[ActivityItem])
@@ -795,6 +838,157 @@ def create_app(
         )
 
     # -- test runs -----------------------------------------------------------------------
+
+    # -- attachments: files the person gives the agents (slipwright/attachments.py) -------
+
+    def _drafts(eng: Engine, project_id: str, ids: list[str], request: Request) -> None:
+        mine = {
+            a.id
+            for a in eng.store.list_attachments(project_id, _owner(request), scopes=("draft",))
+        }
+        missing = [i for i in ids if i not in mine]
+        if missing:
+            raise HTTPException(status_code=404, detail=f"attachment not found: {missing[0]}")
+
+    def _get_attachment(eng: Engine, attachment_id: str, request: Request) -> Attachment:
+        try:
+            return eng.store.get_attachment(attachment_id, _owner(request))
+        except AttachmentNotFound as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    def _refuse_demo_project(project: Project) -> None:
+        if project.is_demo:
+            raise HTTPException(
+                status_code=409,
+                detail="this is the example project: it is there to read, not to change",
+            )
+
+    @api.get("/projects/{project_id}/attachments", response_model=list[Attachment])
+    def list_attachments(
+        project_id: str, request: Request, job_id: str | None = None
+    ) -> list[Attachment]:
+        """The project's own files; with ``job_id``, that development's as well."""
+        eng = engine_for(request)
+        _get_project(eng, project_id, request)
+        if job_id is not None:
+            _get(eng, job_id, request)
+        return eng.store.list_attachments(
+            project_id,
+            _owner(request),
+            job_id=job_id,
+            scopes=("project", "job") if job_id is not None else ("project",),
+        )
+
+    @api.post(
+        "/projects/{project_id}/attachments", response_model=Attachment, status_code=201
+    )
+    def add_attachment(
+        project_id: str,
+        request: Request,
+        background: BackgroundTasks,
+        file: UploadFile = File(...),  # noqa: B008 - FastAPI's way of declaring a form field
+        draft: bool = Form(False),  # noqa: B008
+    ) -> Attachment:
+        """Attach a file. ``draft`` holds it for a development not yet started (the
+        new-development form); otherwise every development of the project reads it.
+
+        It is read by a model in the background; the reading arrives on the attachment."""
+        require_owner(request)
+        require_verified(request)
+        eng = engine_for(request)
+        _refuse_demo_project(_get_project(eng, project_id, request))
+        # one byte over the limit is enough to know, and all that is read to know it
+        data = file.file.read(attached.MAX_BYTES + 1)
+        try:
+            found = eng.attach(
+                project_id, file.filename or "file", data, scope="draft" if draft else "project"
+            )
+        except attached.TooLarge as exc:
+            raise HTTPException(status_code=413, detail=str(exc)) from exc
+        except attached.TooMany as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except attached.UnsupportedFile as exc:
+            raise HTTPException(status_code=415, detail=str(exc)) from exc
+        except QuotaExceeded as exc:
+            raise HTTPException(status_code=429, detail=str(exc)) from exc
+        background.add_task(_execute_reading, eng, found.id)
+        return found
+
+    @api.get(
+        "/attachments/{attachment_id}/file",
+        response_class=Response,
+        responses={200: {"content": {"application/octet-stream": {}}}},
+    )
+    def get_attachment_file(attachment_id: str, request: Request, inline: bool = False) -> Response:
+        """The file as it was given. Downloaded, never shown in the page's own origin --
+        except a plain picture, and then in a sandbox: a PDF or a text file opened here
+        could carry a script that runs as the person looking at it."""
+        eng = engine_for(request)
+        _get_attachment(eng, attachment_id, request)
+        found, data = eng.store.attachment_data(attachment_id, _owner(request))
+        shown = inline and found.media_type in attached.PICTURES.values()
+        quoted = urllib.parse.quote(found.name)
+        return Response(
+            content=data,
+            media_type=found.media_type if shown else "application/octet-stream",
+            headers={
+                "Content-Disposition": (
+                    f"{'inline' if shown else 'attachment'}; filename*=UTF-8''{quoted}"
+                ),
+                "X-Content-Type-Options": "nosniff",
+                "Content-Security-Policy": "sandbox; default-src 'none'",
+                "Cache-Control": "private, max-age=3600",
+            },
+        )
+
+    @api.get(
+        "/attachments/{attachment_id}/pages/{page}",
+        response_class=Response,
+        responses={200: {"content": {"image/png": {}, "image/jpeg": {}}}},
+    )
+    def get_attachment_page(attachment_id: str, page: int, request: Request) -> Response:
+        """One page of an attached PDF as a picture, to be shown beside the screen that
+        was designed from it. A picture drawn here, not the document: nothing in it can
+        run, and it is sandboxed all the same."""
+        eng = engine_for(request)
+        found = _get_attachment(eng, attachment_id, request)
+        if found.media_type != attached.PDF:
+            raise HTTPException(status_code=404, detail="only a PDF has pages")
+        _, data = eng.store.attachment_data(attachment_id, _owner(request))
+        drawn = attached.page_picture(data, page)
+        if drawn is None:
+            raise HTTPException(status_code=404, detail=f"there is no page {page}")
+        return Response(
+            content=drawn.data,
+            media_type=drawn.media_type,
+            headers={
+                "X-Content-Type-Options": "nosniff",
+                "Content-Security-Policy": "sandbox; default-src 'none'",
+                "Cache-Control": "private, max-age=3600",
+            },
+        )
+
+    @api.delete("/attachments/{attachment_id}", status_code=204)
+    def delete_attachment(attachment_id: str, request: Request) -> None:
+        require_owner(request)
+        eng = engine_for(request)
+        found = _get_attachment(eng, attachment_id, request)
+        _refuse_demo_project(_get_project(eng, found.project_id, request))
+        eng.store.delete_attachment(attachment_id, _owner(request))
+
+    @api.post("/attachments/{attachment_id}/read", response_model=Attachment, status_code=202)
+    def read_attachment_again(
+        attachment_id: str, request: Request, background: BackgroundTasks
+    ) -> Attachment:
+        """Read it again: after a failure, or once the agent has a model that can see."""
+        require_owner(request)
+        require_verified(request)
+        eng = engine_for(request)
+        found = _get_attachment(eng, attachment_id, request)
+        if found.reading_state == "reading":
+            raise HTTPException(status_code=409, detail="it is being read already")
+        background.add_task(_execute_reading, eng, found.id)
+        return eng.store.set_reading(found.id, "pending")
 
     # -- project brief: what the agents are told the project is (T11.1-T11.3) ------------
 
@@ -1054,10 +1248,16 @@ def create_app(
     @api.get("/jobs/{job_id}/design", response_model=DesignReview)
     def design_review(job_id: str, request: Request) -> DesignReview:
         """The screens of this development, with where each one stands."""
-        job = _get(engine_for(request), job_id, request)
+        eng = engine_for(request)
+        job = _get(eng, job_id, request)
         design = job.data.design or {}
         approvals = job.data.design_approvals or {}
         feedback = job.data.design_feedback or {}
+        files = (
+            {a.name: a for a in eng.store.list_attachments(job.project_id, job_id=job.id)}
+            if job.project_id is not None
+            else {}
+        )
         return DesignReview(
             waiting=job.state is JobState.AWAITING_DESIGN_APPROVAL,
             principles=[str(p) for p in design.get("principles") or []],
@@ -1071,6 +1271,7 @@ def create_app(
                     feedback=str(feedback.get(str(s.get("id")) or "") or ""),
                     has_mock=bool(str(s.get("mock") or "").strip()) or bool(_surfaces(s)),
                     surfaces=_surfaces(s),
+                    reference=_reference(s.get("reference"), files),
                 )
                 for s in design.get("screens") or []
             ],
@@ -1477,6 +1678,29 @@ def _execute_test_run(engine: Engine, run_id: str) -> None:
         engine.execute_test_run(run_id)
     except Exception:  # noqa: BLE001 - a background thread has nobody to raise to
         log.exception("test run %s: background run failed", run_id)
+
+
+def _reference(raw: Any, files: dict[str, Attachment]) -> DesignReference | None:
+    """Where the attached screen a design names can be seen. The name is what the Designer
+    was shown; a file deleted since keeps its name on the design and loses its picture."""
+    if not isinstance(raw, dict) or not raw.get("file"):
+        return None
+    name = str(raw["file"])
+    page = raw.get("page") if isinstance(raw.get("page"), int) else None
+    found = files.get(name)
+    url: str | None = None
+    if found is not None and found.is_picture:
+        url = f"/api/attachments/{found.id}/file?inline=true"
+    elif found is not None and found.media_type == attached.PDF:
+        url = f"/api/attachments/{found.id}/pages/{page or 1}"
+    return DesignReference(file=name, page=page, url=url)
+
+
+def _execute_reading(engine: Engine, attachment_id: str) -> None:
+    try:
+        engine.execute_reading(attachment_id)
+    except Exception:  # noqa: BLE001 - a background thread has nobody to raise to
+        log.exception("attachment %s: reading failed", attachment_id)
 
 
 def _execute_analysis(engine: Engine, project_id: str) -> None:

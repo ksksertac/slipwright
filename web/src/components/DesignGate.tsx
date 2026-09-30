@@ -7,7 +7,7 @@
 import { useEffect, useState } from "react";
 import { describeError, type DesignScreen } from "../api/client";
 import { useDesignReview, useReviewScreen } from "../api/hooks";
-import { IconCheck, IconX } from "./icons";
+import { IconCheck, IconPaperclip, IconX } from "./icons";
 import { Loading } from "./ui";
 import { useT } from "../i18n";
 import { useSay } from "../i18n/said";
@@ -94,6 +94,12 @@ export function DesignGate({ jobId, readOnly = false }: { jobId: string; readOnl
             </button>
             <div className="mock-id">
               <span className="mock-name">{say(screen.name)}</span>
+              {screen.reference && (
+                <span className="chip idle" title={tx("Drawn from what you attached")}>
+                  <IconPaperclip width={12} height={12} /> {screen.reference.file}
+                  {screen.reference.page ? ` · ${screen.reference.page}` : ""}
+                </span>
+              )}
               <span className={`badge plain ${screen.approved ? "ok" : "wait"}`}>
                 {screen.approved ? tx("approved") : tx("waiting")}
               </span>
@@ -249,7 +255,18 @@ function MockModal({
             ))}
           </div>
         )}
-        <div className="mock-modal-body">
+        <div className={`mock-modal-body${screen.reference?.url ? " mock-compare" : ""}`}>
+          {/* what the person attached, beside what was drawn from it: the question at this
+              gate is whether the two are the same screen */}
+          {screen.reference?.url && (
+            <figure className="mock-reference">
+              <figcaption className="faint small">
+                {tx("What you attached")}: {screen.reference.file}
+                {screen.reference.page ? ` · ${tx("page {n}", { n: screen.reference.page })}` : ""}
+              </figcaption>
+              <img src={screen.reference.url} alt={screen.reference.file} />
+            </figure>
+          )}
           <Mock
             jobId={jobId}
             screen={screen}

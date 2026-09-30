@@ -29,6 +29,7 @@ from slipwright.schemas.profile import Profile
 from slipwright.schemas.project import Project
 from slipwright.schemas.testrun import TestRun
 from slipwright.secrets import SecretBox, load_or_create_key
+from slipwright.store.attachments import AttachmentStoreMixin
 from slipwright.store.chat import ChatStoreMixin
 from slipwright.store.db import Database, one, rows
 from slipwright.store.members import MemberStoreMixin
@@ -36,6 +37,7 @@ from slipwright.store.migrate import migrate
 from slipwright.store.pages import PageStoreMixin
 from slipwright.store.prices import PriceStoreMixin
 from slipwright.store.schema import (
+    attachments,
     job_history,
     jobs,
     project_briefs,
@@ -105,6 +107,7 @@ class JobStore(
     SupportStoreMixin,
     PageStoreMixin,
     ChatStoreMixin,
+    AttachmentStoreMixin,
 ):
     """One store per database. Safe to share across threads within a process.
 
@@ -433,6 +436,7 @@ class JobStore(
             if active and not force:
                 raise ProjectInUse(project_id, active)
             conn.execute(delete(test_runs).where(test_runs.c.project_id == project_id))
+            conn.execute(delete(attachments).where(attachments.c.project_id == project_id))
             conn.execute(delete(jobs).where(jobs.c.project_id == project_id))
             conn.execute(delete(project_briefs).where(project_briefs.c.project_id == project_id))
             gone = one(
@@ -462,6 +466,7 @@ class JobStore(
             if JobState(row["state"]) not in TERMINAL_STATES:
                 raise JobInProgress(job_id, JobState(row["state"]))
             conn.execute(delete(test_runs).where(test_runs.c.job_id == job_id))
+            conn.execute(delete(attachments).where(attachments.c.job_id == job_id))
             conn.execute(delete(jobs).where(jobs.c.id == job_id))
         self.events.emit(
             "job.state",

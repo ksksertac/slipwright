@@ -135,6 +135,16 @@ class BreakdownTask(BaseModel):
     )
 
 
+class FileRef(BaseModel):
+    """A place in a file the person attached: the file by its name and, in a PDF, the
+    page. What a story was drawn from, or the screen a design keeps to."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    file: str = Field(min_length=1, description="The attached file's name, exactly as given.")
+    page: int | None = Field(default=None, ge=1, description="The PDF page, 1-based.")
+
+
 class BreakdownStory(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -142,6 +152,10 @@ class BreakdownStory(BaseModel):
     title: str = Field(min_length=1)
     description: str = ""
     tasks: list[BreakdownTask] = Field(min_length=1)
+    sources: list[FileRef] = Field(
+        default_factory=list,
+        description="The attached files (and pages) this story was drawn from, if any.",
+    )
 
 
 class BreakdownEpic(BaseModel):
@@ -226,6 +240,11 @@ class ScreenDesign(BaseModel):
         default=None, description="The backlog task this screen belongs to, when it has one."
     )
     name: str = Field(min_length=1, description="What this screen is called, in the UI.")
+    reference: FileRef | None = Field(
+        default=None,
+        description="The attached screen this one keeps to, when there is one: its file "
+        "and, in a PDF, its page, as labelled on the picture you were shown.",
+    )
     platform: Literal["web", "mobile", "both"] = "both"
     purpose: str = Field(min_length=1, description="What a person comes here to do.")
     layout: str = Field(
@@ -402,6 +421,34 @@ class IntakeResult(RoleOutput):
         return self
 
 
+class ScreenSeen(BaseModel):
+    """One screen found in an attachment, described well enough to build from."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    page: int | None = Field(default=None, description="The PDF page it is on, 1-based.")
+    title: str = Field(min_length=1, description="What the screen is, in a few words.")
+    description: str = Field(
+        min_length=1,
+        description="Layout, fields, buttons, lists and the flow out of it, as seen.",
+    )
+
+
+class ReadingResult(RoleOutput):
+    """What a model made of one attachment (slipwright/attachments.py), once, at upload:
+    every agent afterwards reads this rather than the file."""
+
+    kind: Literal["screens", "document", "other"] = Field(
+        description="screens: mock-ups, wireframes or screenshots of an interface; "
+        "document: requirements, specifications, notes; other: anything else."
+    )
+    screens: list[ScreenSeen] = Field(default_factory=list)
+    requirements: list[str] = Field(
+        default_factory=list,
+        description="Every feature, rule or constraint the file asks for, one per entry.",
+    )
+
+
 class DeployScript(BaseModel):
     """One file the deployment folder will hold, named before it is written (T11.6)."""
 
@@ -479,7 +526,10 @@ __all__ = [
     "BreakdownEpic",
     "BreakdownStory",
     "BreakdownTask",
+    "FileRef",
     "POResult",
+    "ReadingResult",
+    "ScreenSeen",
     "DesignResult",
     "DevOpsResult",
     "DeveloperResult",

@@ -3,6 +3,7 @@
 // history detail, so a backlog looks the same wherever it is shown.
 import type { StackChoice } from "../api/client";
 import { DomainBadge } from "./agents";
+import { Sources, type SourceRef } from "./Attachments";
 import { useSay } from "../i18n/said";
 
 export interface BreakdownShape {
@@ -14,6 +15,8 @@ export interface BreakdownShape {
       id: string;
       title: string;
       description?: string;
+      /** the attached files it was drawn from */
+      sources?: SourceRef[];
       tasks: { id: string; title: string; description?: string; phase?: number | null }[];
     }[];
   }[];
@@ -28,7 +31,16 @@ export interface PlanShape {
   breakdown?: BreakdownShape;
 }
 
-export function BreakdownTree({ plan }: { plan: PlanShape }) {
+export function BreakdownTree({
+  plan,
+  projectId,
+  jobId,
+}: {
+  plan: PlanShape;
+  /** where the files a story came from are looked up; without it they are only named */
+  projectId?: string | null;
+  jobId?: string;
+}) {
   const say = useSay();
   if (!plan.breakdown) {
     return (
@@ -65,6 +77,7 @@ export function BreakdownTree({ plan }: { plan: PlanShape }) {
                     {story.description && (
                       <div className="muted small">{say(story.description)}</div>
                     )}
+                    <Sources sources={story.sources} projectId={projectId} jobId={jobId} />
                   </span>
                 </div>
                 <ul className="tree">

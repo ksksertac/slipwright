@@ -14,10 +14,11 @@ writes no files — the design is a decision, not code.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
-from slipwright.invoke import RoleResult, invoke_role
-from slipwright.providers import ModelProvider
+from slipwright.invoke import RoleResult, invoke_role, may_be_blind
+from slipwright.providers import ImageInput, ModelProvider
 from slipwright.roles.common import base_context, plan_outline
 from slipwright.schemas.job import Job
 from slipwright.schemas.profile import Profile, RoleName
@@ -66,7 +67,13 @@ Design only. You write no files and no code: the specialists do that from what y
 here. If the backlog leaves a screen genuinely undecided, say so in `notes` rather than
 inventing a requirement.
 If a `standards` section is present its sections are binding unless they contradict the
-core rules; say in `summary` when one could not be followed and why."""
+core rules; say in `summary` when one could not be followed and why.
+If an `attachments` section is present, the person attached files, and the `screens` in
+them are what they already drew or chose: where one of them is a screen you are
+designing, keep its layout, its fields, its labels and its flow, and change only what
+the backlog asks to be different -- say which in `notes`. When the screens are shown
+to you as pictures, each is labelled with its file and page: keep to what you see, and
+set `reference` on every screen you drew from one to that file's name and page."""
 
 
 def run(
@@ -77,6 +84,8 @@ def run(
     timeout_s: float | None = None,
     jira: dict[str, Any] | None = None,
     standards: dict[str, Any] | None = None,
+    attachments: dict[str, Any] | None = None,
+    screens: Sequence[ImageInput] | None = None,
 ) -> RoleResult:
     context = base_context(
         job,
@@ -93,7 +102,22 @@ def run(
     sent_back = rejected(job)
     if sent_back:
         context["redesign"] = sent_back
+    if attachments:
+        context["attachments"] = attachments
     kwargs = {} if timeout_s is None else {"timeout_s": timeout_s}
+    if not screens:
+        return invoke_role(RoleName.DESIGNER, profile, context, provider=provider, **kwargs)
+    shown = invoke_role(
+        RoleName.DESIGNER,
+        profile,
+        {**context, "images": list(screens)},
+        provider=provider,
+        **kwargs,
+    )
+    if shown.ok or not may_be_blind(shown):
+        return shown
+    # a model that cannot see is asked again with the descriptions the reading wrote:
+    # the screens as words are worth more than no design at all
     return invoke_role(RoleName.DESIGNER, profile, context, provider=provider, **kwargs)
 
 

@@ -14,6 +14,7 @@ import {
 } from "../api/hooks";
 import { api } from "../api/client";
 import { ActivityRow } from "../components/ActivityRow";
+import { JobFiles } from "../components/Attachments";
 import { BreakdownTree, type BreakdownShape, type PlanShape } from "../components/Breakdown";
 import { AgentIcon, DomainBadge } from "../components/agents";
 import { Crumbs } from "../components/Crumbs";
@@ -65,6 +66,7 @@ export function JobPage() {
           ]}
         />
         <JobHead job={j} projectId={projectId} />
+        <JobFiles projectId={projectId} jobId={j.id} />
         <JobDetail job={j} projectId={projectId} />
       </div>
     </SayProvider>
@@ -414,7 +416,11 @@ function BacklogGate({ job }: { job: Job }) {
           "The Product Owner turned the request into epics, stories and tasks. Once approved they are mirrored to Jira and the Architect designs one phase per task.",
         )}
       </p>
-      <BreakdownTree plan={{ phases: [], breakdown: backlog }} />
+      <BreakdownTree
+        plan={{ phases: [], breakdown: backlog }}
+        projectId={job.project_id}
+        jobId={job.id}
+      />
     </div>
   );
 }
@@ -440,7 +446,7 @@ function ArchitectureGate({ job }: { job: Job }) {
         </>
       )}
       <h3>{tx("Phases")}</h3>
-      <BreakdownTree plan={plan} />
+      <BreakdownTree plan={plan} projectId={job.project_id} jobId={job.id} />
       {job.profile && (
         <>
           <h3>{tx("Profile")}</h3>

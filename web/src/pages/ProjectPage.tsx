@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link, NavLink, useNavigate, useParams } from "react-router-dom";
-import { describeError, type Job, type Project } from "../api/client";
+import { describeError, type Attachment, type Job, type Project } from "../api/client";
+import { DraftFiles } from "../components/Attachments";
 import {
   useActivity,
   useBoard,
@@ -344,6 +345,7 @@ function DevelopmentsTab({ projectId }: { projectId: string }) {
   const start = useStartJob(projectId);
   const navigate = useNavigate();
   const [request, setRequest] = useState("");
+  const [drafts, setDrafts] = useState<Attachment[]>([]);
   // starting a development is the owner's; a member reads the list and waits for a gate
   const owner = isOwner(useMyTeam().data);
 
@@ -353,12 +355,16 @@ function DevelopmentsTab({ projectId }: { projectId: string }) {
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    start.mutate(request.trim(), {
-      onSuccess: () => {
-        setRequest("");
-        void jobs.refetch();
+    start.mutate(
+      { request: request.trim(), attachments: drafts.map((d) => d.id) },
+      {
+        onSuccess: () => {
+          setRequest("");
+          setDrafts([]);
+          void jobs.refetch();
+        },
       },
-    });
+    );
   };
 
   return (
@@ -376,6 +382,7 @@ function DevelopmentsTab({ projectId }: { projectId: string }) {
             onChange={(e) => setRequest(e.target.value)}
             placeholder={tx("e.g. Add a /health endpoint that reports the database status")}
           />
+          <DraftFiles projectId={projectId} drafts={drafts} onChange={setDrafts} />
           {start.error && <div className="error">{describeError(start.error)}</div>}
           <div className="row" style={{ marginTop: 8 }}>
             <button className="btn primary" disabled={!request.trim() || start.isPending}>

@@ -337,6 +337,104 @@
         "title": "ApiToken",
         "type": "object"
       },
+      "Attachment": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "media_type": {
+            "title": "Media Type",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "pages": {
+            "default": 0,
+            "description": "Pages of a PDF; 0 for anything else.",
+            "title": "Pages",
+            "type": "integer"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "reading": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Reading"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reading_state": {
+            "default": "pending",
+            "enum": [
+              "pending",
+              "reading",
+              "done",
+              "failed"
+            ],
+            "title": "Reading State",
+            "type": "string"
+          },
+          "scope": {
+            "enum": [
+              "project",
+              "job",
+              "draft"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "size": {
+            "title": "Size",
+            "type": "integer"
+          },
+          "text_chars": {
+            "default": 0,
+            "description": "How much text could be taken out of it.",
+            "title": "Text Chars",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "created_at",
+          "id",
+          "job_id",
+          "media_type",
+          "name",
+          "pages",
+          "project_id",
+          "reading",
+          "reading_state",
+          "scope",
+          "size",
+          "text_chars"
+        ],
+        "title": "Attachment",
+        "type": "object"
+      },
       "BacklogEdit": {
         "properties": {
           "breakdown": {
@@ -512,6 +610,25 @@
           "tasks_total"
         ],
         "title": "Board",
+        "type": "object"
+      },
+      "Body_add_attachment_api_projects__project_id__attachments_post": {
+        "properties": {
+          "draft": {
+            "default": false,
+            "title": "Draft",
+            "type": "boolean"
+          },
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_add_attachment_api_projects__project_id__attachments_post",
         "type": "object"
       },
       "BriefEdit": {
@@ -1081,6 +1198,45 @@
         "title": "DeployScriptIn",
         "type": "object"
       },
+      "DesignReference": {
+        "description": "The attached screen a design keeps to, and where the page can show it.",
+        "properties": {
+          "file": {
+            "title": "File",
+            "type": "string"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A picture of it; None when the file is no longer there.",
+            "title": "Url"
+          }
+        },
+        "required": [
+          "file",
+          "page",
+          "url"
+        ],
+        "title": "DesignReference",
+        "type": "object"
+      },
       "DesignReview": {
         "properties": {
           "principles": {
@@ -1148,6 +1304,16 @@
             "title": "Purpose",
             "type": "string"
           },
+          "reference": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DesignReference"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "surfaces": {
             "description": "The surfaces this screen was drawn for -- `web`, `mobile`, or both. Empty when the screen has a single drawing, which is what a screen on one platform and every screen drawn before surfaces existed has.",
             "items": {
@@ -1165,6 +1331,7 @@
           "name",
           "platform",
           "purpose",
+          "reference",
           "surfaces"
         ],
         "title": "DesignScreen",
@@ -1308,6 +1475,37 @@
           "usd"
         ],
         "title": "Expectation",
+        "type": "object"
+      },
+      "FileRef": {
+        "additionalProperties": false,
+        "description": "A place in a file the person attached: the file by its name and, in a PDF, the\npage. What a story was drawn from, or the screen a design keeps to.",
+        "properties": {
+          "file": {
+            "description": "The attached file's name, exactly as given.",
+            "minLength": 1,
+            "title": "File",
+            "type": "string"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The PDF page, 1-based.",
+            "title": "Page"
+          }
+        },
+        "required": [
+          "file",
+          "page"
+        ],
+        "title": "FileRef",
         "type": "object"
       },
       "FirstRun": {
@@ -4075,6 +4273,13 @@
       },
       "NewProjectJob": {
         "properties": {
+          "attachments": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Attachments",
+            "type": "array"
+          },
           "request": {
             "minLength": 1,
             "title": "Request",
@@ -4938,6 +5143,17 @@
             "title": "Project Id",
             "type": "string"
           },
+          "reading": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Spend"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Reading the attached files: once per file, on no development. In ``spent_usd`` with the rest; None while no file has been read."
+          },
           "spent_usd": {
             "default": 0.0,
             "title": "Spent Usd",
@@ -4964,6 +5180,7 @@
           "jobs",
           "priced_models",
           "project_id",
+          "reading",
           "spent_usd",
           "subscription_calls",
           "timed_out_calls",
@@ -5535,6 +5752,63 @@
         "title": "QuotaUsage",
         "type": "object"
       },
+      "Reading": {
+        "description": "What a model made of the file. Written once, when it was read; agents after that\nread this rather than the file.",
+        "properties": {
+          "calls": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Calls",
+            "type": "array"
+          },
+          "kind": {
+            "default": "other",
+            "enum": [
+              "screens",
+              "document",
+              "other"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "note": {
+            "default": "",
+            "title": "Note",
+            "type": "string"
+          },
+          "requirements": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Requirements",
+            "type": "array"
+          },
+          "screens": {
+            "items": {
+              "$ref": "#/components/schemas/ScreenSeen"
+            },
+            "title": "Screens",
+            "type": "array"
+          },
+          "summary": {
+            "default": "",
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "calls",
+          "kind",
+          "note",
+          "requirements",
+          "screens",
+          "summary"
+        ],
+        "title": "Reading",
+        "type": "object"
+      },
       "RecoveryCodes": {
         "properties": {
           "recovery_codes": {
@@ -5858,6 +6132,43 @@
           "text"
         ],
         "title": "RuleWrite",
+        "type": "object"
+      },
+      "ScreenSeen": {
+        "additionalProperties": false,
+        "description": "One screen found in an attachment, described well enough to build from.",
+        "properties": {
+          "description": {
+            "description": "Layout, fields, buttons, lists and the flow out of it, as seen.",
+            "minLength": 1,
+            "title": "Description",
+            "type": "string"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The PDF page it is on, 1-based.",
+            "title": "Page"
+          },
+          "title": {
+            "description": "What the screen is, in a few words.",
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "description",
+          "page",
+          "title"
+        ],
+        "title": "ScreenSeen",
         "type": "object"
       },
       "ScreenVerdict": {
@@ -7011,6 +7322,13 @@
             "title": "Job Id",
             "type": "string"
           },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/FileRef"
+            },
+            "title": "Sources",
+            "type": "array"
+          },
           "status": {
             "$ref": "#/components/schemas/TaskStatus"
           },
@@ -7031,6 +7349,7 @@
           "id",
           "jira_key",
           "job_id",
+          "sources",
           "status",
           "tasks",
           "title"
@@ -8518,6 +8837,170 @@
           }
         },
         "summary": "Put Agent Routing"
+      }
+    },
+    "/api/attachments/{attachment_id}": {
+      "delete": {
+        "operationId": "delete_attachment_api_attachments__attachment_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "attachment_id",
+            "required": true,
+            "schema": {
+              "title": "Attachment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Attachment"
+      }
+    },
+    "/api/attachments/{attachment_id}/file": {
+      "get": {
+        "description": "The file as it was given. Downloaded, never shown in the page's own origin --\nexcept a plain picture, and then in a sandbox: a PDF or a text file opened here\ncould carry a script that runs as the person looking at it.",
+        "operationId": "get_attachment_file_api_attachments__attachment_id__file_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "attachment_id",
+            "required": true,
+            "schema": {
+              "title": "Attachment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "inline",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Inline",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/octet-stream": {}
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Attachment File"
+      }
+    },
+    "/api/attachments/{attachment_id}/pages/{page}": {
+      "get": {
+        "description": "One page of an attached PDF as a picture, to be shown beside the screen that\nwas designed from it. A picture drawn here, not the document: nothing in it can\nrun, and it is sandboxed all the same.",
+        "operationId": "get_attachment_page_api_attachments__attachment_id__pages__page__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "attachment_id",
+            "required": true,
+            "schema": {
+              "title": "Attachment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "page",
+            "required": true,
+            "schema": {
+              "title": "Page",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "image/jpeg": {},
+              "image/png": {}
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Attachment Page"
+      }
+    },
+    "/api/attachments/{attachment_id}/read": {
+      "post": {
+        "description": "Read it again: after a failure, or once the agent has a model that can see.",
+        "operationId": "read_attachment_again_api_attachments__attachment_id__read_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "attachment_id",
+            "required": true,
+            "schema": {
+              "title": "Attachment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Attachment"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read Attachment Again"
       }
     },
     "/api/auth/accept-invitation": {
@@ -11060,6 +11543,114 @@
           }
         },
         "summary": "Get Activity"
+      }
+    },
+    "/api/projects/{project_id}/attachments": {
+      "get": {
+        "description": "The project's own files; with ``job_id``, that development's as well.",
+        "operationId": "list_attachments_api_projects__project_id__attachments_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "job_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Attachment"
+                  },
+                  "title": "Response List Attachments Api Projects  Project Id  Attachments Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Attachments"
+      },
+      "post": {
+        "description": "Attach a file. ``draft`` holds it for a development not yet started (the\nnew-development form); otherwise every development of the project reads it.\n\nIt is read by a model in the background; the reading arrives on the attachment.",
+        "operationId": "add_attachment_api_projects__project_id__attachments_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_add_attachment_api_projects__project_id__attachments_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Attachment"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Add Attachment"
       }
     },
     "/api/projects/{project_id}/board": {

@@ -2004,4 +2004,30 @@ export const TR: Record<string, string> = {
   "Getting a code…": "Kod alınıyor…",
   "Sign in with ChatGPT": "ChatGPT ile giriş yap",
   "ChatGPT subscription (Codex)": "ChatGPT aboneliği (Codex)",
+  // attachments (components/Attachments.tsx)
+  "Uploading…": "Yükleniyor…",
+  "Drop files here or click to choose — PDF, Word, images or text, up to {n} MB each":
+    "Dosyaları buraya bırak ya da seçmek için tıkla — PDF, Word, görsel ya da metin, her biri en fazla {n} MB",
+  "larger than {n} MB": "{n} MB'tan büyük",
+  "Being read…": "Okunuyor…",
+  "Could not be read": "Okunamadı",
+  "Its text still reaches the agents.": "Metni yine de ajanlara ulaşıyor.",
+  "Read again": "Yeniden oku",
+  Document: "Doküman",
+  Other: "Diğer",
+  "{n} screen(s)": "{n} ekran",
+  "{n} requirement(s)": "{n} gereksinim",
+  "What the agents will work from": "Ajanların üzerinden çalışacağı şey",
+  "page {n}": "sayfa {n}",
+  "{n} page(s)": "{n} sayfa",
+  "this development only": "yalnızca bu geliştirme",
+  "Documents and screens": "Dokümanlar ve ekranlar",
+  "Requirements, specifications, mock-ups, screenshots. Each is read once when it arrives; the Product Owner plans from them, and the Designer keeps to the screens.":
+    "Gereksinimler, şartnameler, taslaklar, ekran görüntüleri. Her biri geldiğinde bir kez okunur; Ürün Sahibi bunlardan planlar, Tasarımcı ekranlara sadık kalır.",
+  "Optional. Requirements, specifications, mock-ups, screenshots — the agents read them before they ask you anything, and every development of the project can use them.":
+    "İsteğe bağlı. Gereksinimler, şartnameler, taslaklar, ekran görüntüleri — ajanlar sana bir şey sormadan önce bunları okur ve projenin her geliştirmesi bunlardan yararlanabilir.",
+  "Drawn from what you attached": "Eklediğin dosyadan çizildi",
+  "What you attached": "Eklediğin",
+  "Reading the attached files: {usd} over {n} call(s), included above.":
+    "Eklenen dosyaları okumak: {n} çağrıda {usd}, yukarıdakilere dahil.",
 };

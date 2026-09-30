@@ -54,6 +54,8 @@ slipwright/
   alembic/            migrations, in order
 
   accounts.py         signing up, proving an address, resetting a password
+  attachments.py      files a person gives the agents: what is accepted, the text and
+                      pictures taken out of it, and what each agent is told of it
   mail.py             SMTP, and the outbox that stands in for it
   demo.py             the worked example a new account starts with
   quota.py            what one account may take of a shared machine

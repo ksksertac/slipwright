@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 
 from slipwright.board import EpicView, StoryView, TaskStatus, TaskView, job_epics
 from slipwright.jira import JiraClient, JiraError
+from slipwright.roles.results import FileRef
 from slipwright.schemas.job import Job, JobState
 from slipwright.schemas.project import Project
 
@@ -121,7 +122,7 @@ class JiraSync:
                         self.key,
                         self.types.get("story", "Story"),
                         story.title,
-                        _describe(story.description, job),
+                        _describe(_with_sources(story.description, story.sources), job),
                         parent_key=keys[epic.id],
                     )
                     report.note(f"created {keys[story.id]} (story) {story.title}")
@@ -255,6 +256,15 @@ def _flatten(epics: list[EpicView]) -> list[EpicView | StoryView | TaskView]:
             out.append(story)
             out.extend(story.tasks)
     return out
+
+
+def _with_sources(text: str, sources: list[FileRef]) -> str:
+    """The files a story came from, named under it: the file itself stays in Slipwright,
+    but whoever opens the issue should know which document to look in."""
+    if not sources:
+        return text
+    named = ", ".join(f"{s.file}, p. {s.page}" if s.page else s.file for s in sources)
+    return f"{text.strip()}\n\nSource: {named}".strip()
 
 
 def _describe(text: str, job: Job, *, phase: int | None = None) -> str:

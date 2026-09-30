@@ -108,6 +108,40 @@ project_briefs = Table(
     Column("updated_at", Text, nullable=False),
 )
 
+# Files a person gave the agents: a requirements document, a PDF of screens, a photo of a
+# whiteboard. The file itself is kept here rather than on disk so it travels with the
+# database (``slipwright db copy``), is owned like every other row, and never sits
+# anywhere a project's own build command could reach it.
+#
+# ``scope`` says who reads it: ``project`` (every development of the project, like the
+# brief), ``job`` (one development) or ``draft`` (chosen on the new-development form, not
+# yet sent -- no agent reads a draft). ``text`` is what was extracted from it and
+# ``reading_json`` what a model made of it (slipwright/attachments.py), so neither has to
+# be worked out again for every agent that reads it.
+attachments = Table(
+    "attachments",
+    metadata,
+    Column("id", String(64), primary_key=True),
+    Column("owner_id", String(64)),
+    Column("project_id", String(64), nullable=False),
+    Column("job_id", String(64)),
+    Column("scope", String(16), nullable=False),  # project | job | draft
+    Column("name", Text, nullable=False),
+    Column("media_type", String(128), nullable=False),
+    Column("size", Integer, nullable=False),
+    Column("sha256", String(64), nullable=False),
+    Column("pages", Integer, nullable=False, server_default="0"),
+    Column("data", LargeBinary, nullable=False),
+    Column("text", Text, nullable=False, server_default=""),
+    # pending | reading | done | failed
+    Column("reading_state", String(16), nullable=False, server_default="pending"),
+    Column("reading_json", Text),
+    Column("created_at", Text, nullable=False),
+    Index("attachments_project", "project_id", "scope", "created_at"),
+    Index("attachments_job", "job_id"),
+    Index("attachments_owner", "owner_id"),
+)
+
 # What the agents wrote, in the language they did not write it in. Keyed by the source
 # text, so the same sentence is translated once and met again for free.
 translations = Table(
@@ -402,6 +436,7 @@ chat_prompts = Table(
 __all__ = [
     "agent_members",
     "api_tokens",
+    "attachments",
     "chat_codes",
     "chat_links",
     "chat_prompts",

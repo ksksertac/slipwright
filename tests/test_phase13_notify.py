@@ -711,6 +711,7 @@ def test_a_database_written_before_notifications_upgrades_into_one(tmp_path: Pat
             # and what the revisions after it add, since those replay on top (0009)
             for column in ("totp_secret", "totp_enabled_at", "totp_last_step", "totp_recovery"):
                 conn.execute(text(f"ALTER TABLE users DROP COLUMN {column}"))
+            conn.execute(text("DROP TABLE attachments"))  # (0010)
         command.stamp(_config(db), "0007_teams")
 
         migrate(db)

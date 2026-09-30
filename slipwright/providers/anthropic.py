@@ -13,6 +13,7 @@ invoke layer so all providers are treated the same.
 
 from __future__ import annotations
 
+import base64
 from typing import Any
 
 from slipwright.providers import (
@@ -164,10 +165,33 @@ def build_request_kwargs(request: ModelRequest, *, max_tokens: int) -> dict[str,
         "model": request.model,
         "max_tokens": max_tokens,
         "system": request.system,
-        "messages": [{"role": "user", "content": request.prompt}],
+        "messages": [{"role": "user", "content": _content(request)}],
         "thinking": thinking,
         "output_config": output_config,
     }
+
+
+def _content(request: ModelRequest) -> str | list[dict[str, Any]]:
+    """The prompt, with any pictures ahead of it -- each named by the line before it, so
+    the prompt can say "the screen in ekran.pdf, page 2" and mean one of them."""
+    if not request.images:
+        return request.prompt
+    blocks: list[dict[str, Any]] = []
+    for image in request.images:
+        if image.label:
+            blocks.append({"type": "text", "text": image.label})
+        blocks.append(
+            {
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": image.media_type,
+                    "data": base64.b64encode(image.data).decode("ascii"),
+                },
+            }
+        )
+    blocks.append({"type": "text", "text": request.prompt})
+    return blocks
 
 
 __all__ = ["DEFAULT_MAX_TOKENS", "AnthropicProvider", "build_request_kwargs"]

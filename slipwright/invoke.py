@@ -163,6 +163,7 @@ def invoke_role(
         prompt=_user_prompt(context, output_schema),
         output_schema=output_schema,
         timeout_s=timeout_s,
+        images=tuple(context.get("images") or ()),
     )
 
     # where this call was headed. A failed call never gets a response to read the routed
@@ -249,6 +250,20 @@ def invoke_role(
     )
 
 
+def may_be_blind(result: RoleResult) -> bool:
+    """Whether a call that was shown pictures could have failed *because* it was shown
+    them. The vendor turning the request down -- or the model answering past it -- could
+    be; the account being refused, the vendor being down or the call running out of time
+    are not, and asking again without the pictures would only fail the same way."""
+    if result.error is None:
+        return False
+    return result.error.kind in {
+        InvokeErrorKind.PROVIDER_ERROR,
+        InvokeErrorKind.MALFORMED_OUTPUT,
+        InvokeErrorKind.REFUSED,
+    }
+
+
 def _coerce_role(role: RoleName | str) -> RoleName:
     if isinstance(role, RoleName):
         return role
@@ -274,7 +289,9 @@ def _user_prompt(context: Mapping[str, Any], output_schema: dict[str, Any]) -> s
     instructions = context.get("instructions")
     if isinstance(instructions, str) and instructions.strip():
         parts.append(instructions.strip())
-    rest = {k: v for k, v in context.items() if k not in {"system", "instructions"}}
+    # the pictures go beside the prompt, not into it: a base64 screen in the JSON would
+    # be read as a very long string by a model that could have looked at it
+    rest = {k: v for k, v in context.items() if k not in {"system", "instructions", "images"}}
     if rest:
         parts.append("Context:\n" + json.dumps(rest, indent=2, sort_keys=True, default=str))
     parts.append(

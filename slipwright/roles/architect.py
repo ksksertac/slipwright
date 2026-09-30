@@ -68,11 +68,16 @@ def run(
     timeout_s: float | None = None,
     jira: dict[str, Any] | None = None,
     standards: dict[str, Any] | None = None,
+    attachments: dict[str, Any] | None = None,
 ) -> RoleResult:
     worktree = require_worktree(job)
     context = base_context(
         job, instructions=INSTRUCTIONS, feedback=job.data.feedback, jira=jira, standards=standards
     )
+    if attachments:
+        # what the files said, as the reading summed them up: the backlog already
+        # carries what is to be built from them, this is what it should look like
+        context["attachments"] = attachments
     context["seed_profile"] = seed.model_dump(mode="json")
     context["backlog"] = job.data.backlog
     context["domains"] = [d.value for d in Domain]
