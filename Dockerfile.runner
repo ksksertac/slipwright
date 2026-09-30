@@ -64,7 +64,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         python3-pip \
         nodejs \
         npm \
+        unzip \
+        zip \
     && rm -rf /var/lib/apt/lists/*
+# unzip and zip: a build that fetches a toolchain or a Gradle wrapper looks for them first,
+# and nothing in here can install them (Dockerfile says more)
 
 # uv, for projects whose profile builds with it
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
