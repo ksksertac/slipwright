@@ -726,6 +726,7 @@ export const TR: Record<string, string> = {
   "Pick the provider and model this agent works with. It runs there on every project, whatever the project profile says; if the provider cannot be reached the job fails with the reason.":
     "Bu ajanın çalışacağı sağlayıcıyı ve modeli seç. Proje profili ne derse desin her projede orada çalışır; sağlayıcıya ulaşılamazsa iş nedeniyle birlikte başarısız olur.",
   "pick a model…": "bir model seç…",
+  "— not set —": "— belirlenmedi —",
   "the provider's default model": "sağlayıcının varsayılan modeli",
   "add a key under Settings → Models first": "önce Ayarlar → Modeller altında bir anahtar ekle",
   "model id": "model kimliği",

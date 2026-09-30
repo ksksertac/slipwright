@@ -225,6 +225,7 @@ function ModelCard({ agent }: { agent: AgentSummary }) {
                   ? tx("add a key under Settings → Models first")
                   : tx("model id")
             }
+            emptyLabel={tx("pick a model…")}
             onChange={(m) => {
               setModel(m);
               setDirty(true);
