@@ -90,7 +90,9 @@ def test_failed_gate_runs_are_recorded_too(
         job = engine.approve(job.id)
     assert job.state is JobState.FAILED
     runs = store.list_test_runs(project.id, job.id)
-    assert [r.status for r in runs] == [tr.TestRunStatus.FAILED] * 3  # three gate attempts
+    # recorded as failed -- once: the fixes change nothing, so a command that does not
+    # exist is not run again to fail the same way
+    assert [r.status for r in runs] == [tr.TestRunStatus.FAILED]
     assert all(r.source is tr.TestRunSource.GATE for r in runs)
 
 

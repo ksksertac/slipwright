@@ -3603,6 +3603,12 @@ class Engine:
         if job.data.build_attempts == 0 and job.data.review_rounds == 0:
             job.data.phase_base_commit = g.head_commit(worktree)  # the review diffs from here
             self.store.save(job)
+        # a fix round is only worth a build if it changes something. What the failed attempt
+        # left is still staged, uncommitted, so the index before and after says whether it did
+        before_fix: str | None = None
+        if job.data.build_attempts > 0 and job.data.last_build_output is not None:
+            g.stage_all(worktree)
+            before_fix = g.staged_diff(worktree)
         review_ctx: dict[str, Any] | None = None
         if job.data.review_violations:
             review_ctx = {
@@ -3657,6 +3663,20 @@ class Engine:
             }
         g.stage_all(worktree)
         diff = g.staged_diff(worktree)
+        if before_fix is not None and diff == before_fix:
+            # The specialist read the failure and changed nothing: it is saying the code is
+            # not what fails. That leaves the command itself or what the machine has
+            # installed, and neither is a specialist's. Running the same command on the same
+            # files would fail the same way and spend an attempt; three of those once burned
+            # an Android development's fix rounds on an SDK the image did not have.
+            return self._fail(
+                job,
+                f"{role.value} phase {index + 1}/{len(phases)}: the fix changed no file, "
+                f"so the build would fail the same way again — the build command or this "
+                f"machine's tools are what fails, not the code; re-plan, or install what is "
+                f"missing and retry ({summaries[-1]})",
+                detail=job.data.last_build_output,
+            )
         attempt = f", fix attempt {job.data.build_attempts}" if job.data.build_attempts else ""
         if job.data.review_rounds and not attempt:
             attempt = f", review fix {job.data.review_rounds}"
