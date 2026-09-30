@@ -183,6 +183,7 @@ export const TR: Record<string, string> = {
   passed: "geçti",
   error: "hata",
   domain: "alan",
+  platform: "platform",
   backend: "backend",
   web: "web",
   mobile: "mobil",
@@ -782,6 +783,9 @@ export const TR: Record<string, string> = {
   Routing: "Yönlendirme",
   "Build command": "Build komutu",
   "Test command": "Test komutu",
+  "Mobile apps": "Mobil uygulamalar",
+  "{platform} build command": "{platform} build komutu",
+  "{platform} test command": "{platform} test komutu",
   "Package manager": "Paket yöneticisi",
   "Default port": "Varsayılan port",
 

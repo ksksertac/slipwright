@@ -1346,6 +1346,8 @@ def create_app(
             return eng.set_profile(job_id, body)
         except NotAwaitingApproval as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except InvalidEdit as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     @api.put("/jobs/{job_id}/backlog", response_model=Job)
     def set_backlog(job_id: str, body: BacklogEdit, request: Request) -> Job:
