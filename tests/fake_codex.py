@@ -2,8 +2,11 @@
 
 ``exec`` answers in the ``--json`` event stream with whatever ``FAKE_CODEX_ANSWER`` says
 (and records its argv, stdin and environment next to ``CODEX_HOME``); ``FAKE_CODEX_FAIL``
-makes it report an error instead. ``login --device-auth`` prints a link and a code the way
-the real one does, then "is approved" a moment later by writing ``auth.json``.
+makes it report an error instead, and ``hang.txt`` makes it do what the real one does
+when a call runs long: start a child of its own (the native binary under the Node wrapper)
+that keeps working -- writing ``beat`` -- and never answer. ``login --device-auth`` prints
+a link and a code the way the real one does, then "is approved" a moment later by writing
+``auth.json``.
 """
 
 from __future__ import annotations
@@ -24,6 +27,22 @@ if args[:1] == ["exec"]:
     )
     print(json.dumps({"type": "thread.started", "thread_id": "t1"}))
     print(json.dumps({"type": "turn.started"}))
+    if (home / "hang.txt").exists():
+        import subprocess
+
+        beat = home / "beat"
+        subprocess.Popen(
+            [
+                sys.executable,
+                "-c",
+                "import sys, time\n"
+                "while True:\n"
+                "    open(sys.argv[1], 'a').write('.')\n"
+                "    time.sleep(0.05)\n",
+                str(beat),
+            ]
+        )
+        time.sleep(600)
     fail_file = home / "fail.txt"
     fail = fail_file.read_text(encoding="utf-8") if fail_file.exists() else ""
     if fail:
