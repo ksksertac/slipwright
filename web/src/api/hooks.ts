@@ -63,6 +63,7 @@ import {
   type StandardsStatus,
   type ProjectProgress,
   type ProviderModels,
+  type ProviderTerms,
   type ProviderSettings,
   type ProviderSettingsIn,
   type TestCaseIn,
@@ -118,6 +119,7 @@ export const keys = {
   supportMine: ["support", "mine"] as const,
   providers: ["settings", "providers"] as const,
   providerModels: (name: string) => ["settings", "providers", name, "models"] as const,
+  providerTerms: (name: string) => ["settings", "providers", name, "terms"] as const,
   tokens: (userId: string) => ["users", userId, "tokens"] as const,
   standards: ["standards", "status"] as const,
   standardsRules: (scope: string, domain: string) => ["standards", "rules", scope, domain] as const,
@@ -1089,6 +1091,30 @@ export function useProviderModels(name: string | null) {
     enabled: name !== null,
     retry: false,
     staleTime: 5 * 60_000,
+  });
+}
+
+/** A vendor's terms of use for this account's key (EVREN's); silent until a key is set. */
+export function useProviderTerms(name: string | null) {
+  return useQuery({
+    queryKey: keys.providerTerms(name ?? ""),
+    queryFn: () => api.get<ProviderTerms>(`/api/settings/providers/${name}/terms`),
+    enabled: name !== null,
+    retry: false,
+  });
+}
+
+/** Accept the version that was shown -- only ever on the person's own press. */
+export function useAcceptProviderTerms() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ name, version }: { name: string; version: number }) =>
+      api.post<ProviderTerms>(`/api/settings/providers/${name}/terms`, { version }),
+    onSuccess: (terms) => {
+      qc.setQueryData(keys.providerTerms(terms.name), terms);
+      // the model list was refused until now
+      void qc.invalidateQueries({ queryKey: keys.providerModels(terms.name) });
+    },
   });
 }
 

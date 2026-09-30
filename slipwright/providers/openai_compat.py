@@ -95,9 +95,9 @@ class OpenAICompatProvider:
         except httpx.HTTPError as exc:
             raise ProviderError(f"connection error: {exc}") from exc
         if resp.status_code in REJECTED_STATUS:
-            raise ProviderRejectedError(f"API error {resp.status_code}: {_error_message(resp)}")
+            raise self.refused(resp)
         if resp.status_code >= 400:
-            raise ProviderError(f"API error {resp.status_code}: {_error_message(resp)}")
+            raise ProviderError(f"API error {resp.status_code}: {error_message(resp)}")
         data = resp.json()
         choices = data.get("choices") or []
         if not choices:
@@ -129,13 +129,18 @@ class OpenAICompatProvider:
             stop_reason=finish,
         )
 
+    def refused(self, resp: httpx.Response) -> ProviderError:
+        """What an account-level refusal (401/402/403) is reported as. A vendor whose
+        refusals need explaining in Slipwright's terms says so by overriding this."""
+        return ProviderRejectedError(f"API error {resp.status_code}: {error_message(resp)}")
+
     def list_models(self) -> list[str]:
         try:
             resp = net.request(self._client, "GET", "/models", timeout=20.0)
         except httpx.HTTPError as exc:
             raise ProviderError(f"connection error: {exc}") from exc
         if resp.status_code >= 400:
-            raise ProviderError(f"API error {resp.status_code}: {_error_message(resp)}")
+            raise ProviderError(f"API error {resp.status_code}: {error_message(resp)}")
         data = resp.json().get("data") or []
         return sorted(str(m["id"]) for m in data if isinstance(m, dict) and m.get("id"))
 
@@ -159,7 +164,7 @@ def _content(request: ModelRequest) -> str | list[dict[str, Any]]:
     return parts
 
 
-def _error_message(resp: httpx.Response) -> str:
+def error_message(resp: httpx.Response) -> str:
     with contextlib.suppress(ValueError):
         body = resp.json()
         err = body.get("error") if isinstance(body, dict) else None
@@ -170,4 +175,4 @@ def _error_message(resp: httpx.Response) -> str:
     return resp.text[:200]
 
 
-__all__ = ["DEFAULT_MAX_TOKENS", "OpenAICompatProvider"]
+__all__ = ["DEFAULT_MAX_TOKENS", "OpenAICompatProvider", "error_message"]

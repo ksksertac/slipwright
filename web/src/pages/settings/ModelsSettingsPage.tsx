@@ -1,8 +1,10 @@
 import { useState, type FormEvent } from "react";
 import { describeError, type ProviderSettings } from "../../api/client";
 import {
+  useAcceptProviderTerms,
   useChatGPTLogin,
   useChatGPTLogout,
+  useProviderTerms,
   useProviders,
   useSaveProvider,
   useStartChatGPTLogin,
@@ -10,6 +12,7 @@ import {
 } from "../../api/hooks";
 import { Copyable } from "../../components/Copyable";
 import { ModelPicker } from "../../components/ModelPicker";
+import { Markdown } from "../AgentStandardsTab";
 import { useAuth } from "../../auth/AuthProvider";
 import { ErrorBox, Loading, PageHead } from "../../components/ui";
 import { IconCheck, IconChevron } from "../../components/icons";
@@ -140,6 +143,7 @@ function ProviderCard({
       </summary>
       <form className="acc-body" onSubmit={submit}>
         {subscription && <ChatGPTSignIn signedIn={p.key_set} admin={admin} />}
+        {p.has_terms && p.key_set && open && <VendorTerms provider={p} admin={admin} />}
         <div className="grid-2">
           {!subscription && (
             <div className="field">
@@ -291,6 +295,81 @@ function ProviderCard({
       </form>
     </details>
   );
+}
+
+/**
+ * A vendor that refuses every call until its terms of use are accepted (EVREN). Its own
+ * web site has no button for it, only an API call -- so the text is shown here, in the
+ * vendor's own words, and the person accepts it with a press. Never automatically: what
+ * is being agreed to includes how the prompts Slipwright sends are processed.
+ */
+function VendorTerms({ provider: p, admin }: { provider: ProviderSettings; admin: boolean }) {
+  const tx = useT();
+  const terms = useProviderTerms(p.name);
+  const accept = useAcceptProviderTerms();
+  const [read, setRead] = useState(false);
+  if (terms.isLoading) return null;
+  // a wrong key or an unreachable host: Test connection says which, and better
+  if (terms.error || !terms.data) return null;
+  const t = terms.data;
+  if (t.accepted) {
+    return (
+      <div className="row" style={{ marginBottom: 12 }}>
+        <span className="badge ok plain">
+          <IconCheck />
+          {tx("{label}'s terms of use (v{n}) are accepted for this key.", {
+            label: p.label,
+            n: t.version,
+          })}
+        </span>
+      </div>
+    );
+  }
+  return (
+    // one column inside: a callout lays its children side by side
+    <div className="callout hint">
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{ marginTop: 0 }}>
+          <strong>
+            {tx("{label} needs its terms of use accepted before it answers.", { label: p.label })}
+          </strong>{" "}
+          {tx("Until then every call is refused, the model list included. Read them first:")}
+        </p>
+        <details
+          open={read}
+          onToggle={(e) => setRead((e.currentTarget as HTMLDetailsElement).open)}
+        >
+          <summary>{tx("Terms of use, version {n}", { n: t.version })}</summary>
+          <div className="vendor-terms">
+            <Markdown text={plainTerms(t.text)} />
+          </div>
+        </details>
+        {admin && (
+          <div className="row" style={{ marginTop: 8 }}>
+            <button
+              type="button"
+              className="btn primary small"
+              disabled={accept.isPending}
+              onClick={() => accept.mutate({ name: p.name, version: t.version })}
+            >
+              {accept.isPending
+                ? tx("Accepting…")
+                : tx("I accept {label}'s terms of use", { label: p.label })}
+            </button>
+          </div>
+        )}
+        {accept.error && <div className="callout error">{describeError(accept.error)}</div>}
+      </div>
+    </div>
+  );
+}
+
+/** EVREN's text is written for GitHub: badges and quote markers are noise in a small box. */
+function plainTerms(text: string): string {
+  return text
+    .replace(/^!\[.*$/gm, "")
+    .replace(/^> ?/gm, "")
+    .replace(/^---$/gm, "");
 }
 
 /**

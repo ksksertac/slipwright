@@ -33,6 +33,8 @@ GLM = "glm"
 MINIMAX = "minimax"
 # every vendor at once behind one key, at the price OpenRouter charges (providers/openrouter.py)
 OPENROUTER = "openrouter"
+# open-weight models on Turkish hardware; a catalogue and terms of its own (providers/evren.py)
+EVREN = "evren"
 # a ChatGPT plan, through OpenAI's own Codex CLI rather than an API key (providers/codex.py)
 CHATGPT = "chatgpt"
 DEFAULT_PROVIDER = ANTHROPIC
@@ -58,6 +60,9 @@ class ProviderSpec:
     max_tokens: int = 32_000  # the largest answer the vendor accepts in one call
     # "api_key", or "subscription": signed in with a person's plan, no key to type
     kind: str = "api_key"
+    # the vendor refuses every call until the account accepts its terms of use, which
+    # the Models page offers to do (providers/evren.py)
+    has_terms: bool = False
 
 
 PROVIDERS: dict[str, ProviderSpec] = {
@@ -143,6 +148,19 @@ PROVIDERS: dict[str, ProviderSpec] = {
         # 32k is what the models a person is likely to pick will take; the rest is the
         # "Max output tokens per call" field under Settings -> Models.
     ),
+    EVREN: ProviderSpec(
+        name=EVREN,
+        label="EVREN (SSB)",
+        env_var="EVREN_API_KEY",
+        default_base_url="https://evren-llmapi.ssyz.org.tr/v1",
+        # decided per model from the catalogue: Gemma refuses what GLM accepts
+        supports_effort=True,
+        max_tokens_param="max_tokens",
+        docs_url="https://evren.ssyz.org.tr/api-keys",
+        # the catalogue gives 16k as each chat model's default; 32k was accepted by the
+        # live API (2026-09-30), so the usual ceiling stands
+        has_terms=True,
+    ),
     CHATGPT: ProviderSpec(
         name=CHATGPT,
         label="ChatGPT subscription (Codex)",
@@ -188,6 +206,17 @@ def build_client(
         from slipwright.providers.openrouter import OpenRouterProvider
 
         return OpenRouterProvider(
+            creds.api_key,
+            creds.base_url,
+            supports_effort=spec.supports_effort,
+            max_tokens_param=spec.max_tokens_param,
+            max_tokens=creds.max_tokens or spec.max_tokens,
+            transport=transport,
+        )
+    if creds.name == EVREN:
+        from slipwright.providers.evren import EvrenProvider
+
+        return EvrenProvider(
             creds.api_key,
             creds.base_url,
             supports_effort=spec.supports_effort,
@@ -333,6 +362,7 @@ __all__ = [
     "CHATGPT",
     "DEEPSEEK",
     "DEFAULT_PROVIDER",
+    "EVREN",
     "PLAN_DEFAULT",
     "PROFILE_VENDOR",
     "GEMINI",

@@ -97,6 +97,10 @@ class ProviderSettings(BaseModel):
         default="api_key",
         description="subscription: signed in with a person's plan (ChatGPT), not a key.",
     )
+    has_terms: bool = Field(
+        default=False,
+        description="The vendor refuses every call until its terms of use are accepted.",
+    )
 
 
 class ProviderSettingsIn(BaseModel):
@@ -113,6 +117,21 @@ class ProviderSettingsIn(BaseModel):
 class ProviderModels(BaseModel):
     name: str
     models: list[str]
+
+
+class ProviderTerms(BaseModel):
+    """A vendor's terms of use as they stand for this account's key."""
+
+    name: str
+    version: int = Field(description="The current version: what accepting it signs.")
+    accepted: bool
+    text: str = Field(description="The vendor's own text, in its own language (Markdown).")
+
+
+class ProviderTermsIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    version: int = Field(ge=1, description="The version the person was shown.")
 
 
 class SourceSettingsIn(BaseModel):
@@ -423,6 +442,35 @@ def provider_models(name: str, request: Request) -> ProviderModels:
     except ProviderError as exc:
         status = 400 if "no API key" in str(exc) else 502
         raise HTTPException(status_code=status, detail=str(exc)) from exc
+
+
+def _terms(request: Request, name: str, accept: int | None = None) -> ProviderTerms:
+    name = _provider_name(name)
+    if not PROVIDERS[name].has_terms:
+        raise HTTPException(status_code=404, detail=f"{name} has no terms to accept")
+    eng = engine_for(request)
+    try:
+        terms = (
+            eng.provider_terms(name) if accept is None else eng.accept_provider_terms(name, accept)
+        )
+    except ProviderError as exc:
+        status = 400 if "no API key" in str(exc) else 502
+        raise HTTPException(status_code=status, detail=str(exc)) from exc
+    return ProviderTerms(name=name, **vars(terms))
+
+
+@router.get("/settings/providers/{name}/terms", response_model=ProviderTerms)
+def provider_terms(name: str, request: Request) -> ProviderTerms:
+    """Whether this account's key has accepted the vendor's terms, and their text."""
+    return _terms(request, name)
+
+
+@router.post("/settings/providers/{name}/terms", response_model=ProviderTerms)
+def accept_provider_terms(name: str, body: ProviderTermsIn, request: Request) -> ProviderTerms:
+    """Accept the vendor's terms, as the person pressing the button. Never done for them:
+    the vendor asks for an explicit acceptance, and a server cannot give one."""
+    require_owner(request)
+    return _terms(request, name, accept=body.version)
 
 
 # -- ChatGPT subscription ------------------------------------------------------------------------

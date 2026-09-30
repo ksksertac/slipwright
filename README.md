@@ -166,8 +166,11 @@ Anthropic (Claude), OpenAI (GPT), DeepSeek, Google (Gemini), Alibaba (Qwen), Z.a
 and MiniMax work out of the box, as does **OpenRouter** — one key for every vendor at
 once, priced at what OpenRouter charges rather than what the vendor does. Its catalogue
 is filtered to the models that can actually answer in JSON, which is what every agent is
-asked for. On an installation you run for yourself, agents can also
-run on a **ChatGPT subscription** through OpenAI's own Codex CLI, with no API credit.
+asked for. **EVREN** runs open-weight models on hardware in Turkey, with an *LLM
+Çıkarım* key from evren.ssyz.org.tr; it wants its terms of use accepted before the first
+call, and the Models page shows them and accepts them when you press the button. On an
+installation you run for yourself, agents can also run on a **ChatGPT subscription**
+through OpenAI's own Codex CLI, with no API credit.
 Pin each agent to its own provider and model: a strong model for the Architect and a
 cheap one for DevOps. Keys are stored encrypted, and **Test connection** tells you which
 models each key can use.

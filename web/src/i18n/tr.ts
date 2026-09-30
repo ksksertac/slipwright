@@ -1838,12 +1838,12 @@ export const TR: Record<string, string> = {
   "{n} call(s) ran on your ChatGPT plan, which is not billed per call.":
     "{n} çağrı ChatGPT aboneliğinde koştu; abonelik çağrı başına ücretlendirilmez.",
   "on a plan, not billed per call": "abonelikte, çağrı başına ücret yok",
-  "Stop": "Durdur",
+  Stop: "Durdur",
   "Stopping…": "Durduruluyor…",
   "Yes, stop it": "Evet, durdur",
   "stop this development; what it has built stays":
     "bu geliştirmeyi durdur; o ana kadar yapılanlar kalır",
-  "stopped": "durduruldu",
+  stopped: "durduruldu",
   "Somebody stopped a development": "Biri bir geliştirmeyi durdurdu",
   "Remote control": "Uzaktan Yönet",
   "Run it from Telegram, without opening this page.": "Telegram'dan yönet, bu sayfayı açmadan.",
@@ -2003,6 +2003,15 @@ export const TR: Record<string, string> = {
   "Waiting for you to approve it…": "Onaylamanı bekliyor…",
   "Getting a code…": "Kod alınıyor…",
   "Sign in with ChatGPT": "ChatGPT ile giriş yap",
+  "{label}'s terms of use (v{n}) are accepted for this key.":
+    "{label} kullanım şartları (v{n}) bu anahtar için kabul edildi.",
+  "{label} needs its terms of use accepted before it answers.":
+    "{label}, cevap vermeden önce kullanım şartlarının kabul edilmesini istiyor.",
+  "Until then every call is refused, the model list included. Read them first:":
+    "O zamana kadar model listesi dahil her istek reddedilir. Önce okuyun:",
+  "Terms of use, version {n}": "Kullanım şartları, sürüm {n}",
+  "Accepting…": "Kabul ediliyor…",
+  "I accept {label}'s terms of use": "{label} kullanım şartlarını kabul ediyorum",
   "ChatGPT subscription (Codex)": "ChatGPT aboneliği (Codex)",
   // attachments (components/Attachments.tsx)
   "Uploading…": "Yükleniyor…",
