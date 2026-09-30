@@ -17,6 +17,9 @@ slipwright standards search "<q>"     see which sections a task would retrieve
 slipwright self-update --container <id> --image <ref>
                                       replace a container with one on a newer image
                                       (what the server's "install" button starts)
+slipwright worker --connect <code>    lend this Mac to a server: pair, then build its apps
+slipwright worker status|forget       what it is paired with and can build; drop the pairing
+slipwright worker service install     start the worker at login (macOS)
 
 Client commands authenticate with --token or the SLIPWRIGHT_TOKEN environment variable.
 """
@@ -144,7 +147,10 @@ def build_parser() -> argparse.ArgumentParser:
         "copy", help="copy everything from the local SQLite file into SLIPWRIGHT_DATABASE_URL"
     )
     dcopy.add_argument(
-        "--from", dest="source", type=Path, default=None,
+        "--from",
+        dest="source",
+        type=Path,
+        default=None,
         help="the SQLite file to read (default: jobs.sqlite3 in the state dir)",
     )
 
@@ -154,6 +160,20 @@ def build_parser() -> argparse.ArgumentParser:
     )
     upd.add_argument("--container", required=True, help="the container to replace")
     upd.add_argument("--image", required=True, help="the image to run it on")
+
+    wrk = sub.add_parser(
+        "worker",
+        help="lend this Mac to a Slipwright server: build its iOS and Android apps",
+        description="Pair once with the code from Settings -> Workers, then keep running "
+        "(or install it as a service) to build what the server cannot.",
+    )
+    wrk.add_argument("--connect", metavar="CODE", help="pair with this connection code first")
+    wrk.add_argument("--name", help="what the server calls this Mac (default: its host name)")
+    wsub = wrk.add_subparsers(dest="worker_command")
+    wsub.add_parser("status", help="what this Mac is paired with and what it can build")
+    wsub.add_parser("forget", help="drop the pairing kept on this Mac")
+    wsvc = wsub.add_parser("service", help="start the worker at login (macOS launchd)")
+    wsvc.add_argument("action", choices=["install", "uninstall"])
 
     standards = sub.add_parser("standards", help="standards corpus and its search index")
     ssub = standards.add_subparsers(dest="standards_command", required=True)
@@ -220,6 +240,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _db(settings, args)
     if args.command == "self-update":
         return _self_update(args)
+    if args.command == "worker":
+        return _worker(args)
 
     try:
         if args.command == "project":
@@ -309,8 +331,7 @@ def _db(settings: Settings, args: argparse.Namespace) -> int:
     from slipwright.store.db import Database, DatabaseUnavailable
 
     if settings.database_url is None:
-        print("error: set SLIPWRIGHT_DATABASE_URL to the database to copy into",
-              file=sys.stderr)
+        print("error: set SLIPWRIGHT_DATABASE_URL to the database to copy into", file=sys.stderr)
         return 1
     source_path = args.source or settings.db_path
     if not source_path.is_file():
@@ -318,9 +339,7 @@ def _db(settings: Settings, args: argparse.Namespace) -> int:
         return 1
     source, target = Database(source_path), Database(settings.database_url)
     try:
-        counts = copy_database(
-            source, target, progress=lambda name, n: print(f"  {name:<24} {n}")
-        )
+        counts = copy_database(source, target, progress=lambda name, n: print(f"  {name:<24} {n}"))
         # read back rather than trust the counter: this is the moment to find out
         if count_rows(target) != counts:
             print("error: the copy does not match its source", file=sys.stderr)
@@ -430,6 +449,103 @@ def _self_update(args: argparse.Namespace) -> int:
         # the last line is what the server shows on the button once it is back
         print(f"update failed: {exc}", flush=True)
         return 1
+    return 0
+
+
+def _worker(args: argparse.Namespace) -> int:
+    """This Mac's side of a paired worker (worker_agent.py): pair, say what it can build,
+    and build until stopped -- or install/remove the launchd agent that does."""
+    import httpx
+
+    from slipwright import worker_agent as agent
+    from slipwright.workers import CodeError
+
+    if args.worker_command == "status":
+        config = agent.load_config()
+        found = agent.detect()
+        if config:
+            print(f"paired with {config['address']} as {config.get('name')}")
+        else:
+            print("not paired")
+        print(f"can build: {', '.join(found.capabilities) or 'nothing'}")
+        for missing in found.missing:
+            print(f"  {missing}")
+        return 0
+    if args.worker_command == "forget":
+        agent.config_path().unlink(missing_ok=True)
+        print("the pairing is gone from this Mac; remove it under Settings -> Workers too")
+        return 0
+    if args.worker_command == "service":
+        return _worker_service(args.action)
+
+    config = agent.load_config()
+    if args.connect:
+        try:
+            config = agent.pair(args.connect, name=args.name)
+        except (CodeError, agent.Unpaired, httpx.HTTPError) as exc:
+            print(f"not paired: {exc}", file=sys.stderr)
+            return 1
+        kept = agent.save_config(config)
+        print(f"paired with {config['address']} as {config['name']}; kept in {kept}")
+    if config is None:
+        print(
+            "not paired: run  slipwright worker --connect <code>  with the code from "
+            "Settings -> Workers",
+            file=sys.stderr,
+        )
+        return 1
+    found = agent.detect()
+    print(f"can build: {', '.join(found.capabilities) or 'nothing'}", flush=True)
+    for missing in found.missing:
+        print(f"  {missing}", flush=True)
+    try:
+        agent.Worker(config, found=found).forever()
+    except agent.Unpaired as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    except KeyboardInterrupt:
+        return 0
+    return 0
+
+
+def _worker_service(action: str) -> int:
+    """The launchd agent: installed, it starts the worker at login and again if it stops."""
+    import os
+    import platform
+    import shutil
+    import subprocess
+
+    from slipwright import worker_agent as agent
+
+    if platform.system() != "Darwin":
+        print(
+            "a login service is launchd's, which is macOS's; run  slipwright worker  instead",
+            file=sys.stderr,
+        )
+        return 1
+    program = shutil.which("slipwright")
+    argv = [program, "worker"] if program else [sys.executable, "-m", "slipwright.cli", "worker"]
+    path, text = agent.launch_agent(argv)
+    domain = f"gui/{os.getuid()}"  # type: ignore[attr-defined,unused-ignore]
+    if action == "uninstall":
+        subprocess.run(["launchctl", "bootout", f"{domain}/{agent.LAUNCH_LABEL}"], check=False)
+        path.unlink(missing_ok=True)
+        print("the worker no longer starts at login")
+        return 0
+    if agent.load_config() is None:
+        print("pair first:  slipwright worker --connect <code>", file=sys.stderr)
+        return 1
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+    # a stale copy would make bootstrap refuse; taking it down first is harmless if absent
+    subprocess.run(["launchctl", "bootout", f"{domain}/{agent.LAUNCH_LABEL}"], check=False)
+    done = subprocess.run(["launchctl", "bootstrap", domain, str(path)], check=False)
+    if done.returncode != 0:
+        print(
+            f"written to {path}, but launchctl refused it (exit {done.returncode})", file=sys.stderr
+        )
+        return 1
+    print("the worker starts at login now; its log is ~/Library/Logs/slipwright-worker.log")
     return 0
 
 

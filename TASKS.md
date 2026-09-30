@@ -159,7 +159,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 | 14 | T14.1 A phase names its platform; per-platform commands | [x] |
 | 14 | T14.2 What nothing here can build is deferred, not failed | [x] |
 | 14 | T14.3 Pairing, and the worker's side of the API | [x] |
-| 14 | T14.4 `slipwright worker` on the Mac | [ ] |
+| 14 | T14.4 `slipwright worker` on the Mac | [x] |
 | 14 | T14.5 The pages | [ ] |
 | 14 | T14.6 Getting it onto a Mac | [ ] |
 
@@ -1371,20 +1371,27 @@ The shape, decided with the user before any of it was written:
 
 ### T14.4 — `slipwright worker` on the Mac
 **Done when**
-- [ ] `slipwright worker --connect <code>` pairs, keeps the token in
-  `~/Library/Application Support/Slipwright/worker.json` (0600) and starts polling; a
-  second run with a new code only changes the address
-- [ ] It finds Xcode (`xcodebuild -version`), a JDK and the Android SDK
-  (`ANDROID_HOME`, else `~/Library/Android/sdk`), reports what it can build, and says what
-  is missing ("Android SDK not found: install Android Studio")
-- [ ] Each task is unpacked into a fresh temporary directory, built with the `gates/env.py`
-  allow list (never the Mac user's whole environment), and deleted afterwards
-- [ ] It runs only the platform commands of the task it was handed, never anything else the
-  server might send
-- [ ] `slipwright worker service install` writes a launchd agent so it starts at login;
-  `status` and `forget` do what they say
+- [x] `slipwright worker --connect <code>` pairs, keeps the token in
+  `~/Library/Application Support/Slipwright/worker.json` (0600) and starts polling. A new
+  code pairs it again as a new worker -- the old entry stays listed, offline, until it is
+  removed on the page; a mistyped code is refused before the network is touched
+- [x] It finds Xcode by running `xcodebuild -version` (the Command Line Tools install a stub
+  that only says Xcode is required), and the Android SDK with a JDK -- `ANDROID_HOME`, else
+  `~/Library/Android/sdk`, and Android Studio's bundled JDK; it reports what it can build
+  and says what is missing
+- [x] Each build is unpacked into a fresh temporary directory (tar's `data` filter: nothing
+  outside it), built with the `gates/env.py` allow list plus the SDK's two variables --
+  never the Mac user's whole environment -- and deleted afterwards; a heartbeat goes out
+  every 20 s while it runs
+- [x] It runs only the commands of the build it was handed, stops at the first that fails,
+  and reports in the same shape as the server's own gate
+- [x] `slipwright worker service install|uninstall` writes or removes a launchd agent that
+  starts it at login and again if it stops; `status` and `forget` do what they say; a
+  server that no longer knows the Mac stops it rather than it polling forever
 - [ ] The guide says to run it as a separate macOS user: the commands are written by a model,
-  and under your own user they could read your Keychain and SSH keys
+  and under your own user they could read your Keychain and SSH keys (T14.6, with the README)
+
+> Verified by `tests/test_phase14_worker_agent.py`, the worker driven against the real API.
 
 ### T14.5 — The pages
 **Done when**
