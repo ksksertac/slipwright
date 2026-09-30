@@ -6149,6 +6149,18 @@ tr.run-detail td {
   color: var(--accent);
 }
 
+/* a vendor's terms of use on the Models page (EVREN): long, so it scrolls in place */
+.vendor-terms {
+  max-height: 320px;
+  overflow-y: auto;
+  margin-top: 8px;
+  padding: 4px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-size: 13px;
+}
+
 /* two-step sign-in: the QR code and the recovery codes, in the wizard and on Security */
 .twofa {
   display: grid;

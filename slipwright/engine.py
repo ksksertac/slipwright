@@ -58,12 +58,14 @@ from slipwright.notify.core import notify_gate, notify_outcome, settle_prompts
 from slipwright.orchestrator import IllegalTransitionError, Orchestrator
 from slipwright.providers import ModelProvider, ProviderUnavailableError
 from slipwright.providers.codex import Logins
+from slipwright.providers.evren import EvrenProvider, Terms
 from slipwright.providers.registry import (
     CHATGPT,
     DEFAULT_PROVIDER,
     PROVIDERS,
     Credentials,
     RoutingProvider,
+    build_client,
     list_models,
     model_on_default,
 )
@@ -607,6 +609,7 @@ class Engine:
                     "max_tokens": data.get("max_tokens"),
                     "default_max_tokens": spec.max_tokens,
                     "kind": spec.kind,
+                    "has_terms": spec.has_terms,
                 }
             )
         return out
@@ -673,6 +676,25 @@ class Engine:
             spec = PROVIDERS[name]
             raise ProviderUnavailableError(f"no API key for {spec.label}; set it or {spec.env_var}")
         return list_models(creds, transport=self.http_transport)
+
+    def provider_terms(self, name: str) -> Terms:
+        """Where this account's key stands with a vendor's terms of use (EVREN's)."""
+        return self._terms_client(name).terms()
+
+    def accept_provider_terms(self, name: str, version: int) -> Terms:
+        """Accept the version the person was shown. Only ever on their press: see
+        ``providers/evren.py`` for why Slipwright never does this by itself."""
+        return self._terms_client(name).accept_terms(version)
+
+    def _terms_client(self, name: str) -> EvrenProvider:
+        creds = self.provider_credentials(name)
+        if creds is None:
+            spec = PROVIDERS[name]
+            raise ProviderUnavailableError(f"no API key for {spec.label}; set it or {spec.env_var}")
+        client = build_client(creds, transport=self.http_transport)
+        if not isinstance(client, EvrenProvider):
+            raise KeyError(name)
+        return client
 
     @property
     def git_host(self) -> GitHost:

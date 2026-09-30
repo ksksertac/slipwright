@@ -5505,6 +5505,12 @@
             "title": "Env Var",
             "type": "string"
           },
+          "has_terms": {
+            "default": false,
+            "description": "The vendor refuses every call until its terms of use are accepted.",
+            "title": "Has Terms",
+            "type": "boolean"
+          },
           "is_default": {
             "title": "Is Default",
             "type": "boolean"
@@ -5572,6 +5578,7 @@
           "default_model",
           "docs_url",
           "env_var",
+          "has_terms",
           "is_default",
           "key_from_env",
           "key_hint",
@@ -5649,6 +5656,53 @@
           }
         },
         "title": "ProviderSettingsIn",
+        "type": "object"
+      },
+      "ProviderTerms": {
+        "description": "A vendor's terms of use as they stand for this account's key.",
+        "properties": {
+          "accepted": {
+            "title": "Accepted",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "text": {
+            "description": "The vendor's own text, in its own language (Markdown).",
+            "title": "Text",
+            "type": "string"
+          },
+          "version": {
+            "description": "The current version: what accepting it signs.",
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "accepted",
+          "name",
+          "text",
+          "version"
+        ],
+        "title": "ProviderTerms",
+        "type": "object"
+      },
+      "ProviderTermsIn": {
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "description": "The version the person was shown.",
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "title": "ProviderTermsIn",
         "type": "object"
       },
       "QuotaSettings": {
@@ -13194,6 +13248,100 @@
           }
         },
         "summary": "Provider Models",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/settings/providers/{name}/terms": {
+      "get": {
+        "description": "Whether this account's key has accepted the vendor's terms, and their text.",
+        "operationId": "provider_terms_api_settings_providers__name__terms_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderTerms"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Provider Terms",
+        "tags": [
+          "settings"
+        ]
+      },
+      "post": {
+        "description": "Accept the vendor's terms, as the person pressing the button. Never done for them:\nthe vendor asks for an explicit acceptance, and a server cannot give one.",
+        "operationId": "accept_provider_terms_api_settings_providers__name__terms_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderTermsIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderTerms"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Accept Provider Terms",
         "tags": [
           "settings"
         ]

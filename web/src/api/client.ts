@@ -63,6 +63,7 @@ export type AgentSummary = Schemas["AgentSummary"];
 export type AgentRouting = Schemas["AgentRouting"];
 export type ProviderSettingsIn = Schemas["ProviderSettingsIn"];
 export type ProviderModels = Schemas["ProviderModels"];
+export type ProviderTerms = Schemas["ProviderTerms"];
 export type Pipeline = Schemas["Pipeline"];
 export type Translations = Schemas["Translations"];
 export type Onboarding = Schemas["Onboarding"];

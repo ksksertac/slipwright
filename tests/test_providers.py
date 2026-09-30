@@ -32,7 +32,8 @@ class FakeVendor:
     """One OpenAI-compatible endpoint (also answers Anthropic's /v1/models) per host.
 
     It answers OpenRouter's two extra notes as well: ``/key``, the endpoint that proves a
-    key is real, and the ``supported_parameters`` every catalogue entry carries.
+    key is real, and the ``supported_parameters`` every catalogue entry carries -- and
+    EVREN's, the ``task`` and ``capabilities`` that say a model can be an agent.
     """
 
     def __init__(self, key: str, models: list[str]) -> None:
@@ -55,7 +56,12 @@ class FakeVendor:
                 200,
                 json={
                     "data": [
-                        {"id": m, "supported_parameters": ["response_format"]}
+                        {
+                            "id": m,
+                            "supported_parameters": ["response_format"],
+                            "task": "chat",
+                            "capabilities": {"response_format": True},
+                        }
                         for m in self.models
                     ]
                 },

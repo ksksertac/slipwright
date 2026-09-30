@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- EVREN, the Turkish defence industry's platform: open-weight models (GLM, DeepSeek,
+  Qwen, MiMo, Gemma) on hardware in Turkey. Only its chat models that can answer in JSON
+  are offered; reasoning effort goes to the models that take it and not to the ones that
+  refuse it; and its terms of use, which it requires before the first call and offers no
+  button for, are shown on the Models page and accepted there with a press -- never by
+  Slipwright on its own. A platform key pasted where an LLM key belongs is named as such.
+
 ## 0.2.0
 
 - **Updating from the page.** A newer release is offered under the version in the

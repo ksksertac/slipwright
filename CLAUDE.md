@@ -40,11 +40,14 @@ slipwright/
   orchestrator/       which transitions are legal
   roles/              one module per agent + results.py, the typed output contract
   invoke.py           the single place a model is called
-  providers/          Anthropic, OpenAI and six OpenAI-compatible vendors; registry.py
+  providers/          Anthropic, OpenAI and seven OpenAI-compatible vendors; registry.py
                       routes per role. OpenRouter has two rules of its own
                       (openrouter.py): its catalogue is filtered to the models that can
                       answer in JSON, and its key is proved against /key, because
-                      /models answers 200 to anybody
+                      /models answers 200 to anybody. EVREN has three (evren.py): a
+                      catalogue filtered by task and capability, reasoning_effort sent
+                      per model, and terms a person accepts on the Models page --
+                      never Slipwright by itself
   gates/              build_cmd and test_cmd: env.py (what they may see),
                       runner.py (where they run)
   standards/          the RAG corpus: chunking, retrieval, fts.py (the one dialect split)
