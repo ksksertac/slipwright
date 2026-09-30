@@ -69,6 +69,12 @@ class Spend(BaseModel):
     unpriced_calls: int = Field(
         default=0, description="Calls whose model had no stored price; not in ``usd``."
     )
+    timed_out_calls: int = Field(
+        default=0,
+        description="Attempts the vendor was still writing when they were given up on. "
+        "They were generated and charged for; no usage block ever says how much, so they "
+        "are not in ``usd`` -- the amount is unknown, not nought.",
+    )
 
 
 class Expectation(BaseModel):
@@ -103,6 +109,7 @@ class JobCost(BaseModel):
     calls: int = 0
     unpriced_calls: int = 0
     subscription_calls: int = 0
+    timed_out_calls: int = 0
     by_role: list[Spend] = Field(default_factory=list)
     by_model: list[Spend] = Field(default_factory=list)
     by_phase: list[Spend] = Field(default_factory=list)
@@ -118,6 +125,7 @@ class ProjectCosts(BaseModel):
     expected_usd: float | None = None
     unpriced_calls: int = 0
     subscription_calls: int = 0
+    timed_out_calls: int = 0
     priced_models: int = Field(default=0, description="Models with a stored price.")
     reading: Spend | None = Field(
         default=None,
@@ -164,6 +172,9 @@ def on_a_subscription(entry: dict[str, Any]) -> bool:
 
 def _add(row: Spend, entry: dict[str, Any], lookup: Lookup) -> None:
     row.calls += 1
+    # counted whatever else this entry is: an attempt that timed out is spending that
+    # happened, and the entry it rides on may otherwise look like a perfectly normal call
+    row.timed_out_calls += int(entry.get("unreported_attempts") or 0)
     row.input_tokens += int(entry.get("input_tokens") or 0)
     row.output_tokens += int(entry.get("output_tokens") or 0)
     if on_a_subscription(entry):
@@ -296,6 +307,9 @@ def job_cost(
     on_plan = len(entries) - len(billed)
     costs = [call_cost(e, index) for e in billed]
     unpriced = sum(1 for c in costs if c is None)
+    # a plan pays a flat fee, so a timeout on one costs nothing extra; only a call billed
+    # by the token leaves money behind when it is given up on
+    timed_out = sum(int(e.get("unreported_attempts") or 0) for e in billed)
     wanted = expectations(job, profile, averages or {}, index, route)
     known = [e.usd for e in wanted if e.usd is not None]
     expected = round(sum(known), 6) if known else None
@@ -314,6 +328,7 @@ def job_cost(
         variance_usd=round(spent - expected, 6) if expected is not None else None,
         calls=len(entries),
         unpriced_calls=unpriced,
+        timed_out_calls=timed_out,
         subscription_calls=on_plan,
         by_role=_group(entries, "role", index),
         by_model=_group(entries, "model", index),
@@ -354,6 +369,10 @@ def project_costs(
         expected_usd=round(sum(known), 6) if known else None,
         unpriced_calls=sum(r.unpriced_calls for r in rows)
         + (reading.unpriced_calls if reading else 0),
+        # reading an attachment is a model call like any other, so it can be given up on
+        # part-written and charged for in the same way the developments can
+        timed_out_calls=sum(r.timed_out_calls for r in rows)
+        + (reading.timed_out_calls if reading else 0),
         subscription_calls=sum(r.subscription_calls for r in rows)
         + (reading.subscription_calls if reading else 0),
         priced_models=len(stored_prices or []),

@@ -751,6 +751,10 @@ export const TR: Record<string, string> = {
   "Pick the provider and model this agent works with. It runs there on every project, whatever the project profile says; if the provider cannot be reached the job fails with the reason.":
     "Bu ajanın çalışacağı sağlayıcıyı ve modeli seç. Proje profili ne derse desin her projede orada çalışır; sağlayıcıya ulaşılamazsa iş nedeniyle birlikte başarısız olur.",
   "pick a model…": "bir model seç…",
+  "{n} call(s) were given up on while the model was still writing. They were charged for, but no vendor reports the tokens of a call it never finished answering, so they are not in these totals.":
+    "{n} çağrı, model henüz yazıyorken bırakıldı. Bunlar faturalandı ama hiçbir sağlayıcı tamamlamadığı bir çağrının token’larını bildirmiyor, o yüzden bu toplamlarda yoklar.",
+  "timed out while writing: charged for, amount never reported":
+    "yazarken zaman aşımı: faturalandı, miktarı hiç bildirilmedi",
   "— not set —": "— belirlenmedi —",
   "the provider's default model": "sağlayıcının varsayılan modeli",
   "add a key under Settings → Models first": "önce Ayarlar → Modeller altında bir anahtar ekle",

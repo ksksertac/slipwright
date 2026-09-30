@@ -3148,9 +3148,14 @@ class Engine:
         # the tokens of the attempts before this one; None while no vendor has said any,
         # so "nothing known" never turns into "nothing spent" (see ``Spend.unpriced_calls``)
         burned: list[int] | None = None
+        # attempts that timed out: the vendor was writing when we stopped waiting, so
+        # those tokens exist and are charged for, and no usage block will ever arrive to
+        # say how many. Nothing else here can see them, so they are counted on their own.
+        unreported = 0
 
         def settle(result: RoleResult) -> RoleResult:
             """The call, priced over all its attempts."""
+            result.unreported_attempts = unreported
             if burned is None:
                 return result
             result.usage = Usage(input_tokens=burned[0], output_tokens=burned[1])
@@ -3163,6 +3168,12 @@ class Engine:
             attempt += 1
             result = run(job, provider=provider, timeout_s=self.timeout_s, **kw)
             result.attempts = attempt
+            if (
+                result.error is not None
+                and result.error.kind is InvokeErrorKind.TIMEOUT
+                and result.usage is None
+            ):
+                unreported += 1
             if result.usage is not None:
                 if burned is None:
                     burned = [0, 0]
@@ -3281,6 +3292,7 @@ class Engine:
                 "cost_usd": round(cost, 6) if cost is not None else None,
                 "ok": result.ok,
                 "error": result.error.kind.value if result.error else None,
+                "unreported_attempts": result.unreported_attempts or None,
                 "at": utcnow().isoformat(),
             }
         )

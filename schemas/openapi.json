@@ -2541,6 +2541,11 @@
             "title": "Subscription Calls",
             "type": "integer"
           },
+          "timed_out_calls": {
+            "default": 0,
+            "title": "Timed Out Calls",
+            "type": "integer"
+          },
           "unpriced_calls": {
             "default": 0,
             "title": "Unpriced Calls",
@@ -2571,6 +2576,7 @@
           "spent_usd",
           "state",
           "subscription_calls",
+          "timed_out_calls",
           "unpriced_calls",
           "variance_usd"
         ],
@@ -5158,6 +5164,11 @@
             "title": "Subscription Calls",
             "type": "integer"
           },
+          "timed_out_calls": {
+            "default": 0,
+            "title": "Timed Out Calls",
+            "type": "integer"
+          },
           "unpriced_calls": {
             "default": 0,
             "title": "Unpriced Calls",
@@ -5172,6 +5183,7 @@
           "reading",
           "spent_usd",
           "subscription_calls",
+          "timed_out_calls",
           "unpriced_calls"
         ],
         "title": "ProjectCosts",
@@ -6439,6 +6451,12 @@
             "title": "Subscription Calls",
             "type": "integer"
           },
+          "timed_out_calls": {
+            "default": 0,
+            "description": "Attempts the vendor was still writing when they were given up on. They were generated and charged for; no usage block ever says how much, so they are not in ``usd`` -- the amount is unknown, not nought.",
+            "title": "Timed Out Calls",
+            "type": "integer"
+          },
           "unpriced_calls": {
             "default": 0,
             "description": "Calls whose model had no stored price; not in ``usd``.",
@@ -6458,6 +6476,7 @@
           "label",
           "output_tokens",
           "subscription_calls",
+          "timed_out_calls",
           "unpriced_calls",
           "usd"
         ],
