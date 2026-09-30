@@ -129,6 +129,13 @@ def test_sse_endpoint_streams_store_events(client: TestClient, engine: Engine, r
 
 def test_sse_keepalive_and_unfiltered(client: TestClient, engine: Engine, repo: Path) -> None:
     def later() -> None:
+        # counted from the moment the stream is listening, not from the thread's start:
+        # on a busy runner connecting took most of the 0.3s, the event came first, and no
+        # keepalive had gone out yet. (The TestClient hands the response over only once it
+        # is complete, so the test itself cannot wait for ": connected".)
+        deadline = time.monotonic() + 5
+        while engine.events.subscriber_count() == 0 and time.monotonic() < deadline:
+            time.sleep(0.01)
         time.sleep(0.3)
         engine.create_project(Project(name="late", repo_path=repo))
 
