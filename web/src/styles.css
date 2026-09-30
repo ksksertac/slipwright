@@ -4154,6 +4154,35 @@ details.acc[open] .acc-chev {
   width: calc(100% - 24px);
   justify-content: center;
 }
+/* a newer release, offered under the version it would replace */
+.build-update .spinner {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: pulse 1.4s infinite;
+}
+.build-notes {
+  display: block;
+  margin: 6px 12px 0;
+  text-align: center;
+}
+.build-error {
+  margin: 6px 12px 0;
+  color: var(--bad-text);
+  overflow-wrap: anywhere;
+}
+.build-how {
+  margin: 6px 12px 0;
+  color: var(--text-2);
+}
+.build-how code {
+  display: block;
+  margin-top: 4px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
 
 /* ---------------------------------------------------------------------------------------
    An agent's page: the setup side by side, and the "what it does" tab

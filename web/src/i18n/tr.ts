@@ -77,6 +77,20 @@ export const TR: Record<string, string> = {
   "{day}.{month}": "{day}.{month}",
   "build {id}": "sürüm {id}",
   "New version — reload": "Yeni sürüm var — yenile",
+  "version {v} · build {id}": "sürüm {v} · derleme {id}",
+  "Install version {v}": "{v} sürümünü kur",
+  "Downloading version {v}…": "{v} sürümü indiriliyor…",
+  "Restarting on version {v}…": "{v} sürümüyle yeniden başlatılıyor…",
+  "What's new": "Neler yeni",
+  "The update failed: {error}": "Güncelleme olmadı: {error}",
+  "Install version {v}? The server restarts on it; projects, settings and history are kept.":
+    "{v} sürümü kurulsun mu? Sunucu bu sürümle yeniden başlar; projeler, ayarlar ve geçmiş olduğu gibi kalır.",
+  "{n} development(s) running now will carry on from the step they were on.":
+    "Şu an çalışan {n} geliştirme kaldığı adımdan devam edecek.",
+  "A copy of the database is taken first.": "Önce veritabanının bir kopyası alınır.",
+  "This server runs from source. Update it with:": "Bu sunucu kaynaktan çalışıyor. Şununla güncelle:",
+  "This server cannot reach Docker, so it cannot install by itself. Mount /var/run/docker.sock into its container, or run:":
+    "Bu sunucu Docker'a erişemiyor, kendi kendine kuramaz. Container'ına /var/run/docker.sock bağla ya da şunu çalıştır:",
   "{running} running · {waiting} waiting for approval · {done} done · {failed} failed · last activity {when}":
     "{running} çalışıyor · {waiting} onay bekliyor · {done} tamam · {failed} başarısız · son hareket {when}",
   "What came out of it": "Ne çıktı ortaya",

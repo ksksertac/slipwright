@@ -14,6 +14,7 @@ export type WorkList = Schemas["WorkList"];
 export type WorkGroup = Schemas["WorkGroup"];
 export type WorkItem = Schemas["WorkItem"];
 export type Version = Schemas["Version"];
+export type UpdateStatus = Schemas["UpdateStatus"];
 export type TwoFactorStatus = Schemas["TwoFactorStatus"];
 export type TwoFactorSetup = Schemas["TwoFactorSetup"];
 export type Board = Schemas["Board"];

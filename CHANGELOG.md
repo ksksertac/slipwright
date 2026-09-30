@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- A newer release is offered under the version in the corner, to whoever is using the
+  screen, and one press installs it: the server pulls it and restarts on it with every
+  volume, port and setting it had, and goes back to the old one if the new one does not
+  come up healthy. It needs the Docker socket; without it the button says what to run.
+
 ## 0.1.0
 
 The first release. A team of agents builds what you ask for, and a person approves at
