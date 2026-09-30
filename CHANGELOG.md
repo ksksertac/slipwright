@@ -1,11 +1,18 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
 
-- A newer release is offered under the version in the corner, to whoever is using the
-  screen, and one press installs it: the server pulls it and restarts on it with every
-  volume, port and setting it had, and goes back to the old one if the new one does not
-  come up healthy. It needs the Docker socket; without it the button says what to run.
+- **Updating from the page.** A newer release is offered under the version in the
+  corner, to whoever is using the screen; a dialog says what it changes, and **Update
+  now** installs it: the server pulls it and restarts on it with every volume, port and
+  setting it had, and goes back to the old one if the new one does not come up healthy.
+  It needs the Docker socket; without it the dialog says what to run.
+- A running development can be stopped from its lane, open or closed.
+- A build command that can never succeed -- `npm ci` with no lock file -- stops the
+  development and says why, instead of failing the same way three times.
+- A vendor with no model chosen stops rather than being sent a Claude model's name.
+- A short model list is a dropdown again, so a ChatGPT plan's single model is visible.
+- The ChatGPT sign-in card notices the approval given on OpenAI's page without a reload.
 
 ## 0.1.0
 
