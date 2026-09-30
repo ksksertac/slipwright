@@ -322,6 +322,7 @@ function GatePanel({ job }: { job: Job }) {
         </div>
       );
     }
+    if (job.state === "awaiting_builder") return <BuilderWait job={job} />;
     return null;
   }
   return (
@@ -459,6 +460,33 @@ function ArchitectureGate({ job }: { job: Job }) {
 
 /** The job stopped mid-step (a loop, or the supervisor asked): continue, or send
  * feedback that reaches the role that continues. */
+/** Not a gate: nobody approves a Mac into existence. It says which apps wait and where to
+ *  lend a machine that builds them; one connecting carries the development on by itself. */
+function BuilderWait({ job }: { job: Job }) {
+  const tx = useT();
+  const navigate = useNavigate();
+  const apps = job.data.waiting_platforms
+    .map((p) => (p === "ios" ? "iOS" : p === "android" ? "Android" : p))
+    .join(" / ");
+  return (
+    <div className="callout notice" style={{ display: "block" }}>
+      <div className="row spread">
+        <span>
+          <strong>{tx("Waiting for a Mac: {apps}", { apps })}</strong>
+        </span>
+        <button className="btn primary small" onClick={() => navigate("/settings/workers")}>
+          {tx("Connect a Mac")}
+        </button>
+      </div>
+      <div className="small muted" style={{ marginTop: 6 }}>
+        {tx(
+          "Everything this server can build is done. The rest is built on a Mac; when one connects, the development carries on by itself from here.",
+        )}
+      </div>
+    </div>
+  );
+}
+
 function DecisionGate({ job }: { job: Job }) {
   const tx = useT();
   const stop = [...job.history].reverse().find((t) => t.to_state === "awaiting_decision");

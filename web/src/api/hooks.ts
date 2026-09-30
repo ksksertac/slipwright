@@ -47,6 +47,8 @@ import {
   type SourceRepo,
   type SourceSettings,
   type SourceSettingsIn,
+  type Worker,
+  type ConnectionCode,
   type Overview,
   type WorkList,
   type Profile,
@@ -107,6 +109,7 @@ export const keys = {
   testRunOutput: (id: string) => ["test-runs", id, "output"] as const,
   github: ["settings", "github"] as const,
   sources: ["settings", "sources"] as const,
+  workers: ["settings", "workers"] as const,
   sourceRepos: (name: string) => ["settings", "sources", name, "repos"] as const,
   githubRepos: ["settings", "github", "repos"] as const,
   jira: ["settings", "jira"] as const,
@@ -1325,5 +1328,33 @@ export function useUnlink() {
     mutationFn: ({ channel, userId }: { channel: ChannelName; userId?: string }) =>
       api.delete<void>(`/api/notify/links/${channel}${userId ? `/${userId}` : ""}`),
     onSuccess: () => void qc.invalidateQueries({ queryKey: keys.notify }),
+  });
+}
+
+// -- the Macs this account lends its developments (T14.5) ------------------------------
+
+/** The paired Macs. Polled, because "online" is the point of the list: a Mac asleep is
+ *  why a development is still waiting. */
+export function useWorkers() {
+  return useQuery({
+    queryKey: keys.workers,
+    queryFn: () => api.get<Worker[]>("/api/workers"),
+    refetchInterval: 5_000,
+  });
+}
+
+/** A fresh connection code. ``address`` is the server as the Mac should call it: the page's
+ *  own address unless the person typed one, because the page may be open at localhost. */
+export function useConnectionCode() {
+  return useMutation({
+    mutationFn: (address: string) => api.post<ConnectionCode>("/api/workers/code", { address }),
+  });
+}
+
+export function useRevokeWorker() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete<void>(`/api/workers/${id}`),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: keys.workers }),
   });
 }

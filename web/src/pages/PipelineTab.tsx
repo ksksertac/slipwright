@@ -638,7 +638,22 @@ function StepPanel({
                 {tx("open development →")}
               </Link>
             </div>
-            {step.status === "waiting" && <GateEditor job={job.data} step={step} />}
+            {/* waiting for a Mac asks nobody to approve anything: it says where to lend one */}
+            {step.status === "waiting" && step.key === "builder_gate" && (
+              <div className="gate" style={{ marginBottom: 12 }}>
+                <div className="muted small" style={{ marginBottom: 8 }}>
+                  {tx(
+                    "Everything this server can build is done. The rest is built on a Mac; when one connects, the development carries on by itself from here.",
+                  )}
+                </div>
+                <Link className="btn primary small" to="/settings/workers">
+                  {tx("Connect a Mac")}
+                </Link>
+              </div>
+            )}
+            {step.status === "waiting" && step.key !== "builder_gate" && (
+              <GateEditor job={job.data} step={step} />
+            )}
             {/* the screens are worth seeing after they are signed off too */}
             {step.key === "design" && <DesignGate jobId={jobId} readOnly />}
             {step.status === "failed" && (
