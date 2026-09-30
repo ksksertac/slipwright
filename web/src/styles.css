@@ -2085,8 +2085,7 @@ button.linkish:hover {
      the page a direction without putting anything behind the card that competes with it */
   background:
     radial-gradient(900px 520px at 12% -8%, rgb(var(--glow) / 0.22), transparent 70%),
-    radial-gradient(700px 460px at 95% 105%, rgb(var(--glow-2) / 0.16), transparent 70%),
-    var(--bg);
+    radial-gradient(700px 460px at 95% 105%, rgb(var(--glow-2) / 0.16), transparent 70%), var(--bg);
   padding: 24px 16px;
   --glow: 42 120 214;
   --glow-2: 124 92 230;
@@ -2966,8 +2965,8 @@ table.mini .num {
 }
 .lane-head {
   display: flex;
-  align-items: flex-start;
-  gap: 12px;
+  align-items: center;
+  gap: 16px;
   cursor: pointer; /* the whole head folds and unfolds the lane */
 }
 .lane-title {
@@ -2983,7 +2982,7 @@ table.mini .num {
 .lane-head input[type="checkbox"] {
   width: 16px;
   height: 16px;
-  margin-top: 3px;
+  margin: 0;
   accent-color: var(--accent);
 }
 .lane-id {
@@ -3007,13 +3006,28 @@ table.mini .num {
   flex-wrap: wrap;
   margin-top: 6px;
 }
+/* The right-hand block: progress, a hairline, then the controls. Everything in it shares
+   one centre line, so the count, the bar and the buttons read as a row, not a stack of
+   three shapes at three heights. */
+.lane-side {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 0 0 auto;
+  margin-left: auto; /* stays at the right end when the head wraps on a narrow screen */
+}
 .lane-progress {
-  flex: 0 0 168px;
+  width: 150px;
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  align-items: flex-end;
-  padding-top: 3px;
+  gap: 6px;
+}
+.lane-count {
+  font-size: 11.5px;
+  color: var(--text-3);
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 .lane-progress .progress {
   width: 100%;
@@ -3022,35 +3036,85 @@ table.mini .num {
 .lane-progress .row {
   width: 100%;
 }
-
-/* closed is the resting state, so a lane is one line high: the title, where it got to, the
-   bar, and the word that opens it. "Detail" sits at the right end of the head, aligned with
-   the bar above it, and turns its chevron down when the lane is open. */
-.lane-toggle {
+.lane-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 16px;
+  border-left: 1px solid var(--line);
+}
+/* Retry and replan are the page's ordinary buttons; in the head they take the lane's
+   measure, so a failed lane lines up as neatly as a running one */
+.lane-actions .btn {
+  height: 30px;
+  padding: 0 11px;
+  font-size: 12.5px;
+  border-radius: var(--radius-sm);
+}
+.lane-actions-item,
+.lane-confirm {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  flex: 0 0 auto;
-  align-self: center;
-  margin-left: auto; /* stays at the right end when the head wraps on a narrow screen */
-  padding: 5px 8px 5px 10px;
+  gap: 8px;
+}
+
+/* The lane's own buttons: one height, one shape, so Stop and Details are a pair. Stop is
+   quiet until pointed at -- it is there for when it is wanted, not to be pressed. */
+.lane-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 11px;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   background: var(--surface-2);
   font: inherit;
   font-size: 12.5px;
   font-weight: 550;
+  line-height: 1;
   color: var(--text-2);
   cursor: pointer;
   white-space: nowrap;
+  transition:
+    color 0.12s ease,
+    border-color 0.12s ease,
+    background 0.12s ease;
 }
-.lane-toggle:hover {
+.lane-btn:hover {
   color: var(--text);
   border-color: var(--line-strong);
 }
-.lane-toggle svg {
+.lane-btn svg {
   width: 14px;
   height: 14px;
+  flex: 0 0 auto;
+}
+.lane-stop svg {
+  width: 12px;
+  height: 12px;
+}
+.lane-stop:hover {
+  color: var(--bad-text);
+  border-color: var(--bad);
+  background: var(--bad-soft);
+}
+.lane-btn.danger {
+  color: var(--bad-text);
+  border-color: var(--bad);
+  background: var(--bad-soft);
+}
+.lane-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* closed is the resting state, so a lane is one line high: the title, where it got to, the
+   bar, and the word that opens it. "Details" turns its chevron down when the lane is open. */
+.lane-toggle {
+  padding-right: 8px;
+}
+.lane-toggle svg {
   transition: transform 0.15s ease;
 }
 .lane.open .lane-toggle {
@@ -3534,9 +3598,13 @@ table.mini .num {
   .lane-head {
     flex-wrap: wrap;
   }
-  .lane-progress {
+  .lane-side {
     flex: 1 1 100%;
-    align-items: stretch;
+    justify-content: space-between;
+  }
+  .lane-progress {
+    flex: 1 1 auto;
+    width: auto;
   }
   .flow-node {
     flex-basis: 100%;
@@ -5569,7 +5637,9 @@ tr.run-detail td {
 .wizard-rail li.on .onboarding-mark {
   background: var(--accent);
   color: #fff;
-  box-shadow: 0 0 0 3px var(--surface), 0 0 0 5px var(--accent);
+  box-shadow:
+    0 0 0 3px var(--surface),
+    0 0 0 5px var(--accent);
 }
 .wizard-body {
   text-align: center;

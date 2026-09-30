@@ -12,6 +12,7 @@ import {
   useSkipTests,
 } from "../api/hooks";
 import { isOwner, mayActAt } from "../api/gates";
+import { IconStop } from "./icons";
 import { Modal } from "./Modal";
 import { useT } from "../i18n";
 import { useSay } from "../i18n/said";
@@ -52,13 +53,51 @@ export function failureOf(job: Job) {
  *  "this is not worth what it is spending", which can be true mid-phase or at a gate
  *  nobody is going to answer. Whatever call is in flight finishes -- it is already paid
  *  for -- and nothing further starts. The owner's, like retry and replan. */
-export function StopAction({ job, compact = false }: { job: Job; compact?: boolean }) {
+export function StopAction({
+  job,
+  compact = false,
+  lane = false,
+}: {
+  job: Job;
+  compact?: boolean;
+  /** drawn in a lane's head, as the twin of the Details button beside it */
+  lane?: boolean;
+}) {
   const tx = useT();
   const stop = useCancelJob(job.id);
   const team = useMyTeam();
   const [sure, setSure] = useState(false);
   const running = !hasFinished(job.state);
   if (!running || !isOwner(team.data)) return null;
+  if (lane) {
+    return sure ? (
+      <span className="lane-confirm">
+        <button
+          type="button"
+          className="lane-btn danger"
+          disabled={stop.isPending}
+          onClick={() => stop.mutate(undefined, { onSettled: () => setSure(false) })}
+        >
+          <IconStop />
+          {stop.isPending ? tx("Stopping…") : tx("Yes, stop it")}
+        </button>
+        <button type="button" className="lane-btn" onClick={() => setSure(false)}>
+          {tx("Cancel")}
+        </button>
+        {stop.error && <span className="error small">{describeError(stop.error)}</span>}
+      </span>
+    ) : (
+      <button
+        type="button"
+        className="lane-btn lane-stop"
+        onClick={() => setSure(true)}
+        title={tx("stop this development; what it has built stays")}
+      >
+        <IconStop />
+        {tx("Stop")}
+      </button>
+    );
+  }
   if (!sure) {
     return (
       <button

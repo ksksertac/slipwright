@@ -54,7 +54,17 @@ import {
 } from "../components/stages";
 import { StepDetailView } from "../components/StepDetail";
 import { useToast } from "../components/Toast";
-import { Empty, ErrorBox, hasFinished, Loading, Pager, ProgressBar, sentence, StateBadge, timeAgo } from "../components/ui";
+import {
+  Empty,
+  ErrorBox,
+  hasFinished,
+  Loading,
+  Pager,
+  ProgressBar,
+  sentence,
+  StateBadge,
+  timeAgo,
+} from "../components/ui";
 import { useT, type T } from "../i18n";
 import { useSay } from "../i18n/said";
 import { JobDetail } from "./JobPage";
@@ -256,33 +266,39 @@ function LaneRow({
             </span>
           </div>
         </div>
-        <div className="lane-progress">
-          <ProgressBar done={done} total={lane.steps.length} showText={false} />
-          <span className="faint tiny">
-            {tx("{done} of {total} steps", { done, total: lane.steps.length })}
-          </span>
+        {/* one block on the right, centred on the title's two lines: how far along, then
+            the controls as a matched pair -- they used to be three shapes at three heights */}
+        <div className="lane-side">
+          <div className="lane-progress">
+            <span className="lane-count">
+              {tx("{done} of {total} steps", { done, total: lane.steps.length })}
+            </span>
+            <ProgressBar done={done} total={lane.steps.length} showText={false} />
+          </div>
+          <div className="lane-actions">
+            {/* the failure is spelled out inside the detail, so the shortcut is for the
+                closed lane, where nothing else offers it */}
+            {lane.state === "failed" && !open && (
+              <span onClick={stop} className="lane-actions-item">
+                <LaneRetry jobId={lane.job_id} />
+              </span>
+            )}
+            {/* Retry hides when the lane is open because the failure and its buttons are
+                spelled out inside. Stopping has no such twin: nothing in the detail offers
+                it, so hiding it there left the open lane -- the one somebody watching a
+                development spend is looking at -- with no way to stop it at all. */}
+            {!hasFinished(lane.state) && (
+              <span onClick={stop} className="lane-actions-item">
+                <LaneStop jobId={lane.job_id} />
+              </span>
+            )}
+            {/* the button is what a keyboard reaches; the click on the head is the mouse's */}
+            <button type="button" className="lane-btn lane-toggle" aria-expanded={open}>
+              {tx("Details")}
+              <IconChevron />
+            </button>
+          </div>
         </div>
-        {/* the failure is spelled out inside the detail, so the shortcut is for the
-            closed lane, where nothing else offers it */}
-        {lane.state === "failed" && !open && (
-          <span onClick={stop}>
-            <LaneRetry jobId={lane.job_id} />
-          </span>
-        )}
-        {/* Retry hides when the lane is open because the failure and its buttons are
-            spelled out inside. Stopping has no such twin: nothing in the detail offers
-            it, so hiding it there left the open lane -- the one somebody watching a
-            development spend is looking at -- with no way to stop it at all. */}
-        {!hasFinished(lane.state) && (
-          <span onClick={stop}>
-            <LaneStop jobId={lane.job_id} />
-          </span>
-        )}
-        {/* the button is what a keyboard reaches; the click on the head is the mouse's */}
-        <button type="button" className="lane-toggle" aria-expanded={open}>
-          {tx("Details")}
-          <IconChevron />
-        </button>
       </div>
 
       {open && (
@@ -463,7 +479,7 @@ function LaneRetry({ jobId }: { jobId: string }) {
 
 function LaneStop({ jobId }: { jobId: string }) {
   const job = useJob(jobId);
-  return job.data ? <StopAction job={job.data} compact /> : null;
+  return job.data ? <StopAction job={job.data} lane /> : null;
 }
 
 /** Card labels come from the server in English; the fixed ones translate, a phase
