@@ -29,7 +29,7 @@ import {
   StatusBadge,
   StatusDot,
   formatTime,
-  sentence,
+  nameOf,
   timeAgo,
 } from "../components/ui";
 import { PipelineTab } from "./PipelineTab";
@@ -201,7 +201,7 @@ function OverviewTab({ projectId }: { projectId: string }) {
               <div className="row spread">
                 <div>
                   <Link to={`/projects/${projectId}/jobs/${row.job_id}`}>
-                    <strong>{sentence(row.request)}</strong>
+                    <strong>{nameOf(row)}</strong>
                   </Link>{" "}
                   <span className="muted small">· {row.pending_approval}</span>
                 </div>
@@ -223,9 +223,7 @@ function OverviewTab({ projectId }: { projectId: string }) {
               {running.map((row) => (
                 <tr key={row.job_id}>
                   <td>
-                    <Link to={`/projects/${projectId}/jobs/${row.job_id}`}>
-                      {sentence(row.request)}
-                    </Link>
+                    <Link to={`/projects/${projectId}/jobs/${row.job_id}`}>{nameOf(row)}</Link>
                   </td>
                   <td>
                     <StateBadge state={row.state} />
@@ -279,7 +277,7 @@ function BoardTab({ projectId }: { projectId: string }) {
               <span className="title">
                 {say(epic.title)}{" "}
                 <Link className="muted small" to={`/projects/${projectId}/jobs/${epic.job_id}`}>
-                  · {epic.job_request}
+                  · {epic.job_title || epic.job_request}
                 </Link>
               </span>
               <JiraLink issueKey={epic.jira_key} />
@@ -344,6 +342,7 @@ function DevelopmentsTab({ projectId }: { projectId: string }) {
   const jobs = useProjectJobs(projectId);
   const start = useStartJob(projectId);
   const navigate = useNavigate();
+  const [title, setTitle] = useState("");
   const [request, setRequest] = useState("");
   const [drafts, setDrafts] = useState<Attachment[]>([]);
   // starting a development is the owner's; a member reads the list and waits for a gate
@@ -356,9 +355,10 @@ function DevelopmentsTab({ projectId }: { projectId: string }) {
   const submit = (e: FormEvent) => {
     e.preventDefault();
     start.mutate(
-      { request: request.trim(), attachments: drafts.map((d) => d.id) },
+      { title: title.trim(), request: request.trim(), attachments: drafts.map((d) => d.id) },
       {
         onSuccess: () => {
+          setTitle("");
           setRequest("");
           setDrafts([]);
           void jobs.refetch();
@@ -377,15 +377,35 @@ function DevelopmentsTab({ projectId }: { projectId: string }) {
               "Describe what you want. The Product Owner turns it into epics, stories and tasks, the Architect designs how to build and test it, and you approve each step.",
             )}
           </p>
-          <textarea
-            value={request}
-            onChange={(e) => setRequest(e.target.value)}
-            placeholder={tx("e.g. Add a /health endpoint that reports the database status")}
-          />
+          {/* the name it is listed by everywhere; the description below is what the
+              agents work from, and may run as long as it needs to */}
+          <div className="field">
+            <label htmlFor="dev-title">{tx("Short name")}</label>
+            <input
+              id="dev-title"
+              type="text"
+              value={title}
+              maxLength={80}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder={tx("e.g. Health endpoint")}
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="dev-request">{tx("Description")}</label>
+            <textarea
+              id="dev-request"
+              value={request}
+              onChange={(e) => setRequest(e.target.value)}
+              placeholder={tx("e.g. Add a /health endpoint that reports the database status")}
+            />
+          </div>
           <DraftFiles projectId={projectId} drafts={drafts} onChange={setDrafts} />
           {start.error && <div className="error">{describeError(start.error)}</div>}
           <div className="row" style={{ marginTop: 8 }}>
-            <button className="btn primary" disabled={!request.trim() || start.isPending}>
+            <button
+              className="btn primary"
+              disabled={!title.trim() || !request.trim() || start.isPending}
+            >
               <IconPlus /> {start.isPending ? tx("Working it out…") : tx("Plan it")}
             </button>
             <span className="faint small">
@@ -429,7 +449,7 @@ function DevelopmentsTab({ projectId }: { projectId: string }) {
           <table>
             <thead>
               <tr>
-                <th>{tx("Request")}</th>
+                <th>{tx("Development")}</th>
                 <th>{tx("State")}</th>
                 <th>{tx("Started")}</th>
                 <th>{tx("Last activity")}</th>
@@ -459,7 +479,7 @@ function JobRow({ job, projectId }: { job: Job; projectId: string }) {
   return (
     <tr>
       <td>
-        <Link to={`/projects/${projectId}/jobs/${job.id}`}>{sentence(job.request)}</Link>
+        <Link to={`/projects/${projectId}/jobs/${job.id}`}>{nameOf(job)}</Link>
         <div className="faint tiny mono">{job.id}</div>
       </td>
       <td>
@@ -492,7 +512,7 @@ function JobRow({ job, projectId }: { job: Job; projectId: string }) {
             title={tx("Delete development")}
             body={
               <>
-                {tx("Delete")} <strong>{job.request}</strong>
+                {tx("Delete")} <strong>{nameOf(job)}</strong>
                 {tx(
                   "? Its worktree, branch, history and test runs are removed. A pull request already opened stays on GitHub.",
                 )}

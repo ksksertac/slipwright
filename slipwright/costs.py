@@ -100,6 +100,7 @@ class JobCost(BaseModel):
 
     job_id: str
     request: str
+    title: str = ""  # what the row is labelled with
     state: JobState
     spent_usd: float = 0.0
     expected_usd: float | None = None
@@ -321,6 +322,7 @@ def job_cost(
     return JobCost(
         job_id=job.id,
         request=job.request,
+        title=job.title,
         state=job.state,
         spent_usd=spent,
         expected_usd=expected,

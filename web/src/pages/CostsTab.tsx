@@ -9,7 +9,7 @@ import { Link } from "react-router-dom";
 import type { JobCost, Spend } from "../api/client";
 import { useCosts } from "../api/hooks";
 import { AgentIcon, ROLE_LABEL } from "../components/agents";
-import { Empty, ErrorBox, Loading, StateBadge, sentence } from "../components/ui";
+import { Empty, ErrorBox, Loading, StateBadge, nameOf } from "../components/ui";
 import { useT, type T } from "../i18n";
 
 /** Dollars, at the precision the number deserves: cents are noise above a dollar, and a
@@ -37,8 +37,7 @@ export function CostsTab({ projectId }: { projectId: string }) {
     subscription_calls,
     timed_out_calls,
     priced_models,
-  } =
-    costs.data;
+  } = costs.data;
 
   if (priced_models === 0) {
     return (
@@ -122,7 +121,7 @@ function JobRow({ job, projectId }: { job: JobCost; projectId: string }) {
     <section className="card cost-job">
       <button type="button" className="cost-job-head" onClick={() => setOpen(!open)}>
         <span className="cost-job-id">
-          <span className="truncate">{sentence(job.request)}</span>
+          <span className="truncate">{nameOf(job)}</span>
           <StateBadge state={job.state} />
         </span>
         <span className="cost-job-money">

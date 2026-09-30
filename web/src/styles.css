@@ -5003,6 +5003,39 @@ tr.run-detail td {
   margin: 0;
   font-size: 22px;
 }
+/* the development's name is the page's title, and renamed where it stands: the pencil
+   stays faint until the heading is pointed at, so it does not compete with the name */
+.job-name {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.job-rename {
+  width: 28px;
+  height: 28px;
+  opacity: 0.35;
+  transition: opacity 0.12s ease;
+}
+.job-rename svg {
+  width: 16px;
+  height: 16px;
+}
+.job-name:hover .job-rename,
+.job-rename:focus-visible {
+  opacity: 1;
+}
+.job-name-edit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.job-name-edit input {
+  min-width: 280px;
+  font-size: 18px;
+  font-weight: 600;
+}
 .job-ask {
   padding: 12px 14px;
   border: 1px solid var(--line);

@@ -11,6 +11,8 @@ import {
   useSendMessage,
   usePipeline,
   useSetTestCases,
+  useMyTeam,
+  useRenameJob,
 } from "../api/hooks";
 import { api } from "../api/client";
 import { ActivityRow } from "../components/ActivityRow";
@@ -31,14 +33,23 @@ import {
   failureOf,
   pendingApproval,
 } from "../components/GateActions";
-import { IconExternal, IconLayers, IconTrash } from "../components/icons";
+import { IconEdit, IconExternal, IconLayers, IconTrash } from "../components/icons";
+import { isOwner } from "../api/gates";
 import { JiraLink } from "../components/JiraLink";
 import { ConfirmModal } from "../components/Modal";
 import { DeploymentGate } from "../components/DeploymentGate";
 import { ProfileForm } from "../components/ProfileForm";
 import { StackPanel } from "../components/StackPanel";
 import { useToast } from "../components/Toast";
-import { Empty, ErrorBox, formatTime, hasFinished, Loading, StateBadge } from "../components/ui";
+import {
+  Empty,
+  ErrorBox,
+  formatTime,
+  hasFinished,
+  Loading,
+  nameOf,
+  StateBadge,
+} from "../components/ui";
 import { sentenceCase, useT } from "../i18n";
 import { SayProvider, useSay } from "../i18n/said";
 import { Copyable } from "../components/Copyable";
@@ -62,7 +73,7 @@ export function JobPage() {
           items={[
             { label: "Projects", to: "/projects" },
             { label: sentenceCase(project.data?.name ?? "project"), to: `/projects/${projectId}` },
-            { label: "Development" },
+            { label: nameOf(j) },
           ]}
         />
         <JobHead job={j} projectId={projectId} />
@@ -70,6 +81,65 @@ export function JobPage() {
         <JobDetail job={j} projectId={projectId} />
       </div>
     </SayProvider>
+  );
+}
+
+/** The development's name as the page's title, renamed where it stands. The owner's, like
+ * everything else that changes a development; the request under it is not editable here,
+ * because it is what the agents were briefed with. */
+function JobName({ job }: { job: Job }) {
+  const tx = useT();
+  const rename = useRenameJob(job.id);
+  const owner = isOwner(useMyTeam().data);
+  const [draft, setDraft] = useState<string | null>(null);
+  if (draft === null) {
+    return (
+      <h1 className="job-name">
+        {nameOf(job)}
+        {owner && (
+          <button
+            type="button"
+            className="btn ghost icon job-rename"
+            title={tx("Rename")}
+            aria-label={tx("Rename")}
+            onClick={() => setDraft(job.title ?? "")}
+          >
+            <IconEdit />
+          </button>
+        )}
+      </h1>
+    );
+  }
+  const save = () => {
+    const name = draft.trim();
+    if (!name || name === job.title) return setDraft(null);
+    rename.mutate(name, { onSuccess: () => setDraft(null) });
+  };
+  return (
+    <form
+      className="job-name-edit"
+      onSubmit={(e) => {
+        e.preventDefault();
+        save();
+      }}
+    >
+      <input
+        type="text"
+        autoFocus
+        value={draft}
+        maxLength={80}
+        aria-label={tx("Short name")}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => e.key === "Escape" && setDraft(null)}
+      />
+      <button className="btn primary small" disabled={!draft.trim() || rename.isPending}>
+        {tx("Save")}
+      </button>
+      <button type="button" className="btn small" onClick={() => setDraft(null)}>
+        {tx("Cancel")}
+      </button>
+      {rename.error && <span className="error small">{describeError(rename.error)}</span>}
+    </form>
   );
 }
 
@@ -84,7 +154,7 @@ function JobHead({ job, projectId }: { job: Job; projectId: string }) {
     <header className="job-head">
       <div className="job-head-top">
         <div className="job-head-id">
-          <h1>{tx("Development")}</h1>
+          <JobName job={job} />
           <StateBadge state={job.state} />
         </div>
         <div className="row" style={{ flexWrap: "nowrap" }}>
@@ -113,7 +183,9 @@ function JobHead({ job, projectId }: { job: Job; projectId: string }) {
         </div>
         <div>
           <dt>{tx("Branch")}</dt>
-          <dd className="mono">slipwright/{job.id}</dd>
+          {/* the name git has, as Job.branch gives it: the page once printed a pattern
+              every branch had long since stopped following */}
+          <dd className="mono">{job.data.branch_name || `slipwright/${job.id}`}</dd>
         </div>
         {job.port !== null && job.port !== undefined && (
           <div>
@@ -270,7 +342,7 @@ function DeleteJobButton({ job, projectId }: { job: Job; projectId: string }) {
           title={tx("Delete development")}
           body={
             <>
-              {tx("Delete")} <strong>{job.request}</strong>
+              {tx("Delete")} <strong>{nameOf(job)}</strong>
               {tx(
                 "? Its worktree, branch, history and test runs are removed. A pull request already opened stays on GitHub.",
               )}
@@ -995,6 +1067,7 @@ function History({ job, projectId }: { job: Job; projectId: string }) {
         .map((t, index) => ({
           job_id: job.id,
           job_request: job.request,
+          job_title: job.title,
           project_id: job.project_id,
           index,
           at: t.at,

@@ -162,7 +162,7 @@ class JiraSync:
             return
         sprint = self.client.active_sprint(board)
         if sprint is None and mode == "create":
-            sprint = self.client.create_sprint(board, f"Slipwright: {job.request[:60]}")
+            sprint = self.client.create_sprint(board, f"Slipwright: {job.title[:60]}")
             report.note(f"started sprint {sprint.get('name')} (#{sprint['id']})")
         if sprint is None:
             job.data.jira_sprint_id = 0

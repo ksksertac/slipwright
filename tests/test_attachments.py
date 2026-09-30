@@ -431,6 +431,7 @@ def test_a_database_written_before_attachments_upgrades_into_one(tmp_path: Path)
         metadata.create_all(db.engine)
         with db.begin() as conn:
             conn.execute(text("DROP TABLE attachments"))
+            conn.execute(text("ALTER TABLE jobs DROP COLUMN title"))  # (0011: job title)
         command.stamp(_config(db), "0009_two_factor")
 
         migrate(db)

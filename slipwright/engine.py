@@ -111,6 +111,7 @@ from slipwright.schemas.brief import (
 )
 from slipwright.schemas.job import (
     APPROVAL_STATES,
+    TITLE_MAX,
     ChangedFile,
     Commit,
     Job,
@@ -118,6 +119,7 @@ from slipwright.schemas.job import (
     JobResult,
     JobState,
     branch_name,
+    headline,
     new_job_id,
     utcnow,
 )
@@ -1591,13 +1593,19 @@ class Engine:
         return out
 
     def create_job(
-        self, request: str, repo_path: Path | None = None, *, project_id: str | None = None
+        self,
+        request: str,
+        repo_path: Path | None = None,
+        *,
+        project_id: str | None = None,
+        title: str = "",
     ) -> Job:
         """Create a job inside a project.
 
         With ``project_id`` the job uses that project's checkout. With only ``repo_path``
         the repository's project is looked up, or created on the spot, so callers that
-        predate projects keep working.
+        predate projects keep working. ``title`` is the short name it is shown by; without
+        one (a chat message, the CLI) it is named after the request's first sentence.
         """
         project: Project | None
         if project_id is not None:
@@ -1616,9 +1624,11 @@ class Engine:
         # the id is minted here rather than by the default factory: the branch is named
         # after it, and the two have to be the same id
         job_id = new_job_id()
+        name = title.strip() or headline(request)
         return self.store.create(
             Job(
                 id=job_id,
+                title=name,
                 project_id=project.id,
                 # the job inherits the project's owner: it decides who may see it and,
                 # once it runs, whose model keys pay for it
@@ -1628,7 +1638,9 @@ class Engine:
                 data=JobData(
                     language=project.language,
                     plan_gate=project.plan_gate,
-                    branch_name=branch_name(project.name, request, job_id),
+                    # after the name a person gave it, which says what it is in far fewer
+                    # words than the request's opening does
+                    branch_name=branch_name(project.name, name, job_id),
                     # the approved brief only: half-written analysis items never reach an agent
                     brief=brief.context() if brief.ready else [],
                 ),
@@ -2383,6 +2395,7 @@ class Engine:
                         "job_id": job.id,
                         "project_id": job.project_id,
                         "request": job.request,
+                        "title": job.title,
                         "gate": gate,
                         "confidence": record.get("confidence"),
                         "reasons": record.get("reasons", []),
@@ -2724,9 +2737,23 @@ class Engine:
             project = self.store.get_project(project_id)
             if not project.pending_request.strip() or not self.store.get_brief(project_id).ready:
                 return None
-            job = self.create_job(project.pending_request, project_id=project_id)
-            self.store.update_project(project.model_copy(update={"pending_request": ""}))
+            job = self.create_job(
+                project.pending_request, project_id=project_id, title=project.pending_title
+            )
+            self.store.update_project(
+                project.model_copy(update={"pending_request": "", "pending_title": ""})
+            )
             return job
+
+    def rename_job(self, job: Job, title: str) -> Job:
+        """Give a development another name. Only the name: the request is the agents'
+        brief and stays as it was asked, and the branch keeps the name git already has
+        (``Job.branch``) -- an open pull request cannot move to another one."""
+        name = title.strip()
+        if not name:
+            raise ValueError("a development needs a name")
+        job.title = name[:TITLE_MAX]
+        return self.store.save(job)
 
     # -- test runs -----------------------------------------------------------------------
 
@@ -2749,7 +2776,7 @@ class Engine:
                 raise ValueError(f"job {job_id} does not belong to project {project_id}")
             profile = job.profile or self.project_profile(project)
             cwd = job.worktree_path
-            note = f"job {job.id}: {job.request}"
+            note = f"job {job.id}: {job.title}"
         else:
             profile = self.project_profile(project)
             cwd = project.repo_path
@@ -2959,7 +2986,7 @@ class Engine:
             letter = failed_letter(
                 lang,
                 link=f"{root}{path}",
-                request=job.request,
+                request=job.title,
                 project=project,
                 error=(error or "")[:600],
                 name=user.username,
