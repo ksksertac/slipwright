@@ -1218,6 +1218,51 @@ nobody agreed to sent the same specialist round the same loop until the attempts
 > spent, the diagnosis reaching the specialist's next prompt, the refused correction that
 > reached outside the tests, and the two-rewrite bound.
 
+## Phase 13 — Attachments: what the person already has written down or drawn
+
+Somebody starting a project has a requirements document; somebody asking for a feature
+has a PDF of the screens it should have. Typing that into a text box loses most of it.
+They attach the file instead, it is read once, and the agents work from what it says.
+
+### T13.1 — A file is kept, owned and refused like everything else
+**Done when**
+- [x] `attachments` (alembic `0010_attachments`) holds the file itself, so it moves with
+  `slipwright db copy` and never sits where a project's build command could reach it
+- [x] A file is judged by its bytes, not its name: PDF, Word (.docx), PNG/JPEG/GIF/WebP and
+  UTF-8 text are taken; SVG, HTML and archives are refused (415)
+- [x] At most 50 MB a file (413) and 50 files a project, drafts included (409); files count
+  toward the account's disk quota and one that would pass it is refused (429)
+- [x] Somebody else's file is not found; the example project takes none (409); a file goes
+  with its project or its development
+- [x] Downloaded as `application/octet-stream`, never rendered in the page's origin -- a
+  plain picture alone may be shown, and then in a CSP sandbox
+
+### T13.2 — It is read once, and the agents read the reading
+**Done when**
+- [x] The text of a PDF, a Word document or a text file is taken out at upload
+- [x] The Product Owner's model reads each file once, on its owner's keys, and is *shown*
+  pictures -- the image, or the first pages of a PDF drawn -- rather than told about them
+  (`ModelRequest.images`: image blocks for Anthropic, data URLs for the OpenAI protocol,
+  `--image` files for the Codex CLI)
+- [x] A model that cannot see is asked again with the text alone, and the reading says so
+- [x] A project's files reach its brief (analysis and intake) and every development; a
+  file chosen on the new-development form reaches that development alone
+- [x] The Product Owner gets the text and the reading and is told to turn every feature in
+  the files into the backlog; the Architect and the Designer get the reading
+- [x] The file's contents are framed as the person's material, not instructions
+
+> Verified by `tests/test_attachments.py`.
+
+### T13.3 — The Designer looks at the screens
+- [x] The Designer is shown the attached screens themselves -- a picture, or the pages of a
+  PDF its reading found a screen on -- and one that cannot see designs from the reading
+- [x] The design gate shows the attached screen beside the mock drawn from it
+
+### T13.4 — Where a story came from
+- [x] A story names the file and page it came from (`sources`); the backlog links to it and
+  the Jira issue names it
+- [x] Reading a file is priced and counted in the project's costs
+
 ---
 
 ## Phase 10 — Proposed (not started)

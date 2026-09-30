@@ -80,6 +80,7 @@ export type BatchResult = Schemas["BatchResult"];
 export type BatchOutcome = Schemas["BatchOutcome"];
 export type PlanEdit = Schemas["PlanEdit"];
 export type BriefView = Schemas["BriefView"];
+export type Attachment = Schemas["Attachment"];
 export type ProjectBrief = Schemas["ProjectBrief"];
 export type BriefItem = Schemas["BriefItem"];
 export type BriefCategory = NonNullable<BriefItem["category"]>;
@@ -170,12 +171,14 @@ function rememberSignedOut(resp: Response): void {
 }
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  // a file goes as a form, and the browser writes its own Content-Type with the boundary
+  const form = body instanceof FormData;
   const init: RequestInit = {
     method,
     credentials: "same-origin",
-    headers: body === undefined ? {} : { "Content-Type": "application/json" },
+    headers: body === undefined || form ? {} : { "Content-Type": "application/json" },
   };
-  if (body !== undefined) init.body = JSON.stringify(body);
+  if (body !== undefined) init.body = form ? body : JSON.stringify(body);
   const resp = await fetch(path, init);
   if (resp.status === 204) return undefined as T;
   const text = await resp.text();
@@ -220,6 +223,7 @@ export const api = {
   put: <T>(path: string, body?: unknown) => request<T>("PUT", path, body ?? {}),
   patch: <T>(path: string, body?: unknown) => request<T>("PATCH", path, body ?? {}),
   delete: <T>(path: string) => request<T>("DELETE", path),
+  upload: <T>(path: string, form: FormData) => request<T>("POST", path, form),
   text: async (path: string): Promise<string> => {
     const resp = await fetch(path, { credentials: "same-origin" });
     if (!resp.ok) throw new ApiError(resp.status, await resp.text());

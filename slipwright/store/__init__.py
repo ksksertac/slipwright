@@ -1,3 +1,4 @@
+from slipwright.store.attachments import AttachmentNotFound
 from slipwright.store.sqlite import (
     ANY_OWNER,
     JobInProgress,
@@ -12,6 +13,7 @@ from slipwright.store.users import UsernameTaken, UserNotFound
 
 __all__ = [
     "ANY_OWNER",
+    "AttachmentNotFound",
     "JobInProgress",
     "JobNotFound",
     "JobStore",

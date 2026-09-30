@@ -915,6 +915,8 @@ function BacklogGateEditor({ job }: { job: Job }) {
         )}
       </p>
       <BacklogEditor
+        projectId={job.project_id}
+        jobId={job.id}
         value={draft}
         onChange={(next) => {
           setDraft(next);

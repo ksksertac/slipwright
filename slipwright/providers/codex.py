@@ -165,9 +165,19 @@ class CodexProvider:
             args += ["-m", request.model]
         if request.thinking_depth is not ThinkingDepth.OFF:
             args += ["-c", f'model_reasoning_effort="{_EFFORT[request.thinking_depth]}"']
-        args.append("-")  # the prompt comes on stdin: far longer than a command line allows
         stdin = f"{PREAMBLE}{request.system}\n\n{request.prompt}"
-        with tempfile.TemporaryDirectory(prefix="slipwright-codex-") as empty:
+        with (
+            tempfile.TemporaryDirectory(prefix="slipwright-codex-") as empty,
+            tempfile.TemporaryDirectory(prefix="slipwright-codex-img-") as pictures,
+        ):
+            if request.images:
+                # the CLI takes pictures as files. One ``--image=a,b`` rather than
+                # ``--image a b``: the flag takes several values and would swallow the
+                # ``-`` that says the prompt is on stdin
+                paths = _write_images(Path(pictures), request)
+                args.append("--image=" + ",".join(str(p) for p in paths))
+                stdin = _labels(request) + stdin
+            args.append("-")  # the prompt comes on stdin: far longer than a command line allows
             try:
                 done = subprocess.run(
                     args,
@@ -222,6 +232,22 @@ class CodexProvider:
             elif isinstance(m, str):
                 found.append(m)
         return ["default", *sorted(set(found))]
+
+
+def _write_images(folder: Path, request: ModelRequest) -> list[Path]:
+    paths: list[Path] = []
+    for n, image in enumerate(request.images, start=1):
+        ext = "png" if image.media_type == "image/png" else "jpg"
+        path = folder / f"image-{n}.{ext}"
+        path.write_bytes(image.data)
+        paths.append(path)
+    return paths
+
+
+def _labels(request: ModelRequest) -> str:
+    """The CLI shows the pictures without their labels, so the prompt says which is which."""
+    named = [f"Image {n}: {i.label}" for n, i in enumerate(request.images, start=1) if i.label]
+    return ("\n".join(named) + "\n\n") if named else ""
 
 
 # -- signing in ----------------------------------------------------------------------------

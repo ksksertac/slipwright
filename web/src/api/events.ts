@@ -62,6 +62,7 @@ export function useLiveEvents(projectId?: string, onNotice?: (text: string) => v
         "test_run.state",
         "activity",
         "project",
+        "attachment",
         "supervisor.auto_approved",
       ]) {
         source.addEventListener(type, onMessage as EventListener);

@@ -2,7 +2,9 @@ import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Crumbs } from "../components/Crumbs";
 import { PageHead } from "../components/ui";
-import { describeError, type NewProject } from "../api/client";
+import { api, describeError, type NewProject } from "../api/client";
+import { PendingFiles } from "../components/Attachments";
+import { useToast } from "../components/Toast";
 import { slugify } from "../slug";
 import {
   useCreateProject,
@@ -54,6 +56,8 @@ export function NewProjectPage() {
   const createJira = useCreateJiraProject();
   const [language, setLanguage] = useState<NewProject["language"]>("tr");
   const [firstRequest, setFirstRequest] = useState("");
+  const [files, setFiles] = useState<File[]>([]);
+  const toast = useToast();
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState(0);
   // a Jira key is short and uppercase (SCRUM); the project's name is not one
@@ -109,6 +113,18 @@ export function NewProjectPage() {
         body.github_repo = made.full_name;
       }
       const project = await create.mutateAsync(body);
+      // the files go before the brief page opens, so the first agent to read the project
+      // reads them too. One that is refused does not undo the project: it is said, and
+      // the brief page is where another can be added.
+      for (const file of files) {
+        const form = new FormData();
+        form.append("file", file);
+        try {
+          await api.upload(`/api/projects/${project.id}/attachments`, form);
+        } catch (err) {
+          toast.bad(`${file.name}: ${describeError(err)}`);
+        }
+      }
       // get to know the project first, whatever was typed above — the checkout is read,
       // or, when there is nothing to read, the Product Owner asks what you are building.
       // Approving the brief is what sets the first development off.
@@ -527,6 +543,18 @@ export function NewProjectPage() {
                 </div>
               )}
             </div>
+          </section>
+
+          {/* What the person already has written down or drawn: across the width, like the
+            first development, because a list of files needs it. */}
+          <section className="card np-section np-first">
+            <h3>{tx("Documents and screens")}</h3>
+            <p className="help" style={{ marginTop: 0 }}>
+              {tx(
+                "Optional. Requirements, specifications, mock-ups, screenshots — the agents read them before they ask you anything, and every development of the project can use them.",
+              )}
+            </p>
+            <PendingFiles files={files} onChange={setFiles} />
           </section>
 
           {/* The first development, across the foot: it is the one field somebody writes a

@@ -63,6 +63,15 @@ export function CostsTab({ projectId }: { projectId: string }) {
           })}
         </div>
       )}
+      {costs.data.reading && (
+        /* no development owns these calls: each file is read once, when it arrives */
+        <div className="muted small">
+          {tx("Reading the attached files: {usd} over {n} call(s), included above.", {
+            usd: usd(costs.data.reading.usd),
+            n: costs.data.reading.calls,
+          })}
+        </div>
+      )}
       {unpriced_calls > 0 && (
         <div className="muted small">
           {tx("{n} call(s) ran on a model with no stored price and are not in these totals.", {

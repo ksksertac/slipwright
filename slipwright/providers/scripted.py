@@ -30,6 +30,7 @@ ASIDES: tuple[tuple[str, str], ...] = (
     ("deploy", "propose how this project is deployed"),
     ("deploy_write", "Write the deployment files that were approved"),
     ("gate_triage", "was the failing test itself wrong"),
+    ("reading", "Read the file in `file`"),
 )
 
 
@@ -204,6 +205,20 @@ def canned(profile: Profile) -> ScriptedProvider:
                 "items": [
                     {"category": "product", "title": "What it is for", "detail": "as answered"}
                 ],
+            }
+        ),
+        # an attached file: a screen when it was shown one, else the text it was given
+        "reading": lambda req: (
+            {
+                "summary": "scripted: a screen",
+                "kind": "screens",
+                "screens": [{"page": 1, "title": "Sign in", "description": "two fields"}],
+            }
+            if req.images
+            else {
+                "summary": "scripted: a document",
+                "kind": "document",
+                "requirements": ["what the file asks for"],
             }
         ),
     }

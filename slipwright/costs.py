@@ -119,6 +119,11 @@ class ProjectCosts(BaseModel):
     unpriced_calls: int = 0
     subscription_calls: int = 0
     priced_models: int = Field(default=0, description="Models with a stored price.")
+    reading: Spend | None = Field(
+        default=None,
+        description="Reading the attached files: once per file, on no development. In "
+        "``spent_usd`` with the rest; None while no file has been read.",
+    )
 
 
 Lookup = dict[tuple[str, str], dict[str, Any]]
@@ -325,6 +330,7 @@ def project_costs(
     stored_prices: list[dict[str, Any]] | None = None,
     history: list[Job] | None = None,
     route: Router | None = None,
+    readings: list[dict[str, Any]] | None = None,
 ) -> ProjectCosts:
     """Every development's money. ``history`` is what the averages are learned from —
     the project's own jobs by default, so an installation's estimates get better as it
@@ -336,14 +342,22 @@ def project_costs(
         for job in jobs
     ]
     known = [r.expected_usd for r in rows if r.expected_usd is not None]
+    reading: Spend | None = None
+    if readings:
+        reading = Spend(key="reading", label="Reading attached files")
+        for entry in readings:
+            _add(reading, entry, lookup)
     return ProjectCosts(
         project_id=project_id,
         jobs=rows,
-        spent_usd=round(sum(r.spent_usd for r in rows), 6),
+        spent_usd=round(sum(r.spent_usd for r in rows) + (reading.usd if reading else 0), 6),
         expected_usd=round(sum(known), 6) if known else None,
-        unpriced_calls=sum(r.unpriced_calls for r in rows),
-        subscription_calls=sum(r.subscription_calls for r in rows),
+        unpriced_calls=sum(r.unpriced_calls for r in rows)
+        + (reading.unpriced_calls if reading else 0),
+        subscription_calls=sum(r.subscription_calls for r in rows)
+        + (reading.subscription_calls if reading else 0),
         priced_models=len(stored_prices or []),
+        reading=reading,
     )
 
 

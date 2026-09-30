@@ -31,6 +31,7 @@ from typing import Any, cast
 import httpx
 from pydantic import ValidationError
 
+from slipwright import attachments as attached
 from slipwright import prices
 from slipwright.accounts import Accounts
 from slipwright.events import EventBus
@@ -47,6 +48,7 @@ from slipwright.invoke import (
     InvokeErrorKind,
     RoleResult,
     Usage,
+    may_be_blind,
 )
 from slipwright.jira import DEFAULT_ISSUE_TYPES, JiraClient, JiraError, JiraSettings
 from slipwright.jiraactions import ActionOutcome, ActionRunner, jira_context
@@ -74,6 +76,7 @@ from slipwright.roles import (
     discovery,
     po,
     qa,
+    reader,
     review,
     supervisor,
 )
@@ -94,6 +97,7 @@ from slipwright.roles.results import (
     SupervisorResult,
 )
 from slipwright.roles.specialists import specialist_for
+from slipwright.schemas.attachment import Attachment, Reading, Scope
 from slipwright.schemas.brief import (
     BriefEdit,
     BriefItem,
@@ -2420,6 +2424,7 @@ class Engine:
                 language=project.language,
                 provider=self.provider_for(project.owner_id),
                 timeout_s=self.timeout_s,
+                attachments=self.project_attachments(project.id),
             )
         except Exception as exc:  # noqa: BLE001 - a broken provider must not kill the request
             log.exception("analysis failed for project %s", project_id)
@@ -2472,6 +2477,7 @@ class Engine:
                 language=project.language,
                 provider=self.provider_for(project.owner_id),
                 timeout_s=self.timeout_s,
+                attachments=self.project_attachments(project.id),
             )
         except Exception as exc:  # noqa: BLE001 - a broken provider must not kill the request
             log.exception("intake failed for project %s", project_id)
@@ -2507,6 +2513,156 @@ class Engine:
         brief.state = BriefState.PROPOSED
         brief.error = ""
         return self.store.save_brief(brief)
+
+    # -- attachments: files the person gave the agents (slipwright/attachments.py) -------
+
+    def attach(
+        self, project_id: str, name: str, data: bytes, *, scope: Scope = "project"
+    ) -> Attachment:
+        """Take a file in: refuse what cannot be read or will not fit, take the text out,
+        keep it. Reading it with a model is ``execute_reading``, afterwards."""
+        project = self.store.get_project(project_id)
+        if len(data) > attached.MAX_BYTES:
+            raise attached.TooLarge(len(data))
+        self.store.forget_drafts(project_id, attached.DRAFT_TTL)
+        if self.store.count_attachments(project_id) >= attached.MAX_PER_PROJECT:
+            raise attached.TooMany()
+        self.quotas.check_attachment(project.owner_id, len(data))
+        media_type = attached.sniff(data, name)
+        text, pages = attached.extract(data, media_type)
+        return self.store.add_attachment(
+            project_id=project_id,
+            owner_id=project.owner_id,
+            name=attached.clean_name(name),
+            media_type=media_type,
+            data=data,
+            text=text,
+            pages=pages or attached.page_count(data, media_type),
+            scope=scope,
+        )
+
+    def execute_reading(self, attachment_id: str) -> Attachment | None:
+        """Have the Product Owner's model read the file once, on its owner's keys. Never
+        raises: a file that could not be read is a state, and its text still reaches the
+        agents without the reading.
+
+        The pictures go first. A model that cannot see refuses them, and is asked again
+        with the text alone -- a document is still worth reading without its figures --
+        and the reading says so, so nobody takes a description of a screen nobody looked
+        at for one somebody did."""
+        try:
+            found, data = self.store.attachment_data(attachment_id)
+            project = self.store.get_project(found.project_id)
+        except KeyError:  # the file, or its project, deleted before it was read
+            return None
+        self.store.set_reading(attachment_id, "reading")
+        try:
+            text = self.store.attachment_text(attachment_id)
+            images = attached.pictures(data, found.media_type, name=found.name)
+            if not text and not images:
+                return self.store.set_reading(
+                    attachment_id, "failed", Reading(note="nothing in this file could be read")
+                )
+
+            def ask(shown: list[Any]) -> RoleResult:
+                return reader.read(
+                    found,
+                    text,
+                    shown,
+                    self.project_profile(project),
+                    language=project.language,
+                    provider=self.provider_for(project.owner_id),
+                    timeout_s=self.timeout_s,
+                )
+
+            note = ""
+            calls: list[dict[str, Any]] = []
+            result = ask(images)
+            calls.append(self._reading_call(result))
+            if not result.ok and images and text and may_be_blind(result):
+                note = "read from its text alone: the model would not take the pictures"
+                result = ask([])
+                calls.append(self._reading_call(result))
+            if not result.ok:
+                assert result.error is not None
+                return self.store.set_reading(
+                    attachment_id, "failed", Reading(note=result.error.message, calls=calls)
+                )
+            reading = attached.reading_from(result.output, note)
+            reading.calls = calls
+            return self.store.set_reading(attachment_id, "done", reading)
+        except Exception as exc:  # noqa: BLE001 - a broken file must not kill the request
+            log.exception("reading attachment %s failed", attachment_id)
+            return self.store.set_reading(
+                attachment_id, "failed", Reading(note=f"{type(exc).__name__}: {exc}")
+            )
+
+    def _reading_call(self, result: RoleResult) -> dict[str, Any]:
+        """One reading call as the cost panel reads a job's calls: what answered, what it
+        took, and what that cost at the price of the model that actually answered."""
+        usage = result.usage
+        price = self.price_of(result.provider, result.model)
+        cost = (
+            price.cost(usage.input_tokens or 0, usage.output_tokens or 0)
+            if price and usage
+            else None
+        )
+        return {
+            "role": RoleName.PO.value,
+            "model": result.model,
+            "provider": result.provider,
+            "attempts": result.attempts,
+            "input_tokens": usage.input_tokens if usage else None,
+            "output_tokens": usage.output_tokens if usage else None,
+            "cost_usd": round(cost, 6) if cost is not None else None,
+            "ok": result.ok,
+            "error": result.error.kind.value if result.error else None,
+            "at": utcnow().isoformat(),
+        }
+
+    def screens_for(self, job: Job) -> list[Any]:
+        """The attached screens, drawn, for the Designer to look at: every picture that was
+        read as screens, and the pages of a PDF the reading found a screen on. A file that
+        could not be read is shown whole if it is a picture -- a screenshot with no reading
+        is still a screenshot."""
+        if job.project_id is None:
+            return []
+        shown: list[Any] = []
+        for a in self.store.list_attachments(job.project_id, job_id=job.id):
+            read = a.reading if a.reading_state == "done" else None
+            if read is not None and read.kind == "screens":
+                pages = sorted({s.page for s in read.screens if s.page})
+            elif read is None and a.is_picture:
+                pages = []  # an unread PDF could be anything; its text reaches the agents
+            else:
+                continue
+            _, data = self.store.attachment_data(a.id)
+            shown += attached.pictures(
+                data,
+                a.media_type,
+                name=a.name,
+                pages=pages or None,
+                limit=attached.DESIGN_PICTURES - len(shown),
+            )
+            if len(shown) >= attached.DESIGN_PICTURES:
+                break
+        return shown[: attached.DESIGN_PICTURES]
+
+    def attachments_for(self, job: Job, *, whole: bool = True) -> dict[str, Any] | None:
+        """The ``attachments`` section of a role's context: the project's files and this
+        development's. ``whole`` gives the text of each as well as its reading -- what
+        the Product Owner, who turns them into the backlog, needs; the roles after it
+        build from the backlog and are given the reading alone."""
+        if job.project_id is None:
+            return None
+        found = self.store.list_attachments(job.project_id, job_id=job.id)
+        texts = {a.id: self.store.attachment_text(a.id) for a in found} if whole else None
+        return attached.for_agents(found, texts)
+
+    def project_attachments(self, project_id: str) -> dict[str, Any] | None:
+        """The project's own files, whole, for the brief: there is no development yet."""
+        found = self.store.list_attachments(project_id, scopes=("project",))
+        return attached.for_agents(found, {a.id: self.store.attachment_text(a.id) for a in found})
 
     def save_brief(self, project_id: str, edit: BriefEdit) -> ProjectBrief:
         """Take the person's edits. Approving is what lets an agent read any of it."""
@@ -3182,7 +3338,9 @@ class Engine:
             )
         job = self._ensure_workspace(job)
         seed = self.seed_for(job)
-        result = self._invoke(RoleName.PO, po.run, job, profile=seed)
+        result = self._invoke(
+            RoleName.PO, po.run, job, profile=seed, attachments=self.attachments_for(job)
+        )
         if not result.ok:
             return self._invocation_failed(job, result)
         assert isinstance(result.output, POResult)
@@ -3218,7 +3376,13 @@ class Engine:
         if not job.data.backlog:
             return self._fail(job, "no approved backlog to design from")
         seed = self.seed_for(job)
-        result = self._invoke(RoleName.ARCHITECT, architect.run, job, seed=seed)
+        result = self._invoke(
+            RoleName.ARCHITECT,
+            architect.run,
+            job,
+            seed=seed,
+            attachments=self.attachments_for(job, whole=False),
+        )
         if not result.ok:
             return self._invocation_failed(job, result)
         assert isinstance(result.output, ArchitectResult)
@@ -3301,7 +3465,14 @@ class Engine:
                 note="designer: the screens already match this plan",
             )
         profile = self._profile(job)
-        result = self._invoke(RoleName.DESIGNER, designer.run, job, profile=profile)
+        result = self._invoke(
+            RoleName.DESIGNER,
+            designer.run,
+            job,
+            profile=profile,
+            attachments=self.attachments_for(job, whole=False),
+            screens=self.screens_for(job),
+        )
         if not result.ok:
             return self._invocation_failed(job, result)
         assert isinstance(result.output, DesignResult)

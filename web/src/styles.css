@@ -6121,3 +6121,122 @@ tr.run-detail td {
   font-size: 14px;
   letter-spacing: 0.05em;
 }
+
+/* -- attachments: files the person gives the agents (components/Attachments.tsx) -------- */
+.file-drop {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1.5px dashed var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 13px;
+  cursor: pointer;
+  transition:
+    border-color 0.12s,
+    background 0.12s;
+}
+.file-drop:hover,
+.file-drop:focus-visible,
+.file-drop.over {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--text);
+  outline: none;
+}
+.file-drop.disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+.file-list {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.file-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.file-thumb {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
+  color: var(--text-2);
+  overflow: hidden;
+}
+.file-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.file-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.file-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.file-body details ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+/* the files a story was drawn from, under its title */
+.source-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+.source-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  text-decoration: none;
+}
+/* the design gate: the attached screen beside the one drawn from it */
+.mock-compare {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  background: var(--surface-2);
+}
+.mock-reference {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  padding: 8px;
+  overflow: auto;
+}
+.mock-reference img {
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: #fff;
+}
+@media (max-width: 720px) {
+  .mock-compare {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

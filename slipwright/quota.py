@@ -166,10 +166,13 @@ class Quotas:
         projects = self.store.list_projects(owner_id)
         paths = [self.worktrees_root / j.id for j in jobs]
         paths += [self.repos_root / p.id for p in projects]
+        # attached files live in the database, not on the disk walked above, and take
+        # the same room on the machine
+        attached = self.store.attachment_bytes(owner_id) // (1024 * 1024)
         return Usage(
             running_jobs=running(jobs),
             projects=len([p for p in projects if not p.is_demo]),
-            disk_mb=disk_mb(paths),
+            disk_mb=disk_mb(paths) + attached,
         )
 
     # -- the two places something is refused ------------------------------------------------
@@ -194,6 +197,16 @@ class Quotas:
             raise QuotaExceeded("running developments", limits.max_running_jobs, use.running_jobs)
         if limits.max_disk_mb and use.disk_mb >= limits.max_disk_mb:
             raise QuotaExceeded("disk (MB)", limits.max_disk_mb, use.disk_mb)
+
+    def check_attachment(self, owner_id: str | None, size: int) -> None:
+        """A file is refused when it would take the account past its disk, rather than
+        being let in and stopping the next development from starting."""
+        limits = self.limits()
+        if not limits.max_disk_mb:
+            return
+        used = self.usage(owner_id).disk_mb
+        if used + size / (1024 * 1024) > limits.max_disk_mb:
+            raise QuotaExceeded("disk (MB)", limits.max_disk_mb, used)
 
 
 def warn_if_unprotected(quota: Quota, *, open_to_strangers: bool) -> str | None:

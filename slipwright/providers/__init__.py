@@ -18,6 +18,18 @@ from pydantic import BaseModel, ConfigDict, Field
 from slipwright.schemas.profile import Permission, RoleName, ThinkingDepth
 
 
+class ImageInput(BaseModel):
+    """A picture shown to the model beside the prompt: a screen somebody attached, or a
+    page of a PDF rendered to look at. Already small enough to send -- the attachments
+    module scales it down -- so a provider only has to wrap it."""
+
+    model_config = ConfigDict(frozen=True, ser_json_bytes="base64", val_json_bytes="base64")
+
+    media_type: str  # image/png | image/jpeg
+    data: bytes
+    label: str = ""  # which file and page, said in the prompt next to it
+
+
 class ModelRequest(BaseModel):
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
@@ -34,6 +46,10 @@ class ModelRequest(BaseModel):
         description="JSON Schema the response text must conform to."
     )
     timeout_s: float = Field(gt=0)
+    # what the model is to look at as well as read. Empty on nearly every call; a
+    # provider that cannot show pictures refuses the call rather than dropping them, so
+    # the caller can decide to ask again without (``attachments.read``)
+    images: tuple[ImageInput, ...] = ()
 
 
 class ModelResponse(BaseModel):
@@ -105,6 +121,7 @@ class ModelProvider(Protocol):
 
 
 __all__ = [
+    "ImageInput",
     "REJECTED_STATUS",
     "ModelProvider",
     "ModelRequest",

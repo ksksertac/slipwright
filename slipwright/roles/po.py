@@ -29,7 +29,13 @@ If `feedback` is present, a human rejected your previous backlog (`previous_back
 address every point in it. If a `jira` section is present you may add Jira actions for
 issues that already exist; the backlog itself is mirrored to Jira by the engine.
 If a `standards` section is present its sections are binding unless they contradict
-the core rules; say in `summary` when one could not be followed and why."""
+the core rules; say in `summary` when one could not be followed and why.
+If an `attachments` section is present, the person attached documents and screens to go
+with the request: every feature, rule and screen in the files that belong to
+`this development` becomes part of the backlog, as the epics and stories it amounts to --
+nothing in them left out, nothing added that is not there. Files `for` the whole project
+are background: build from them only what `request` asks for. Give every story drawn
+from a file its `sources`: the file's `name` exactly as given, and the `page` in a PDF."""
 
 
 def run(
@@ -40,11 +46,14 @@ def run(
     timeout_s: float | None = None,
     jira: dict[str, Any] | None = None,
     standards: dict[str, Any] | None = None,
+    attachments: dict[str, Any] | None = None,
 ) -> RoleResult:
     context = base_context(
         job, instructions=INSTRUCTIONS, feedback=job.data.feedback, jira=jira, standards=standards
     )
     context["previous_backlog"] = job.data.backlog
+    if attachments:
+        context["attachments"] = attachments
     scan = scan_worktree(require_worktree(job))
     context["repository"] = {"tree": scan["tree"][:120], "files": scan["files"]}
     kwargs = {} if timeout_s is None else {"timeout_s": timeout_s}

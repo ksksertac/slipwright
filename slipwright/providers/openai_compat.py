@@ -9,6 +9,7 @@ SDK is needed and tests can answer locally through a mock transport. The profile
 
 from __future__ import annotations
 
+import base64
 import contextlib
 from typing import Any
 
@@ -71,7 +72,7 @@ class OpenAICompatProvider:
             "model": request.model,
             "messages": [
                 {"role": "system", "content": request.system},
-                {"role": "user", "content": request.prompt},
+                {"role": "user", "content": _content(request)},
             ],
             "response_format": {"type": "json_object"},
             self.max_tokens_param: self._max_tokens,
@@ -137,6 +138,25 @@ class OpenAICompatProvider:
             raise ProviderError(f"API error {resp.status_code}: {_error_message(resp)}")
         data = resp.json().get("data") or []
         return sorted(str(m["id"]) for m in data if isinstance(m, dict) and m.get("id"))
+
+
+def _content(request: ModelRequest) -> str | list[dict[str, Any]]:
+    """The prompt, with any pictures ahead of it as data URLs -- the one form every
+    vendor speaking this protocol accepts. A model that cannot see refuses the call
+    (OpenRouter says it has no endpoint for image input), which is what the caller wants
+    to hear: a picture silently dropped is a screen the agent claims to have looked at."""
+    if not request.images:
+        return request.prompt
+    parts: list[dict[str, Any]] = []
+    for image in request.images:
+        if image.label:
+            parts.append({"type": "text", "text": image.label})
+        data = base64.b64encode(image.data).decode("ascii")
+        parts.append(
+            {"type": "image_url", "image_url": {"url": f"data:{image.media_type};base64,{data}"}}
+        )
+    parts.append({"type": "text", "text": request.prompt})
+    return parts
 
 
 def _error_message(resp: httpx.Response) -> str:

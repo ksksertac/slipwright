@@ -12,7 +12,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from slipwright.roles.results import Breakdown
+from slipwright.roles.results import Breakdown, FileRef
 from slipwright.schemas.job import Job, JobState
 
 
@@ -55,6 +55,7 @@ class StoryView(BaseModel):
     job_id: str
     tasks: list[TaskView]
     jira_key: str | None = None
+    sources: list[FileRef] = Field(default_factory=list)
 
 
 class EpicView(BaseModel):
@@ -188,6 +189,7 @@ def job_epics(job: Job) -> list[EpicView]:
                     job_id=job.id,
                     tasks=tasks,
                     jira_key=keys.get(story.id),
+                    sources=list(story.sources),
                 )
             )
         epics.append(

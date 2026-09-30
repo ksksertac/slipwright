@@ -18,6 +18,9 @@ dependencies = [
     # the Slack (Socket Mode) and Discord (gateway) bots connect outward over a websocket
     "websockets>=13",
     "segno>=1.6",
+    "pypdf>=5",
+    "pypdfium2>=4.30",
+    "pillow>=11",
 ]
 
 [project.optional-dependencies]
@@ -63,5 +66,5 @@ packages = ["slipwright"]
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["sentence_transformers", "sentence_transformers.*"]
+module = ["sentence_transformers", "sentence_transformers.*", "pypdfium2", "pypdfium2.*"]
 ignore_missing_imports = true

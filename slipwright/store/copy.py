@@ -29,6 +29,9 @@ from slipwright.store.schema import metadata, users
 #: Rows per INSERT. Large enough to be quick, small enough that one statement never
 #: carries a whole table of agent transcripts.
 BATCH = 500
+#: ...except where a row is a file of up to fifty megabytes: five hundred of those in one
+#: statement is a server out of memory, not a quick copy.
+FILE_BATCH = 4
 
 
 class TargetNotEmpty(RuntimeError):
@@ -66,9 +69,10 @@ def copy_database(
             dst.execute(delete(table))
         for table in metadata.sorted_tables:
             counts[table.name] = 0
+            batch = FILE_BATCH if table.name == "attachments" else BATCH
             with source.connect() as src:
                 result = src.execution_options(stream_results=True).execute(select(table))
-                while chunk := result.fetchmany(BATCH):
+                while chunk := result.fetchmany(batch):
                     dst.execute(insert(table), _rows(chunk))
                     counts[table.name] += len(chunk)
             if progress is not None:
