@@ -134,7 +134,7 @@ def test_sse_keepalive_and_unfiltered(client: TestClient, engine: Engine, repo: 
         # keepalive had gone out yet. (The TestClient hands the response over only once it
         # is complete, so the test itself cannot wait for ": connected".)
         deadline = time.monotonic() + 5
-        while engine.events.subscriber_count() == 0 and time.monotonic() < deadline:
+        while engine.events.subscriber_count == 0 and time.monotonic() < deadline:
             time.sleep(0.01)
         time.sleep(0.3)
         engine.create_project(Project(name="late", repo_path=repo))
