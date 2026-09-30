@@ -198,6 +198,7 @@ function ProviderCard({
                     ? tx("sign in to list the models")
                     : tx("add a key to list the models")
               }
+              emptyLabel={tx("— not set: roles use the model in their profile —")}
             />
             <div className="muted small">
               {p.is_default
