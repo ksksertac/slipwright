@@ -49,7 +49,8 @@ slipwright/
                       per model, and terms a person accepts on the Models page --
                       never Slipwright by itself
   gates/              build_cmd and test_cmd: env.py (what they may see),
-                      runner.py (where they run)
+                      runner.py (where they run), toolchains.py (what is installed
+                      there, and which mobile platforms it can build)
   standards/          the RAG corpus: chunking, retrieval, fts.py (the one dialect split)
   store/              persistence. schema.py declares every table; db.py owns the engine
   api/                FastAPI. __init__.py is projects and jobs, settings.py is settings,
@@ -71,6 +72,8 @@ slipwright/
   costs.py + prices.py  what a development cost against what it was expected to
   support.py          the support desk
   net.py              retrying a request that never left
+  workers.py          a Mac lent to an account: the connection code, the address in it
+  worker_agent.py     `slipwright worker`, the Mac's side; api/workers.py is the door
   notify/             Telegram, Slack, Discord and Teams: core.py decides who is asked
                       and what a press may do; listeners.py runs the bots
 
@@ -187,6 +190,17 @@ behaviour deliberately changed, rewrite it to state the new rule -- do not weake
   proves itself with Microsoft's signed token instead -- keep that check first.
 - **`_resume_all` is deliberately unscoped.** The server starting is not somebody asking;
   in-flight work of every account must carry on, each on its own owner's credentials.
+- **A worker's poll wakes developments, per account.** `AWAITING_BUILDER` is the one wait
+  nobody approves: it opens when a machine that can build the phase is there. `/api/worker/`
+  is outside the login like the Teams door; its token opens nothing else, and a worker is
+  handed its own account's builds only (`claim_worker_task` filters on the owner). Never
+  let the approve path or a gate editor reach that state -- there is nothing to approve.
+- **A lost Mac is not a red build.** `BuilderLost` sends the job back to waiting with
+  `builder_resume=build_gate`: the phase is written, only its build is owed, and no attempt
+  is spent. Charging it as a failure would fail developments because a laptop went to sleep.
+- **Nothing may depend on a platform phase.** Phases nothing here can build are moved
+  behind the rest (`_put_unbuildable_last`); the Architect is told so. A plan where a
+  backend phase needs what an iOS phase wrote would wait forever on a Windows server.
 - **Alembic is quiet on purpose.** It narrates at INFO, which once landed in a CLI's
   stdout and corrupted a token it printed. `store/migrate.py` sets it to WARNING.
 - **A new database is created and stamped in one transaction.** Both engines run DDL

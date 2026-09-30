@@ -81,6 +81,25 @@ jobs:
           echo "minor=${v%.*}" >> "$GITHUB_OUTPUT"
           echo "releasing $v"
 
+  macos:
+    # The one place Xcode is. The worker a Mac lends (TASKS.md Phase 14) is tested with
+    # fakes everywhere else; here it finds a real Xcode and builds a SwiftUI package for iOS
+    # through the real API. Not a required check: a macOS runner's queue is no reason to
+    # hold a change to the server back.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      - run: |
+          git config --global user.name slipwright-ci
+          git config --global user.email ci@slipwright.invalid
+      - run: >-
+          uv run pytest -q tests/test_phase14_macos.py tests/test_phase14_worker_agent.py
+          tests/test_phase14_workers.py tests/test_phase14_platforms.py
+
   image:
     # an image nobody could trust is not worth publishing
     needs: [test, version]

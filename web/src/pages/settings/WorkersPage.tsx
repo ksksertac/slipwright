@@ -99,7 +99,8 @@ function ConnectMac() {
 function CodeSteps({ code }: { code: ConnectionCode }) {
   const tx = useT();
   const left = useSecondsLeft(code.expires_at);
-  const install = "brew install ksksertac/tap/slipwright";
+  // the server says how: it knows where its own source is published
+  const install = code.install.join("\n");
   return (
     <ol className="stack tight" style={{ marginTop: 12, paddingLeft: 18 }}>
       <li>

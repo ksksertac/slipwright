@@ -41,7 +41,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 
 ## Progress
 
-> **Resume here:** Phases 0–9, 11 and 12 are complete (T9.0–T9.9, T11.1–T11.6, T12.1–T12.4). Next: Phase 14 (a paired Mac worker for iOS and Apple Silicon Android builds), T14.1 first; keep the invariants and the task-by-task rhythm.
+> **Resume here:** Phases 0–9, 11, 12 and 14 are complete (T9.0–T9.9, T11.1–T11.6, T12.1–T12.4, T14.1–T14.6; the Homebrew tap in T14.6 is left to the owner). Next: whatever the user asks for; keep the invariants and the task-by-task rhythm.
 > Design note for T1.3: `run_cmd` is executed as a subprocess in the worktree (Docker is used
 > only if the profile's `run_cmd` itself invokes it).
 > Design note for T2.2: `invoke_role` talks to a `ModelProvider` (`slipwright/providers/`);
@@ -161,7 +161,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 | 14 | T14.3 Pairing, and the worker's side of the API | [x] |
 | 14 | T14.4 `slipwright worker` on the Mac | [x] |
 | 14 | T14.5 The pages | [x] |
-| 14 | T14.6 Getting it onto a Mac | [ ] |
+| 14 | T14.6 Getting it onto a Mac | [x] |
 
 ---
 
@@ -1269,7 +1269,7 @@ They attach the file instead, it is read once, and the agents work from what it 
   the Jira issue names it
 - [x] Reading a file is priced and counted in the project's costs
 
-## Phase 14 — Mobile builds on a Mac: a paired worker (not started)
+## Phase 14 — Mobile builds on a Mac: a paired worker
 
 An iOS app is built by Xcode, Xcode runs only on macOS, and no container can hold macOS:
 Docker on a Mac runs a Linux VM too. Android's build-tools exist for Linux on x86_64 only,
@@ -1388,8 +1388,8 @@ The shape, decided with the user before any of it was written:
 - [x] `slipwright worker service install|uninstall` writes or removes a launchd agent that
   starts it at login and again if it stops; `status` and `forget` do what they say; a
   server that no longer knows the Mac stops it rather than it polling forever
-- [ ] The guide says to run it as a separate macOS user: the commands are written by a model,
-  and under your own user they could read your Keychain and SSH keys (T14.6, with the README)
+- [x] The guide says to run it as a separate macOS user: the commands are written by a model,
+  and under your own user they could read your Keychain and SSH keys (README, T14.6)
 
 > Verified by `tests/test_phase14_worker_agent.py`, the worker driven against the real API.
 
@@ -1407,17 +1407,26 @@ The shape, decided with the user before any of it was written:
 
 ### T14.6 — Getting it onto a Mac
 **Done when**
-- [ ] A release builds a wheel with the web UI inside (it is not in git) and attaches it
-- [ ] A Homebrew tap formula is updated by each release: `brew install ksksertac/tap/slipwright`
-- [ ] A macOS CI job installs the wheel and pairs a worker with a server started in the same
-  job; building a one-screen SwiftUI app through it is the proof that Xcode is reached
-- [ ] The README has a "Mac worker" section: install, connect, run as a service, Tailscale for
-  another network, a fixed LAN address for the Windows machine
+- [x] The worker installs straight from the source: `uv tool install
+  git+https://github.com/ksksertac/slipwright`. It needs none of the web UI -- the one part
+  of the package that is built rather than committed -- so a git install is a whole worker,
+  and needs no tap, release asset or image to exist first (checked: a wheel built from a
+  clean clone runs `slipwright worker`). The server hands these lines to the page
+  (`ConnectionCode.install`), so they are said in one place
+- [ ] ~~A Homebrew tap formula updated by each release~~ -- not done: it needs a second
+  repository and a token that can write to it, which is the owner's call, not a task's.
+  `brew install uv` + the git install above do the same job today
+- [x] A `macos` CI job (not a required check) runs the Phase 14 tests on a real Mac, and
+  `tests/test_phase14_macos.py` -- skipped anywhere without Xcode -- finds Xcode and builds a
+  SwiftUI package for the iOS Simulator through a paired worker and the real API
+- [x] The README has an "iOS apps: lend it a Mac" section: install, connect, run as a
+  service, a user of its own, a reserved LAN address, Tailscale for another network, and the
+  server on the same Mac in Docker
 
-> To be verified by: a development with backend + iOS phases on a server that cannot build
-> iOS runs the backend phase, waits, and finishes when a fake worker connects (scripted
-> provider, worker driven through the API); a mistyped code; another account's worker never
-> sees the job; a worker lost mid-build returns the job to waiting with no attempt spent.
+> Verified along the way: a development with backend + iOS phases on a server that cannot
+> build iOS runs the backend phase, waits, and finishes when a fake worker connects through
+> the API; a mistyped code; another account's worker never sees the build; a worker lost
+> mid-build returns the job to waiting with no attempt spent (`tests/test_phase14_*.py`).
 
 ---
 

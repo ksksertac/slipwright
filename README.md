@@ -538,6 +538,46 @@ person's decision, never a model's.
 
 </details>
 
+### iOS apps: lend it a Mac
+
+An iOS app is built by Xcode, Xcode runs only on macOS, and no container can hold macOS:
+Docker on a Mac runs a Linux VM too. Android's build tools exist for Linux on x86_64 only,
+so on an Apple Silicon Mac the image cannot build Android either. Slipwright stays where it
+is, and a Mac *lends* it the builds it cannot do.
+
+A development with an iOS app builds everything else as usual, then stops at **Waiting for
+a Mac**. Nothing has failed and nothing is spent; when a Mac connects it carries on by
+itself.
+
+1. **Settings → Macs → Make a code.** If the page is open at `localhost` it asks for the
+   address the Mac should use: this computer's network address (`ipconfig` on Windows, the
+   *IPv4 Address*), e.g. `http://192.168.1.20:8500`.
+2. **On the Mac**, install the worker once and run the command the page shows:
+   ```bash
+   brew install uv
+   uv tool install --force git+https://github.com/ksksertac/slipwright
+   slipwright worker --connect SW-7KQ4-M2XD-9FHA-T3WN-P6RB
+   ```
+   The code works once, for fifteen minutes. `slipwright worker status` says what the Mac
+   can build: Xcode for iOS (install it from the App Store and open it once), Android
+   Studio for Android.
+3. **`slipwright worker service install`** starts it at login from then on
+   (`~/Library/Logs/slipwright-worker.log`).
+
+The worker is not in Docker -- it has to reach Xcode -- and it calls the server; nothing is
+opened on the Mac. It builds only its own account's apps, each in a fresh directory that is
+deleted afterwards, with nothing of the Mac's environment but what a build needs.
+
+- **Run it as a macOS user of its own.** The commands it runs are written by a model; under
+  your own user they could read your Keychain and SSH keys.
+- **The same network** is simplest. The server's machine keeps its address if your router
+  reserves it (DHCP reservation). For a Mac elsewhere, [Tailscale](https://tailscale.com)
+  gives both a stable address.
+- **The server on the same Mac, in Docker?** Run the worker beside it, outside Docker.
+  When the page asks for an address, give the Mac's own network address
+  (`http://192.168.1.30:8500`): Docker's published port answers there too, and it stays
+  right if the worker ever moves to another Mac.
+
 ## Development
 
 ```sh

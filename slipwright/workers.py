@@ -39,6 +39,14 @@ LIVE = timedelta(seconds=90)
 #: A worktree bigger than this is not shipped to a Mac. node_modules, build output and the
 #: like are ignored by git and so never counted; what is left past this is a mistake.
 MAX_SNAPSHOT = 200 * 1024 * 1024
+#: How the worker gets onto a Mac. Straight from the source: the worker needs none of the
+#: web UI -- the one part of the package that is built rather than committed -- so a git
+#: install is a whole worker, and needs no tap, release asset or image to exist first.
+#: ``uv`` brings the Python it needs.
+INSTALL = (
+    "brew install uv",
+    "uv tool install --force git+https://github.com/ksksertac/slipwright",
+)
 
 PREFIX = "SW"
 _ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
