@@ -37,3 +37,20 @@ def test_compose_maps_ports_state_and_repos() -> None:
     assert (ROOT / "repos" / ".gitkeep").exists()
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     assert "docker compose up --build" in readme
+
+
+def test_the_runner_image_carries_the_same_android_toolchain_as_the_server() -> None:
+    """The Architect is told what the server has; with the container runner the commands
+    run in the other image, so the two must not drift apart."""
+    server = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+    runner = (ROOT / "Dockerfile.runner").read_text(encoding="utf-8")
+
+    def pinned(text: str) -> list[str]:
+        prefixes = ("ARG ANDROID_", "ARG GRADLE_")
+        return sorted(line for line in text.splitlines() if line.startswith(prefixes))
+
+    assert pinned(server) == pinned(runner)
+    assert any(line.startswith("ARG ANDROID_PACKAGES=") for line in pinned(server))
+    for text in (server, runner):
+        assert "ANDROID_HOME=/opt/android-sdk" in text and "JAVA_HOME=/opt/java/openjdk" in text
+        assert "/usr/local/bin/gradle" in text

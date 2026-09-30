@@ -286,11 +286,44 @@ def test_gate_exhausts_retries_and_fails_with_output(
     assert "[test: exit 1]" in (gate_note.detail or "")
     job = engine.approve(job.id)  # the human says: try once more anyway
 
-    # one more (fresh) attempt, the gate fails again, the next identical answer stops it
-    assert job.state is JobState.AWAITING_DECISION
-    assert len([r for r in provider.requests if r.role is RoleName.BACKEND]) == 4
-    assert job.data.build_attempts == 2
+    # one more (fresh) attempt; it writes what is already there, so the build is not run
+    # again to fail the same way -- the development stops and says the code is not the cause
+    assert job.state is JobState.FAILED
+    assert len([r for r in provider.requests if r.role is RoleName.BACKEND]) == 3
+    assert job.data.build_attempts == 1
     assert "approved: continue with developing" in [t.note for t in job.history]
+    assert "the fix changed no file" in (job.history[-1].note or "")
+    assert "[test: exit 1]" in (job.history[-1].detail or "")
+
+
+def test_a_fix_that_changes_nothing_stops_instead_of_building_again(
+    store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
+) -> None:
+    """The specialist reads the failure, finds nothing wrong in the code and says so. The
+    command is what fails -- a tool the machine lacks, say -- and building the same files
+    again would only spend an attempt on the same failure."""
+
+    def reply(req: ModelRequest) -> dict[str, Any]:
+        fixing = '"build_failure":' in req.prompt
+        return {
+            # a different answer each time, so this is not the loop check stopping it
+            "summary": "the SDK is missing; nothing to change" if fixing else "wrote OK",
+            "phase_complete": True,
+            "changes": [] if fixing else [{"path": "OK", "content": "no\n"}],
+        }
+
+    provider = _provider(seed, _plan("first"), reply)
+    engine = _engine(store, worktrees_root, seed, provider)
+    job = engine.approve(_to_plan_gate(engine, repo).id)
+
+    assert job.state is JobState.FAILED
+    assert len([r for r in provider.requests if r.role is RoleName.BACKEND]) == 2
+    gates = [t for t in job.history if (t.note or "").startswith("build gate failed")]
+    assert len(gates) == 1  # the build ran once, not again after the empty fix
+    last = job.history[-1]
+    assert "phase 1/1: the fix changed no file" in (last.note or "")
+    assert "the SDK is missing" in (last.note or "")
+    assert "[test: exit 1]" in (last.detail or "")
 
 
 def test_project_commands_never_see_the_servers_python_environment(

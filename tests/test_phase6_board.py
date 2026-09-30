@@ -154,7 +154,7 @@ def test_board_marks_the_failing_task(
     # the same fix twice stops at the decision gate: the task is still in progress
     assert job.state is JobState.AWAITING_DECISION
     assert _statuses(job) == ["in_progress", "todo"]
-    job = engine.approve(engine.approve(job.id).id)  # two more tries exhaust the gate
+    job = engine.approve(job.id)  # one more try changes nothing, and that stops it
     assert job.state is JobState.FAILED
     assert _statuses(job) == ["failed", "todo"]
     (epic,) = job_epics(job)

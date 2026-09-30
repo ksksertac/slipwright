@@ -175,11 +175,30 @@ def test_backoff_doubles(
 # --- loop detection ----------------------------------------------------------------------------
 
 
+def _answers_in_pairs(provider: Any) -> None:
+    """A specialist that says everything twice: the second of each pair trips the loop
+    check, and the first after a person's decision is new, so it changes the file. One that
+    never changes anything is stopped for that before any loop could be seen."""
+    n: list[int] = []
+
+    def dev(req: ModelRequest) -> Any:
+        n.append(1)
+        text = f"try {(len(n) - 1) // 2}"
+        return {
+            "summary": text,
+            "phase_complete": True,
+            "changes": [{"path": "OK", "content": f"{text}\n"}],
+        }
+
+    provider.replies[RoleName.BACKEND] = dev
+
+
 def test_loop_stops_at_the_decision_gate_and_the_human_decides(
     store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
 ) -> None:
     broken = seed.model_copy(update={"test_cmd": FALSE})
     provider = full_provider(broken, phases=1)
+    _answers_in_pairs(provider)
     engine = full_engine(store, worktrees_root, broken, provider)
     job = engine.start(engine.create_job("x", repo).id)
     job = engine.approve(engine.approve(job.id).id)
@@ -233,7 +252,9 @@ def test_decision_gate_api_and_pipeline_card(
     store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
 ) -> None:
     broken = seed.model_copy(update={"test_cmd": FALSE})
-    engine = full_engine(store, worktrees_root, broken, full_provider(broken, phases=1))
+    provider = full_provider(broken, phases=1)
+    _answers_in_pairs(provider)
+    engine = full_engine(store, worktrees_root, broken, provider)
     with TestClient(create_app(engine, resume_on_startup=False, require_auth=False)) as client:
         project = client.post("/api/projects", json={"name": "demo", "repo_path": str(repo)}).json()
         job = client.post(f"/api/projects/{project['id']}/jobs", json={"request": "x"}).json()

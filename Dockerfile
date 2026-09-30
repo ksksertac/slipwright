@@ -1,5 +1,5 @@
 # Slipwright: API + web UI + the toolchains the agents need to build the projects they
-# work on (git, gh, uv/Python, Node). State (SQLite, secret key, clones, worktrees, logs)
+# work on (git, gh, uv/Python, Node, JDK/Gradle/Android SDK). State (SQLite, secret key, clones, worktrees, logs)
 # lives under /data — mount a volume there.
 #
 #   docker compose up --build
@@ -17,7 +17,50 @@ COPY web/ ./
 # vite writes to ../slipwright/api/static (see vite.config.ts)
 RUN mkdir -p /src/slipwright/api && npm run build
 
-# Stage 2: runtime --------------------------------------------------------------------------
+# Stage 2: the Android SDK and Gradle -------------------------------------------------------
+# A project's own commands run as an ordinary user with no package manager, so a mobile
+# project whose build fetched its own SDK failed every fix round it was given. They are
+# installed here instead. On the build machine's own platform, like the web UI: what lands
+# in /opt is the same files for every architecture, and sdkmanager is a JVM program that
+# takes minutes under arm64 emulation to do what takes seconds natively.
+#
+# The build-tools binaries (aapt2, zipalign) are x86_64 only -- Google publishes no others --
+# so on an arm64 installation an Android build still fails, now with an honest error.
+#
+# Gradle 8.14 is the last 8.x and runs every Android Gradle Plugin 8 release, which is what a
+# model writes; a project needing AGP 9 names a wrapper of its own. Kept in step with
+# Dockerfile.runner, which is where the commands run on a hosted installation.
+FROM --platform=$BUILDPLATFORM eclipse-temurin:21-jdk AS android
+ARG ANDROID_TOOLS=16111833
+ARG ANDROID_TOOLS_SHA1=e025545c62a8e64c7559119566a569fb1dec5f60
+ARG ANDROID_PACKAGES="platforms;android-35 platforms;android-36 build-tools;35.0.0 build-tools;36.0.0"
+ARG GRADLE_VERSION=8.14.3
+ARG GRADLE_SHA256=bd71102213493060956ec229d946beee57158dbd89d0e62b91bca0fa2c5f3531
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl unzip \
+    && rm -rf /var/lib/apt/lists/*
+RUN curl -fsSLo /tmp/tools.zip \
+         "https://dl.google.com/android/repository/commandlinetools-linux-${ANDROID_TOOLS}_latest.zip" \
+    && echo "${ANDROID_TOOLS_SHA1}  /tmp/tools.zip" | sha1sum -c - \
+    && mkdir -p /opt/android-sdk/cmdline-tools \
+    && unzip -q /tmp/tools.zip -d /opt/android-sdk/cmdline-tools \
+    && mv /opt/android-sdk/cmdline-tools/cmdline-tools /opt/android-sdk/cmdline-tools/latest \
+    && rm /tmp/tools.zip
+# the licences, accepted once here: Gradle refuses an SDK whose licences nobody accepted
+RUN yes | /opt/android-sdk/cmdline-tools/latest/bin/sdkmanager \
+         --sdk_root=/opt/android-sdk --licenses > /dev/null \
+    && /opt/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=/opt/android-sdk \
+         ${ANDROID_PACKAGES} > /tmp/sdk.log || { cat /tmp/sdk.log; exit 1; }
+# sdkmanager itself is only needed to get here: Gradle fetches a missing platform on its own
+RUN rm -rf /opt/android-sdk/cmdline-tools
+RUN curl -fsSLo /tmp/gradle.zip \
+         "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip" \
+    && echo "${GRADLE_SHA256}  /tmp/gradle.zip" | sha256sum -c - \
+    && mkdir -p /opt/gradle \
+    && unzip -q /tmp/gradle.zip -d /opt/gradle \
+    && rm /tmp/gradle.zip
+
+# Stage 3: runtime --------------------------------------------------------------------------
 FROM python:3.12-slim-bookworm AS runtime
 
 # UV_PROJECT_ENVIRONMENT is set only where Slipwright's own venv is built: a project's
@@ -40,6 +83,16 @@ RUN apt-get update \
     && apt-get update \
     && apt-get install -y --no-install-recommends gh nodejs \
     && rm -rf /var/lib/apt/lists/*
+
+# Java and Android for mobile projects (stage 2). The JDK is this platform's own; the SDK
+# belongs to uid 1000 so Gradle may add a platform a project asks for that is not here yet.
+COPY --from=eclipse-temurin:21-jdk /opt/java/openjdk /opt/java/openjdk
+COPY --from=android --chown=1000:1000 /opt/android-sdk /opt/android-sdk
+COPY --from=android /opt/gradle /opt/gradle
+RUN ln -s /opt/gradle/gradle-*/bin/gradle /usr/local/bin/gradle
+ENV JAVA_HOME=/opt/java/openjdk \
+    ANDROID_HOME=/opt/android-sdk \
+    PATH="/opt/java/openjdk/bin:${PATH}"
 
 # OpenAI's Codex CLI: how a ChatGPT plan runs the agents (providers/codex.py). Signed in per
 # account from Settings -> Models; each session is kept under /data, never under /work.

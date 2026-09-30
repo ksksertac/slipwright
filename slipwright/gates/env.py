@@ -29,6 +29,9 @@ from collections.abc import Mapping, Sequence
 #: * ``TZ`` -- tests that format a date are otherwise at the mercy of the host.
 #: * ``CI`` -- what every test runner reads to turn off colour and interactivity.
 #: * ``TERM``/``COLUMNS`` -- so tools that draw progress bars behave.
+#: * ``JAVA_HOME``/``ANDROID_HOME`` -- where the image's JDK and Android SDK are. Paths,
+#:   not secrets; without them Gradle cannot find the SDK the image carries and an
+#:   Android build fails exactly as if there were none.
 #: * the Windows trio -- a Windows host cannot resolve a path without them.
 ALLOWED = (
     "PATH",
@@ -40,6 +43,9 @@ ALLOWED = (
     "CI",
     "TERM",
     "COLUMNS",
+    "JAVA_HOME",
+    "ANDROID_HOME",
+    "ANDROID_SDK_ROOT",
     # Windows: without these, spawning anything at all fails
     "SYSTEMROOT",
     "WINDIR",

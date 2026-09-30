@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any
 
+from slipwright.gates import toolchains
 from slipwright.invoke import RoleResult, invoke_role
 from slipwright.providers import ModelProvider
 from slipwright.roles.common import base_context, require_worktree, scan_worktree
@@ -26,9 +27,17 @@ You are the Software Architect. Read the repository (`worktree`) and the approve
    build, test and run it. `run_cmd` must start the project listening on the literal
    placeholder `{port}`. Prefer the commands the repository's CI already runs. Keep the
    `roles` map exactly as given in `seed_profile`.
-   `build_cmd` and `test_cmd` run on a bare checkout, in a container, with nothing
-   installed beforehand and no device, emulator or simulator attached. Write commands
-   that can survive that. In particular: install with the command that creates a lock
+   `build_cmd` and `test_cmd` run on a bare checkout, as an ordinary user who cannot
+   install system packages, with no device, emulator or simulator attached. Nothing is
+   installed beforehand beyond git, curl, Python with uv, Node with npm, and whatever
+   `toolchains` lists; use those as they are and never write a step that downloads an SDK
+   or a JDK or calls a system package manager. An Android project builds with the
+   installed `gradle` (not `./gradlew`, unless the repository already commits
+   `gradle/wrapper/gradle-wrapper.jar`: that file is binary and cannot be written), on an
+   Android Gradle Plugin version that runs on that Gradle, with a `compileSdk` among the
+   listed platforms. If what the project needs is not there, say so in `summary` rather
+   than working around it. Write commands that can survive all that. In particular:
+   install with the command that creates a lock
    file (`npm install`, not `npm ci`) unless the repository already has one committed,
    because a project being written for the first time does not; and leave out anything
    that needs a device (`connectedAndroidTest`, a simulator test run) or a service this
@@ -86,6 +95,8 @@ def run(
         None if job.profile is None else job.profile.model_dump(mode="json")
     )
     context["worktree"] = scan_worktree(worktree)
+    # what the machine brings, so the commands use it instead of fetching their own
+    context["toolchains"] = toolchains.installed()
     kwargs = {} if timeout_s is None else {"timeout_s": timeout_s}
     return invoke_role(RoleName.ARCHITECT, seed, context, provider=provider, **kwargs)
 
