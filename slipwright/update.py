@@ -57,8 +57,10 @@ log = logging.getLogger(__name__)
 #: registry, or turns the whole thing off with ``off``.
 DEFAULT_IMAGE = "ghcr.io/ksksertac/slipwright"
 DEFAULT_SOCKET = "/var/run/docker.sock"
-#: How often the registry is asked. Releases are rare; the registry is somebody else's.
-CHECK_EVERY_S = 6 * 3600.0
+#: How often the registry is asked. Every merge to main is a release, so a fix merged
+#: should reach the corner in minutes, not the six hours this once was -- one small
+#: anonymous request per installation every five minutes is nothing to the registry.
+CHECK_EVERY_S = 5 * 60.0
 #: How many copies of a SQLite database are kept from before an update.
 BACKUPS_KEPT = 3
 #: A release is three numbers and nothing else: ``1.2`` is a moving alias of the newest
