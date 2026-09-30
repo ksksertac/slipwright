@@ -72,9 +72,13 @@ ENV PYTHONUNBUFFERED=1 \
     SLIPWRIGHT_HOST=0.0.0.0 \
     SLIPWRIGHT_PORT=8500
 
-# git + gh (DevOps role), curl (health checks), node (projects that need it)
+# git + gh (DevOps role), curl (health checks), node (projects that need it). unzip and zip
+# for a project's own commands: a build that fetches a toolchain or a Gradle wrapper checks
+# for them before anything else, and the user those commands run as cannot install them --
+# an Android build once failed all three of its rounds on nothing more than a missing unzip
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl git gnupg openssh-client \
+         unzip zip \
     && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
          -o /usr/share/keyrings/githubcli-archive-keyring.gpg \
     && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
