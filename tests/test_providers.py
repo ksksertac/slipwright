@@ -483,7 +483,13 @@ def test_models_settings_page_and_role_provider_column_exist() -> None:
     # and a <select> of four hundred cannot be typed into. It also has to stay a text
     # field so a model released this morning can be used before it is listed.
     picker = (web / "components" / "ModelPicker.tsx").read_text(encoding="utf-8")
-    assert "useProviderModels" in picker and "datalist" in picker and 'type="text"' in picker
+    # Both shapes, because the vendors are not the same shape: a dropdown you can see
+    # while the list is short (a ChatGPT plan offers exactly one model), and a text field
+    # with suggestions once it is not (OpenRouter offers four hundred and a dropdown of
+    # four hundred cannot be typed into). Dropping either one broke the other in turn.
+    assert "useProviderModels" in picker
+    assert "<select" in picker and "listed.length <= SHORT" in picker
+    assert "datalist" in picker and 'type="text"' in picker
     for user in (
         ("components", "ProfileForm.tsx"),
         ("pages", "AgentDetailPage.tsx"),

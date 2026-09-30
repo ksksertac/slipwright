@@ -323,6 +323,21 @@ docker run -d --name slipwright -p 8500:8500 \
 The database is migrated at start, and developments that were running carry on. Never
 `docker volume rm` or `docker compose down -v` an installation you want to keep.
 
+**Or from the page.** When a newer release is out, an **Install version …** button appears
+under the version in the sidebar's corner, for whoever is using the screen. Give the
+container the Docker socket and the button does the above by itself -- pulls the release,
+copies a SQLite database aside, makes the container again on the same volumes, ports and
+settings, and puts the old one back if the new one never becomes healthy:
+
+```sh
+docker run -d --name slipwright -p 8500:8500     -v slipwright-state:/data -v slipwright-work:/work     -v /var/run/docker.sock:/var/run/docker.sock --group-add 0     ghcr.io/ksksertac/slipwright:latest
+```
+
+`--group-add` is the socket's group on the host (`0` on Docker Desktop; `stat -c %g
+/var/run/docker.sock` on Linux). Access to the socket is access to the host, so give it
+only to a server you trust with that. Without it the button says what to run instead.
+Releases are the `v1.2.3` tags, not every push to `main`.
+
 </details>
 
 <details>
@@ -449,6 +464,7 @@ Settings come from the environment (or `serve` flags):
 | `SLIPWRIGHT_QUOTA_MAX_*` | `0` (off) | per-account limits on running developments, projects and disk |
 | `SLIPWRIGHT_DEMO_PROJECT` | on | the worked example a new account starts with |
 | `SLIPWRIGHT_CHATGPT_SUBSCRIPTION` | on locally, off when hosted | offer **ChatGPT subscription (Codex)** under Settings → Models |
+| `SLIPWRIGHT_UPDATE_IMAGE` | `ghcr.io/ksksertac/slipwright` | where newer releases are looked for; `off` stops asking |
 | `SLIPWRIGHT_DEV` | `0` | allow the Vite dev server's origin (CORS) |
 
 ### Moving to PostgreSQL

@@ -86,6 +86,8 @@ from slipwright.store import (
     TestRunNotFound,
 )
 from slipwright.teams import agent_for_gate, may_act_at
+from slipwright.update import CHECK_EVERY_S, Updater
+from slipwright.update import checker as update_checker
 from slipwright.worklist import WorkList, work_list
 
 log = logging.getLogger(__name__)
@@ -364,6 +366,8 @@ def create_app(
     static_dir: Path | None = None,
     jira_sweep_s: float = 3600.0,
     price_refresh_s: float = 86_400.0,
+    updater: Updater | None = None,
+    update_check_s: float = CHECK_EVERY_S,
 ) -> FastAPI:
     """Build the app. ``require_auth=False`` (tests, trusted local use) skips login;
     ``dev=True`` allows the Vite dev server's origin (``SLIPWRIGHT_DEV=1``); ``static_dir``
@@ -373,6 +377,7 @@ def create_app(
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.engine = engine
+        app.state.updater = updater or Updater.from_env(sqlite=engine.raw_store.path)
         app.state.resume_thread = None
         # a server anybody can sign up to, with nothing limiting what one account takes,
         # is a machine waiting to fall over. Said once, loudly, and not enforced: refusing
@@ -405,6 +410,13 @@ def create_app(
             threading.Thread(
                 target=_price_refresher, args=(engine, price_refresh_s, stop), daemon=True
             ).start()
+        # whether a newer release is out, for the corner that shows the version
+        if resume_on_startup and update_check_s > 0:
+            threading.Thread(
+                target=update_checker,
+                args=(app.state.updater, update_check_s, stop),
+                daemon=True,
+            ).start()
         # the chat bots that hear "carry on" and "reject": started with the rest of the
         # background work, and restarted by the settings page when a token changes
         app.state.notify_listeners = None
@@ -429,6 +441,7 @@ def create_app(
     from slipwright.api.settings import router as settings_router
     from slipwright.api.support import router as support_router
     from slipwright.api.teams import router as teams_router
+    from slipwright.api.update import router as update_router
 
     app = FastAPI(
         title="Slipwright",
@@ -464,6 +477,7 @@ def create_app(
     app.include_router(support_router, prefix="/api")
     app.include_router(teams_router, prefix="/api")
     app.include_router(notify_router, prefix="/api")
+    app.include_router(update_router, prefix="/api")
 
     @app.get("/healthz", include_in_schema=False)
     def healthz() -> dict[str, str]:

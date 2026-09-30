@@ -1,6 +1,6 @@
 [project]
 name = "slipwright"
-version = "0.1.0"
+version = "0.2.0"
 description = "A multi-agent SDLC harness: a Product Owner, an Architect, a Designer, specialists, QA and DevOps build each development in its own git worktree, and a person approves at every gate."
 readme = "README.md"
 license = "Apache-2.0"
