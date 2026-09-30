@@ -3007,6 +3007,14 @@
             "minimum": 0.0,
             "title": "Tokens Used",
             "type": "integer"
+          },
+          "waiting_platforms": {
+            "description": "While the job waits for a builder: the mobile platforms (ios, android) its remaining phases need and nothing here can build (T14.2).",
+            "items": {
+              "type": "string"
+            },
+            "title": "Waiting Platforms",
+            "type": "array"
           }
         },
         "required": [
@@ -3057,7 +3065,8 @@
           "supervision",
           "test_cases",
           "tests_skipped",
-          "tokens_used"
+          "tokens_used",
+          "waiting_platforms"
         ],
         "title": "JobData",
         "type": "object"
@@ -3322,6 +3331,7 @@
           "devops",
           "awaiting_deploy_approval",
           "awaiting_decision",
+          "awaiting_builder",
           "done",
           "cancelled",
           "failed"

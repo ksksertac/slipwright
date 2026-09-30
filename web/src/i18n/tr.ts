@@ -617,6 +617,8 @@ export const TR: Record<string, string> = {
   Done: "Tamam",
   "Your decision": "Senin kararın",
   "Review approval: phase {n}": "İnceleme onayı: faz {n}",
+  "Waiting for a Mac: {apps}": "Mac bekleniyor: {apps}",
+  "waiting for a Mac": "Mac bekleniyor",
   "Nothing recorded for this step yet.": "Bu adım için henüz kayıt yok.",
   "Waiting for your approval of the": "Onayını bekleyen:",
   "Rename epics, stories and tasks or add and remove tasks; the Architect designs one phase per task from what you approve.":

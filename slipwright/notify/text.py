@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from slipwright.schemas.job import Job, JobState
-from slipwright.schemas.profile import RoleName
+from slipwright.schemas.profile import RoleName, platform_names
 
 GATE_NAME: dict[str, dict[JobState, str]] = {
     "tr": {
@@ -191,6 +191,27 @@ def gate_message(
     )
 
 
+def builder_message(job: Job, *, project: str, link: str | None, lang: str) -> Message:
+    """Everything this machine can build is done; the apps left wait for a Mac. Said to
+    the groups that hear of gates -- it waits on a person as much as a gate does -- but
+    with no buttons: nothing here is approved, a machine connecting is what moves it."""
+    where = f"{project} · " if project else ""
+    apps = platform_names(job.data.waiting_platforms)
+    if lang == "tr":
+        headline = f"⏳ {where}{apps} için bir Mac bekleniyor"
+        tail = "Bir Mac bağlandığında geliştirme kendiliğinden devam eder."
+    else:
+        headline = f"⏳ {where}waiting for a Mac to build {apps}"
+        tail = "It carries on by itself when a Mac connects."
+    return Message(
+        kind="gate",
+        headline=headline,
+        lines=[f"“{_clip(job.request, 200)}”", tail],
+        link=link,
+        summary=headline,
+    )
+
+
 def outcome_message(
     job: Job, kind: str, *, project: str, link: str | None, lang: str, error: str | None = None
 ) -> Message:
@@ -222,6 +243,7 @@ def test_message(lang: str) -> Message:
 __all__ = [
     "Message",
     "agent_name",
+    "builder_message",
     "gate_message",
     "gate_name",
     "outcome_message",

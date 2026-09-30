@@ -489,6 +489,8 @@ function stepLabel(tx: T, step: StepCard): string {
   if (step.phase && m) return `${tx(m[1]!)}: ${m[2]!}`;
   const gate = /^Review approval: phase (\d+)$/.exec(step.label);
   if (gate) return tx("Review approval: phase {n}", { n: gate[1]! });
+  const mac = /^Waiting for a Mac: (.+)$/.exec(step.label);
+  if (mac) return tx("Waiting for a Mac: {apps}", { apps: mac[1]! });
   return tx(step.label);
 }
 

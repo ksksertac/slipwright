@@ -40,7 +40,14 @@ from slipwright.notify.models import CHANNELS, EVENTS, ChatLink, ChatPrompt
 from slipwright.notify.msteams import TeamsAdapter
 from slipwright.notify.slack import SlackAdapter
 from slipwright.notify.telegram import TelegramAdapter
-from slipwright.notify.text import Message, gate_message, outcome_message, test_message, word
+from slipwright.notify.text import (
+    Message,
+    builder_message,
+    gate_message,
+    outcome_message,
+    test_message,
+    word,
+)
 from slipwright.schemas.job import APPROVAL_STATES, Job, JobState, utcnow
 from slipwright.teams import agent_for_gate, may_act_at
 
@@ -229,7 +236,12 @@ class Notifier:
 
     def announce(self, job: Job, kind: str, *, error: str | None = None) -> list[str]:
         """Tell every group that asked for this kind of event. Returns where it went."""
-        if kind == "gate":
+        if kind == "builder":
+            msg = builder_message(
+                job, project=self._project(job), link=self._link(job), lang=self.lang
+            )
+            kind = "gate"  # heard by the groups that hear of gates: it waits on a person too
+        elif kind == "gate":
             msg = gate_message(
                 job,
                 role=agent_for_gate(job.state),
@@ -622,6 +634,15 @@ def notify_gate(engine: Engine, job: Job) -> None:
         log.exception("job %s: chat notification failed", job.id)
 
 
+def notify_builder_wait(engine: Engine, job: Job) -> None:
+    """A development waits for a machine that can build its apps. Only the groups hear of
+    it: there is no button to press in anyone's own chat. Never raises."""
+    try:
+        Notifier(engine, job.owner_id).announce(job, "builder")
+    except Exception:  # noqa: BLE001 - a wait must never wait on a chat service
+        log.exception("job %s: chat notification failed", job.id)
+
+
 def notify_outcome(engine: Engine, job: Job, kind: str, error: str | None = None) -> None:
     """The groups hear of every outcome they asked for; a failure is also put to its owner
     in their own chat, with a button to try again."""
@@ -653,6 +674,7 @@ __all__ = [
     "current_marker",
     "failure_marker",
     "gate_marker",
+    "notify_builder_wait",
     "notify_gate",
     "notify_outcome",
     "settle_prompts",
