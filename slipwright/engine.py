@@ -32,7 +32,7 @@ import httpx
 from pydantic import ValidationError
 
 from slipwright import attachments as attached
-from slipwright import prices
+from slipwright import prices, workers
 from slipwright.accounts import Accounts
 from slipwright.events import EventBus
 from slipwright.gates import DEFAULT_TIMEOUT_S as GATE_TIMEOUT_S
@@ -298,6 +298,12 @@ class _Stopped(Exception):
     the step's next model call, caught by the run loop."""
 
 
+class BuilderLost(Exception):
+    """The machine a build was sent to went away and did not come back in time. Not a
+    failed build -- nothing was learnt about the code -- so it spends no attempt: the
+    development goes back to waiting for a builder (T14.3)."""
+
+
 class BriefIsRunning(ValueError):
     """The analysis (or an intake round) is working; a second one would race it."""
 
@@ -405,6 +411,8 @@ class Engine:
         # first retry waits this long, then doubles (T9.7); tests set it to 0
         self.retry_backoff_s = retry_backoff_s
         self.gate_timeout_s = gate_timeout_s
+        # how often a build sent to a Mac is looked in on; tests make it quick
+        self.worker_poll_s = 1.0
         self._git_host = git_host
         # tests answer GitHub/Jira HTTP locally through a mock transport
         self.http_transport = http_transport
@@ -2853,11 +2861,12 @@ class Engine:
                 # here now -- connected, or this server itself started somewhere that can
                 job = self.orchestrator.transition(
                     job,
-                    JobState.DEVELOPING,
+                    JobState(job.data.builder_resume or JobState.DEVELOPING.value),
                     note=f"a builder for {', '.join(job.data.waiting_platforms)} is here; "
                     "carrying on",
                 )
                 job.data.waiting_platforms = []
+                job.data.builder_resume = None
                 job = self.store.save(job)
             while job.state in WORKING_STATES:
                 if job.id in self._cancelled:
@@ -3429,19 +3438,89 @@ class Engine:
                     f"[refused: {role.value} does not have the run_commands permission]"
                 ),
             )
-        kwargs: dict[str, Any] = {"runner": self.runner, "platform": platform}
-        if self.gate_timeout_s is not None:
-            kwargs["timeout_s"] = self.gate_timeout_s
-        with self._checkout_locks[str(require_worktree(job))]:
-            gate = build_gate(profile, require_worktree(job), **kwargs)
+        lent = (
+            platform is not None
+            and not toolchains.can_build(platform)
+            and platform in self.remote_platforms(job.owner_id)
+        )
+        if lent:
+            assert platform is not None
+            gate = self._remote_gate(job, profile, platform)
+        else:
+            kwargs: dict[str, Any] = {"runner": self.runner, "platform": platform}
+            if self.gate_timeout_s is not None:
+                kwargs["timeout_s"] = self.gate_timeout_s
+            with self._checkout_locks[str(require_worktree(job))]:
+                gate = build_gate(profile, require_worktree(job), **kwargs)
         if job.project_id is not None:
             self.record_gate_run(job, gate)
         return gate
 
+    def _remote_gate(self, job: Job, profile: Profile, platform: str) -> GateResult:
+        """Build on a machine the owner lent: queue the worktree and the platform's two
+        commands, and wait for the answer.
+
+        A worker that stops being heard from while it holds the build has it taken back
+        and queued again, once; a second time, or nobody able to take it at all, is
+        ``BuilderLost`` -- a Mac gone to sleep is not a red build and must not be charged
+        as one. The queued copy is dropped whatever happens: it is a whole worktree.
+        """
+        timeout = self.gate_timeout_s or GATE_TIMEOUT_S
+        worktree = require_worktree(job)
+        with self._checkout_locks[str(worktree)]:
+            try:
+                packed = workers.snapshot(worktree)
+            except ValueError as exc:
+                return GateResult(ok=False, output=f"[{platform}: not sent to a Mac: {exc}]")
+        build, test = profile.commands_for(platform)
+        task_id = self.store.enqueue_worker_task(
+            job.owner_id,
+            job.id,
+            platform,
+            [(f"{platform} build", build), (f"{platform} test", test)],
+            timeout,
+            packed,
+        )
+        # both commands may take their whole timeout; past that and a margin, nobody is coming
+        deadline = time.monotonic() + 2 * timeout + workers.LIVE.total_seconds()
+        waiting_since = time.monotonic()
+        try:
+            while True:
+                row = self.store.worker_task_row(task_id)
+                if row is None:
+                    raise BuilderLost(f"the {platform} build was taken off the queue")
+                if row["state"] == "done":
+                    return GateResult(
+                        ok=row["exit_code"] == 0,
+                        output=str(row["output"] or ""),
+                        seconds=float(row["seconds"] or 0.0),
+                    )
+                now = time.monotonic()
+                if row["state"] == "running":
+                    holder = self.store.get_worker(
+                        str(row["worker_id"]), live_since=workers.live_since()
+                    )
+                    if holder is None or not holder.online:
+                        if int(row["tries"]) >= 2:
+                            raise BuilderLost(f"the Mac building {platform} went away twice")
+                        self.store.requeue_worker_task(task_id)
+                        waiting_since = now
+                elif (
+                    platform not in self.remote_platforms(job.owner_id)
+                    and now - waiting_since > workers.LIVE.total_seconds()
+                ):
+                    raise BuilderLost(f"no Mac that builds {platform} is connected")
+                if now > deadline:
+                    raise BuilderLost(f"no answer from the Mac building {platform} in time")
+                time.sleep(self.worker_poll_s)
+        finally:
+            self.store.drop_worker_task(task_id)
+
     def _final_gate(self, job: Job) -> GateResult:
         """The whole project, once QA's tests are written: its own commands, then every
-        mobile platform's that can be built here. One that cannot is said, not failed --
-        where it gets built is the waiting state's business (T14.2), not this gate's."""
+        mobile platform's that can be built here or on a machine the owner lent. One that
+        cannot is said, not failed: its phases already passed their own gates, and holding
+        the tests of everything else hostage to a Mac being awake would help nobody."""
         gate = self._run_gate(job)
         profile = self._profile(job)
         outputs = [gate.output]
@@ -3449,10 +3528,15 @@ class Engine:
         for platform in profile.platform_names():
             if not gate.ok:
                 break
-            if not toolchains.can_build(platform):
+            if not self.can_build(job, platform):
                 outputs.append(f"[{platform}: not built here -- this machine cannot build it]")
                 continue
-            gate = self._run_gate(job, platform)
+            try:
+                built = self._run_gate(job, platform)
+            except BuilderLost as lost:
+                outputs.append(f"[{platform}: not built -- {lost}]")
+                continue
+            gate = built
             outputs.append(gate.output)
             seconds += gate.seconds
         return GateResult(ok=gate.ok, output="\n\n".join(outputs), seconds=seconds)
@@ -3776,9 +3860,13 @@ class Engine:
     # -- builds this machine cannot do (T14.2) ---------------------------------------------
 
     def remote_platforms(self, owner_id: str | None) -> frozenset[str]:
-        """What a machine lent to this account can build right now. None is lent until
-        workers exist (T14.3), which is where this learns to answer."""
-        return frozenset()
+        """What the machines this account has lent, and that are there now, can build.
+        Only its own: a Mac is lent to one account and never builds another's code."""
+        found: set[str] = set()
+        for worker in self.store.list_workers(owner_id, live_since=workers.live_since()):
+            if worker.online:
+                found.update(worker.capabilities)
+        return frozenset(found)
 
     def can_build(self, job: Job, platform: str) -> bool:
         """Here, or on a machine the job's owner has lent -- never somebody else's."""
@@ -3826,19 +3914,27 @@ class Engine:
         )
         return job
 
-    def _wait_for_builder(self, job: Job) -> Job:
+    def _wait_for_builder(
+        self, job: Job, *, resume: JobState = JobState.DEVELOPING, why: str | None = None
+    ) -> Job:
         """Everything left needs a machine this is not: stop and say which, and wait for
-        one to connect. No attempt is spent and nothing has failed."""
+        one to connect. No attempt is spent and nothing has failed.
+
+        ``resume`` is where it picks up: the phase itself, or -- when the Mac went away
+        with a phase already written -- only its build.
+        """
         phases = self._phases(job)
         index = job.data.phase_index
-        platforms = sorted(
-            {
-                str(p["platform"])
-                for p in phases[index:]
-                if p.get("platform") and not self._phase_buildable(job, p)
-            }
-        )
+        wanted = {
+            str(p["platform"])
+            for p in phases[index:]
+            if p.get("platform") and not self._phase_buildable(job, p)
+        }
+        if resume is JobState.BUILD_GATE and index < len(phases) and phases[index].get("platform"):
+            wanted.add(str(phases[index]["platform"]))
+        platforms = sorted(wanted)
         job.data.waiting_platforms = platforms
+        job.data.builder_resume = resume.value
         self.store.save(job)
         names = ", ".join(platforms)
         job = self.orchestrator.transition(
@@ -3849,9 +3945,12 @@ class Engine:
                 f"{names}, which nothing here can build; it carries on when one connects"
             ),
             detail="\n".join(
-                f"{i + 1}. {p.get('goal', '')} ({p.get('platform')})"
-                for i, p in enumerate(phases)
-                if i >= index
+                ([why] if why else [])
+                + [
+                    f"{i + 1}. {p.get('goal', '')} ({p.get('platform')})"
+                    for i, p in enumerate(phases)
+                    if i >= index
+                ]
             ),
         )
         self._notify_builder_wait(job)
@@ -3906,11 +4005,16 @@ class Engine:
         index = job.data.phase_index
         # a phase that builds one platform's app is built with that platform's commands
         platform = phases[index].get("platform") if index < len(phases) else None
-        gate = self._run_gate(job, platform)
-        # the tester reads a failure first: a test that asserts something nobody agreed to
-        # is QA's own to correct, and the gate runs again without a specialist touching it
-        while not gate.ok and self._qa_gate_triage(job, index, gate.tail):
+        try:
             gate = self._run_gate(job, platform)
+            # the tester reads a failure first: a test that asserts something nobody agreed
+            # to is QA's own to correct, and the gate runs again without a specialist
+            while not gate.ok and self._qa_gate_triage(job, index, gate.tail):
+                gate = self._run_gate(job, platform)
+        except BuilderLost as lost:
+            # the phase is written and staged; only its build is owed, so that is where the
+            # development picks up again -- not with the specialist writing it twice
+            return self._wait_for_builder(job, resume=JobState.BUILD_GATE, why=str(lost))
         if gate.ok:
             job.data.build_attempts = 0
             job.data.last_build_output = None

@@ -417,8 +417,9 @@ def test_an_openai_compatible_vendor_is_shown_the_picture_as_a_data_url() -> Non
 
 
 def test_a_database_written_before_attachments_upgrades_into_one(tmp_path: Path) -> None:
-    """Built by taking the new shape apart: drop what 0010 adds, stamp the revision before
-    it, and let the store upgrade itself the way a server does on start."""
+    """Built by taking the new shape apart: drop what 0010 and every later revision add,
+    stamp the revision before it, and let the store upgrade itself the way a server does
+    on start."""
     from alembic import command
     from sqlalchemy import inspect, text
 
@@ -430,7 +431,8 @@ def test_a_database_written_before_attachments_upgrades_into_one(tmp_path: Path)
     try:
         metadata.create_all(db.engine)
         with db.begin() as conn:
-            conn.execute(text("DROP TABLE attachments"))
+            for later in ("attachments", "workers", "worker_codes", "worker_tasks"):
+                conn.execute(text(f"DROP TABLE {later}"))
         command.stamp(_config(db), "0009_two_factor")
 
         migrate(db)

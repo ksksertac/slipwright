@@ -158,7 +158,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 | 12 | T12.4 Told when work arrives, told when it ends | [x] |
 | 14 | T14.1 A phase names its platform; per-platform commands | [x] |
 | 14 | T14.2 What nothing here can build is deferred, not failed | [x] |
-| 14 | T14.3 Pairing, and the worker's side of the API | [ ] |
+| 14 | T14.3 Pairing, and the worker's side of the API | [x] |
 | 14 | T14.4 `slipwright worker` on the Mac | [ ] |
 | 14 | T14.5 The pages | [ ] |
 | 14 | T14.6 Getting it onto a Mac | [ ] |
@@ -1341,25 +1341,33 @@ The shape, decided with the user before any of it was written:
 
 ### T14.3 — Pairing, and the worker's side of the API
 **Done when**
-- [ ] `workers` (owner, name, token hash, capabilities, paired/last-seen/revoked) and
-  `worker_codes` (hash, owner, expiry), alembic migration included; modelled on
-  `chat_codes`: only the hash is stored, a code is spent on first use, 15 minutes
-- [ ] The connection code packs the server address, the secret and a check digit into
-  base32 without look-alike letters (`SW-` prefix); a mistyped code is refused before the
-  network is touched
-- [ ] The address comes from the installation's server address (the mail `base_url`,
-  generalised), else the address the browser is on; `localhost` is never put in a code --
-  the page asks for the LAN address instead and keeps it
-- [ ] `POST /api/workers/pair` is public (like `/api/notify/inbound/`) and proves itself with
-  the code; it returns a worker token that authenticates **only** the worker endpoints
-- [ ] `POST /api/workers/poll` long-polls (~25 s) with the worker's capabilities; it doubles
-  as the heartbeat and hands out at most one task at a time, and only its owner's
-- [ ] `GET .../tasks/{id}/bundle` streams the commit; `POST .../tasks/{id}/result` takes the
-  exit code, output (capped like the gate's) and seconds
-- [ ] `RemoteRunner` implements `Runner`: it queues a task and waits for the result. A worker
-  that vanishes mid-build gets its task back in the queue once; after that the job returns to
-  `AWAITING_BUILDER` -- a lost Mac is not a failed build and spends no attempt
-- [ ] Revoking a worker stops its next poll (401) and requeues its task
+- [x] `workers` (owner, name, token hash, capabilities, paired/last-seen/revoked),
+  `worker_codes` (hash, owner, expiry) and `worker_tasks` (the queue), alembic
+  `0011_workers`; modelled on `chat_codes`: only hashes are stored, a code is spent on
+  first use, 15 minutes. Deleting an account deletes its workers
+- [x] The connection code packs the server address (six bytes for a LAN IPv4 and port), a
+  10-byte secret and a check byte into Crockford base32 (`SW-` prefix); a mistyped code is
+  refused before the network is touched, and O/I/L are read as 0/1/1
+- [x] The address comes from the installation's own (the mail `base_url`), else the one the
+  page sends; `localhost` is never put in a code -- the page is answered 422 and asked for
+  the LAN address, which is kept for the next code
+- [x] `POST /api/worker/pair` is public (`PUBLIC_PREFIXES`, like `/api/notify/inbound/`) and
+  proves itself with the code; it returns a `swk_` token that opens **only** `/api/worker/*`
+- [x] `POST /api/worker/poll` long-polls (~25 s) with the worker's capabilities; it doubles
+  as the heartbeat, claims at most one build at a time with a conditional update, and only
+  its own account's; it is also what wakes that account's waiting developments
+- [x] `GET .../tasks/{id}/snapshot` gives the worktree as a tar.gz -- tracked and untracked,
+  not ignored -- because a phase is not committed until it passes, so a git bundle would
+  have been the last phase's code; `POST .../tasks/{id}/result` takes the exit code, the
+  output and the seconds
+- [x] The engine's `_remote_gate` queues a build and waits. A worker unheard-of while it
+  holds one has it requeued once; after that, or with no Mac able to take it, `BuilderLost`
+  sends the job to `AWAITING_BUILDER` with `builder_resume=build_gate` -- a lost Mac is not a
+  failed build, spends no attempt, and the phase is not written again when one returns
+- [x] Revoking a worker stops its next poll (401) and requeues its build
+
+> Verified by `tests/test_phase14_workers.py`, including a fake Mac driving the real API
+> through a whole development, and one that falls asleep holding the iOS build.
 
 ### T14.4 — `slipwright worker` on the Mac
 **Done when**
