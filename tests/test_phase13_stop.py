@@ -3,7 +3,8 @@
 Not a failure and not a step: the answer to "this is not worth what it is spending", which
 can be true mid-phase or at a gate nobody is going to answer. What it cannot do is
 interrupt a call already in flight -- the model is answering and that answer is already
-paid for -- so it takes effect between steps.
+paid for -- so it takes effect before the next call, whether that is the next step's or
+the same step asking again.
 """
 
 from __future__ import annotations
@@ -16,8 +17,10 @@ from fastapi.testclient import TestClient
 
 from slipwright.api import create_app
 from slipwright.engine import Engine, NotAwaitingApproval
+from slipwright.providers import ModelRequest, ProviderTimeoutError
+from slipwright.providers.scripted import ScriptedProvider
 from slipwright.schemas.job import TERMINAL_STATES, JobState
-from slipwright.schemas.profile import Profile
+from slipwright.schemas.profile import Profile, RoleName
 from slipwright.schemas.project import Project
 from slipwright.store import JobNotFound, JobStore
 from tests.pipeline import full_engine, full_provider
@@ -63,6 +66,53 @@ def test_what_it_built_is_still_there(engine: Engine, repo: Path) -> None:
     stopped = engine.cancel(job.id)
     assert stopped.data.backlog == backlog
     assert stopped.branch == job.branch
+
+
+def _stopped_mid_call(
+    store: JobStore, worktrees_root: Path, seed: Profile, repo: Path, *, answers: bool
+) -> tuple[Engine, str, list[ModelRequest]]:
+    """A development whose Product Owner is told to stop while it is answering: the stop
+    arrives with the call in flight, the way it does from the page. It then either answers
+    or times out -- and a timeout is, on its own, asked again."""
+    provider: ScriptedProvider = full_provider(seed, phases=1)
+    backlog = provider.replies[RoleName.PO]
+    engine = full_engine(store, worktrees_root, seed, provider)
+    job = engine.create_job("health", repo)
+    asked: list[ModelRequest] = []
+
+    def po(request: ModelRequest) -> object:
+        asked.append(request)
+        if len(asked) == 1:
+            engine.cancel(job.id, by="ada")
+        if answers:
+            return backlog
+        raise ProviderTimeoutError("the model took too long")
+
+    provider.replies[RoleName.PO] = po
+    return engine, job.id, asked
+
+
+def test_a_call_that_timed_out_is_not_asked_again_once_stopped(
+    store: JobStore, worktrees_root: Path, seed: Profile, repo: Path
+) -> None:
+    """A step is many calls, and a call that times out is asked again. Stopping looked
+    only between steps, so a development told to stop went on asking -- one call after
+    another, each spending -- until its step gave up."""
+    engine, job_id, asked = _stopped_mid_call(store, worktrees_root, seed, repo, answers=False)
+    job = engine.start(job_id)
+    assert job.state is JobState.CANCELLED, "stopped, not failed after its retries"
+    assert len(asked) == 1, "the call in flight finished; nothing was asked after it"
+
+
+def test_a_step_that_ends_at_a_gate_after_the_stop_does_not_wait_there(
+    store: JobStore, worktrees_root: Path, seed: Profile, repo: Path
+) -> None:
+    """Told to stop while the step was still running, it must not be found waiting for a
+    yes that would only set it spending again."""
+    engine, job_id, _ = _stopped_mid_call(store, worktrees_root, seed, repo, answers=True)
+    job = engine.start(job_id)
+    assert job.state is JobState.CANCELLED
+    assert job.data.backlog, "what the call in flight answered is kept"
 
 
 def test_it_cannot_be_stopped_twice(engine: Engine, repo: Path) -> None:

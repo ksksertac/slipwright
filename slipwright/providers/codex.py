@@ -20,13 +20,16 @@ throwaway empty directory with a read-only sandbox. The answer is the last
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
 import re
 import shlex
 import shutil
+import signal
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -135,6 +138,62 @@ def read_answer(stdout: str) -> tuple[str, int | None, int | None, str | None]:
     return text, tokens_in, tokens_out, error
 
 
+def _own_group() -> dict[str, Any]:
+    """Popen arguments that start a process at the head of a group of its own, so that
+    everything it starts can be ended with it (see ``_kill_tree``)."""
+    if sys.platform == "win32":
+        return {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
+    return {"start_new_session": True}
+
+
+def _kill_tree(process: subprocess.Popen[str]) -> None:
+    """End ``process`` and everything it started.
+
+    ``codex`` on the PATH is a Node script that starts the real, native binary as its
+    child. Killing only the process we started killed the wrapper; the binary was handed
+    to PID 1 and went on thinking -- on the person's plan -- for an answer nobody was
+    waiting for any more. A development whose calls kept timing out left one of these
+    behind every ten minutes, each still spending, and stopping the development did not
+    touch them."""
+    if sys.platform == "win32":
+        subprocess.run(  # noqa: S603 - our own argv, no shell
+            ["taskkill", "/F", "/T", "/PID", str(process.pid)],  # noqa: S607
+            capture_output=True,
+            check=False,
+        )
+    else:
+        with contextlib.suppress(ProcessLookupError, PermissionError):  # already gone
+            os.killpg(process.pid, signal.SIGKILL)
+    process.kill()  # whatever the group kill missed, the head at least
+
+
+def _run_tree(
+    args: list[str], stdin: str, *, cwd: str, env: dict[str, str], timeout: float
+) -> subprocess.CompletedProcess[str]:
+    """``subprocess.run`` with a timeout that ends the whole tree, not only its head."""
+    with subprocess.Popen(  # noqa: S603 - our own argv, no shell
+        args,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        cwd=cwd,
+        env=env,
+        **_own_group(),
+    ) as process:
+        try:
+            out, err = process.communicate(stdin, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            _kill_tree(process)
+            raise
+        except BaseException:
+            _kill_tree(process)  # the server stopping mid-call leaves nothing behind either
+            raise
+    return subprocess.CompletedProcess(args, process.returncode, out, err)
+
+
 class CodexProvider:
     """Runs one ``codex exec`` per request, signed in as one account."""
 
@@ -169,17 +228,8 @@ class CodexProvider:
         stdin = f"{PREAMBLE}{request.system}\n\n{request.prompt}"
         with tempfile.TemporaryDirectory(prefix="slipwright-codex-") as empty:
             try:
-                done = subprocess.run(
-                    args,
-                    input=stdin,
-                    capture_output=True,
-                    text=True,
-                    encoding="utf-8",
-                    errors="replace",
-                    cwd=empty,
-                    env=_env(self.home),
-                    timeout=request.timeout_s,
-                    check=False,
+                done = _run_tree(
+                    args, stdin, cwd=empty, env=_env(self.home), timeout=request.timeout_s
                 )
             except subprocess.TimeoutExpired as exc:
                 raise ProviderTimeoutError(f"codex exec timed out after {exc.timeout}s") from exc
@@ -267,7 +317,7 @@ class Logins:
             if current and current.running and current.code:
                 return current
             if current and current.running:
-                current.process.kill()
+                _kill_tree(current.process)
             command = self.command or codex_command()
             if not command:
                 raise ProviderUnavailableError(
@@ -283,6 +333,7 @@ class Logins:
                 errors="replace",
                 env=_env(home),
                 cwd=str(home),
+                **_own_group(),
             )
             login = Login(process)
             self._running[home] = login
@@ -293,7 +344,7 @@ class Logins:
         if not (login.url and login.code):
             said = " ".join(login.lines)[-400:]
             if login.running:
-                login.process.kill()
+                _kill_tree(login.process)
             raise ProviderError(f"codex login gave no code: {said or 'no output'}")
         return login
 
@@ -319,7 +370,7 @@ class Logins:
         with self._lock:
             login = self._running.get(home)
             if login and login.running and time.monotonic() - login.started > self.TTL_S:
-                login.process.kill()
+                _kill_tree(login.process)
             if login and login.running:
                 return "waiting"
         return "signed_out"
@@ -329,7 +380,7 @@ class Logins:
         with self._lock:
             login = self._running.pop(home, None)
         if login and login.running:
-            login.process.kill()
+            _kill_tree(login.process)
         (home / "auth.json").unlink(missing_ok=True)
 
 

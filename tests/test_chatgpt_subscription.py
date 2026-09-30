@@ -19,7 +19,7 @@ from fastapi.testclient import TestClient
 from slipwright.api import create_app
 from slipwright.config import Settings
 from slipwright.engine import Engine
-from slipwright.providers import ModelRequest, ProviderRejectedError
+from slipwright.providers import ModelRequest, ProviderRejectedError, ProviderTimeoutError
 from slipwright.providers.codex import CodexProvider, Logins, read_answer
 from slipwright.providers.registry import CHATGPT
 from slipwright.schemas.profile import Profile, RoleName, ThinkingDepth
@@ -66,9 +66,10 @@ def test_an_answer_comes_from_codex_exec_with_its_tokens(home: Path) -> None:
     assert (response.input_tokens, response.output_tokens) == (1200, 42)
     call = json.loads((home / "last_call.json").read_text(encoding="utf-8"))
     assert call["argv"][:2] == ["exec", "--json"]
-    assert call["argv"][
-        call["argv"].index("-m") : call["argv"].index("-m") + 2
-    ] == ["-m", "gpt-6-sol"]
+    assert call["argv"][call["argv"].index("-m") : call["argv"].index("-m") + 2] == [
+        "-m",
+        "gpt-6-sol",
+    ]
     assert 'model_reasoning_effort="high"' in call["argv"]
     assert call["argv"][-1] == "-"  # the prompt came on stdin, not the command line
     assert "You are the Architect." in call["stdin"] and "Plan it." in call["stdin"]
@@ -100,6 +101,23 @@ def test_not_signed_in_and_a_spent_plan_end_the_step_at_once(home: Path) -> None
     (home / "fail.txt").write_text("You've hit your usage limit.", encoding="utf-8")
     with pytest.raises(ProviderRejectedError, match="usage limit"):
         provider.complete(_request())
+
+
+def test_a_call_that_times_out_leaves_nothing_of_codex_running(home: Path) -> None:
+    """``codex`` is a Node wrapper around a native binary. The timeout killed the wrapper
+    and the binary was left behind, working on the person's plan for an answer nobody
+    would read -- one more every time a call timed out, and stopping the development did
+    not reach them."""
+    (_signed_in(home) / "hang.txt").write_text("1", encoding="utf-8")
+    beat = home / "beat"
+    with pytest.raises(ProviderTimeoutError):
+        CodexProvider(home, command=FAKE).complete(_request(timeout_s=3))
+    assert beat.exists(), "the child had started before the call was given up on"
+
+    time.sleep(0.5)  # whatever was mid-write lands
+    before = beat.stat().st_size
+    time.sleep(1.0)
+    assert beat.stat().st_size == before, "the child is still working"
 
 
 def test_only_the_agents_last_message_is_the_answer() -> None:
@@ -201,9 +219,9 @@ def test_the_sign_in_card_keeps_watching_while_you_approve_elsewhere() -> None:
     It also has to watch until it is signed in rather than only while the server says
     "waiting", or one answer of any other kind stops the polling for good.
     """
-    hooks = (
-        Path(__file__).resolve().parent.parent / "web" / "src" / "api" / "hooks.ts"
-    ).read_text(encoding="utf-8")
+    hooks = (Path(__file__).resolve().parent.parent / "web" / "src" / "api" / "hooks.ts").read_text(
+        encoding="utf-8"
+    )
     login = hooks[hooks.index("export function useChatGPTLogin") :][:1200]
     assert "refetchIntervalInBackground: true" in login
     assert '(q) => (q.state.data?.status === "signed_in" ? false : 3000)' in login

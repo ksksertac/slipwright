@@ -281,6 +281,11 @@ class JobIsRunning(ValueError):
         self.job = job
 
 
+class _Stopped(Exception):
+    """Somebody stopped the development while a step was still running it; raised before
+    the step's next model call, caught by the run loop."""
+
+
 class BriefIsRunning(ValueError):
     """The analysis (or an intake round) is working; a second one would race it."""
 
@@ -2153,8 +2158,9 @@ class Engine:
         a retry, and does not count against anything.
 
         What it cannot do is interrupt a call that is already in flight. The model is
-        answering and that answer is already paid for, so the stop takes effect between
-        steps: whatever was running finishes, and nothing further begins. A development
+        answering and that answer is already paid for, so the stop takes effect before the
+        next call -- the next step, or the next call inside this one, a retry included:
+        whatever was being answered finishes, and nothing further is asked. A development
         that is not running at all stops here and now.
         """
         job = self.store.get(job_id)
@@ -2172,7 +2178,7 @@ class Engine:
                 lock.release()
             return self._notify_outcome(job)
         self._cancelled.add(job.id)
-        self.store.update_state(job.id, job.state, note=f"{note}: finishing the step it is on")
+        self.store.update_state(job.id, job.state, note=f"{note}: finishing the call it is on")
         return self.store.get(job.id)
 
     def retry(self, job_id: str, *, run: bool = True, feedback: str | None = None) -> Job:
@@ -2661,6 +2667,14 @@ class Engine:
                 before = job.state
                 try:
                     job = handler(job)
+                except _Stopped:
+                    self._cancelled.discard(job.id)
+                    job = self.orchestrator.transition(
+                        self.store.get(job.id),
+                        JobState.CANCELLED,
+                        note="stopped: its next call was not made",
+                    )
+                    return self._notify_outcome(job)
                 except Exception as exc:  # noqa: BLE001 - a crashed phase fails the job
                     log.exception("job %s: %s phase crashed", job.id, before.value)
                     job = self._fail(
@@ -2675,6 +2689,14 @@ class Engine:
                 if job.state in APPROVAL_STATES:
                     job = self._supervise(job)  # may approve, in which case the loop goes on
                     job = self._notify_team(job)
+            if job.id in self._cancelled:
+                self._cancelled.discard(job.id)
+                if not job.is_terminal:
+                    # the step it was stopped in ended at a gate: it was told to stop, so
+                    # it does not sit there waiting for somebody to approve its next spend
+                    job = self.orchestrator.transition(
+                        job, JobState.CANCELLED, note="stopped: nothing further was started"
+                    )
             job = self._notify_outcome(job)
         # outside the job's lock: reading the code it wrote is a model call, and a job
         # that has finished must not look busy while it happens
@@ -3009,6 +3031,12 @@ class Engine:
         mine = self.provider_for(job.owner_id)
         provider: ModelProvider = mine
         while True:
+            # a step is not one call: the developer is asked, the gate runs, the developer
+            # is asked again, and a call that timed out is asked again after it. Looking for
+            # a stop only between steps let a development that had been told to stop go on
+            # spending for as long as its step did -- every new call is a place to stop
+            if job.id in self._cancelled:
+                raise _Stopped
             attempt += 1
             result = run(job, provider=provider, timeout_s=self.timeout_s, **kw)
             result.attempts = attempt
@@ -3968,8 +3996,7 @@ class Engine:
             stray = [
                 c.path
                 for c in result.output.changes
-                if not c.path.startswith(prefix)
-                and not (pipeline and c.path.startswith(pipeline))
+                if not c.path.startswith(prefix) and not (pipeline and c.path.startswith(pipeline))
             ]
             if stray:
                 allowed = f"{prefix} or {pipeline}" if pipeline else prefix
@@ -4013,10 +4040,7 @@ class Engine:
         self.store.update_state(
             job.id,
             job.state,
-            note=(
-                f"devops: {len(touched)} deployment file(s) written{parts} "
-                f"— {summaries[-1]}"
-            ),
+            note=(f"devops: {len(touched)} deployment file(s) written{parts} — {summaries[-1]}"),
             detail=diff or "(no changes)",
         )
         job.history = self.store.get(job.id).history
