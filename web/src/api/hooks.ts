@@ -971,7 +971,15 @@ export function useChatGPTLogin(enabled: boolean) {
       return state;
     },
     enabled,
-    refetchInterval: (q) => (q.state.data?.status === "waiting" ? 3000 : false),
+    // Approving happens on OpenAI's site, so this is the one query in the app whose
+    // answer changes while the person is looking at a different tab. The global default
+    // pauses an interval on a blurred window and never refetches on focus
+    // (`refetchOnWindowFocus: false`), which left the card saying "waiting for you to
+    // approve it" long after the approval had landed -- only a reload got past it.
+    refetchIntervalInBackground: true,
+    // and it watches until it is actually signed in, rather than only while the server
+    // says "waiting": a poll that answered anything else once would have stopped for good
+    refetchInterval: (q) => (q.state.data?.status === "signed_in" ? false : 3000),
   });
 }
 

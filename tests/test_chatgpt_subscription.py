@@ -191,3 +191,19 @@ def test_signed_in_it_is_a_provider_an_agent_can_run_on(
     response = engine.provider.complete(_request(model="whatever-the-profile-says"))
     assert response.text == '{"ok": true}'
     assert response.provider == CHATGPT
+
+
+def test_the_sign_in_card_keeps_watching_while_you_approve_elsewhere() -> None:
+    """Approving is done on OpenAI's site, so the answer this card waits for changes
+    while the person is looking at another tab. The app refetches nothing on window
+    focus, and a paused interval plus no focus refetch is a card that says "waiting for
+    you to approve it" long after the approval landed -- a reload was the only way out.
+    It also has to watch until it is signed in rather than only while the server says
+    "waiting", or one answer of any other kind stops the polling for good.
+    """
+    hooks = (
+        Path(__file__).resolve().parent.parent / "web" / "src" / "api" / "hooks.ts"
+    ).read_text(encoding="utf-8")
+    login = hooks[hooks.index("export function useChatGPTLogin") :][:1200]
+    assert "refetchIntervalInBackground: true" in login
+    assert '(q) => (q.state.data?.status === "signed_in" ? false : 3000)' in login
