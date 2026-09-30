@@ -34,6 +34,7 @@ from slipwright.update import (
     recreated,
     release_notes,
     replace,
+    running_version,
 )
 from tests.pipeline import full_engine, full_provider
 
@@ -180,6 +181,18 @@ def test_the_newest_release_tag_is_the_one_offered() -> None:
 
 def test_builds_of_main_are_not_releases() -> None:
     assert latest_release(IMAGE, _registry(["latest", "sha-8b16ffa", "1.2"])) is None
+
+
+def test_a_published_image_reports_the_release_ci_made_of_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Every merge is a release and pyproject.toml does not follow it, so the number an
+    image was published as is the one it has to report -- or the release it installs is
+    offered to it forever."""
+    monkeypatch.setenv("SLIPWRIGHT_VERSION", "0.2.7")
+    assert running_version() == "0.2.7"
+    monkeypatch.setenv("SLIPWRIGHT_VERSION", "")  # a local build: pyproject.toml's
+    assert running_version() != ""
 
 
 def test_only_a_newer_release_is_offered() -> None:

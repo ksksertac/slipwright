@@ -88,6 +88,12 @@ ENV HOME=/home/slipwright \
 
 VOLUME ["/data"]
 VOLUME ["/work"]
+
+# What this image was released as (update.py's running_version), set by CI from the tag it
+# computed. Last, so a new number does not rebuild every layer above; empty in a local
+# build, which then reports pyproject.toml's version.
+ARG SLIPWRIGHT_VERSION=""
+ENV SLIPWRIGHT_VERSION=${SLIPWRIGHT_VERSION}
 EXPOSE 8500
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
     CMD curl -fsS http://127.0.0.1:8500/healthz || exit 1

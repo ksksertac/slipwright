@@ -144,7 +144,10 @@ opened again, and an image with no driver in it.
 
 `main` is protected by a ruleset: no direct pushes, only a pull request whose `test` check
 (`.github/workflows/docker.yml`) has passed. Push a branch and open a PR. Every merge to
-`main` publishes `ghcr.io/ksksertac/slipwright:latest`.
+`main` is a **release**: CI publishes the image as the next patch (`v0.2.0` → `0.2.1`) and
+`:latest`, tags the commit and writes a GitHub release from the merged PRs' titles, and
+every running installation is offered it. A bigger step (`v0.3.0`) is a tag pushed by
+hand; the patches count on from it.
 
 ## Configuration
 
@@ -198,7 +201,9 @@ behaviour deliberately changed, rewrite it to state the new rule -- do not weake
   re-create would hand an empty one. A release's migrations run against the database the
   previous release left; one that fails its health check is swapped back, but the
   schema is not, so a migration must leave the database usable by the release before.
-  A release tag must equal `pyproject.toml`'s version (CI checks).
+  Since every merge is a release, that is every merge. The number an image reports is
+  `SLIPWRIGHT_VERSION`, written into it by CI -- `pyproject.toml`'s is only a source
+  checkout's, because CI cannot commit a bump to a protected `main`.
 - **Positional assertions rot.** A test that asserted on `provider_settings()[2]` broke
   the day a vendor was added. Look things up by name.
 

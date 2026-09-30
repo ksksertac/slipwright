@@ -1,9 +1,15 @@
 # Checks every push, and publishes the images people run to GitHub Container Registry.
 #
-#   main          -> ghcr.io/<owner>/slipwright:latest   (+ :sha-<short>)
-#   tag v1.2.3    -> ghcr.io/<owner>/slipwright:1.2.3, :1.2
-#                    -- a *release*: running installations offer to install it (update.py)
+#   main          -> a *release*: the newest v1.2.3 tag's next patch, v1.2.4, published as
+#                    :1.2.4, :1.2 and :latest (+ :sha-<short>), then tagged and given a
+#                    GitHub release -- running installations offer to install it (update.py)
+#   tag v1.3.0    -> the same, for a bigger step taken by hand; patches count on from it
 #   pull request  -> built, never pushed: a stranger's branch does not get to publish
+#
+# Every merge a release, because a merge nobody released is a fix nobody gets: three went
+# out as :sha-… only and no installation was ever offered them. pyproject.toml does not
+# follow -- CI may not commit to a protected main -- so the number travels in the image
+# (SLIPWRIGHT_VERSION) instead.
 #
 # The runner image (Dockerfile.runner) is published beside it as slipwright-runner, so a
 # hosted installation can set SLIPWRIGHT_RUNNER_IMAGE instead of building it itself.
@@ -16,10 +22,12 @@ on:
   pull_request:
   workflow_dispatch:
 
-# a newer push to the same branch makes the older run pointless
+# A newer push to a pull request makes the older run pointless. On main it does not: a
+# release run cut off between publishing and tagging would leave a number half-issued,
+# so main's runs queue instead (the newest pending one still replaces the others).
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -33,15 +41,6 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync --frozen --extra postgres
-      # A release is offered to every running installation by its number (update.py), and
-      # an installation knows its own number from pyproject.toml. A tag that disagrees
-      # would be offered forever to the very version it installs.
-      - if: startsWith(github.ref, 'refs/tags/v')
-        run: |
-          have=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
-          if [ "v$have" != "$GITHUB_REF_NAME" ]; then
-            echo "tag $GITHUB_REF_NAME, but pyproject.toml says $have" >&2; exit 1
-          fi
       # jobs commit in the tests' scratch repositories; a runner has no git identity
       - run: |
           git config --global user.name slipwright-ci
@@ -50,9 +49,43 @@ jobs:
       - run: uv run mypy
       - run: uv run pytest -q
 
+  # What this run is released as: nothing for a pull request; a pushed tag's own number;
+  # on main the commit's tag if somebody already gave it one, else the next patch.
+  version:
+    # never from a branch that is not main: a manual run elsewhere builds, it does not release
+    if: github.event_name == 'push' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.next.outputs.version }}
+      minor: ${{ steps.next.outputs.minor }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the tags
+      - id: next
+        run: |
+          release='^v[0-9]+\.[0-9]+\.[0-9]+$'
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            tag="$GITHUB_REF_NAME"
+            [[ "$tag" =~ $release ]] || { echo "not a release tag: $tag"; exit 0; }
+          else
+            tag=$(git tag --points-at HEAD | grep -E "$release" | sort -V | tail -1 || true)
+            if [ -z "$tag" ]; then
+              newest=$(git tag -l 'v*' | grep -E "$release" | sort -V | tail -1 || true)
+              IFS=. read -r major minor patch <<< "${newest#v}"
+              tag="v${major:-0}.${minor:-0}.$(( ${patch:-0} + 1 ))"
+            fi
+          fi
+          v="${tag#v}"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "minor=${v%.*}" >> "$GITHUB_OUTPUT"
+          echo "releasing $v"
+
   image:
     # an image nobody could trust is not worth publishing
-    needs: test
+    needs: [test, version]
+    # a pull request has no version to wait for, and is built all the same
+    if: ${{ !cancelled() && needs.test.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -81,8 +114,8 @@ jobs:
           images: ghcr.io/${{ github.repository_owner }}/${{ matrix.name }}
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=${{ needs.version.outputs.version }},enable=${{ needs.version.outputs.version != '' }}
+            type=raw,value=${{ needs.version.outputs.minor }},enable=${{ needs.version.outputs.version != '' }}
             type=sha
       - uses: docker/build-push-action@v6
         with:
@@ -92,5 +125,25 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: SLIPWRIGHT_VERSION=${{ needs.version.outputs.version }}
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+  # Only once the image is out: an installation is offered a number the moment the
+  # registry has it, and the notes it shows are this release's. The tag is made by the
+  # release itself; made with this job's token, it starts no second run.
+  release:
+    needs: [version, image]
+    if: ${{ !cancelled() && needs.image.result == 'success' && needs.version.outputs.version != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: v${{ needs.version.outputs.version }}
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "$TAG is already released"; exit 0
+          fi
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA"             --title "$TAG" --generate-notes --latest
