@@ -28,6 +28,25 @@ NEVER_COMMITTED = (
     "DerivedData/",
     "coverage/",
 )
+#: Committed, but never worth a reviewer's reading: lock files a package manager writes
+#: (a fresh ``package-lock.json`` is nine thousand lines) and compiled output, which says
+#: again what its source already said. Left out of every diff a role is shown.
+NEVER_SHOWN = (
+    "package-lock.json",
+    "yarn.lock",
+    "pnpm-lock.yaml",
+    "bun.lockb",
+    "poetry.lock",
+    "uv.lock",
+    "Pipfile.lock",
+    "Cargo.lock",
+    "Gemfile.lock",
+    "composer.lock",
+    "Podfile.lock",
+    "pubspec.lock",
+    "go.sum",
+    "dist/",
+)
 #: The most of a diff a role is given. Past it the role reads which files changed and as
 #: much of the change as fits; a model has a limit on what it is sent, and a diff that
 #: size is not one anybody reviews line by line anyway.
@@ -84,8 +103,16 @@ def clone(url: str, target: Path) -> None:
 
 
 def _not_ours() -> list[str]:
-    """Pathspecs that leave ``NEVER_COMMITTED`` out of a diff, at any depth."""
-    return ["--", ".", *(f":(exclude,glob)**/{d}**" for d in NEVER_COMMITTED)]
+    """Pathspecs that leave ``NEVER_COMMITTED`` and ``NEVER_SHOWN`` out of a diff, at any
+    depth: a directory with everything under it, a file by its name."""
+    return [
+        "--",
+        ".",
+        *(
+            f":(exclude,glob)**/{p}**" if p.endswith("/") else f":(exclude,glob)**/{p}"
+            for p in (*NEVER_COMMITTED, *NEVER_SHOWN)
+        ),
+    ]
 
 
 def _capped(repo: Path, text: str, stat: list[str]) -> str:

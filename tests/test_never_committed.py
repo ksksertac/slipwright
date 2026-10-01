@@ -68,6 +68,26 @@ def test_a_diff_shown_to_a_role_leaves_dependencies_out(repo: Path) -> None:
     assert [path for path, _, _ in g.numstat(repo, base)] == ["src/a.py"]
 
 
+def test_lock_files_and_compiled_output_are_committed_but_not_shown(repo: Path) -> None:
+    base = g.head_commit(repo)
+    _write(
+        repo,
+        {
+            "package-lock.json": "{}\n" * 9000,
+            "web/yarn.lock": "x\n",
+            "dist/data/questions.js": "compiled\n",
+            "src/data/questions.ts": "export const q = []\n",
+        },
+    )
+    g.stage_all(repo)
+    g.commit(repo, "phase 1")
+
+    assert {"package-lock.json", "web/yarn.lock", "dist/data/questions.js"} <= _tracked(repo)
+    shown = g.diff(repo, base)
+    assert "src/data/questions.ts" in shown
+    assert "lock" not in shown and "dist/" not in shown
+
+
 def test_a_diff_too_big_to_send_says_which_files_and_sends_what_fits(
     repo: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
