@@ -315,7 +315,15 @@ class JobData(BaseModel):
     )
     invocation_log: list[dict[str, Any]] = Field(
         default_factory=list,
-        description="One entry per model call: role, phase, attempts, prompt_chars, tokens, at.",
+        description="One entry per model call: role, provider, model, phase, attempts, "
+        "prompt_chars, tokens, cost, how long it took, the start of what it wrote, at.",
+    )
+    inflight: dict[str, Any] | None = Field(
+        default=None,
+        description="The model call being waited on right now -- role, provider, model, "
+        "phase, started_at -- so a page can say who was asked and how long ago before the "
+        "answer exists. Cleared when the call is logged; no provider streams, so the answer "
+        "itself only ever arrives whole.",
     )
     output_hashes: dict[str, str] = Field(
         default_factory=dict, description="(role:phase) -> hash of the last output (loop check)."

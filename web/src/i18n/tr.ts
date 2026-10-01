@@ -1,5 +1,13 @@
 // Turkish. Keys are the English source strings; anything missing shows the English.
 export const TR: Record<string, string> = {
+  // the development's "right now" tab (components/NowFeed.tsx)
+  "Right now": "Şu anda",
+  Finished: "Bitti",
+  "Phase {i} of {n}": "Faz {i}/{n}",
+  Task: "Görev",
+  "Waiting for the answer": "Yanıt bekleniyor",
+  "What it wrote": "Ne yazdı",
+  attempts: "deneme",
   "phase {n}": "faz {n}",
   "Proposed these cases; it writes the tests for the ones you approve":
     "Bu senaryoları önerdi; onayladıklarını test olarak yazacak",
