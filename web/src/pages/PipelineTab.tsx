@@ -47,8 +47,13 @@ import {
   STAGE_ICON,
   STAGE_LABEL,
   STAGE_NOTE,
+  phaseGoal,
+  phaseName,
+  phaseTotal,
   stageAgent,
+  stageCount,
   stageStatus,
+  stageTally,
   stages,
   type Stage,
 } from "../components/stages";
@@ -218,6 +223,7 @@ function LaneRow({
   openKey: string | null;
 }) {
   const tx = useT();
+  const say = useSay();
   const done = lane.steps.filter((s) => s.status === "done").length;
   // closed is the resting state: the tab is a list of developments until you ask for one
   const [open, setOpen] = useState(false);
@@ -249,7 +255,7 @@ function LaneRow({
                     <AgentIcon role={lane.running_role} />
                   </span>
                 )}
-                <span className="truncate">{stepTitle(tx, lane.running_label)}</span>
+                <span className="truncate">{stepTitle(tx, say, lane)}</span>
               </span>
             )}
             <span className="faint tiny">
@@ -341,7 +347,9 @@ function LaneFlow({
   openKey: string | null;
 }) {
   const groups = useMemo(() => stages(lane.steps), [lane.steps]);
-  let place = 0; // the step's place in the whole flow, so the cards read as an order
+  // a phase card is numbered as a phase; the others need no number -- a running count over
+  // the whole flow made the first phase "6", which read as phase six
+  const total = phaseTotal(lane.steps);
   return (
     <div className="lane-flow">
       {groups.map((group) => (
@@ -362,7 +370,7 @@ function LaneFlow({
                 />
                 <StepCardView
                   step={step}
-                  place={++place}
+                  total={total}
                   active={openKey === step.key}
                   onOpen={() => onOpen(step.key)}
                 />
@@ -379,7 +387,7 @@ function LaneFlow({
  * stage is for, and the count and bar say how much of it is behind you. */
 function StageHead({ stage }: { stage: Stage }) {
   const tx = useT();
-  const done = stage.steps.filter((s) => s.status === "done").length;
+  const { done, total } = stageTally(stage);
   const Icon = STAGE_ICON[stage.key] ?? IconLayers;
   const agent = stageAgent(stage.steps);
   return (
@@ -390,14 +398,9 @@ function StageHead({ stage }: { stage: Stage }) {
         <span className="flow-stage-note">{tx(STAGE_NOTE[stage.key] ?? "")}</span>
       </span>
       <span className="flow-stage-progress">
-        <span className="count mono">
-          {done}/{stage.steps.length}
-        </span>
+        <span className="count">{stageCount(tx, stage)}</span>
         <span className="track">
-          <span
-            className="fill"
-            style={{ width: `${stage.steps.length ? (done / stage.steps.length) * 100 : 0}%` }}
-          />
+          <span className="fill" style={{ width: `${total ? (done / total) * 100 : 0}%` }} />
         </span>
       </span>
     </div>
@@ -473,26 +476,26 @@ function LaneStop({ jobId }: { jobId: string }) {
   return job.data ? <StopAction job={job.data} lane /> : null;
 }
 
-/** Card labels come from the server in English; the fixed ones translate, a phase
- * label ("Backend: <goal>") keeps its goal and translates the agent. */
-function stepLabel(tx: T, step: StepCard): string {
-  const m = /^([^:]+): (.*)$/.exec(step.label);
-  if (step.phase && m) return `${tx(m[1]!)}: ${m[2]!}`;
+/** Card labels come from the server in English; the fixed ones translate, and a phase card
+ * is its goal alone (in the language the page is read in), its agent being the header. */
+function stepLabel(tx: T, say: (s: string) => string, step: StepCard): string {
+  if (step.phase && step.key.startsWith("phase:")) return say(phaseGoal(step));
   const gate = /^Review approval: phase (\d+)$/.exec(step.label);
-  if (gate) return tx("Review approval: phase {n}", { n: gate[1]! });
+  if (gate) return tx("Review approval · {phase}", { phase: phaseName(tx, Number(gate[1])) });
   const mac = /^Waiting for a Mac: (.+)$/.exec(step.label);
   if (mac) return tx("Waiting for a Mac: {apps}", { apps: mac[1]! });
   return tx(step.label);
 }
 
-/** A running step's label in the lane header: the agent translated, its goal clipped.
- *  "Backend Developer: add the endpoint" is the whole card's title; here there is room
- *  for who and roughly what, not the sentence. */
-function stepTitle(tx: T, label: string): string {
-  const m = /^([^:]+): (.*)$/.exec(label);
-  if (!m) return tx(label);
-  const goal = m[2]!.trim();
-  return `${tx(m[1]!)} · ${goal.length > 48 ? `${goal.slice(0, 48)}…` : goal}`;
+/** A running step's label in the lane header. The agent is the icon in front of it, so a
+ *  phase reads "Phase 4 of 8 · <goal, clipped>"; anything else is its translated label. */
+function stepTitle(tx: T, say: (s: string) => string, lane: Lane): string {
+  const label = lane.running_label ?? "";
+  const step = lane.steps.find((s) => s.key === lane.running_key);
+  if (!step?.phase || !step.key.startsWith("phase:")) return tx(label);
+  const goal = say(phaseGoal(step));
+  const clipped = goal.length > 48 ? `${goal.slice(0, 48)}…` : goal;
+  return `${phaseName(tx, step.phase, phaseTotal(lane.steps))} · ${clipped}`;
 }
 
 function elapsed(s: number | null | undefined): string {
@@ -504,24 +507,26 @@ function elapsed(s: number | null | undefined): string {
 
 function StepCardView({
   step,
-  place,
+  total,
   active,
   onOpen,
 }: {
   step: StepCard;
-  place: number;
+  total: number;
   active: boolean;
   onOpen: () => void;
 }) {
   const tx = useT();
   const say = useSay();
   const who = step.role ? tx(ROLE_LABEL[step.role] ?? step.role) : step.gate ? tx("you") : "";
+  const label = stepLabel(tx, say, step);
+  const isPhase = !!step.phase && step.key.startsWith("phase:");
   return (
     <button
       type="button"
       className={`step-card ${step.status} ${step.gate ? "is-gate" : ""} ${active ? "active" : ""}`}
       onClick={onOpen}
-      title={step.label}
+      title={label}
       data-agent={step.role ?? undefined}
     >
       <div className="who">
@@ -533,9 +538,9 @@ function StepCardView({
           <span className="role-ink gate-ink">{step.gate ? <IconUsers /> : <IconCheck />}</span>
         )}
         {who && <span className="truncate">{who}</span>}
-        <span className="step-no">{place}</span>
+        {isPhase && <span className="step-phase">{phaseName(tx, step.phase!, total)}</span>}
       </div>
-      <div className="label">{stepLabel(tx, step)}</div>
+      <div className="label">{label}</div>
       {step.task_title && <div className="task truncate">{say(step.task_title)}</div>}
       {step.recommendation && (
         <div
@@ -590,6 +595,7 @@ function StepPanel({
   onClose: () => void;
 }) {
   const tx = useT();
+  const say = useSay();
   const pipeline = usePipeline(projectId);
   const job = useJob(jobId);
   useEffect(() => {
@@ -603,8 +609,16 @@ function StepPanel({
     <aside className="drawer" role="dialog" aria-label={step?.label ?? "step"}>
       <div className="drawer-head">
         <div style={{ minWidth: 0 }}>
-          <div className="faint tiny truncate">{lane && nameOf(lane)}</div>
-          <h3 className="truncate">{step ? stepLabel(tx, step) : "…"}</h3>
+          {/* which development, and -- for a phase -- which phase of it, above the goal */}
+          <div className="faint tiny truncate">
+            {step?.phase && step.key.startsWith("phase:") && lane
+              ? `${phaseName(tx, step.phase, phaseTotal(lane.steps))} · `
+              : ""}
+            {lane && nameOf(lane)}
+          </div>
+          <h3 className="truncate" title={step ? stepLabel(tx, say, step) : undefined}>
+            {step ? stepLabel(tx, say, step) : "…"}
+          </h3>
         </div>
         <button className="btn ghost icon" onClick={onClose} aria-label={tx("Close")}>
           <IconX />

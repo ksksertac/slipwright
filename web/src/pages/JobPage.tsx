@@ -18,7 +18,7 @@ import { api } from "../api/client";
 import { ActivityRow } from "../components/ActivityRow";
 import { JobFiles } from "../components/Attachments";
 import { BreakdownTree, type BreakdownShape, type PlanShape } from "../components/Breakdown";
-import { AgentIcon, DomainBadge } from "../components/agents";
+import { AgentIcon, DomainBadge, ROLE_LABEL } from "../components/agents";
 import { Crumbs } from "../components/Crumbs";
 import { DesignGate } from "../components/DesignGate";
 import { Detail } from "../components/Detail";
@@ -55,7 +55,15 @@ import { SayProvider, useSay } from "../i18n/said";
 import { Copyable } from "../components/Copyable";
 import { ResultCard } from "../components/ResultCard";
 import { NowFeed } from "../components/NowFeed";
-import { STAGE_ICON, STAGE_LABEL, stageAgent, stageStatus, stages } from "../components/stages";
+import {
+  STAGE_ICON,
+  STAGE_LABEL,
+  phaseName,
+  stageAgent,
+  stageCount,
+  stageStatus,
+  stages,
+} from "../components/stages";
 
 export function JobPage() {
   const { projectId = "", jobId = "" } = useParams();
@@ -252,7 +260,6 @@ function StageStepper({ job, projectId }: { job: Job; projectId: string }) {
   return (
     <ol className="job-stages">
       {groups.map((group) => {
-        const done = group.steps.filter((s) => s.status === "done").length;
         const agent = stageAgent(group.steps);
         const Icon = STAGE_ICON[group.key] ?? IconLayers;
         return (
@@ -264,9 +271,7 @@ function StageStepper({ job, projectId }: { job: Job; projectId: string }) {
             <span className="job-stage-icon">{agent ? <AgentIcon role={agent} /> : <Icon />}</span>
             <span className="job-stage-id">
               <span className="job-stage-title">{tx(STAGE_LABEL[group.key] ?? group.key)}</span>
-              <span className="faint tiny mono">
-                {done}/{group.steps.length}
-              </span>
+              <span className="faint tiny">{stageCount(tx, group)}</span>
             </span>
           </li>
         );
@@ -590,16 +595,18 @@ function DecisionGate({ job }: { job: Job }) {
 
 /** The findings QA could not get the specialist to fix: accept them or send it back. */
 function ReviewGate({ job }: { job: Job }) {
+  const tx = useT();
+  const phases = (job.data.plan as PlanShape | null)?.phases?.length ?? null;
   const reviews = job.data.reviews as unknown as ReviewRecord[];
   const last = reviews[reviews.length - 1];
   if (!last) return null;
   return (
     <div style={{ marginTop: 12 }}>
       <p className="muted small">
-        Phase {last.phase} passed the build but still breaks {last.blocking} blocking standard
-        {last.blocking === 1 ? "" : "s"} after {last.round} fix round{last.round === 1 ? "" : "s"}.
-        Approving keeps the phase as built and continues; rejecting sends it back to the specialist
-        with your feedback.
+        {tx(
+          "{phase} passed the build but still breaks {n} blocking standard(s) after {r} fix round(s). Approving keeps the phase as built and continues; rejecting sends it back to the specialist with your feedback.",
+          { phase: phaseName(tx, last.phase, phases), n: last.blocking, r: last.round },
+        )}
       </p>
       <ViolationsTable violations={last.violations} />
     </div>
@@ -858,7 +865,9 @@ function PhasePanel({ job, group, open }: { job: Job; group: PhaseGroup; open: b
   return (
     <details className="phase" id={`phase-${group.number}`} open={open} data-state={state}>
       <summary>
-        <span className="phase-no">{group.number}</span>
+        <span className="phase-no">
+          {phaseName(tx, group.number, (job.data.plan as PlanShape | null)?.phases?.length)}
+        </span>
         <span className="phase-head">
           <span className="goal">{say(group.goal)}</span>
           <span className="phase-meta">
@@ -963,6 +972,7 @@ interface InvocationEntry {
 function Invocations({ job }: { job: Job }) {
   const tx = useT();
   const log = job.data.invocation_log as unknown as InvocationEntry[];
+  const phases = (job.data.plan as PlanShape | null)?.phases?.length ?? null;
   if (log.length === 0) return <Empty>{tx("No model call has been recorded yet.")}</Empty>;
   const tokens = log.reduce((n, e) => n + (e.input_tokens ?? 0) + (e.output_tokens ?? 0), 0);
   return (
@@ -995,13 +1005,10 @@ function Invocations({ job }: { job: Job }) {
             {log.map((e, i) => (
               <tr key={i}>
                 <td className="muted small">{formatTime(e.at)}</td>
-                <td>{e.role}</td>
+                <td>{tx(ROLE_LABEL[e.role] ?? e.role)}</td>
                 <td className="small">{e.provider ?? "—"}</td>
                 <td className="mono small">{e.model ?? "—"}</td>
-                <td className="small">
-                  {e.state}
-                  {e.phase ? ` · phase ${e.phase}` : ""}
-                </td>
+                <td className="small">{e.phase ? phaseName(tx, e.phase, phases) : e.state}</td>
                 <td className="mono small">
                   {e.prompt_chars != null ? `${(e.prompt_chars / 1000).toFixed(1)}k chars` : "—"}
                 </td>

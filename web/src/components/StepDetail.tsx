@@ -14,6 +14,7 @@ import { Detail } from "./Detail";
 import { IconCheck, IconChevron } from "./icons";
 import { Loading, timeAgo } from "./ui";
 import { useT } from "../i18n";
+import { phaseName } from "./stages";
 import { isRetryNote, noteText, phaseOf } from "../i18n/notes";
 
 const ITEM_CLASS: Record<StepItem["status"], string> = {
@@ -136,9 +137,7 @@ function StepNow({ step }: { step: StepDetail }) {
       <span className="pulse-dot" />
       <div style={{ minWidth: 0 }}>
         {phase && (
-          <div className="step-now-where">
-            {tx("phase {at} of {of}", { at: phase.at, of: phase.of })}
-          </div>
+          <div className="step-now-where">{phaseName(tx, Number(phase.at), Number(phase.of))}</div>
         )}
         <div className="step-now-what">
           {doing ? noteText(tx, doing.title) : tx("Working on it")}

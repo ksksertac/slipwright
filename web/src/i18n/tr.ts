@@ -4,6 +4,12 @@ export const TR: Record<string, string> = {
   "Right now": "Şu anda",
   Finished: "Bitti",
   "Phase {i} of {n}": "Faz {i}/{n}",
+  "Phase {n}": "Faz {n}",
+  "{done}/{total} done": "{done}/{total} tamam",
+  "{n} record(s)": "{n} kayıt",
+  "Review approval · {phase}": "İnceleme onayı · {phase}",
+  "{phase} passed the build but still breaks {n} blocking standard(s) after {r} fix round(s). Approving keeps the phase as built and continues; rejecting sends it back to the specialist with your feedback.":
+    "{phase} build'i geçti ama {r} düzeltme turundan sonra hâlâ {n} engelleyici standardı ihlal ediyor. Onaylarsan faz olduğu gibi kalır ve devam edilir; reddedersen geri bildiriminle uzmana geri gider.",
   Task: "Görev",
   "Waiting for the answer": "Yanıt bekleniyor",
   "What it wrote": "Ne yazdı",
@@ -339,7 +345,6 @@ export const TR: Record<string, string> = {
   running: "çalışıyor",
   "Working on it": "üzerinde çalışıyor",
   "last sign of life {ago}": "en son {ago} kıpırdadı",
-  "phase {at} of {of}": "{of} fazın {at}. fazı",
   "the model was asked again {n} times": "modele {n} kez yeniden soruldu",
 
   waiting: "seni bekliyor",
@@ -627,7 +632,6 @@ export const TR: Record<string, string> = {
   "Written tests approval": "Yazılan testlerin onayı",
   Done: "Tamam",
   "Your decision": "Senin kararın",
-  "Review approval: phase {n}": "İnceleme onayı: faz {n}",
   "Waiting for a Mac: {apps}": "Mac bekleniyor: {apps}",
   "waiting for a Mac": "Mac bekleniyor",
   "Nothing recorded for this step yet.": "Bu adım için henüz kayıt yok.",
@@ -1206,7 +1210,6 @@ export const TR: Record<string, string> = {
   Today: "Bugün",
   Yesterday: "Dün",
   "under a second": "bir saniyeden az",
-  "build gate · phase {n}": "build kapısı · faz {n}",
   "by hand · on the development's branch": "elle · geliştirmenin dalında",
   "by hand · on the main branch": "elle · ana dalda (main)",
   "in the development: {request}": "geliştirmede: {request}",
@@ -1253,7 +1256,7 @@ export const TR: Record<string, string> = {
   "{1}, by {2}": "{1} — onaylayan: {2}",
   Approved: "Onaylandı",
   "{1} test cases approved": "{1} test senaryosu onaylandı",
-  "Phase {1} approved despite the review": "{1}. faz, incelemeye rağmen onaylandı",
+  "Phase {1} approved despite the review": "Faz {1}, incelemeye rağmen onaylandı",
   "Sent back: {1}": "Geri gönderildi: {1}",
   "Taken back: {1}": "Geri alındı: {1}",
   "Tests re-run by hand": "Testler elle yeniden çalıştırıldı",
@@ -1265,23 +1268,23 @@ export const TR: Record<string, string> = {
     "Backlog hazır: {1} epic, {2} story, {3} task",
   "Plan ready: {1} phases, {2} decisions": "Plan hazır: {1} faz, {2} karar",
   "Phase {1}/{2}, build fix {3}: {4} ({5} files)":
-    "{1}/{2}. faz, {3}. build düzeltmesi: {4} ({5} dosya)",
+    "Faz {1}/{2}, {3}. build düzeltmesi: {4} ({5} dosya)",
   "Phase {1}/{2}, review fix {3}: {4} ({5} files)":
-    "{1}/{2}. faz, {3}. inceleme düzeltmesi: {4} ({5} dosya)",
+    "Faz {1}/{2}, {3}. inceleme düzeltmesi: {4} ({5} dosya)",
   "Phase {1}/{2}, part {3}: {4} ({5} files so far)":
-    "{1}/{2}. faz, {3}. parça: {4} (şimdiye kadar {5} dosya)",
+    "Faz {1}/{2}, {3}. parça: {4} (şimdiye kadar {5} dosya)",
   "Phase {1}/{2} built in {5} parts: {3} ({4} files)":
-    "{1}/{2}. faz {5} parçada yapıldı: {3} ({4} dosya)",
-  "Phase {1}/{2} built: {3} ({4} files)": "{1}/{2}. faz yapıldı: {3} ({4} dosya)",
-  "Build gate passed — phase {1}/{2}": "Build kapısı geçildi — {1}/{2}. faz",
-  "Build gate — phase {1}": "Build kapısı — {1}. faz",
+    "Faz {1}/{2} {5} parçada yapıldı: {3} ({4} dosya)",
+  "Phase {1}/{2} built: {3} ({4} files)": "Faz {1}/{2} yapıldı: {3} ({4} dosya)",
+  "Build gate passed — phase {1}/{2}": "Build kapısı geçildi — Faz {1}/{2}",
+  "Build gate — phase {1}": "Build kapısı — Faz {1}",
   "Build gate failed — phase {1} (attempt {2}/{3})":
-    "Build kapısı geçilemedi — {1}. faz ({2}/{3}. deneme)",
+    "Build kapısı geçilemedi — Faz {1} ({2}/{3}. deneme)",
   "Build gate failed {1} times on phase {2} — giving up":
-    "Build kapısı {2}. fazda {1} kez geçilemedi — vazgeçildi",
+    "Faz {2}: build kapısı {1} kez geçilemedi — vazgeçildi",
   "The test was wrong, not the code — phase {1}, corrected ({2} files): {3}":
-    "Hatalı olan kod değil testti — {1}. faz, düzeltildi ({2} dosya): {3}",
-  "The code is wrong, not the test — phase {1}: {2}": "Hatalı olan test değil kod — {1}. faz: {2}",
+    "Hatalı olan kod değil testti — Faz {1}, düzeltildi ({2} dosya): {3}",
+  "The code is wrong, not the test — phase {1}: {2}": "Hatalı olan test değil kod — Faz {1}: {2}",
   "Test fix refused — it changed {2}, which is not a test":
     "Test düzeltmesi kabul edilmedi — test dosyası olmayan {2} değiştirilmiş",
   "Called the test wrong but sent no correction": "Test hatalı dendi ama düzeltmesi gelmedi",
@@ -1297,7 +1300,7 @@ export const TR: Record<string, string> = {
     "Süpervizör çalışmadı ({1}) — kapı seni bekliyor",
   "Supervisor: {1} ({2})": "Süpervizör: {1} ({2})",
   "Supervisor (confidence {1}): {2}": "Süpervizör (güven {1}): {2}",
-  "Review of phase {1}/{2}: {3}": "{1}/{2}. fazın incelemesi: {3}",
+  "Review of phase {1}/{2}: {3}": "Faz {1}/{2} incelemesi: {3}",
   "nothing to fix": "düzeltilecek bir şey yok",
   "{1} findings, {2} blocking, {3} advisory": "{1} bulgu, {2} engelleyici, {3} tavsiye",
   "{1} — fix round {2}/{3}": "{1} — {2}/{3}. düzeltme turu",
@@ -1319,7 +1322,7 @@ export const TR: Record<string, string> = {
   "{1} refused": "{1} reddedildi",
   "{1} queued": "{1} kuyrukta",
   "{1} unchanged": "{1} değişmedi",
-  "Standards read for phase {1}: {2} sections": "{1}. faz için standartlar okundu: {2} bölüm",
+  "Standards read for phase {1}: {2} sections": "Faz {1} için standartlar okundu: {2} bölüm",
   "Standards read: {1} sections": "Standartlar okundu: {1} bölüm",
   "{1} messages from you went to {2}": "Senden gelen {1} mesajı {2} okudu",
   "Attempt {1} failed ({2}) — trying again in {3}s, {4} of {5} retries used":

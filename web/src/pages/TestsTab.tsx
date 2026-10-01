@@ -17,6 +17,7 @@ import {
 import { IconFlask, IconPlay } from "../components/icons";
 import { Empty, ErrorBox, Loading, nameOf, timeAgo } from "../components/ui";
 import { useLang, useT, type T } from "../i18n";
+import { phaseName } from "../components/stages";
 import { Copyable } from "../components/Copyable";
 
 const STATUS_CLASS: Record<TestRun["status"], string> = {
@@ -90,7 +91,7 @@ function dayLabel(key: string, tx: T, lang: string): string {
 /** One line for the list: what this run was testing. */
 function what(run: TestRun, job: Job | undefined, tx: T): string {
   if (run.source === "gate") {
-    return run.phase ? tx("build gate · phase {n}", { n: run.phase }) : tx("build gate");
+    return run.phase ? `${tx("build gate")} · ${phaseName(tx, run.phase)}` : tx("build gate");
   }
   return job ? tx("by hand · on the development's branch") : tx("by hand · on the main branch");
 }
