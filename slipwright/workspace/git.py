@@ -6,6 +6,34 @@ import os
 import subprocess
 from pathlib import Path
 
+#: What a package manager or a build fills a checkout with, which is never the work. A
+#: project the agents start has no ``.gitignore`` until somebody writes one, and ``add -A``
+#: once committed all of ``node_modules`` -- sixteen thousand files -- into a phase, whose
+#: diff then went to QA at 150 million characters and was refused by the model. These are
+#: kept out of every commit (through ``info/exclude``, so the project's own files are not
+#: touched) and out of every diff a role is shown.
+NEVER_COMMITTED = (
+    "node_modules/",
+    ".gradle/",
+    "build/",
+    ".venv/",
+    "venv/",
+    "__pycache__/",
+    ".pytest_cache/",
+    ".mypy_cache/",
+    ".dart_tool/",
+    ".next/",
+    ".nuxt/",
+    ".expo/",
+    "DerivedData/",
+    "coverage/",
+)
+#: The most of a diff a role is given. Past it the role reads which files changed and as
+#: much of the change as fits; a model has a limit on what it is sent, and a diff that
+#: size is not one anybody reviews line by line anyway.
+MAX_DIFF_CHARS = 400_000
+_EXCLUDE_MARK = "# slipwright: never committed"
+
 
 class GitError(RuntimeError):
     def __init__(self, args: list[str], returncode: int, stderr: str) -> None:
@@ -16,10 +44,15 @@ class GitError(RuntimeError):
 
 
 def run(
-    repo: Path, *args: str, check: bool = True, env: dict[str, str] | None = None
+    repo: Path,
+    *args: str,
+    check: bool = True,
+    env: dict[str, str] | None = None,
+    stdin: str | None = None,
 ) -> subprocess.CompletedProcess[str]:
     proc = subprocess.run(
         ["git", "-C", str(repo), *args],
+        input=stdin,
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -50,9 +83,33 @@ def clone(url: str, target: Path) -> None:
         raise GitError(["clone", url, str(target)], proc.returncode, proc.stderr)
 
 
+def _not_ours() -> list[str]:
+    """Pathspecs that leave ``NEVER_COMMITTED`` out of a diff, at any depth."""
+    return ["--", ".", *(f":(exclude,glob)**/{d}**" for d in NEVER_COMMITTED)]
+
+
+def _capped(repo: Path, text: str, stat: list[str]) -> str:
+    """``text``, or when it is too big to send, which files changed and as much as fits."""
+    if len(text) <= MAX_DIFF_CHARS:
+        return text
+    files = run(repo, "diff", "--stat=200", "--no-color", *stat, *_not_ours()).stdout
+    room = max(MAX_DIFF_CHARS - len(files), MAX_DIFF_CHARS // 2)
+    return (
+        f"(this diff is {len(text):,} characters; the first {room:,} follow the list of "
+        f"changed files)\n\n{files}\n{text[:room]}\n(... cut here)"
+    )
+
+
+def diff(repo: Path, base: str, head: str = "HEAD") -> str:
+    """What changed between two commits, as a role is shown it: dependencies and build
+    output left out, and no bigger than ``MAX_DIFF_CHARS``."""
+    text = run(repo, "diff", "--no-color", base, head, *_not_ours()).stdout
+    return _capped(repo, text, [base, head])
+
+
 def numstat(repo: Path, base: str, head: str = "HEAD") -> list[tuple[str, int, int]]:
     """(path, added, removed) per file between two commits; a binary file counts as 0/0."""
-    out = run(repo, "diff", "--numstat", "--no-color", base, head).stdout
+    out = run(repo, "diff", "--numstat", "--no-color", base, head, *_not_ours()).stdout
     rows: list[tuple[str, int, int]] = []
     for line in out.splitlines():
         parts = line.split("\t")
@@ -111,12 +168,43 @@ def head_commit(repo: Path) -> str:
 
 
 def stage_all(repo: Path) -> None:
+    """Stage everything but ``NEVER_COMMITTED``. What an earlier commit let in by mistake
+    is taken back out of the index, so the next commit removes it from the branch."""
+    _exclude_ours(repo)
     run(repo, "add", "-A")
+    patterns = [f"--exclude={d}" for d in NEVER_COMMITTED]
+    tracked = run(repo, "ls-files", "-z", "--cached", "--ignored", *patterns).stdout
+    if tracked:
+        run(
+            repo,
+            "rm",
+            "-r",
+            "-q",
+            "--cached",
+            "--pathspec-from-file=-",
+            "--pathspec-file-nul",
+            stdin=tracked,
+        )
+
+
+def _exclude_ours(repo: Path) -> None:
+    """``NEVER_COMMITTED`` in the repository's ``info/exclude``: shared by every worktree,
+    never committed, and the project's own ``.gitignore`` is left alone."""
+    common = Path(run(repo, "rev-parse", "--git-common-dir").stdout.strip())
+    exclude = (common if common.is_absolute() else repo / common) / "info" / "exclude"
+    current = exclude.read_text(encoding="utf-8") if exclude.exists() else ""
+    if _EXCLUDE_MARK in current:
+        return
+    exclude.parent.mkdir(parents=True, exist_ok=True)
+    block = "\n".join([_EXCLUDE_MARK, *NEVER_COMMITTED])
+    exclude.write_text(f"{current.rstrip()}\n{block}\n".lstrip(), encoding="utf-8")
 
 
 def staged_diff(repo: Path) -> str:
-    """Diff of the index against HEAD (call ``stage_all`` first to include new files)."""
-    return run(repo, "diff", "--cached", "--no-color").stdout
+    """Diff of the index against HEAD (call ``stage_all`` first to include new files),
+    as a role is shown it -- see ``diff``."""
+    text = run(repo, "diff", "--cached", "--no-color", *_not_ours()).stdout
+    return _capped(repo, text, ["--cached"])
 
 
 def has_staged_changes(repo: Path) -> bool:

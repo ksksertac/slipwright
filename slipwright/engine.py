@@ -3151,7 +3151,7 @@ class Engine:
         base = job.data.base_commit
         if base is None:
             return "(base commit unknown)"
-        return g.run(worktree, "diff", "--no-color", base, "HEAD").stdout or "(no changes)"
+        return g.diff(worktree, base) or "(no changes)"
 
     def _invocation_failed(self, job: Job, result: RoleResult) -> Job:
         assert result.error is not None
@@ -4354,7 +4354,7 @@ class Engine:
         base = job.data.phase_base_commit
         if base is None:
             return "(phase base unknown)"
-        return g.run(worktree, "diff", "--no-color", base, "HEAD").stdout or "(no changes)"
+        return g.diff(worktree, base) or "(no changes)"
 
     def _review(self, job: Job) -> Job:
         """QA reviews the phase just built against the standards its specialist read.
