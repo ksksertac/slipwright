@@ -32,6 +32,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from slipwright.costs import project_costs
+from slipwright.invoke import compact_json
 from slipwright.pipeline import StepStatus, lane_for
 from slipwright.providers import ModelProvider, ModelRequest, ProviderError
 from slipwright.quota import QuotaExceeded
@@ -64,6 +65,7 @@ class Answer:
 
     text: str
     buttons: list[tuple[str, str]] = field(default_factory=list)
+
 
 #: Typed as a command, the question costs nothing: no model is called to work out that
 #: ``/projeler`` means "projects". Turkish and English, with and without the slash.
@@ -131,7 +133,7 @@ WORDS: dict[str, dict[str, str]] = {
         "nothing_waiting": "Onayını bekleyen bir şey yok.",
         "nothing_running": "Şu an çalışan bir geliştirme yok.",
         "no_such_project": "Öyle bir proje bulamadım.",
-        "nothing_by_that_name": "\"{asked}\" diye bir proje ya da geliştirme bulamadım.",
+        "nothing_by_that_name": '"{asked}" diye bir proje ya da geliştirme bulamadım.',
         "totals": "{all} geliştirme: {done} bitti, {going} sürüyor, {waiting} seni bekliyor, "
         "{stopped} durdu.",
         "which_project": "Hangi proje? Numarasını ya da adını yaz.\n{list}",
@@ -168,7 +170,7 @@ WORDS: dict[str, dict[str, str]] = {
         "nothing_waiting": "Nothing is waiting for you.",
         "nothing_running": "Nothing is being worked on right now.",
         "no_such_project": "I could not find that project.",
-        "nothing_by_that_name": "I could not find a project or a development called \"{asked}\".",
+        "nothing_by_that_name": 'I could not find a project or a development called "{asked}".',
         "totals": "{all} development(s): {done} finished, {going} being worked on, "
         "{waiting} waiting for you, {stopped} stopped.",
         "which_project": "Which project? Give its number or its name.\n{list}",
@@ -272,13 +274,13 @@ def classify(
             "words the person used for it -- put that in `subject`, as written. People "
             "name the work far more often than the project it sits in.\n"
             "For `start`, `work` is what they want built, in their own words, with the "
-            "project's name taken out: \"add a checkbox to the notes project\" is subject "
-            "\"notes\" and work \"add a checkbox\". Asking how something is going is never "
+            'project\'s name taken out: "add a checkbox to the notes project" is subject '
+            '"notes" and work "add a checkbox". Asking how something is going is never '
             "`start`.\n"
             "Answer `unknown` unless it is clearly one of the others.\n\n"
             + json.dumps({"message": text}, ensure_ascii=False)
             + "\n\nRespond with one JSON object matching this JSON Schema:\n"
-            + json.dumps(Question.model_json_schema(), indent=2, sort_keys=True)
+            + compact_json(Question.model_json_schema())
         ),
         output_schema=Question.model_json_schema(),
         timeout_s=timeout_s,
@@ -491,8 +493,9 @@ def gather(notifier: Notifier, user_id: str, question: Question) -> dict[str, An
     if question.intent == "cost":
         wanted = [named] if named else projects
         return {
-            "cost": [_what_it_cost(engine, p, [j for j in jobs if j.project_id == p.id])
-                     for p in wanted]
+            "cost": [
+                _what_it_cost(engine, p, [j for j in jobs if j.project_id == p.id]) for p in wanted
+            ]
         }
 
     if question.intent == "status":
@@ -677,8 +680,8 @@ def write(
         prompt=(
             f"Write the answer in {lang}, for a chat app: a couple of lines, no heading, "
             "no markdown table.\n"
-            "Say where things are, never what they are not: \"planning, 3 of 17 steps\" "
-            "rather than \"not finished, not waiting\". Never read a field name or a raw "
+            'Say where things are, never what they are not: "planning, 3 of 17 steps" '
+            'rather than "not finished, not waiting". Never read a field name or a raw '
             "state back to the person -- `step` and `waiting_for_you` are written in "
             f"English and must come out as ordinary {lang}.\n"
             "If something is waiting for them, say that first: it is the only part they "
@@ -696,9 +699,9 @@ def write(
             "list. Lead with them when there is more than one.\n"
             "Keep project names and the person's own words for what they asked for "
             "exactly as they are written here. Say only what the data says.\n\n"
-            + json.dumps(data, ensure_ascii=False, indent=2)
+            + compact_json(data)
             + "\n\nRespond with one JSON object matching this JSON Schema:\n"
-            + json.dumps(Written.model_json_schema(), indent=2, sort_keys=True)
+            + compact_json(Written.model_json_schema())
         ),
         output_schema=Written.model_json_schema(),
         timeout_s=timeout_s,
@@ -784,9 +787,7 @@ def begin(notifier: Notifier, user_id: str, flow: str) -> str:
         return _say(notifier.lang, "no_projects")
     if len(projects) == 1:
         # one project is not a question worth asking
-        _remember(
-            notifier, user_id, flow=flow, step="request", data={"project_id": projects[0].id}
-        )
+        _remember(notifier, user_id, flow=flow, step="request", data={"project_id": projects[0].id})
         return _say(notifier.lang, "what_request")
     _remember(notifier, user_id, flow=flow, step="project", data={})
     return _say(notifier.lang, "which_project", list=_listed(projects))

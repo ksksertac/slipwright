@@ -95,3 +95,22 @@ def test_the_folders_a_phase_touches_come_first(tmp_path: Path) -> None:
 def test_a_small_tree_is_listed_whole_as_before(tmp_path: Path) -> None:
     _write(tmp_path, {"README.md": "", "src/app.py": "", "tests/test_app.py": ""})
     assert sorted(list_tree(tmp_path)) == ["README.md", "src/app.py", "tests/test_app.py"]
+
+
+# -- T15.7: a compact prompt ----------------------------------------------------------------
+
+
+def test_the_prompt_is_sent_compact_and_reads_back_the_same() -> None:
+    from slipwright.invoke import _user_prompt
+
+    context = {
+        "request": "Yarışma sonucunu ve kupayı göster",
+        "plan": {"phases": [{"number": i, "goal": "çözüm üret"} for i in range(20)]},
+    }
+    prompt = _user_prompt(context, {"type": "object"})
+    body = prompt[prompt.index("Context:\n") + 9 : prompt.index("\n\nRespond with")]
+
+    assert json.loads(body) == context
+    assert "Yarışma sonucunu ve kupayı göster" in prompt  # letters, not \u escapes
+    indented = len(json.dumps(context, indent=2, sort_keys=True))
+    assert len(body) < indented * 0.9

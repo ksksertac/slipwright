@@ -26,6 +26,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from slipwright.invoke import compact_json
 from slipwright.providers import ModelProvider, ModelRequest, ProviderError
 from slipwright.schemas.job import Job
 from slipwright.schemas.profile import Profile, RoleName, ThinkingDepth
@@ -233,9 +234,9 @@ def _one_batch(
             f"Translate each string from {LANGUAGE_NAMES.get(source, source)} to "
             f"{LANGUAGE_NAMES.get(target, target)}.\n"
             "Answer with the same number of strings, in the same order.\n\n"
-            + json.dumps({"texts": batch}, ensure_ascii=False, indent=2)
+            + compact_json({"texts": batch})
             + "\n\nRespond with one JSON object matching this JSON Schema:\n"
-            + json.dumps(Translated.model_json_schema(), indent=2, sort_keys=True)
+            + compact_json(Translated.model_json_schema())
         ),
         output_schema=Translated.model_json_schema(),
         timeout_s=timeout_s,

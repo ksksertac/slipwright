@@ -77,7 +77,7 @@ def _provider(seed: Profile, phases: int = 2) -> ScriptedProvider:
         }
     p.replies[RoleName.QA] = lambda req: (
         {"summary": "cases", "test_cases": [{"name": "smoke", "description": "OK is yes"}]}
-        if '"stage": 1' in req.prompt
+        if '"stage":1' in req.prompt
         else {"summary": "tests", "changes": [{"path": "tests/t.txt", "content": "ok\n"}]}
     )
     return p

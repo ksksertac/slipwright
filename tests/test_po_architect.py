@@ -112,7 +112,7 @@ def test_approve_leaves_gate_and_reject_reruns_po_with_feedback(
     assert len(provider.requests) == 2
     assert "split the story, one task per endpoint" in provider.requests[1].prompt
     assert "previous_backlog" in provider.requests[1].prompt
-    assert '"id": "t1"' in provider.requests[1].prompt  # the rejected backlog, verbatim
+    assert '"id":"t1"' in provider.requests[1].prompt  # the rejected backlog, verbatim
     assert _moves(job) == [
         JobState.BACKLOG,
         JobState.AWAITING_BACKLOG_APPROVAL,
@@ -192,7 +192,7 @@ def test_architect_designs_from_the_approved_backlog(
     assert job.profile == seed  # the canned architect echoes the seed
     request = provider.requests[-1]
     assert request.role is RoleName.ARCHITECT
-    assert "backlog" in request.prompt and '"id": "t1"' in request.prompt
+    assert "backlog" in request.prompt and '"id":"t1"' in request.prompt
     assert "seed_profile" in request.prompt
     assert job.data.plan is not None
     assert [p["task_id"] for p in job.data.plan["phases"]] == ["t1"]

@@ -1534,8 +1534,8 @@ prompt on that development, the same on each of its 24 calls.
 The context and the output schema are serialised with `indent=2`; the indentation is
 tokens and carries nothing a model reads.
 **Done when**
-- [ ] `invoke._user_prompt` serialises both without indentation (compact separators)
-- [ ] Test: the same context is at least 10% fewer characters, and parses back equal
+- [x] `invoke._user_prompt` serialises both without indentation (compact separators)
+- [x] Test: the same context is at least 10% fewer characters, and parses back equal
 
 ### T15.8 — A failed build sends the errors, not the last 20,000 characters
 `build_failure` is the tail of the build's output, up to 20,000 characters, sent on every

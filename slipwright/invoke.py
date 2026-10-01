@@ -293,12 +293,18 @@ def _user_prompt(context: Mapping[str, Any], output_schema: dict[str, Any]) -> s
     # be read as a very long string by a model that could have looked at it
     rest = {k: v for k, v in context.items() if k not in {"system", "instructions", "images"}}
     if rest:
-        parts.append("Context:\n" + json.dumps(rest, indent=2, sort_keys=True, default=str))
+        parts.append("Context:\n" + compact_json(rest))
     parts.append(
-        "Respond with one JSON object matching this JSON Schema:\n"
-        + json.dumps(output_schema, indent=2, sort_keys=True)
+        "Respond with one JSON object matching this JSON Schema:\n" + compact_json(output_schema)
     )
     return "\n\n".join(parts)
+
+
+def compact_json(value: Any) -> str:
+    """JSON as a model is sent it (T15.7): no indentation, which is tokens a model does not
+    read, and letters as themselves -- ``ensure_ascii`` wrote every ``ç`` of a Turkish
+    brief as six characters of ``\\u00e7``."""
+    return json.dumps(value, sort_keys=True, default=str, ensure_ascii=False, separators=(",", ":"))
 
 
 def _call_with_timeout(fn: Callable[[], ModelResponse], timeout_s: float) -> ModelResponse:

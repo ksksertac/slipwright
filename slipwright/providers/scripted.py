@@ -81,7 +81,7 @@ def _translation_request(request: ModelRequest) -> list[str] | None:
     """The strings a translation request carries, or None when it is not one."""
     if "You translate short" not in request.system:
         return None
-    start = request.prompt.find('{\n  "texts": [')
+    start = request.prompt.find('{"texts":')
     if start < 0:
         return None
     payload, _ = json.JSONDecoder().raw_decode(request.prompt, start)
@@ -149,7 +149,7 @@ def canned(profile: Profile) -> ScriptedProvider:
                     "summary": "scripted test plan",
                     "test_cases": [{"name": "smoke", "description": "the project imports"}],
                 }
-                if '"stage": 1' in req.prompt
+                if _context(req).get("stage") == 1
                 else {"summary": "scripted tests", "changes": []}
             ),
             RoleName.DEVOPS: {
@@ -197,7 +197,7 @@ def canned(profile: Profile) -> ScriptedProvider:
                     {"question": "Who uses it?", "why": "audience", "hint": "a role"},
                 ],
             }
-            if '"rounds": []' in req.prompt
+            if _context(req).get("rounds") == []
             else {
                 "summary": "scripted story",
                 "ready": True,
@@ -225,13 +225,22 @@ def canned(profile: Profile) -> ScriptedProvider:
     return provider
 
 
+def _context(req: ModelRequest) -> dict[str, Any]:
+    """The context a role was sent, read as JSON rather than matched as text: how it is
+    laid out is ``invoke._user_prompt``'s business (compact since T15.7)."""
+    start = req.prompt.find("Context:\n")
+    end = req.prompt.find("\n\nRespond with")
+    if start < 0 or end < start:
+        return {}
+    try:
+        value = json.loads(req.prompt[start + len("Context:\n") : end])
+    except ValueError:
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
 def _request_from(req: ModelRequest) -> str:
-    marker = '"request": '
-    start = req.prompt.find(marker)
-    if start < 0:
-        return ""
-    end = req.prompt.find("\n", start)
-    return str(json.loads(req.prompt[start + len(marker) : end].rstrip(",")))
+    return str(_context(req).get("request", ""))
 
 
 __all__ = ["Reply", "ScriptedProvider", "canned"]
