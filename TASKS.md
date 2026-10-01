@@ -1490,8 +1490,10 @@ code could not be delivered; the whole file is needed to continue", wrote nothin
 called again -- parts, then build attempts, each a 40,000-token call. The cut file is the
 loop.
 **Done when**
-- [x] The files of the current phase are given whole up to a much larger bound (60 KB),
-  and the 12 KB cut stays for files read only for reference
+- [x] The files of the current phase are given whole up to a much larger bound, and the
+  12 KB cut stays for files read only for reference -- done by #51 while this was being
+  built: 100,000 characters a file, 300,000 for all, and the files a build failure names
+  are sent too; a file past it is listed in `files_cut`
 - [x] A file past that bound is changed by edits (exact text to replace, and with what)
   instead of whole contents, and the engine applies them; an edit whose text is not found
   is refused back to the developer with the file's real lines around it
