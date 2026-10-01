@@ -3951,6 +3951,20 @@ class Engine:
         g.stage_all(worktree)
         diff = g.staged_diff(worktree)
         if before_fix is not None and diff == before_fix:
+            # First the reason that is ours: a file it would have had to change reached it
+            # cut short, and a file is changed by returning all of it. Blaming the machine
+            # here once sent a person to look for a missing tool while the fix was one word
+            # on a line of App.tsx the specialist was never shown.
+            cut = developer.too_large(worktree, developer.editable_files(job, worktree))
+            if cut:
+                return self._fail(
+                    job,
+                    f"{role.value} phase {index + 1}/{len(phases)}: the fix changed no file "
+                    f"because {', '.join(cut)} is too large to be sent whole, and a file is "
+                    f"changed by returning all of it; re-plan so it is split into smaller "
+                    f"files ({summaries[-1]})",
+                    detail=job.data.last_build_output,
+                )
             # The specialist read the failure and changed nothing: it is saying the code is
             # not what fails. That leaves the command itself or what the machine has
             # installed, and neither is a specialist's. Running the same command on the same
