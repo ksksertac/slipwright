@@ -1809,114 +1809,6 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
-      "Hello": {
-        "additionalProperties": false,
-        "description": "What any installation says about itself to anybody on its network.",
-        "properties": {
-          "app": {
-            "const": "slipwright",
-            "default": "slipwright",
-            "title": "App",
-            "type": "string"
-          },
-          "instance": {
-            "title": "Instance",
-            "type": "string"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "revision": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Revision"
-          },
-          "version": {
-            "title": "Version",
-            "type": "string"
-          }
-        },
-        "required": [
-          "app",
-          "instance",
-          "name",
-          "revision",
-          "version"
-        ],
-        "title": "Hello",
-        "type": "object"
-      },
-      "Here": {
-        "additionalProperties": false,
-        "description": "This installation, for its own card.",
-        "properties": {
-          "addresses": {
-            "description": "Where another machine may reach this one, to type in when it is not found by looking.",
-            "items": {
-              "type": "string"
-            },
-            "title": "Addresses",
-            "type": "array"
-          },
-          "admin": {
-            "description": "Whether the installation's own settings go too.",
-            "title": "Admin",
-            "type": "boolean"
-          },
-          "enabled": {
-            "description": "Off on a hosted installation (SLIPWRIGHT_TRANSFER).",
-            "title": "Enabled",
-            "type": "boolean"
-          },
-          "instance": {
-            "title": "Instance",
-            "type": "string"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "projects": {
-            "description": "This account's projects: what a transfer would send.",
-            "title": "Projects",
-            "type": "integer"
-          },
-          "revision": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Revision"
-          },
-          "version": {
-            "title": "Version",
-            "type": "string"
-          }
-        },
-        "required": [
-          "addresses",
-          "admin",
-          "enabled",
-          "instance",
-          "name",
-          "projects",
-          "revision",
-          "version"
-        ],
-        "title": "Here",
-        "type": "object"
-      },
       "Identity": {
         "additionalProperties": false,
         "description": "Who the stored token belongs to, as the settings page shows it.",
@@ -4945,55 +4837,53 @@
         "title": "PageWrite",
         "type": "object"
       },
-      "Peer": {
+      "PairRequest": {
         "additionalProperties": false,
-        "description": "A Slipwright on this network, as it describes itself.",
         "properties": {
-          "address": {
-            "description": "Where it answers, as this server reached it.",
-            "title": "Address",
-            "type": "string"
+          "capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Capabilities",
+            "type": "array"
           },
-          "compatible": {
-            "description": "On the same schema as this one, so a transfer works.",
-            "title": "Compatible",
-            "type": "boolean"
-          },
-          "instance": {
-            "description": "Which installation: the same one seen twice is one.",
-            "title": "Instance",
+          "code": {
+            "maxLength": 400,
+            "minLength": 10,
+            "title": "Code",
             "type": "string"
           },
           "name": {
+            "maxLength": 120,
+            "minLength": 1,
             "title": "Name",
-            "type": "string"
-          },
-          "revision": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Its database schema; a transfer needs the same.",
-            "title": "Revision"
-          },
-          "version": {
-            "title": "Version",
             "type": "string"
           }
         },
         "required": [
-          "address",
-          "compatible",
-          "instance",
-          "name",
-          "revision",
-          "version"
+          "code",
+          "name"
         ],
-        "title": "Peer",
+        "title": "PairRequest",
+        "type": "object"
+      },
+      "Paired": {
+        "properties": {
+          "token": {
+            "description": "Shown once; the server keeps only its hash.",
+            "title": "Token",
+            "type": "string"
+          },
+          "worker_id": {
+            "title": "Worker Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "worker_id"
+        ],
+        "title": "Paired",
         "type": "object"
       },
       "Permission": {
@@ -6675,36 +6565,6 @@
         "title": "SecretView",
         "type": "object"
       },
-      "SendRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "address": {
-            "description": "The receiver, http://host:port.",
-            "maxLength": 300,
-            "minLength": 4,
-            "title": "Address",
-            "type": "string"
-          },
-          "code": {
-            "maxLength": 40,
-            "minLength": 10,
-            "title": "Code",
-            "type": "string"
-          },
-          "delete_after": {
-            "default": false,
-            "description": "Delete the projects here once the receiver has them all.",
-            "title": "Delete After",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "address",
-          "code"
-        ],
-        "title": "SendRequest",
-        "type": "object"
-      },
       "SignUp": {
         "properties": {
           "email": {
@@ -7343,52 +7203,6 @@
           "status"
         ],
         "title": "StatusChange",
-        "type": "object"
-      },
-      "Step": {
-        "additionalProperties": false,
-        "properties": {
-          "done": {
-            "title": "Done",
-            "type": "integer"
-          },
-          "key": {
-            "enum": [
-              "pair",
-              "projects",
-              "jobs",
-              "settings",
-              "attachments",
-              "standards",
-              "repos",
-              "finish",
-              "delete"
-            ],
-            "title": "Key",
-            "type": "string"
-          },
-          "state": {
-            "enum": [
-              "waiting",
-              "doing",
-              "done",
-              "skipped"
-            ],
-            "title": "State",
-            "type": "string"
-          },
-          "total": {
-            "title": "Total",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "done",
-          "key",
-          "state",
-          "total"
-        ],
-        "title": "Step",
         "type": "object"
       },
       "StepCard": {
@@ -8530,6 +8344,270 @@
         "title": "TransferCode",
         "type": "object"
       },
+      "TransferHello": {
+        "additionalProperties": false,
+        "description": "What any installation says about itself to anybody on its network.",
+        "properties": {
+          "app": {
+            "const": "slipwright",
+            "default": "slipwright",
+            "title": "App",
+            "type": "string"
+          },
+          "instance": {
+            "title": "Instance",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "app",
+          "instance",
+          "name",
+          "revision",
+          "version"
+        ],
+        "title": "TransferHello",
+        "type": "object"
+      },
+      "TransferHere": {
+        "additionalProperties": false,
+        "description": "This installation, for its own card.",
+        "properties": {
+          "addresses": {
+            "description": "Where another machine may reach this one, to type in when it is not found by looking.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Addresses",
+            "type": "array"
+          },
+          "admin": {
+            "description": "Whether the installation's own settings go too.",
+            "title": "Admin",
+            "type": "boolean"
+          },
+          "enabled": {
+            "description": "Off on a hosted installation (SLIPWRIGHT_TRANSFER).",
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "instance": {
+            "title": "Instance",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "projects": {
+            "description": "This account's projects: what a transfer would send.",
+            "title": "Projects",
+            "type": "integer"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "addresses",
+          "admin",
+          "enabled",
+          "instance",
+          "name",
+          "projects",
+          "revision",
+          "version"
+        ],
+        "title": "TransferHere",
+        "type": "object"
+      },
+      "TransferPairRequest": {
+        "additionalProperties": false,
+        "description": "The sender's half of the key exchange. Public: the exchange is the proof.",
+        "properties": {
+          "message": {
+            "description": "SPAKE2, base64.",
+            "maxLength": 200,
+            "minLength": 8,
+            "title": "Message",
+            "type": "string"
+          },
+          "name": {
+            "default": "",
+            "maxLength": 120,
+            "title": "Name",
+            "type": "string"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "slot": {
+            "maxLength": 3,
+            "minLength": 3,
+            "title": "Slot",
+            "type": "string"
+          },
+          "version": {
+            "default": "",
+            "maxLength": 40,
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slot",
+          "message"
+        ],
+        "title": "TransferPairRequest",
+        "type": "object"
+      },
+      "TransferPaired": {
+        "additionalProperties": false,
+        "properties": {
+          "confirm": {
+            "description": "Proof the receiver derived the same key.",
+            "title": "Confirm",
+            "type": "string"
+          },
+          "message": {
+            "description": "The receiver's half of the exchange, base64.",
+            "title": "Message",
+            "type": "string"
+          },
+          "session": {
+            "title": "Session",
+            "type": "string"
+          }
+        },
+        "required": [
+          "confirm",
+          "message",
+          "session"
+        ],
+        "title": "TransferPaired",
+        "type": "object"
+      },
+      "TransferPeer": {
+        "additionalProperties": false,
+        "description": "A Slipwright on this network, as it describes itself.",
+        "properties": {
+          "address": {
+            "description": "Where it answers, as this server reached it.",
+            "title": "Address",
+            "type": "string"
+          },
+          "compatible": {
+            "description": "On the same schema as this one, so a transfer works.",
+            "title": "Compatible",
+            "type": "boolean"
+          },
+          "instance": {
+            "description": "Which installation: the same one seen twice is one.",
+            "title": "Instance",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Its database schema; a transfer needs the same.",
+            "title": "Revision"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "address",
+          "compatible",
+          "instance",
+          "name",
+          "revision",
+          "version"
+        ],
+        "title": "TransferPeer",
+        "type": "object"
+      },
+      "TransferSendRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "description": "The receiver, http://host:port.",
+            "maxLength": 300,
+            "minLength": 4,
+            "title": "Address",
+            "type": "string"
+          },
+          "code": {
+            "maxLength": 40,
+            "minLength": 10,
+            "title": "Code",
+            "type": "string"
+          },
+          "delete_after": {
+            "default": false,
+            "description": "Delete the projects here once the receiver has them all.",
+            "title": "Delete After",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "address",
+          "code"
+        ],
+        "title": "TransferSendRequest",
+        "type": "object"
+      },
       "TransferStatus": {
         "additionalProperties": false,
         "description": "A transfer under way, from either end.",
@@ -8597,7 +8675,7 @@
           },
           "steps": {
             "items": {
-              "$ref": "#/components/schemas/Step"
+              "$ref": "#/components/schemas/TransferStep"
             },
             "title": "Steps",
             "type": "array"
@@ -8615,6 +8693,52 @@
           "steps"
         ],
         "title": "TransferStatus",
+        "type": "object"
+      },
+      "TransferStep": {
+        "additionalProperties": false,
+        "properties": {
+          "done": {
+            "title": "Done",
+            "type": "integer"
+          },
+          "key": {
+            "enum": [
+              "pair",
+              "projects",
+              "jobs",
+              "settings",
+              "attachments",
+              "standards",
+              "repos",
+              "finish",
+              "delete"
+            ],
+            "title": "Key",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "waiting",
+              "doing",
+              "done",
+              "skipped"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "done",
+          "key",
+          "state",
+          "total"
+        ],
+        "title": "TransferStep",
         "type": "object"
       },
       "Transition": {
@@ -9353,130 +9477,6 @@
           "timeout_s"
         ],
         "title": "WorkerTask",
-        "type": "object"
-      },
-      "slipwright__api__workers__PairRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "capabilities": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Capabilities",
-            "type": "array"
-          },
-          "code": {
-            "maxLength": 400,
-            "minLength": 10,
-            "title": "Code",
-            "type": "string"
-          },
-          "name": {
-            "maxLength": 120,
-            "minLength": 1,
-            "title": "Name",
-            "type": "string"
-          }
-        },
-        "required": [
-          "code",
-          "name"
-        ],
-        "title": "PairRequest",
-        "type": "object"
-      },
-      "slipwright__api__workers__Paired": {
-        "properties": {
-          "token": {
-            "description": "Shown once; the server keeps only its hash.",
-            "title": "Token",
-            "type": "string"
-          },
-          "worker_id": {
-            "title": "Worker Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "token",
-          "worker_id"
-        ],
-        "title": "Paired",
-        "type": "object"
-      },
-      "slipwright__schemas__transfer__PairRequest": {
-        "additionalProperties": false,
-        "description": "The sender's half of the key exchange. Public: the exchange is the proof.",
-        "properties": {
-          "message": {
-            "description": "SPAKE2, base64.",
-            "maxLength": 200,
-            "minLength": 8,
-            "title": "Message",
-            "type": "string"
-          },
-          "name": {
-            "default": "",
-            "maxLength": 120,
-            "title": "Name",
-            "type": "string"
-          },
-          "revision": {
-            "anyOf": [
-              {
-                "maxLength": 64,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Revision"
-          },
-          "slot": {
-            "maxLength": 3,
-            "minLength": 3,
-            "title": "Slot",
-            "type": "string"
-          },
-          "version": {
-            "default": "",
-            "maxLength": 40,
-            "title": "Version",
-            "type": "string"
-          }
-        },
-        "required": [
-          "slot",
-          "message"
-        ],
-        "title": "PairRequest",
-        "type": "object"
-      },
-      "slipwright__schemas__transfer__Paired": {
-        "additionalProperties": false,
-        "properties": {
-          "confirm": {
-            "description": "Proof the receiver derived the same key.",
-            "title": "Confirm",
-            "type": "string"
-          },
-          "message": {
-            "description": "The receiver's half of the exchange, base64.",
-            "title": "Message",
-            "type": "string"
-          },
-          "session": {
-            "title": "Session",
-            "type": "string"
-          }
-        },
-        "required": [
-          "confirm",
-          "message",
-          "session"
-        ],
-        "title": "Paired",
         "type": "object"
       }
     }
@@ -15660,7 +15660,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Here"
+                  "$ref": "#/components/schemas/TransferHere"
                 }
               }
             },
@@ -15771,7 +15771,7 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/Peer"
+                    "$ref": "#/components/schemas/TransferPeer"
                   },
                   "title": "Response Nearby Installations Api Transfer Nearby Get",
                   "type": "array"
@@ -15806,7 +15806,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Hello"
+                  "$ref": "#/components/schemas/TransferHello"
                 }
               }
             },
@@ -15827,7 +15827,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/slipwright__schemas__transfer__PairRequest"
+                "$ref": "#/components/schemas/TransferPairRequest"
               }
             }
           },
@@ -15838,7 +15838,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/slipwright__schemas__transfer__Paired"
+                  "$ref": "#/components/schemas/TransferPaired"
                 }
               }
             },
@@ -15914,7 +15914,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SendRequest"
+                "$ref": "#/components/schemas/TransferSendRequest"
               }
             }
           },
@@ -16478,7 +16478,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/slipwright__api__workers__PairRequest"
+                "$ref": "#/components/schemas/PairRequest"
               }
             }
           },
@@ -16489,7 +16489,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/slipwright__api__workers__Paired"
+                  "$ref": "#/components/schemas/Paired"
                 }
               }
             },

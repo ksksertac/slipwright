@@ -11,7 +11,7 @@ StepKey = Literal[
 ]
 
 
-class Peer(BaseModel):
+class TransferPeer(BaseModel):
     """A Slipwright on this network, as it describes itself."""
 
     model_config = ConfigDict(extra="forbid")
@@ -24,7 +24,7 @@ class Peer(BaseModel):
     compatible: bool = Field(description="On the same schema as this one, so a transfer works.")
 
 
-class Here(BaseModel):
+class TransferHere(BaseModel):
     """This installation, for its own card."""
 
     model_config = ConfigDict(extra="forbid")
@@ -42,7 +42,7 @@ class Here(BaseModel):
     admin: bool = Field(description="Whether the installation's own settings go too.")
 
 
-class Hello(BaseModel):
+class TransferHello(BaseModel):
     """What any installation says about itself to anybody on its network."""
 
     model_config = ConfigDict(extra="forbid")
@@ -61,7 +61,7 @@ class TransferCode(BaseModel):
     shown_s: int = Field(description="Seconds until the next one; the old one works a while on.")
 
 
-class SendRequest(BaseModel):
+class TransferSendRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     address: str = Field(
@@ -73,7 +73,7 @@ class SendRequest(BaseModel):
     )
 
 
-class PairRequest(BaseModel):
+class TransferPairRequest(BaseModel):
     """The sender's half of the key exchange. Public: the exchange is the proof."""
 
     model_config = ConfigDict(extra="forbid")
@@ -85,7 +85,7 @@ class PairRequest(BaseModel):
     version: str = Field(default="", max_length=40)
 
 
-class Paired(BaseModel):
+class TransferPaired(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     session: str
@@ -93,7 +93,7 @@ class Paired(BaseModel):
     confirm: str = Field(description="Proof the receiver derived the same key.")
 
 
-class Step(BaseModel):
+class TransferStep(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     key: StepKey
@@ -112,20 +112,20 @@ class TransferStatus(BaseModel):
     peer: str = Field(description="The other machine: its address, or the name it gave.")
     state: Literal["running", "receiving", "importing", "done", "failed"]
     error: str | None = None
-    steps: list[Step]
+    steps: list[TransferStep]
     moved: list[str] = Field(default_factory=list, description="Names of the projects moved.")
     skipped: int = Field(default=0, description="Projects the receiver already had.")
     counts: dict[str, int] = Field(default_factory=dict, description="Rows written, per table.")
 
 
 __all__ = [
-    "Hello",
-    "Here",
-    "PairRequest",
-    "Paired",
-    "Peer",
-    "SendRequest",
-    "Step",
+    "TransferHello",
+    "TransferHere",
+    "TransferPairRequest",
+    "TransferPaired",
+    "TransferPeer",
+    "TransferSendRequest",
+    "TransferStep",
     "TransferCode",
     "TransferStatus",
 ]

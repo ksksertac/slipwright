@@ -32,15 +32,15 @@ from slipwright.api.auth import _engine, require_owner
 from slipwright.api.workers import ADDRESS_SETTING
 from slipwright.engine import Engine
 from slipwright.schemas.transfer import (
-    Hello,
-    Here,
-    Paired,
-    PairRequest,
-    Peer,
-    SendRequest,
-    Step,
     TransferCode,
+    TransferHello,
+    TransferHere,
+    TransferPaired,
+    TransferPairRequest,
+    TransferPeer,
+    TransferSendRequest,
     TransferStatus,
+    TransferStep,
 )
 from slipwright.store.migrate import current_revision
 from slipwright.transfer import incoming, nearby, outgoing
@@ -129,8 +129,10 @@ def _addresses(engine: Engine, page: str | None) -> list[str]:
     return found
 
 
-def _steps(progress: Progress) -> list[Step]:
-    return [Step(key=s.key, total=s.total, done=s.done, state=s.state) for s in progress.steps]
+def _steps(progress: Progress) -> list[TransferStep]:
+    return [
+        TransferStep(key=s.key, total=s.total, done=s.done, state=s.state) for s in progress.steps
+    ]
 
 
 def _summary(summary: dict[str, Any]) -> dict[str, Any]:
@@ -144,13 +146,13 @@ def _summary(summary: dict[str, Any]) -> dict[str, Any]:
 # -- the owner's side -------------------------------------------------------------------
 
 
-@router.get("/transfer", response_model=Here)
-def here(request: Request, address: str | None = None) -> Here:
+@router.get("/transfer", response_model=TransferHere)
+def here(request: Request, address: str | None = None) -> TransferHere:
     """This installation, as its own card shows it, and whether transfers are on."""
     scope = _scope(request)
     engine = _engine(request)
     enabled = bool(getattr(engine, "transfer_enabled", True))
-    return Here(
+    return TransferHere(
         enabled=enabled,
         instance=_instance(engine),
         name=nearby.machine_name(),
@@ -162,8 +164,8 @@ def here(request: Request, address: str | None = None) -> Here:
     )
 
 
-@router.get("/transfer/nearby", response_model=list[Peer])
-def nearby_installations(request: Request, address: str | None = None) -> list[Peer]:
+@router.get("/transfer/nearby", response_model=list[TransferPeer])
+def nearby_installations(request: Request, address: str | None = None) -> list[TransferPeer]:
     """The other Slipwrights on this network. ``address`` is where the page is open:
     the best clue to which network that is. Takes a few seconds."""
     _scope(request)
@@ -179,7 +181,7 @@ def nearby_installations(request: Request, address: str | None = None) -> list[P
             client=client,
         )
     return [
-        Peer(
+        TransferPeer(
             address=str(p["address"]),
             instance=str(p.get("instance", "")),
             name=str(p.get("name", "")) or str(p["address"]),
@@ -232,7 +234,7 @@ def incoming_status(request: Request) -> Response | TransferStatus:
 
 
 @router.post("/transfer/send", response_model=TransferStatus, status_code=202)
-def send(body: SendRequest, request: Request) -> TransferStatus:
+def send(body: TransferSendRequest, request: Request) -> TransferStatus:
     """Start moving this account to ``address`` with the code shown there. Runs in the
     background; ask ``/transfer/send/{id}`` how it goes. Refused at once (409) while a
     development is running."""
@@ -286,13 +288,13 @@ def _sending_status(sending: outgoing.Sending) -> TransferStatus:
 # -- the other installation's side -------------------------------------------------------
 
 
-@router.get("/transfer/peer/hello", response_model=Hello)
-def hello(request: Request) -> Hello:
+@router.get("/transfer/peer/hello", response_model=TransferHello)
+def hello(request: Request) -> TransferHello:
     """What this is, to anybody on the network who asks: a name and a version, nothing
     of anybody's."""
     engine = _engine(request)
     _on(engine)
-    return Hello(
+    return TransferHello(
         instance=_instance(engine),
         name=nearby.machine_name(),
         version=running_version(),
@@ -300,8 +302,8 @@ def hello(request: Request) -> Hello:
     )
 
 
-@router.post("/transfer/peer/pair", response_model=Paired)
-def pair(body: PairRequest, request: Request) -> Paired:
+@router.post("/transfer/peer/pair", response_model=TransferPaired)
+def pair(body: TransferPairRequest, request: Request) -> TransferPaired:
     """The sender's half of the exchange in, the receiver's out. The code is spent."""
     engine = _engine(request)
     _on(engine)
@@ -325,7 +327,7 @@ def pair(body: PairRequest, request: Request) -> Paired:
     except incoming.Rejected as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     log.info("transfer from %s (%s) started", body.name or "?", caller)
-    return Paired(
+    return TransferPaired(
         session=rec.id,
         message=base64.b64encode(answer).decode("ascii"),
         confirm=confirmation(rec.key),
