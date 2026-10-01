@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import { describeError, type Job } from "../api/client";
 import { useMyTeam, useOverview, useProjects, useJob, useUndoAutoApproval } from "../api/hooks";
@@ -55,6 +55,7 @@ export function DashboardPage() {
   const waitingIds = useMemo(() => new Set(waiting.map((w) => w.job_id)), [waiting]);
   // a job that moved on drops out of the selection by itself
   const selected = useMemo(() => chosen.filter((id) => waitingIds.has(id)), [chosen, waitingIds]);
+  const [lower, fill] = useFillToBottom<HTMLDivElement>(!!overview.data);
 
   if (overview.isLoading) return <Loading rows={5} />;
   if (overview.error) return <ErrorBox error={overview.error} />;
@@ -142,7 +143,11 @@ export function DashboardPage() {
         </div>
       </div>
 
-      <div className="grid-2" style={{ alignItems: "start" }}>
+      <div
+        className="dash-lower"
+        ref={lower}
+        style={fill ? ({ "--dash-fill": `${fill}px` } as CSSProperties) : undefined}
+      >
         <div className="card flush">
           <div className="card-head">
             <h3>
@@ -164,36 +169,38 @@ export function DashboardPage() {
               <span className="badge wait plain">{waiting.length}</span>
             </span>
           </div>
-          {waiting.length === 0 ? (
-            <div className="empty" style={{ padding: 28 }}>
-              <div className="glyph">
-                <IconCheck />
+          <div className="card-body">
+            {waiting.length === 0 ? (
+              <div className="empty" style={{ padding: 28 }}>
+                <div className="glyph">
+                  <IconCheck />
+                </div>
+                <div className="small">{tx("Nothing waits for you.")}</div>
               </div>
-              <div className="small">{tx("Nothing waits for you.")}</div>
-            </div>
-          ) : (
-            <table>
-              <tbody>
-                {waiting.map((w) => (
-                  <WaitingRow
-                    key={w.job_id}
-                    jobId={w.job_id}
-                    request={nameOf(w)}
-                    projectName={named(byId.get(w.project_id ?? "")?.name)}
-                    projectId={w.project_id ?? undefined}
-                    pending={w.pending_approval ?? ""}
-                    at={w.last_activity}
-                    selected={selected.includes(w.job_id)}
-                    onSelect={(on) =>
-                      setSelected((ids) =>
-                        on ? [...new Set([...ids, w.job_id])] : ids.filter((i) => i !== w.job_id),
-                      )
-                    }
-                  />
-                ))}
-              </tbody>
-            </table>
-          )}
+            ) : (
+              <table>
+                <tbody>
+                  {waiting.map((w) => (
+                    <WaitingRow
+                      key={w.job_id}
+                      jobId={w.job_id}
+                      request={nameOf(w)}
+                      projectName={named(byId.get(w.project_id ?? "")?.name)}
+                      projectId={w.project_id ?? undefined}
+                      pending={w.pending_approval ?? ""}
+                      at={w.last_activity}
+                      selected={selected.includes(w.job_id)}
+                      onSelect={(on) =>
+                        setSelected((ids) =>
+                          on ? [...new Set([...ids, w.job_id])] : ids.filter((i) => i !== w.job_id),
+                        )
+                      }
+                    />
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
         </div>
 
         <div className="card flush">
@@ -205,31 +212,33 @@ export function DashboardPage() {
               {tx("Recent activity")}
             </h3>
           </div>
-          {o.recent.length === 0 ? (
-            <div className="empty" style={{ padding: 28 }}>
-              <div className="small">
-                No activity yet.{" "}
-                {o.projects === 0 ? (
-                  <Link to="/projects/new">{tx("Add a project")}</Link>
-                ) : (
-                  <Link to="/projects">{tx("Start a development")}</Link>
-                )}
-                .
+          <div className="card-body">
+            {o.recent.length === 0 ? (
+              <div className="empty" style={{ padding: 28 }}>
+                <div className="small">
+                  No activity yet.{" "}
+                  {o.projects === 0 ? (
+                    <Link to="/projects/new">{tx("Add a project")}</Link>
+                  ) : (
+                    <Link to="/projects">{tx("Start a development")}</Link>
+                  )}
+                  .
+                </div>
               </div>
-            </div>
-          ) : (
-            <ul className="feed capped">
-              {o.recent.map((item) => (
-                <ActivityRow
-                  key={`${item.job_id}:${item.index}`}
-                  item={item}
-                  projectId={item.project_id ?? ""}
-                  projectName={named(byId.get(item.project_id ?? "")?.name)}
-                  compact
-                />
-              ))}
-            </ul>
-          )}
+            ) : (
+              <ul className="feed capped">
+                {o.recent.map((item) => (
+                  <ActivityRow
+                    key={`${item.job_id}:${item.index}`}
+                    item={item}
+                    projectId={item.project_id ?? ""}
+                    projectName={named(byId.get(item.project_id ?? "")?.name)}
+                    compact
+                  />
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
       </div>
 
@@ -283,6 +292,41 @@ export function DashboardPage() {
       )}
     </SayProvider>
   );
+}
+
+/**
+ * The height that takes an element from where it starts to the bottom of the window.
+ *
+ * The approvals and the feed sit side by side below the charts. Sized by their content,
+ * an empty approvals card left a hole beside a feed that ran past the fold and scrolled
+ * the whole page; sized to what is left of the window, both end on the same line and the
+ * feed scrolls inside its card. Re-measured whenever anything in the page changes size,
+ * since the onboarding list and the charts above it settle after the first paint.
+ */
+function useFillToBottom<T extends HTMLElement>(ready: boolean, floor = 320) {
+  const ref = useRef<T>(null);
+  const [height, setHeight] = useState<number>();
+  useLayoutEffect(() => {
+    const el = ref.current;
+    const page = el?.parentElement;
+    if (!el || !page) return;
+    const measure = () => {
+      const top = el.getBoundingClientRect().top + window.scrollY;
+      const pad = parseFloat(getComputedStyle(page).paddingBottom) || 0;
+      setHeight(Math.max(floor, Math.floor(window.innerHeight - top - pad)));
+    };
+    measure();
+    // measuring is idempotent, so the page growing because of the height set here
+    // settles on the same number rather than looping
+    const watch = new ResizeObserver(measure);
+    watch.observe(page);
+    window.addEventListener("resize", measure);
+    return () => {
+      watch.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [ready, floor]);
+  return [ref, height] as const;
 }
 
 /** A gate the supervisor approved: the job runs on; the human can still overrule it. */

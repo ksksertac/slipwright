@@ -2946,6 +2946,49 @@ table.mini .num {
   padding: 0 20px;
 }
 
+/* approvals and the feed, side by side, ending at the bottom of the window (the height
+   is measured in DashboardPage): both cards are the same height, and whichever has more
+   than fits scrolls inside itself rather than scrolling the page */
+.dash-lower {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  gap: 16px;
+  height: var(--dash-fill, auto);
+}
+.dash-lower > .card {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.dash-lower .card-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+/* "nothing waits for you" sits in the middle of the card, not stuck under its head */
+.dash-lower .card-body > .empty {
+  margin: auto 0;
+}
+.dash-lower .feed.capped {
+  max-height: none;
+  overflow: visible;
+}
+/* one column: the cards stack, so filling the window would only push the second one
+   off it; each keeps the old cap instead */
+@media (max-width: 900px) {
+  .dash-lower {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    height: auto;
+  }
+  .dash-lower .card-body {
+    max-height: 420px;
+  }
+}
+
 /* pipeline (T9.9)
 
    A lane is read top to bottom: who asked for what (a headline over the brief), how far
