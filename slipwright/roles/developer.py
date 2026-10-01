@@ -118,7 +118,7 @@ def run(
         context["output_was_truncated"] = truncated
     if continuation:
         context["continuation"] = continuation
-    context["tree"] = list_tree(worktree)
+    context["tree"] = list_tree(worktree, first=wanted)
     context["files"] = read_files(worktree, wanted)
 
     kwargs = {} if timeout_s is None else {"timeout_s": timeout_s}

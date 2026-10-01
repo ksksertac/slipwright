@@ -1461,11 +1461,11 @@ Where a diff is sent, and whether it has to be:
 
 ### T15.2 — DevOps writes the pull request from the files that changed, not the diff
 **Done when**
-- [ ] DevOps is given `git diff --stat` (files and line counts) instead of `branch_diff`;
+- [x] DevOps is given `git diff --stat` (files and line counts) instead of `branch_diff`;
   the draft already carries the plan and the history it describes
-- [ ] The instructions say the pull request is described from the draft and the file list,
+- [x] The instructions say the pull request is described from the draft and the file list,
   and that nothing is invented beyond them
-- [ ] Test: the DevOps prompt of a development whose branch diff is large stays small, and
+- [x] Test: the DevOps prompt of a development whose branch diff is large stays small, and
   still names every changed file
 
 ### T15.3 — The developer's file tree shows the code first
@@ -1474,12 +1474,12 @@ developer imports what exists, puts a new file where the project keeps its kind 
 not write a second `util`. It walks folders alphabetically and stops at 400, so in a big
 repository `assets/`, `docs/` or `public/` can fill it and `src/` never appear.
 **Done when**
-- [ ] The folders of the files this phase touches, and then the source folders, are listed
+- [x] The folders of the files this phase touches, and then the source folders, are listed
   before anything else
-- [ ] Files that are not code (images, fonts, media, fixtures past a few) are summarised
+- [x] Files that are not code (images, fonts, media, fixtures past a few) are summarised
   per folder with their count (`public/images: 214 files`) instead of one line each
-- [ ] The cap stays; what is cut says how many entries were left out and where
-- [ ] Test: a repository with 500 images in `public/` and a small `src/` gives a tree in
+- [x] The cap stays; what is cut says how many entries were left out and where
+- [x] Test: a repository with 500 images in `public/` and a small `src/` gives a tree in
   which every file under `src/` appears
 
 ---

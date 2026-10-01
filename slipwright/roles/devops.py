@@ -22,11 +22,12 @@ from slipwright.schemas.profile import Profile, RoleName
 
 INSTRUCTIONS = """\
 Write the pull request for this branch. `draft` is a factual description assembled from
-the approved plan and the job history; `branch_diff` is what changed. Produce a concise
-`pr_title` (imperative, under 70 characters) and a `pr_body` in Markdown that explains
-what changed and why, lists the phases, and mentions how it was tested. Do not invent
-anything that is not in the draft or the diff. If a `jira` section is present, comment
-the outcome on the stories listed there (the PR link is added by the engine).
+the approved plan and the job history; `changed_files` lists the files the branch changed
+and by how many lines. Produce a concise `pr_title` (imperative, under 70 characters) and
+a `pr_body` in Markdown that explains what changed and why, lists the phases, and mentions
+how it was tested. Do not invent anything that is not in the draft or the file list. If
+a `jira` section is present, comment the outcome on the stories listed there (the PR link
+is added by the engine).
 If a `standards` section is present its sections are binding unless they contradict
 the core rules; say in `summary` when one could not be followed and why."""
 
@@ -181,15 +182,17 @@ def run(
     job: Job,
     profile: Profile,
     *,
-    branch_diff: str,
+    changed_files: str,
     provider: ModelProvider | None = None,
     timeout_s: float | None = None,
     jira: dict[str, Any] | None = None,
     standards: dict[str, Any] | None = None,
 ) -> RoleResult:
+    # the files and their line counts, not the diff: the draft already says what was done
+    # and why, and the whole branch's diff was the biggest prompt a development sent
     context = base_context(job, instructions=INSTRUCTIONS, jira=jira, standards=standards)
     context["draft"] = draft_description(job)
-    context["branch_diff"] = branch_diff
+    context["changed_files"] = changed_files
     kwargs = {} if timeout_s is None else {"timeout_s": timeout_s}
     return invoke_role(RoleName.DEVOPS, profile, context, provider=provider, **kwargs)
 

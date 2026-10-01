@@ -134,6 +134,14 @@ def diff(repo: Path, base: str, head: str = "HEAD") -> str:
     return _capped(repo, text, [base, head])
 
 
+def changed_files(repo: Path, base: str, head: str = "HEAD") -> str:
+    """Which files changed between two commits and by how many lines, every path whole:
+    what a role that describes a change needs, without the change itself."""
+    return run(
+        repo, "diff", "--stat=240,200", "--no-color", base, head, *_not_ours()
+    ).stdout.rstrip()
+
+
 def numstat(repo: Path, base: str, head: str = "HEAD") -> list[tuple[str, int, int]]:
     """(path, added, removed) per file between two commits; a binary file counts as 0/0."""
     out = run(repo, "diff", "--numstat", "--no-color", base, head, *_not_ours()).stdout

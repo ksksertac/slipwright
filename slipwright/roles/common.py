@@ -59,20 +59,78 @@ MANIFEST_FILES = (
 )
 MAX_TREE_ENTRIES = 400
 MAX_FILE_BYTES = 12_000
+#: What is not code. A folder with more than a few of these is counted, not listed: a
+#: model writing code needs to know the images are there, not each one's name.
+NOT_CODE_SUFFIXES = frozenset(
+    {
+        ".png", ".jpg", ".jpeg", ".gif", ".webp", ".avif", ".bmp", ".ico", ".svg",
+        ".heic", ".tif", ".tiff", ".psd",
+        ".ttf", ".otf", ".woff", ".woff2", ".eot",
+        ".mp3", ".mp4", ".wav", ".ogg", ".webm", ".mov", ".m4a",
+        ".pdf", ".zip",
+    }
+)  # fmt: skip
+_DOC_SUFFIXES = frozenset({".md", ".rst", ".txt"})
+#: Up to this many of them in one folder are still listed one by one.
+_LISTED_NOT_CODE = 3
+#: A walk stops here: a monorepo is not read to its last file to choose 400 of them.
+_MAX_WALK = 20_000
 
 
-def list_tree(root: Path, limit: int = MAX_TREE_ENTRIES) -> list[str]:
-    """Relative paths under ``root`` (sorted, bounded), skipping vendored/tool dirs."""
-    entries: list[str] = []
+def list_tree(root: Path, limit: int = MAX_TREE_ENTRIES, first: Iterable[str] = ()) -> list[str]:
+    """Relative paths under ``root``, bounded, skipping vendored and tool directories.
+
+    The cap used to fall wherever an alphabetical walk reached it, so in a big repository
+    ``assets/`` or ``public/`` filled it and ``src/`` never appeared (T15.3). What the
+    reader needs most comes first: the folders of ``first`` (the files a phase touches),
+    then the files at the top, then code, then documents. Images, fonts and media are
+    counted per folder. What does not fit is said, with where it was.
+    """
+    files: list[str] = []
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = sorted(d for d in dirnames if d not in SKIP_DIRS)
         rel = Path(dirpath).relative_to(root)
-        for name in sorted(filenames):
-            entries.append((rel / name).as_posix() if rel != Path(".") else name)
-            if len(entries) >= limit:
-                entries.append(f"... (truncated at {limit} entries)")
-                return entries
-    return entries
+        files.extend((rel / n).as_posix() if rel != Path(".") else n for n in sorted(filenames))
+        if len(files) >= _MAX_WALK:
+            break
+
+    def folder(path: str) -> str:
+        return path.rpartition("/")[0]
+
+    def not_code(path: str) -> bool:
+        return Path(path).suffix.lower() in NOT_CODE_SUFFIXES
+
+    counted: dict[str, list[str]] = {}
+    for path in files:
+        if not_code(path):
+            counted.setdefault(folder(path), []).append(path)
+    counted = {d: paths for d, paths in counted.items() if len(paths) > _LISTED_NOT_CODE}
+    focus = {folder(p.strip("/")) for p in first}
+
+    def rank(path: str) -> int:
+        where = folder(path)
+        if any(where == f or (f and where.startswith(f + "/")) for f in focus):
+            return 0
+        if not where:
+            return 1
+        return 3 if Path(path).suffix.lower() in _DOC_SUFFIXES else 2
+
+    ranked = [(rank(p), p, p) for p in files if not (not_code(p) and folder(p) in counted)]
+    # a counted folder is one line, so it sits among the code where its folder would
+    for where, paths in counted.items():
+        kinds = ", ".join(sorted({Path(p).suffix.lower() for p in paths}))
+        line = f"{where or '.'}/ ({len(paths)} files: {kinds})"
+        ranked.append((min(rank(paths[0]), 2), f"{where}/", line))
+    listed = [line for _, _, line in sorted(ranked)]
+    if len(listed) <= limit:
+        return listed
+    left = listed[limit:]
+    tops: dict[str, int] = {}
+    for entry in left:
+        top = entry.split("/", 1)[0] if "/" in entry else "."
+        tops[top] = tops.get(top, 0) + 1
+    where = ", ".join(f"{t}/ {n}" for t, n in sorted(tops.items(), key=lambda kv: -kv[1])[:5])
+    return [*listed[:limit], f"... ({len(left)} more left out: {where})"]
 
 
 def read_files(root: Path, names: Iterable[str], max_bytes: int = MAX_FILE_BYTES) -> dict[str, str]:
@@ -93,8 +151,8 @@ def read_files(root: Path, names: Iterable[str], max_bytes: int = MAX_FILE_BYTES
     return out
 
 
-def scan_worktree(root: Path) -> dict[str, Any]:
-    return {"tree": list_tree(root), "files": read_files(root, MANIFEST_FILES)}
+def scan_worktree(root: Path, limit: int = MAX_TREE_ENTRIES) -> dict[str, Any]:
+    return {"tree": list_tree(root, limit), "files": read_files(root, MANIFEST_FILES)}
 
 
 def writing_rules(language: str) -> str:
