@@ -114,3 +114,36 @@ def test_the_prompt_is_sent_compact_and_reads_back_the_same() -> None:
     assert "Yarışma sonucunu ve kupayı göster" in prompt  # letters, not \u escapes
     indented = len(json.dumps(context, indent=2, sort_keys=True))
     assert len(body) < indented * 0.9
+
+
+# -- T15.8: the errors of a failed build ----------------------------------------------------
+
+
+def test_a_long_failed_build_reaches_the_developer_as_its_errors() -> None:
+    from slipwright.gates import MAX_MODEL_CHARS, GateResult
+
+    progress = [f"> Task :app:step{i} UP-TO-DATE" for i in range(1800)]
+    errors = [
+        "> Task :app:compileDebugKotlin",
+        "e: file:///work/app/src/main/java/com/x/App.kt:12:5 Unresolved reference: Trophy",
+        "e: file:///work/app/src/main/java/com/x/Room.kt:40:9 Type mismatch",
+        "> Task :app:compileDebugKotlin FAILED",
+    ]
+    output = "\n".join(progress[:900] + errors + progress[900:] + ["BUILD FAILED in 41s"])
+    gate = GateResult(ok=False, output=output)
+
+    sent = gate.for_model
+    assert len(output) > 50_000 and len(sent) <= MAX_MODEL_CHARS + 300
+    assert "App.kt:12:5 Unresolved reference: Trophy" in sent
+    assert "Room.kt:40:9 Type mismatch" in sent
+    assert "BUILD FAILED in 41s" in sent  # and how the run ended
+    assert len(gate.tail) > len(sent)  # the person still has the long version
+
+
+def test_a_failure_with_no_error_line_falls_back_to_its_end() -> None:
+    from slipwright.gates import condensed
+
+    output = "\n".join(f"step {i} ok" for i in range(3000)) + "\nexit status 2"
+    sent = condensed(output, limit=1000)
+    assert sent.endswith("exit status 2") and "were cut" in sent
+    assert condensed("short", limit=1000) == "short"

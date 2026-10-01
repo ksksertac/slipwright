@@ -1541,11 +1541,11 @@ tokens and carries nothing a model reads.
 `build_failure` is the tail of the build's output, up to 20,000 characters, sent on every
 retry. Most of it is progress lines; the errors are a few lines in it.
 **Done when**
-- [ ] The lines that look like errors (`error`, `Error:`, `FAILED`, `✕`, a compiler's
+- [x] The lines that look like errors (`error`, `Error:`, `FAILED`, `✕`, a compiler's
   `file:line:col`) are kept with a few lines around each, then the tail, within 6,000
   characters; the person still sees the whole output in the run's detail
-- [ ] A build whose output has no recognisable error line falls back to the tail
-- [ ] Test: a Gradle failure of 50,000 characters reaches the developer under 6,000 with
+- [x] A build whose output has no recognisable error line falls back to the tail
+- [x] Test: a Gradle failure of 50,000 characters reaches the developer under 6,000 with
   its `e: file.kt:12:5` lines in it
 
 ---

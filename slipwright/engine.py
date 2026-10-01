@@ -4144,7 +4144,7 @@ class Engine:
             gate = self._run_gate(job, platform)
             # the tester reads a failure first: a test that asserts something nobody agreed
             # to is QA's own to correct, and the gate runs again without a specialist
-            while not gate.ok and self._qa_gate_triage(job, index, gate.tail):
+            while not gate.ok and self._qa_gate_triage(job, index, gate.for_model):
                 gate = self._run_gate(job, platform)
         except BuilderLost as lost:
             # the phase is written and staged; only its build is owed, so that is where the
@@ -4183,9 +4183,10 @@ class Engine:
         # whether the last fix moved anything at all, decided before the record of it is
         # overwritten: byte-identical output means the specialist changed nothing the
         # command could notice, and the supervisor cannot see that from one attempt alone
-        repeated = job.data.last_build_output == gate.tail
+        repeated = job.data.last_build_output == gate.for_model
         job.data.build_attempts += 1
-        job.data.last_build_output = gate.tail
+        # the developer's next prompt carries this on every retry: the errors, not the run
+        job.data.last_build_output = gate.for_model
         job.data.rerun_only = False  # the specialist now fixes it the ordinary way
         self.store.save(job)
         if job.data.build_attempts >= self.max_build_attempts:
@@ -4198,7 +4199,7 @@ class Engine:
             f"build gate failed on phase {index + 1} "
             f"(attempt {job.data.build_attempts}/{self.max_build_attempts})"
         )
-        choice, reason = self._failed_gate_choice(job, index, gate.tail, repeated=repeated)
+        choice, reason = self._failed_gate_choice(job, index, gate.for_model, repeated=repeated)
         if choice == "replan":
             job.data.feedback = (
                 f"phase {index + 1} failed the build gate {job.data.build_attempts} time(s); "
@@ -4549,7 +4550,7 @@ class Engine:
                     detail=(test_diff or "(no changes)") + "\n\n" + gate.tail,
                 )
             job.data.build_attempts += 1
-            job.data.last_build_output = gate.tail
+            job.data.last_build_output = gate.for_model
             self.store.save(job)
             if job.data.build_attempts >= self.max_build_attempts:
                 return self._fail(
