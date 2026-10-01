@@ -157,7 +157,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 | 12 | T12.3 What a member may do | [x] |
 | 12 | T12.4 Told when work arrives, told when it ends | [x] |
 | 14 | T14.1 A phase names its platform; per-platform commands | [x] |
-| 14 | T14.2 What nothing here can build is deferred, not failed | [ ] |
+| 14 | T14.2 What nothing here can build is deferred, not failed | [x] |
 | 14 | T14.3 Pairing, and the worker's side of the API | [ ] |
 | 14 | T14.4 `slipwright worker` on the Mac | [ ] |
 | 14 | T14.5 The pages | [ ] |
@@ -1318,21 +1318,26 @@ The shape, decided with the user before any of it was written:
 
 ### T14.2 — What nothing here can build is deferred, not failed
 **Done when**
-- [ ] `_develop` meets a phase whose platform neither the server nor a connected worker of
-  the job's owner can build: it records it in `data.deferred_phases`, notes why, and moves
-  to the next phase -- no attempt spent, no commit
-- [ ] When the remaining phases are done and some were deferred, the job enters
-  `AWAITING_BUILDER` (new state; legal from the working states, and back to `DEVELOPING`);
-  it survives a restart like every other state
-- [ ] A worker connecting (or reporting a new capability) wakes its owner's jobs waiting for
-  that platform -- the first wake that is not a person's click, so it is scoped to the
-  worker's own account and runs each job on its owner's keys
-- [ ] The deferred phases then run in plan order, and QA, review and DevOps follow as usual
-- [ ] Entering the state notifies the owner like a gate does (mail, chat), naming the
-  platforms and linking to the page that pairs a Mac -- the message carries no code
-- [ ] The pipeline shows a "waiting for a Mac" card after the last phase that ran, and the
-  board keeps the deferred tasks `todo`, not failed
-- [ ] A project with no platform phases behaves exactly as today
+- [x] `_develop` meets a phase whose platform neither the server nor a machine the job's
+  owner has lent can build (`Engine.can_build`): the phases not started yet are reordered
+  so the ones that can be built go first -- stable, so each platform keeps its own order,
+  and safe because nothing depends on a platform phase. The breakdown's phase numbers
+  follow, so the board marks the right tasks; no attempt is spent
+- [x] When only such phases are left the job enters `AWAITING_BUILDER` (new state, from
+  `DEVELOPING` and back), naming them in `data.waiting_platforms`; it survives a restart
+  like every other state
+- [x] `Engine.waiting_for_builders(owner)` names the developments a builder of that account
+  would carry on -- the first wake that is not a person's click, so it is asked per account
+  and each job then runs on its owner's keys; `_run` moves a ready job on by itself
+- [x] The waiting phases then run in plan order, and QA, review and DevOps follow as usual
+- [x] Entering the state is announced once per wait: the chat groups that hear of gates
+  (no buttons -- nothing is approved) and a letter to the owner naming the apps and linking
+  to the page that pairs a Mac -- neither carries a code
+- [x] The pipeline shows a "Waiting for a Mac" card before the first phase that waited, and
+  the board keeps those tasks `todo`, not failed; nobody is shown an approve button
+- [x] A project with no platform phases behaves exactly as today
+
+> Verified by `tests/test_phase14_deferral.py`.
 
 ### T14.3 — Pairing, and the worker's side of the API
 **Done when**

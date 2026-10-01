@@ -24,6 +24,12 @@ Platform = Literal["ios", "android"]
 PLATFORMS: tuple[Platform, ...] = ("ios", "android")
 
 
+def platform_names(platforms: list[str]) -> str:
+    """The platforms as a person writes them: iOS / Android."""
+    shown = {"ios": "iOS", "android": "Android"}
+    return " / ".join(shown.get(p, p) for p in platforms)
+
+
 class RoleName(StrEnum):
     PO = "po"  # product owner: request -> epics, stories, tasks
     ARCHITECT = "architect"  # backlog + repository -> profile, decisions, phases

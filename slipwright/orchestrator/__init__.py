@@ -30,8 +30,12 @@ LEGAL_TRANSITIONS: dict[JobState, tuple[JobState, ...]] = {
     JobState.DEVELOPING: (
         JobState.BUILD_GATE,
         JobState.AWAITING_DESIGN_APPROVAL,
+        JobState.AWAITING_BUILDER,
         JobState.FAILED,
     ),
+    # the phases left need a machine this one is not; one that can build them connecting
+    # is what carries the development on (T14.2)
+    JobState.AWAITING_BUILDER: (JobState.DEVELOPING,),
     JobState.AWAITING_DESIGN_APPROVAL: (JobState.DEVELOPING, JobState.DESIGN),
     JobState.BUILD_GATE: (JobState.DEVELOPING, JobState.REVIEW, JobState.QA, JobState.FAILED),
     JobState.REVIEW: (

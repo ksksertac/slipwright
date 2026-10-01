@@ -21,6 +21,7 @@ const STATE_CLASS: Record<JobState, string> = {
   devops: "work",
   awaiting_deploy_approval: "wait",
   awaiting_decision: "wait",
+  awaiting_builder: "wait",
   done: "ok",
   failed: "bad",
   // stopped on purpose: settled, but not an achievement and not a fault
@@ -44,6 +45,7 @@ export const STATE_LABEL: Record<JobState, string> = {
   devops: "devops",
   awaiting_deploy_approval: "needs deployment approval",
   awaiting_decision: "needs your decision",
+  awaiting_builder: "waiting for a Mac",
   done: "done",
   failed: "failed",
   cancelled: "stopped",
