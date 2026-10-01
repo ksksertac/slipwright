@@ -118,6 +118,11 @@ function NowHead({ job, inflight, calls }: { job: Job; inflight: InFlight | null
   const index = job.data.phase_index ?? 0;
   const phase = plan?.phases?.[index];
   const developing = job.state === "developing" && phase;
+  // the head sits over one phase, so a bare total there was read as that phase's: the
+  // phase's own calls are counted beside it, and each says which it is
+  const here = developing ? calls.filter((c) => c.phase === index + 1) : [];
+  const phaseSent = sum(here.map((c) => c.input_tokens));
+  const phaseGot = sum(here.map((c) => c.output_tokens));
   const task = developing ? taskTitle(job, phase.task_id) : null;
   const done = hasFinished(job.state);
   return (
@@ -134,8 +139,21 @@ function NowHead({ job, inflight, calls }: { job: Job; inflight: InFlight | null
           </span>
         )}
         {(sent !== null || got !== null) && (
-          <span className="now-right" title={tx("This development so far")}>
-            <Tokens input={sent} output={got} cost={job.data.cost_usd ? job.data.cost_usd : null} />
+          <span className="now-right">
+            {developing && (phaseSent !== null || phaseGot !== null) && (
+              <span className="now-sum">
+                <span className="now-sum-label">{tx("This phase")}</span>
+                <Tokens input={phaseSent} output={phaseGot} />
+              </span>
+            )}
+            <span className="now-sum" title={tx("This development so far")}>
+              <span className="now-sum-label">{tx("In total")}</span>
+              <Tokens
+                input={sent}
+                output={got}
+                cost={job.data.cost_usd ? job.data.cost_usd : null}
+              />
+            </span>
           </span>
         )}
       </div>
