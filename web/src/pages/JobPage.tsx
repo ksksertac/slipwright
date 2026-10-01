@@ -54,6 +54,7 @@ import { sentenceCase, useT } from "../i18n";
 import { SayProvider, useSay } from "../i18n/said";
 import { Copyable } from "../components/Copyable";
 import { ResultCard } from "../components/ResultCard";
+import { NowFeed } from "../components/NowFeed";
 import { STAGE_ICON, STAGE_LABEL, stageAgent, stageStatus, stages } from "../components/stages";
 
 export function JobPage() {
@@ -274,11 +275,12 @@ function StageStepper({ job, projectId }: { job: Job; projectId: string }) {
   );
 }
 
-const TABS = ["result", "phases", "tests", "calls", "steering", "history"] as const;
+const TABS = ["now", "result", "phases", "tests", "calls", "steering", "history"] as const;
 type Tab = (typeof TABS)[number] | "flow";
 
 const TAB_LABEL: Record<Tab, string> = {
   flow: "Flow",
+  now: "Right now",
   result: "What came out",
   phases: "Phases",
   tests: "Tests",
@@ -293,9 +295,10 @@ const TAB_LABEL: Record<Tab, string> = {
  * for and the rest is a click rather than a scroll. */
 function JobTabs({ job, projectId, flow }: { job: Job; projectId: string; flow?: ReactNode }) {
   const tx = useT();
-  // the flow is what a lane is opened for, so it is the tab a lane opens on; the page has
-  // no flow of its own and opens on the result, the one answer most people came for
-  const [tab, setTab] = useState<Tab>(flow ? "flow" : "result");
+  // the flow is what a lane is opened for, so it is the tab a lane opens on. The page has
+  // no flow of its own: while the development runs it opens on what is happening, and once
+  // it is over on the result, the one answer most people came for
+  const [tab, setTab] = useState<Tab>(flow ? "flow" : hasFinished(job.state) ? "result" : "now");
   const tabs: Tab[] = flow ? ["flow", ...TABS] : [...TABS];
   return (
     <>
@@ -314,6 +317,7 @@ function JobTabs({ job, projectId, flow }: { job: Job; projectId: string; flow?:
       </nav>
       <div className="job-tab-body">
         {tab === "flow" && flow}
+        {tab === "now" && <NowFeed job={job} />}
         {tab === "result" && <ResultCard job={job} />}
         {tab === "phases" && <Phases job={job} />}
         {tab === "tests" && <QaSection job={job} />}
@@ -941,6 +945,9 @@ function StandardsList({ text }: { text: string }) {
 
 interface InvocationEntry {
   role: string;
+  // added to the log on 22 and 25 September: a call made before has neither
+  provider?: string | null;
+  model?: string | null;
   state: string;
   phase: number | null;
   attempts: number;
@@ -975,6 +982,8 @@ function Invocations({ job }: { job: Job }) {
             <tr>
               <th>{tx("When")}</th>
               <th>{tx("Role")}</th>
+              <th>{tx("Provider")}</th>
+              <th>{tx("Model")}</th>
               <th>{tx("Step")}</th>
               <th>{tx("Prompt")}</th>
               <th>{tx("Tokens in / out")}</th>
@@ -987,12 +996,14 @@ function Invocations({ job }: { job: Job }) {
               <tr key={i}>
                 <td className="muted small">{formatTime(e.at)}</td>
                 <td>{e.role}</td>
+                <td className="small">{e.provider ?? "—"}</td>
+                <td className="mono small">{e.model ?? "—"}</td>
                 <td className="small">
                   {e.state}
                   {e.phase ? ` · phase ${e.phase}` : ""}
                 </td>
                 <td className="mono small">
-                  {e.prompt_chars !== null ? `${(e.prompt_chars / 1000).toFixed(1)}k chars` : "—"}
+                  {e.prompt_chars != null ? `${(e.prompt_chars / 1000).toFixed(1)}k chars` : "—"}
                 </td>
                 <td className="mono small">
                   {e.input_tokens ?? "—"} / {e.output_tokens ?? "—"}

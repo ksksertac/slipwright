@@ -330,6 +330,18 @@ class InvalidEdit(ValueError):
     """A human edit at a gate does not pass the same checks as the agent's output."""
 
 
+#: How much of a call's answer the job keeps, for the page that follows it as it runs.
+OUTPUT_KEPT = 1500
+SUMMARY_KEPT = 400
+
+
+def _clip(text: object, limit: int) -> str | None:
+    if not isinstance(text, str) or not text.strip():
+        return None
+    text = text.strip()
+    return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
+
+
 class Engine:
     def __init__(
         self,
@@ -3224,7 +3236,16 @@ class Engine:
                 thinking_depth=profile.roles[role].thinking_depth,
                 error=InvokeError(kind=InvokeErrorKind.BUDGET, message=problem),
             )
-        result = self._call_with_retries(role, run, job, profile.roles[role].retries, **kw)
+        self._take_off(job, role, profile)
+        try:
+            result = self._call_with_retries(role, run, job, profile.roles[role].retries, **kw)
+        except BaseException:
+            # an exception never reaches _account, and a call nobody is waiting for any more
+            # must not stay on the page as one that is
+            job.data.inflight = None
+            with contextlib.suppress(Exception):
+                self.store.save(job)
+            raise
         if retrieved is not None:
             result.standards = retrieved.chunk_ids
         self._account(job, role, result)
@@ -3403,8 +3424,32 @@ class Engine:
             return None
         return prices.resolve(self.price_index(), provider, model)
 
+    def _take_off(self, job: Job, role: RoleName, profile: Profile) -> None:
+        """Say who is being asked, before the answer exists. A call runs for minutes and no
+        provider streams, so without this the page knew nothing until it was over; now it
+        shows the call it is waiting on, and for how long."""
+        cfg = profile.roles[role]
+        provider: str | None = cfg.provider
+        model: str | None = cfg.model
+        route = getattr(self.provider_for(job.owner_id), "route", None)
+        if route is not None:
+            # where the router will send it: an agent's assignment beats the profile
+            with contextlib.suppress(Exception):
+                provider, model = route(role.value, cfg.provider, cfg.model)
+        job.data.inflight = {
+            "role": role.value,
+            "provider": provider,
+            "model": model,
+            "state": job.state.value,
+            "phase": job.data.phase_index + 1 if job.state is JobState.DEVELOPING else None,
+            "started_at": utcnow().isoformat(),
+        }
+        self.store.save(job)
+
     def _account(self, job: Job, role: RoleName, result: RoleResult) -> None:
         """Count the call against the job's budget and keep the per-call log."""
+        started = (job.data.inflight or {}).get("started_at")
+        job.data.inflight = None
         usage = result.usage
         tokens = ((usage.input_tokens or 0) + (usage.output_tokens or 0)) if usage else 0
         job.data.invocations += result.attempts
@@ -3434,6 +3479,12 @@ class Engine:
                 "ok": result.ok,
                 "error": result.error.kind.value if result.error else None,
                 "unreported_attempts": result.unreported_attempts or None,
+                "started_at": started,
+                # what it wrote, for the page that follows a development as it runs: the
+                # role's own one-line account, and the start of the answer itself. Clipped,
+                # because every call's lands in the job's row and a row is written often
+                "summary": _clip(getattr(result.output, "summary", None), SUMMARY_KEPT),
+                "output": _clip(result.raw_text, OUTPUT_KEPT),
                 "at": utcnow().isoformat(),
             }
         )

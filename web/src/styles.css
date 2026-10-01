@@ -6439,3 +6439,213 @@ tr.run-detail td {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* -- "right now": what a development is doing, newest first (components/NowFeed.tsx) -- */
+.now {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.now-head {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.now-head-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.now-label {
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.now-who {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 13px;
+}
+.now-who .role-ink svg,
+.now-item .role-ink svg {
+  width: 16px;
+  height: 16px;
+}
+.now-where {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+}
+.now-phase,
+.now-task {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.now-feed {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.now-item {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.now-item.note {
+  background: transparent;
+  border-style: dashed;
+  padding: 8px 14px;
+}
+.now-item.bad {
+  border-color: color-mix(in srgb, var(--bad) 45%, var(--line));
+}
+.now-item-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.now-model {
+  color: var(--text-3);
+  padding: 1px 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+.now-time {
+  margin-left: auto;
+  white-space: nowrap;
+}
+.now-note {
+  font-size: 13px;
+  color: var(--text-2);
+  min-width: 0;
+}
+.now-summary {
+  margin: 8px 0 0;
+  line-height: 1.5;
+}
+.now-meta {
+  margin-top: 6px;
+}
+.now-meta:empty {
+  display: none;
+}
+.now-output {
+  margin-top: 8px;
+}
+.now-output > summary {
+  cursor: pointer;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+.now-output pre {
+  margin: 8px 0 0;
+  max-height: 320px;
+  overflow: auto;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.now-empty {
+  padding: 16px 4px;
+}
+
+/* the call still in the air: an accent edge, a running clock, and three lines standing in
+   for the answer -- it arrives whole, so nothing here pretends to be the text itself */
+.now-waiting {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.now-waiting .pulse-dot {
+  background: var(--accent);
+}
+.now-waiting .now-time {
+  color: var(--accent);
+  font-weight: 600;
+}
+.now-writing {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+.now-dots i {
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  margin-left: 3px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: now-dot 1.2s infinite ease-in-out;
+}
+.now-dots i:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.now-dots i:nth-child(3) {
+  animation-delay: 0.4s;
+}
+@keyframes now-dot {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+.now-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 10px;
+}
+.now-skeleton span {
+  height: 9px;
+  border-radius: 5px;
+  background: linear-gradient(90deg, var(--surface-2) 0%, var(--line) 50%, var(--surface-2) 100%);
+  background-size: 200% 100%;
+  animation: now-shimmer 1.6s infinite linear;
+}
+.now-skeleton span:nth-child(2) {
+  width: 85%;
+}
+.now-skeleton span:nth-child(3) {
+  width: 60%;
+}
+@keyframes now-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .now-dots i,
+  .now-skeleton span {
+    animation: none;
+  }
+}
+@media (max-width: 720px) {
+  .now-where {
+    grid-template-columns: 1fr;
+  }
+}
