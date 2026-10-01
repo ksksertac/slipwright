@@ -1,13 +1,12 @@
-// The version corner. Two different "new versions" meet here, and they are not the same:
-//
-// - the page is older than the server: a deploy happened under an open tab, and the tab
-//   is still running the bundle it loaded. Reloading is the whole fix.
-// - the server is older than the newest release: somebody has to install it. The corner
+// The version corner: the server is older than the newest release and somebody has to
+// install it. (A tab older than the server -- a rebuild under an open page -- once had a
+// "reload" button of its own here; sitting beside this one it read as a second, duplicate
+// offer, so it went. A reload is a keypress away.) The corner
 //   says so in two words; the dialog behind it says what the release is, what changes
 //   and what happens on "Update now" -- the server pulls it and restarts on it, keeping
 //   every project, setting and development (slipwright/update.py). Anybody using the
 //   screen may press it.
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { api, describeError } from "../api/client";
 import type { UpdateStatus, Version } from "../api/client";
@@ -25,8 +24,6 @@ const INSTALLING_MS = 3_000;
 
 export function BuildWatch() {
   const tx = useT();
-  const loaded = useRef<string | null>(null);
-  const [stale, setStale] = useState(false);
   const [build, setBuild] = useState("");
   const [update, setUpdate] = useState<UpdateStatus | null>(null);
   const [open, setOpen] = useState(false);
@@ -46,8 +43,6 @@ export function BuildWatch() {
         if (!alive) return;
         setBuild(v.build);
         setUpdate(u);
-        if (loaded.current === null) loaded.current = v.build;
-        else if (loaded.current !== v.build) setStale(true);
       } catch {
         /* offline or restarting: ask again on the next tick */
       }
@@ -100,14 +95,6 @@ export function BuildWatch() {
               ? tx("build {id}", { id: build })
               : null}
         </div>
-        {stale && !installing ? (
-          <button
-            className="btn small primary build-stale"
-            onClick={() => window.location.reload()}
-          >
-            {tx("New version — reload")}
-          </button>
-        ) : null}
         {update?.latest ? (
           <button className="btn small build-stale build-offer" onClick={() => setOpen(true)}>
             <span className="build-dot" />
