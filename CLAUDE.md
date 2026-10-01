@@ -152,6 +152,12 @@ opened again, and an image with no driver in it.
 every running installation is offered it. A bigger step (`v0.3.0`) is a tag pushed by
 hand; the patches count on from it.
 
+**For now the test suite does not run in CI** (since 2026-10-01; it cost ~10 minutes a
+PR). The `test` check runs ruff and mypy only, and the macOS job is off. So run
+`uv run pytest -q` locally, against the branch as it will merge (rebased on `main`),
+before every PR -- nothing else stands between a change and every installation. Both
+are marked `TEMPORARILY OFF` in `docker.yml`, one line each to turn back on.
+
 ## Configuration
 
 | Variable | Default | What it decides |
