@@ -1934,38 +1934,89 @@ button.linkish:hover {
 .menu {
   position: absolute;
   right: 0;
-  top: calc(100% + 4px);
-  min-width: 170px;
+  top: calc(100% + 6px);
+  min-width: 200px;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   box-shadow: var(--shadow-lg);
-  padding: 4px;
+  padding: 5px;
   z-index: 20;
+  transform-origin: top right;
+  animation: menu-in 0.12s ease-out;
 }
-.menu button {
+@keyframes menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.97);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .menu {
+    animation: none;
+  }
+}
+/* an item is a button or a link (the project menu's "Edit project" goes to a tab):
+   both look the same, or a link's icon has no size and fills the whole menu */
+.menu button,
+.menu a {
   display: flex;
   width: 100%;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   border: 0;
   background: none;
   font: inherit;
+  font-size: 14px;
   color: var(--text);
   padding: 8px 10px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   text-align: left;
+  text-decoration: none;
+  transition: background 0.1s, color 0.1s;
 }
-.menu button:hover {
+.menu button svg,
+.menu a svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  color: var(--text-3);
+  transition: color 0.1s;
+}
+.menu button:hover,
+.menu a:hover,
+.menu button:focus-visible,
+.menu a:focus-visible {
   background: var(--surface-2);
+  outline: none;
 }
-.menu button.danger {
+.menu button:hover svg,
+.menu a:hover svg {
+  color: var(--accent);
+}
+/* the destructive one is set apart by a rule, and turns red only under the pointer */
+.menu > .danger:not(:first-child) {
+  position: relative;
+  margin-top: 9px;
+}
+.menu > .danger:not(:first-child)::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  top: -5px;
+  border-top: 1px solid var(--line);
+}
+.menu .danger,
+.menu .danger svg {
   color: var(--bad-text);
 }
-.menu button svg {
-  width: 15px;
-  height: 15px;
+.menu .danger:hover {
+  background: var(--bad-soft);
+}
+.menu .danger:hover svg {
+  color: var(--bad-text);
 }
 
 /* modal */
