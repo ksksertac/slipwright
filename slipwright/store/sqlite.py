@@ -48,6 +48,7 @@ from slipwright.store.schema import (
 from slipwright.store.settings import SettingsStoreMixin
 from slipwright.store.support import SupportStoreMixin
 from slipwright.store.users import UserStoreMixin
+from slipwright.store.workers import WorkerStoreMixin
 
 #: How many values one ``IN (...)`` carries. SQLite caps the parameter list and a very
 #: long list is slow everywhere, so long lookups are chunked.
@@ -108,6 +109,7 @@ class JobStore(
     PageStoreMixin,
     ChatStoreMixin,
     AttachmentStoreMixin,
+    WorkerStoreMixin,
 ):
     """One store per database. Safe to share across threads within a process.
 

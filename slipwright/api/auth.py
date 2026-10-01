@@ -94,10 +94,11 @@ PUBLIC_PATHS = frozenset(
         "/healthz",
     }
 )
-#: Paths a chat service calls, not a person. Anybody on the internet can reach them, so
-#: each one proves the caller itself -- Teams' signed token, in ``api/notify.py`` -- and
+#: Paths a chat service or a paired Mac calls, not a person. Anybody on the internet can
+#: reach them, so each one proves the caller itself -- Teams' signed token, in
+#: ``api/notify.py``; a connection code or a worker token, in ``api/workers.py`` -- and
 #: refuses before reading anything when that proof is missing.
-PUBLIC_PREFIXES = ("/api/notify/inbound/",)
+PUBLIC_PREFIXES = ("/api/notify/inbound/", "/api/worker/")
 NO_USERS_HINT = "no users exist yet; create one with: slipwright user add <name>"
 #: What every "is this address known?" endpoint says, whatever the answer.
 SENT_IF_KNOWN = "if that address has an account, a message is on its way"

@@ -261,6 +261,11 @@ class JobData(BaseModel):
         description="While the job waits for a builder: the mobile platforms (ios, android) "
         "its remaining phases need and nothing here can build (T14.2).",
     )
+    builder_resume: str | None = Field(
+        default=None,
+        description="Where a builder arriving picks the job up: developing, or build_gate "
+        "when a Mac went away with the phase already written (T14.3).",
+    )
     # -- hardening (T9.7) --
     resume_state: str | None = Field(
         default=None, description="Where the job continues after the decision gate."

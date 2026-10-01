@@ -432,6 +432,62 @@ chat_prompts = Table(
     Index("chat_prompts_person", "owner_id", "channel", "external_id", "status"),
 )
 
+# -- machines an account lends its developments (T14.3) -----------------------------------
+
+# A Mac -- in practice -- paired to an account to build what the server cannot: iOS always,
+# Android on Apple Silicon. ``owner_id`` is the account ("" for the installation, as with
+# chat codes); only the token's hash is kept. ``capabilities_json`` is what it said it can
+# build at its last poll, and ``last_seen_at`` whether it is there at all.
+workers = Table(
+    "workers",
+    metadata,
+    Column("id", String(64), primary_key=True),
+    Column("owner_id", String(64), nullable=False),
+    Column("name", Text, nullable=False),
+    Column("token_hash", String(128), nullable=False, unique=True),
+    Column("capabilities_json", Text, nullable=False, server_default="[]"),
+    Column("paired_at", Text, nullable=False),
+    Column("last_seen_at", Text),
+    Column("revoked_at", Text),
+    Index("workers_owner", "owner_id"),
+)
+
+# The one-time secret inside a connection code. Hash only; spent by being read.
+worker_codes = Table(
+    "worker_codes",
+    metadata,
+    Column("code_hash", String(128), primary_key=True),
+    Column("owner_id", String(64), nullable=False),
+    Column("created_at", Text, nullable=False),
+    Column("expires_at", Text, nullable=False),
+)
+
+# One build a worker is asked for: a platform's commands against ``snapshot``, the worktree
+# as the gate would have seen it (a tar.gz -- a phase is not committed until it passes).
+# queued -> running -> done, or lost when the worker went away twice.
+worker_tasks = Table(
+    "worker_tasks",
+    metadata,
+    Column("id", String(64), primary_key=True),
+    Column("owner_id", String(64), nullable=False),
+    Column("job_id", String(64), nullable=False),
+    Column("platform", String(16), nullable=False),
+    Column("commands_json", Text, nullable=False),  # [[label, command], ...]
+    Column("timeout_s", Float, nullable=False),
+    Column("snapshot", LargeBinary, nullable=False),
+    Column("state", String(16), nullable=False, server_default="queued"),
+    Column("worker_id", String(64)),
+    Column("tries", Integer, nullable=False, server_default="0"),
+    Column("exit_code", Integer),
+    Column("output", Text),
+    Column("seconds", Float),
+    Column("created_at", Text, nullable=False),
+    Column("claimed_at", Text),
+    Column("finished_at", Text),
+    Index("worker_tasks_queue", "owner_id", "state", "created_at"),
+    Index("worker_tasks_job", "job_id"),
+)
+
 
 __all__ = [
     "agent_members",
@@ -458,4 +514,7 @@ __all__ = [
     "test_runs",
     "translations",
     "users",
+    "worker_codes",
+    "worker_tasks",
+    "workers",
 ]

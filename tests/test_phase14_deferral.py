@@ -47,8 +47,15 @@ def _drive(engine: Engine, job: Job) -> Job:
 
 
 def _lend_ios(engine: Engine, owner: str | None = None) -> None:
-    """A Mac of ``owner``'s connects: what T14.3's workers will answer."""
+    """A Mac of ``owner``'s is there -- as far as deciding what to wake goes. Nothing is
+    sent to it: the tests that use this only look at who would be woken."""
     engine.remote_platforms = lambda asked: frozenset({"ios"}) if asked == owner else frozenset()  # type: ignore[method-assign]
+
+
+def _can_build_ios_here(monkeypatch: pytest.MonkeyPatch) -> None:
+    """This machine itself becomes one that builds iOS: a server started again on a Mac.
+    A worker building it remotely is T14.3's to show (test_phase14_workers)."""
+    monkeypatch.setattr(toolchains, "can_build", lambda platform, *a, **k: platform == "ios")
 
 
 def test_the_rest_is_built_and_the_ios_phase_waits_for_a_mac(
@@ -74,15 +81,19 @@ def test_the_rest_is_built_and_the_ios_phase_waits_for_a_mac(
     assert lane.pending_approval is None  # nobody can approve a Mac into existence
 
 
-def test_a_mac_connecting_carries_the_development_on(
-    store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
+def test_a_builder_arriving_carries_the_development_on(
+    store: JobStore,
+    repo: Path,
+    worktrees_root: Path,
+    seed: Profile,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     seed = _with_ios(seed)
     engine = full_engine(store, worktrees_root, seed, _provider(seed, ["backend", "mobile"], 1))
     job = _drive(engine, engine.start(engine.create_job("an api and an app", repo).id))
     assert engine.waiting_for_builders(None) == []  # still nothing that can build it
 
-    _lend_ios(engine)
+    _can_build_ios_here(monkeypatch)
     assert engine.waiting_for_builders(None) == [job.id]
     job = _drive(engine, engine.resume(job.id))
 
