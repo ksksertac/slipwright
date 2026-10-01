@@ -234,20 +234,75 @@ def test_phase_task_map_requires_one_phase_per_task(seed: Profile) -> None:
     assert isinstance(unknown, str) and "t9" in unknown
 
 
-def test_architect_plan_that_ignores_the_backlog_fails_job(
+def test_architect_plan_that_ignores_the_backlog_is_asked_for_once_more_then_fails(
     store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
 ) -> None:
+    answers = iter(["wrong task", "still wrong"])
+
+    def plan(_: object) -> dict[str, object]:
+        return {
+            "summary": next(answers),
+            "profile": seed.model_dump(mode="json"),
+            "decisions": [],
+            "phases": [{"goal": "g", "files": [], "task_id": "t42"}],
+        }
+
     provider = canned(seed)
-    provider.replies[RoleName.ARCHITECT] = {
-        "summary": "wrong task",
-        "profile": seed.model_dump(mode="json"),
-        "decisions": [],
-        "phases": [{"goal": "g", "files": [], "task_id": "t42"}],
-    }
+    provider.replies[RoleName.ARCHITECT] = plan
     _, job = _to_architecture_gate(store, worktrees_root, seed, provider, repo)
 
     assert job.state is JobState.FAILED
     assert "does not match the backlog" in (job.history[-1].note or "")
+    # the person is shown why the architect thought it should be so
+    assert job.history[-1].detail == "still wrong"
+    architect_calls = [r for r in provider.requests if r.role is RoleName.ARCHITECT]
+    assert len(architect_calls) == 2
+    assert "previous_answer_problem" in architect_calls[1].prompt
+    assert "t42" in architect_calls[1].prompt and "t1 (" in architect_calls[1].prompt
+
+
+def test_a_plan_that_leaves_a_task_out_is_fixed_on_the_second_ask(
+    store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
+) -> None:
+    def plan(request: object) -> dict[str, object]:
+        fixed = "previous_answer_problem" in getattr(request, "prompt", "")
+        tasks = ["t1", "t2"] if fixed else ["t1"]
+        return {
+            "summary": "ok" if fixed else "t2 is large; it should be split",
+            "profile": seed.model_dump(mode="json"),
+            "decisions": [],
+            "phases": [{"goal": t, "files": [], "task_id": t} for t in tasks],
+        }
+
+    provider = canned(seed)
+    provider.replies[RoleName.PO] = {
+        "summary": "two tasks",
+        "breakdown": {
+            "epics": [
+                {
+                    "id": "e1",
+                    "title": "Health",
+                    "stories": [
+                        {
+                            "id": "s1",
+                            "title": "Health check",
+                            "tasks": [
+                                {"id": "t1", "title": "Endpoint"},
+                                {"id": "t2", "title": "Android screen"},
+                            ],
+                        }
+                    ],
+                }
+            ]
+        },
+    }
+    provider.replies[RoleName.ARCHITECT] = plan
+    _, job = _to_architecture_gate(store, worktrees_root, seed, provider, repo)
+
+    assert job.state is JobState.AWAITING_ARCHITECTURE_APPROVAL
+    assert job.data.plan is not None
+    assert [p["task_id"] for p in job.data.plan["phases"]] == ["t1", "t2"]
+    assert any("asking again" in (t.note or "") for t in job.history)
 
 
 def test_reject_architecture_reruns_architect_with_previous_plan(

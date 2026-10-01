@@ -3686,9 +3686,43 @@ class Engine:
             return self._invocation_failed(job, result)
         assert isinstance(result.output, ArchitectResult)
         breakdown = Breakdown.model_validate(job.data.backlog)
-        mapping = architect.phase_task_map(result.output.phases, [t.id for t in breakdown.tasks()])
+        task_ids = [t.id for t in breakdown.tasks()]
+        mapping = architect.phase_task_map(result.output.phases, task_ids)
         if isinstance(mapping, str):
-            return self._fail(job, f"architect: plan does not match the backlog: {mapping}")
+            # a plan that skips a task is usually the Architect obeying "say so in summary"
+            # too literally: it flags a large task and leaves it out. Failing outright threw
+            # away a paid plan the person never got to see, so it is asked once more with
+            # the reason and the task list spelled out, and only then given up on.
+            self.store.update_state(
+                job.id,
+                job.state,
+                note=f"architect: plan does not match the backlog ({mapping}); asking again",
+                detail=result.output.summary,
+            )
+            job.history = self.store.get(job.id).history
+            listing = "; ".join(f"{t.id} ({t.title})" for t in breakdown.tasks())
+            result = self._invoke(
+                RoleName.ARCHITECT,
+                architect.run,
+                job,
+                seed=seed,
+                attachments=self.attachments_for(job, whole=False),
+                problem=(
+                    f"{mapping}. Every backlog task needs exactly one phase whose `task_id` "
+                    f"is the task's id; the tasks are: {listing}"
+                ),
+            )
+            if not result.ok:
+                return self._invocation_failed(job, result)
+            assert isinstance(result.output, ArchitectResult)
+            mapping = architect.phase_task_map(result.output.phases, task_ids)
+            if isinstance(mapping, str):
+                return self._fail(
+                    job,
+                    f"architect: plan does not match the backlog: {mapping}",
+                    detail=result.output.summary,
+                )
+        assert isinstance(result.output, ArchitectResult)
         for task in breakdown.tasks():
             task.phase = mapping[task.id]
         job.profile = architect.accepted_profile(result.output, seed)
