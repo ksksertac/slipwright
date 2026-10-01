@@ -76,6 +76,10 @@ You are the Software Architect. Read the repository (`worktree`) and the approve
    `platform`. A platform phase may wait until last for a machine that can build it, so
    nothing may depend on one: put platform phases after everything they use, and never
    make a later phase need what a platform phase wrote.
+   Every backlog task gets exactly one phase, with no exception: a task that is too large,
+   mixes domains or looks unnecessary still gets its phase (the closest fit you can
+   write), and the concern goes in `summary`. A plan that leaves a task out is not
+   reviewable and is thrown away.
 If `feedback` is present, a human rejected your previous plan (`previous_plan`); address
 every point in it. If a `jira` section is present you may add Jira actions for existing
 issues. If a `standards` section is present its sections are binding unless they
@@ -91,15 +95,24 @@ def run(
     jira: dict[str, Any] | None = None,
     standards: dict[str, Any] | None = None,
     attachments: dict[str, Any] | None = None,
+    problem: str | None = None,
 ) -> RoleResult:
     worktree = require_worktree(job)
+    instructions = INSTRUCTIONS
+    if problem:
+        instructions += (
+            "\nYour previous plan was rejected (`previous_answer_problem`); answer again "
+            "with the whole plan and fix exactly that."
+        )
     context = base_context(
-        job, instructions=INSTRUCTIONS, feedback=job.data.feedback, jira=jira, standards=standards
+        job, instructions=instructions, feedback=job.data.feedback, jira=jira, standards=standards
     )
     if attachments:
         # what the files said, as the reading summed them up: the backlog already
         # carries what is to be built from them, this is what it should look like
         context["attachments"] = attachments
+    if problem:
+        context["previous_answer_problem"] = problem
     context["seed_profile"] = seed.model_dump(mode="json")
     context["backlog"] = job.data.backlog
     context["domains"] = [d.value for d in Domain]
