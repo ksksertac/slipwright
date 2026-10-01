@@ -1524,11 +1524,17 @@ a dozen calls. Phase 5 of the same development took 6 developer calls and 3 QA c
 every developer, QA and supervisor call: 13,441 characters, 28% of a mobile developer's
 prompt on that development, the same on each of its 24 calls.
 **Done when**
-- [ ] A developer gets the summary, the stack, the decisions that name its domain or its
-  phase, its own phase in full, and the other phases as one line each (number and goal)
-- [ ] QA and DevOps keep the whole outline: they test and describe the whole branch
-- [ ] Test: a developer's plan for phase 3 of 8 is under half the size of the full outline
-  and still carries every decision about its domain
+- [x] A developer gets the summary, the stack, every decision, and the phases by their
+  heading only (the part of the goal before its colon), its own marked: it has that one
+  whole in `current_phase`. The decisions are not filtered after all: they are free text
+  no one tagged by domain (29 sentences on that development), and they bind every phase
+- [x] QA and DevOps keep the whole outline: they test and describe the whole branch
+- [x] Test: a developer's phases for phase 3 of 8 are under a third of the full ones, and
+  every decision is still there
+
+> Measured on that development: the plan went from 13,441 characters to 9,251 with T15.7
+> alone (the indentation, and `\u` escapes for every Turkish letter), and the phase goals
+> from 3,198 characters to their headings.
 
 ### T15.7 — The prompt is sent compact
 The context and the output schema are serialised with `indent=2`; the indentation is

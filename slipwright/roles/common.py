@@ -201,21 +201,45 @@ def base_context(
     return ctx
 
 
-def plan_outline(plan: dict[str, Any] | None) -> dict[str, Any] | None:
+def plan_outline(plan: dict[str, Any] | None, current: int | None = None) -> dict[str, Any] | None:
     """The plan as a role that implements or tests it needs it: summary, stack,
     decisions and the phase goals — never the breakdown tree or file lists of other
-    phases."""
+    phases.
+
+    With ``current`` (a phase index), the phases are named by their heading only and that
+    one is marked (T15.6): a developer building phase 7 needs to know phase 8 exists, not
+    what it will verify, and its own phase it has whole in ``current_phase``. It was sent
+    every phase in full on every call. The decisions stay whole: they are free text no
+    one tagged by domain, and they bind every phase."""
     if not plan:
         return None
+    phases: list[dict[str, Any]] = []
+    for i, p in enumerate(plan.get("phases", [])):
+        entry = {
+            "number": i + 1,
+            "goal": p.get("goal") if current is None else _heading(p.get("goal")),
+            "domain": p.get("domain", "general"),
+        }
+        if current == i:
+            entry["this_phase"] = True
+        phases.append(entry)
     return {
         "summary": plan.get("summary"),
         "stack": plan.get("stack", []),
         "decisions": plan.get("decisions", []),
-        "phases": [
-            {"number": i + 1, "goal": p.get("goal"), "domain": p.get("domain", "general")}
-            for i, p in enumerate(plan.get("phases", []))
-        ],
+        "phases": phases,
     }
+
+
+def _heading(goal: Any) -> Any:
+    """A phase goal's heading: the part before its colon ("Show the result and the cup:
+    from the host's final view..."), or its first 100 characters."""
+    if not isinstance(goal, str):
+        return goal
+    head, colon, _ = goal.partition(":")
+    if colon and len(head) <= 120:
+        return head.strip()
+    return goal if len(goal) <= 100 else goal[:100].rstrip() + "…"
 
 
 def project_facts(profile: Profile) -> dict[str, str | int]:

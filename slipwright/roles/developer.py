@@ -197,7 +197,8 @@ def run(
         wanted = editable_files(job, worktree)
 
     context["project"] = project_facts(profile)
-    context["plan"] = plan_outline(plan)
+    # a CI fix touches the whole branch and keeps every phase whole; a phase sees its own
+    context["plan"] = plan_outline(plan, None if ci_failure is not None else job.data.phase_index)
     if truncated:
         context["output_was_truncated"] = truncated
     if continuation:

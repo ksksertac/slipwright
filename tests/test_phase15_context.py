@@ -147,3 +147,31 @@ def test_a_failure_with_no_error_line_falls_back_to_its_end() -> None:
     sent = condensed(output, limit=1000)
     assert sent.endswith("exit status 2") and "were cut" in sent
     assert condensed("short", limit=1000) == "short"
+
+
+# -- T15.6: the plan, as much as a step needs -----------------------------------------------
+
+
+def test_a_developer_is_given_the_other_phases_by_their_heading() -> None:
+    from slipwright.roles.common import plan_outline
+
+    plan = {
+        "summary": "A quiz game",
+        "stack": ["React Native"],
+        "decisions": [f"decision {i}: binding on every phase" for i in range(12)],
+        "phases": [
+            {
+                "goal": f"Phase {i} heading: " + "what it verifies in detail. " * 12,
+                "domain": "mobile",
+            }
+            for i in range(8)
+        ],
+    }
+    full = plan_outline(plan)
+    mine = plan_outline(plan, current=2)
+    assert full is not None and mine is not None
+
+    assert mine["decisions"] == plan["decisions"]  # every decision, whole
+    assert [p["goal"] for p in mine["phases"]] == [f"Phase {i} heading" for i in range(8)]
+    assert [p.get("this_phase", False) for p in mine["phases"]] == [i == 2 for i in range(8)]
+    assert len(json.dumps(mine["phases"])) < len(json.dumps(full["phases"])) / 3
