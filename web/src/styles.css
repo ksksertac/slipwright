@@ -3630,22 +3630,25 @@ table.mini .num {
 .step-card .gate-ink {
   color: var(--text-3);
 }
-/* the step's place in the flow, so the cards read as an order even once they wrap */
-.step-card .step-no {
+/* a phase card says which phase it is, in the one way phases are named everywhere */
+.step-card .step-phase {
   margin-left: auto;
   flex: 0 0 auto;
-  display: grid;
-  place-items: center;
-  width: 18px;
-  height: 18px;
-  font-family: var(--mono);
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0;
-  color: var(--text-3);
+  padding: 1px 7px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  white-space: nowrap;
+  color: var(--text-2);
   background: var(--surface-2);
   border: 1px solid var(--line);
   border-radius: 999px;
+}
+.step-card.running .step-phase {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  background: var(--accent-soft);
 }
 .step-card .label {
   font-size: 13px;
@@ -5873,16 +5876,14 @@ tr.run-detail td {
 }
 .phase-no {
   flex: none;
-  width: 22px;
-  height: 22px;
   margin-top: 1px;
-  border-radius: 50%;
+  padding: 2px 8px;
+  border-radius: 999px;
   background: var(--surface-3);
   color: var(--text-2);
   font-size: 11.5px;
-  font-family: var(--mono);
-  display: grid;
-  place-items: center;
+  font-weight: 600;
+  white-space: nowrap;
 }
 .phase[data-state="done"] .phase-no {
   background: var(--good-soft);
@@ -6581,6 +6582,70 @@ tr.run-detail td {
   flex-direction: column;
   gap: 3px;
   min-width: 0;
+}
+/* the feed, cut by phase: a heading per phase (or per stage outside the phases), the
+   newest open, the ones before it folded to a line */
+.now-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.now-section > summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 2px;
+  cursor: pointer;
+  list-style: none;
+  min-width: 0;
+}
+.now-section > summary::-webkit-details-marker {
+  display: none;
+}
+.now-section > summary::after {
+  content: "";
+  flex: none;
+  width: 7px;
+  height: 7px;
+  margin-left: 4px;
+  border-right: 1.5px solid var(--text-3);
+  border-bottom: 1.5px solid var(--text-3);
+  transform: rotate(-45deg);
+  transition: transform 0.15s;
+}
+.now-section[open] > summary::after {
+  transform: rotate(45deg);
+}
+.now-section-mark {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-3);
+}
+.now-section-mark.phase {
+  background: var(--accent);
+}
+.now-section:not([open]) .now-section-mark.phase {
+  background: var(--good);
+}
+.now-section-title {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.now-section:not([open]) .now-section-title {
+  font-weight: 500;
+  color: var(--text-2);
+}
+.now-section > .now-feed {
+  padding-left: 14px;
+  margin-left: 3px;
+  border-left: 1px solid var(--line);
 }
 .now-feed {
   list-style: none;

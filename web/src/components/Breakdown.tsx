@@ -5,6 +5,8 @@ import type { StackChoice } from "../api/client";
 import { DomainBadge } from "./agents";
 import { Sources, type SourceRef } from "./Attachments";
 import { useSay } from "../i18n/said";
+import { useT } from "../i18n";
+import { phaseName } from "./stages";
 
 export interface BreakdownShape {
   epics: {
@@ -42,6 +44,7 @@ export function BreakdownTree({
   jobId?: string;
 }) {
   const say = useSay();
+  const tx = useT();
   if (!plan.breakdown) {
     return (
       <ol>
@@ -94,7 +97,7 @@ export function BreakdownTree({
                             )}
                             {phase && (
                               <div className="muted small">
-                                phase {task.phase}: {say(phase.goal)}{" "}
+                                {phaseName(tx, task.phase!, plan.phases.length)} · {say(phase.goal)}{" "}
                                 <DomainBadge domain={phase.domain} />
                                 {phase.files && phase.files.length > 0 && (
                                   <span className="mono"> — {phase.files.join(", ")}</span>

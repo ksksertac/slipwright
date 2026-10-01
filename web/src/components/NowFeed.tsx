@@ -6,29 +6,17 @@ import { noteText } from "../i18n/notes";
 import { useSay } from "../i18n/said";
 import { AgentIcon, ROLE_LABEL } from "./agents";
 import type { BreakdownShape, PlanShape } from "./Breakdown";
+import {
+  cut,
+  PHASE_STATES,
+  sectionOf,
+  stageOfState,
+  type Call,
+  type Entry,
+  type Section,
+} from "./nowSections";
+import { phaseName, STAGE_LABEL } from "./stages";
 import { formatTime, hasFinished, StateBadge, timeAgo } from "./ui";
-
-/** One model call as the job logs it (engine.py ``_account``). Everything is optional:
- * the provider, the model and what it wrote were added to the log over time, and a call
- * made before then has none of them. */
-interface Call {
-  role: string;
-  provider?: string | null;
-  model?: string | null;
-  phase?: number | null;
-  attempts?: number;
-  input_tokens?: number | null;
-  output_tokens?: number | null;
-  cost_usd?: number | null;
-  /** attempts that timed out: generated and billed, with no count ever sent back */
-  unreported_attempts?: number | null;
-  ok: boolean;
-  error?: string | null;
-  started_at?: string | null;
-  summary?: string | null;
-  output?: string | null;
-  at: string;
-}
 
 /** The call being waited on, written before the answer exists (``JobData.inflight``). */
 interface InFlight {
@@ -39,8 +27,6 @@ interface InFlight {
   started_at: string;
 }
 
-type Entry = { kind: "call"; at: string; call: Call } | { kind: "note"; at: string; t: Transition };
-
 /**
  * What a development is doing right now, and what it has done, newest first.
  *
@@ -48,34 +34,74 @@ type Entry = { kind: "call"; at: string; call: Call } | { kind: "note"; at: stri
  * when the call ends. What the page can say in between is who was asked, on which model,
  * and how long ago -- that card sits on top, counting, until the answer replaces it with
  * what was written. Everything else is the history and the call log, merged by time.
+ *
+ * The feed is cut by phase. One list of everything read as phase 3's standards beside
+ * phase 2's review and nobody could tell which work a card was about; under a "Phase 3 of
+ * 8" heading each card belongs to the heading above it, and the phases before the one at
+ * work fold away.
  */
 export function NowFeed({ job }: { job: Job }) {
   const tx = useT();
+  const say = useSay();
   const calls = (job.data.invocation_log ?? []) as unknown as Call[];
   const inflight = (job.data.inflight ?? null) as InFlight | null;
+  const plan = job.data.plan as PlanShape | null;
+  const total = plan?.phases?.length ?? null;
   const entries: Entry[] = [
     ...calls.map((call): Entry => ({ kind: "call", at: call.at, call })),
     // the moves between states are the headings the notes already give; a move with no
     // note says nothing a person would read
     ...job.history.filter((t) => t.note).map((t): Entry => ({ kind: "note", at: t.at, t })),
-  ].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
+  ].sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
+  const sections = cut(entries);
+  const waiting = inflight && !hasFinished(job.state) ? inflight : null;
+  // the call in the air goes on top of its own phase; a new phase starts a section of its own
+  const top = sections[sections.length - 1];
+  // the log names the phase only while developing; a review of it is still that phase
+  const waitingPhase =
+    waiting?.phase ?? (PHASE_STATES.has(job.state) && top?.phase != null ? top.phase : null);
+  const waitingSection = waiting
+    ? sectionOf(waitingPhase, waitingPhase !== null ? "build" : stageOfState(job.state))
+    : null;
+  if (waitingSection && (!top || top.key !== waitingSection.key)) sections.push(waitingSection);
+
+  const heading = (s: Section): string => {
+    if (s.phase === null) return tx(STAGE_LABEL[s.stage] ?? s.stage);
+    const goal = plan?.phases?.[s.phase - 1]?.goal;
+    return `${phaseName(tx, s.phase, total)}${goal ? ` · ${say(goal)}` : ""}`;
+  };
 
   return (
     <div className="now">
       <NowHead job={job} inflight={inflight} calls={calls} />
-      <ol className="now-feed">
-        {inflight && !hasFinished(job.state) && <Waiting call={inflight} />}
-        {entries.map((e, i) =>
-          e.kind === "call" ? (
-            <CallItem key={`c${i}`} call={e.call} />
-          ) : (
-            <NoteItem key={`n${i}`} t={e.t} />
-          ),
+      <div className="now-sections">
+        {[...sections].reverse().map((s, i) => (
+          <details key={`${s.key}-${i}`} className="now-section" open={i === 0}>
+            <summary>
+              <span className={`now-section-mark ${s.phase !== null ? "phase" : ""}`} />
+              <span className="now-section-title">{heading(s)}</span>
+              <span className="faint tiny">
+                {tx("{n} record(s)", { n: s.entries.length + (i === 0 && waiting ? 1 : 0) })}
+              </span>
+            </summary>
+            <ol className="now-feed">
+              {i === 0 && waiting && <Waiting call={waiting} />}
+              {[...s.entries]
+                .reverse()
+                .map((e, j) =>
+                  e.kind === "call" ? (
+                    <CallItem key={`c${j}`} call={e.call} />
+                  ) : (
+                    <NoteItem key={`n${j}`} t={e.t} />
+                  ),
+                )}
+            </ol>
+          </details>
+        ))}
+        {entries.length === 0 && !waiting && (
+          <p className="now-empty muted small">{tx("Nothing has happened yet.")}</p>
         )}
-        {entries.length === 0 && !inflight && (
-          <li className="now-empty muted small">{tx("Nothing has happened yet.")}</li>
-        )}
-      </ol>
+      </div>
     </div>
   );
 }
@@ -202,7 +228,7 @@ function CallItem({ call }: { call: Call }) {
       {call.summary && <p className="now-summary">{say(call.summary)}</p>}
       <div className="now-meta faint tiny mono">
         {[
-          call.phase ? tx("phase {n}", { n: call.phase }) : null,
+          // the phase is the heading this card sits under
           call.attempts && call.attempts > 1 ? `${call.attempts} ${tx("attempts")}` : null,
         ]
           .filter(Boolean)

@@ -15,6 +15,7 @@ import { AgentIcon } from "./agents";
 import { IconCheck, IconPlay, IconX } from "./icons";
 import { ErrorBox, Loading } from "./ui";
 import { useT } from "../i18n";
+import { phaseName } from "./stages";
 
 type Edits = Record<string, string>;
 
@@ -82,6 +83,10 @@ export function WorkListPanel({ job, onStarted }: { job: Job; onStarted?: () => 
             edits={edits}
             onEdit={(id, value) => setEdits({ ...edits, [id]: value })}
             editable={data.editable}
+            phases={data.groups.reduce(
+              (n, g) => n + g.items.filter((it) => it.kind === "phase").length,
+              0,
+            )}
           />
         ))}
       </ol>
@@ -142,12 +147,14 @@ function Group({
   edits,
   onEdit,
   editable,
+  phases,
 }: {
   group: WorkGroup;
   index: number;
   edits: Edits;
   onEdit: (id: string, value: string) => void;
   editable: boolean;
+  phases: number;
 }) {
   const tx = useT();
   return (
@@ -168,7 +175,7 @@ function Group({
           <li key={item.id} className={item.editable ? "" : "fixed"}>
             <span className="worklist-line">
               {item.phase !== null && item.phase !== undefined && item.kind === "phase" && (
-                <span className="chip">{tx("phase {n}", { n: item.phase })}</span>
+                <span className="chip">{phaseName(tx, item.phase, phases)}</span>
               )}
               {editable && item.editable ? (
                 <input

@@ -7,6 +7,7 @@
 // steps that has a role, which is also the first one you read.
 import type { ComponentType } from "react";
 import type { StepCard } from "../api/client";
+import type { T } from "../i18n";
 import { IconCpu, IconFlask, IconGit, IconLayers } from "./icons";
 
 export type Stage = { key: string; steps: StepCard[] };
@@ -74,6 +75,48 @@ export function stages(steps: StepCard[]): Stage[] {
 /** The agent a stage belongs to: the first of its steps that has one. */
 export function stageAgent(steps: StepCard[]): string | undefined {
   return steps.find((s) => s.role)?.role ?? undefined;
+}
+
+// -- how a phase is named -----------------------------------------------------------------
+//
+// One way, everywhere: "Phase 4 of 8" ("Faz 4/8"). A count of finished steps is written
+// differently ("3/8 done"), because the two side by side -- a stage reading 3/8 while the
+// card under it said phase 4 -- looked like two answers to one question.
+
+/** "Phase 4 of 8", or "Phase 4" where the total is not known. */
+export function phaseName(tx: T, n: number, total?: number | null): string {
+  return total ? tx("Phase {i} of {n}", { i: n, n: total }) : tx("Phase {n}", { n });
+}
+
+/** How many phases the plan behind these cards has. */
+export function phaseTotal(steps: StepCard[]): number {
+  return steps.filter((s) => s.key.startsWith("phase:")).length;
+}
+
+/** A phase card's title: its goal alone. The server writes "<agent>: <goal>", and the agent
+ *  is already the card's header -- in the title it pushed the goal off the end. */
+export function phaseGoal(step: StepCard): string {
+  const m = /^[^:]+: (.*)$/s.exec(step.label);
+  return (m ? m[1]! : step.label).trim();
+}
+
+/** What a stage's corner says: the phase being worked on while the build stage is under
+ *  way, otherwise how many of its steps are done -- written as a count, not as a phase. */
+export function stageCount(tx: T, stage: Stage): string {
+  const phases = stage.steps.filter((s) => s.key.startsWith("phase:"));
+  const running = phases.find((s) => s.status === "running" || s.status === "failed");
+  if (running?.phase) return phaseName(tx, running.phase, phases.length);
+  const { done, total } = stageTally(stage);
+  return tx("{done}/{total} done", { done, total });
+}
+
+/** Done out of all, for the bar: a build stage counts its phases, not the review gates
+ *  between them, so the bar and the phase it names agree. */
+export function stageTally(stage: Stage): { done: number; total: number } {
+  const phases = stage.steps.filter((s) => s.key.startsWith("phase:"));
+  const counted = phases.length ? phases : stage.steps;
+  const done = counted.filter((s) => s.status === "done" || s.status === "skipped").length;
+  return { done, total: counted.length };
 }
 
 export function stageStatus(steps: StepCard[]): string {
