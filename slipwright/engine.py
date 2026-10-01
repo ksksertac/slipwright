@@ -32,11 +32,11 @@ import httpx
 from pydantic import ValidationError
 
 from slipwright import attachments as attached
-from slipwright import prices
+from slipwright import prices, workers
 from slipwright.accounts import Accounts
 from slipwright.events import EventBus
 from slipwright.gates import DEFAULT_TIMEOUT_S as GATE_TIMEOUT_S
-from slipwright.gates import GateResult, build_gate, run_command
+from slipwright.gates import GateResult, build_gate, run_command, toolchains
 from slipwright.gates.runner import Runner, build_runner
 from slipwright.githost import CiState, CiStatus, GitHost, GitHostError, NoRemote
 from slipwright.github import GitHubClient, GitHubError, GitHubSettings
@@ -54,7 +54,12 @@ from slipwright.jira import DEFAULT_ISSUE_TYPES, JiraClient, JiraError, JiraSett
 from slipwright.jiraactions import ActionOutcome, ActionRunner, jira_context
 from slipwright.jirasync import JiraSync
 from slipwright.mail import Mailer, MailSettings, OutboxMailer, SmtpMailer
-from slipwright.notify.core import notify_gate, notify_outcome, settle_prompts
+from slipwright.notify.core import (
+    notify_builder_wait,
+    notify_gate,
+    notify_outcome,
+    settle_prompts,
+)
 from slipwright.orchestrator import IllegalTransitionError, Orchestrator
 from slipwright.providers import ModelProvider, ProviderUnavailableError
 from slipwright.providers.codex import Logins
@@ -97,6 +102,7 @@ from slipwright.roles.results import (
     QAResult,
     StackChoice,
     SupervisorResult,
+    unbuilt_platforms,
 )
 from slipwright.roles.specialists import specialist_for
 from slipwright.schemas.attachment import Attachment, Reading, Scope
@@ -153,7 +159,7 @@ from slipwright.standards.retrieval import Retrieval, core_text, retrieve
 from slipwright.store import ANY_OWNER, JobInProgress, JobStore, ProjectNotFound
 from slipwright.store.scoped import ScopedStore
 from slipwright.support import SupportDesk
-from slipwright.teams import Teams, failed_letter
+from slipwright.teams import Letter, Teams, builder_letter, failed_letter
 from slipwright.translate import OTHER_LANGUAGE, strings_of, translate
 from slipwright.workspace import Workspace
 from slipwright.workspace import git as g
@@ -294,6 +300,12 @@ class _Stopped(Exception):
     the step's next model call, caught by the run loop."""
 
 
+class BuilderLost(Exception):
+    """The machine a build was sent to went away and did not come back in time. Not a
+    failed build -- nothing was learnt about the code -- so it spends no attempt: the
+    development goes back to waiting for a builder (T14.3)."""
+
+
 class BriefIsRunning(ValueError):
     """The analysis (or an intake round) is working; a second one would race it."""
 
@@ -401,6 +413,8 @@ class Engine:
         # first retry waits this long, then doubles (T9.7); tests set it to 0
         self.retry_backoff_s = retry_backoff_s
         self.gate_timeout_s = gate_timeout_s
+        # how often a build sent to a Mac is looked in on; tests make it quick
+        self.worker_poll_s = 1.0
         self._git_host = git_host
         # tests answer GitHub/Jira HTTP locally through a mock transport
         self.http_transport = http_transport
@@ -1907,6 +1921,12 @@ class Engine:
         job = self.store.get(job_id)
         if job.state is not JobState.AWAITING_ARCHITECTURE_APPROVAL:
             raise NotAwaitingApproval(job)
+        phases = [PlanPhase.model_validate(p) for p in self._phases(job)]
+        missing = unbuilt_platforms(phases, profile)
+        if missing:
+            # the plan still has phases for it: taking its commands away would leave them
+            # with nothing to be built by
+            raise InvalidEdit(f"the plan has {', '.join(missing)} phases; keep their commands")
         job.profile = profile
         return self.store.save(job)
 
@@ -1960,6 +1980,11 @@ class Engine:
             raise InvalidEdit(str(exc)) from exc
         if not phases:
             raise InvalidEdit("a plan needs at least one phase")
+        missing = unbuilt_platforms(phases, job.profile) if job.profile else []
+        if missing:
+            raise InvalidEdit(
+                f"no commands build {', '.join(missing)}: add them to the profile first"
+            )
         mapping = architect.phase_task_map(phases, [t.id for t in breakdown.tasks()])
         if isinstance(mapping, str):
             raise InvalidEdit(f"plan does not match the backlog: {mapping}")
@@ -2858,6 +2883,18 @@ class Engine:
             # whoever moved it -- the web page, the API, somebody else's chat -- the
             # questions still open in people's chats about where it was are now moot
             settle_prompts(self, job)
+            if self.builder_ready(job):
+                # the one wait nobody approves: a machine that can build what is left is
+                # here now -- connected, or this server itself started somewhere that can
+                job = self.orchestrator.transition(
+                    job,
+                    JobState(job.data.builder_resume or JobState.DEVELOPING.value),
+                    note=f"a builder for {', '.join(job.data.waiting_platforms)} is here; "
+                    "carrying on",
+                )
+                job.data.waiting_platforms = []
+                job.data.builder_resume = None
+                job = self.store.save(job)
             while job.state in WORKING_STATES:
                 if job.id in self._cancelled:
                     self._cancelled.discard(job.id)
@@ -2968,6 +3005,40 @@ class Engine:
         Only over SMTP. The outbox stands in for mail so that signing up works before a
         server is configured; filling it with news nobody will read helps nobody.
         """
+        self._mail_owner(
+            job,
+            "the failure",
+            lambda link, project, name: failed_letter(
+                lang,
+                link=link,
+                request=job.title,
+                project=project,
+                error=(error or "")[:600],
+                name=name,
+            ),
+        )
+
+    def _mail_builder_wait(self, job: Job, lang: str = "tr") -> None:
+        """Write to the owner that the development waits for a machine to build its apps.
+        Theirs to lend, so theirs to be told; the link is to the page that pairs one."""
+        root = (self.mail_settings().base_url or "").rstrip("/")
+        self._mail_owner(
+            job,
+            "the wait for a builder",
+            lambda link, project, name: builder_letter(
+                lang,
+                link=link,
+                pair_link=f"{root}/settings/workers",
+                request=job.title,
+                project=project,
+                platforms=list(job.data.waiting_platforms),
+                name=name,
+            ),
+        )
+
+    def _mail_owner(self, job: Job, about: str, write: Callable[[str, str, str], Letter]) -> None:
+        """A letter to the job's owner, over SMTP only and never for the example project;
+        ``write(link, project, name)`` words it. A lost letter changes nothing."""
         if job.owner_id is None or not self.mail_settings().configured:
             return
         try:
@@ -2983,17 +3054,10 @@ class Engine:
                     project = found.name
             root = (self.mail_settings().base_url or "").rstrip("/")
             path = f"/projects/{job.project_id}/jobs/{job.id}" if job.project_id else "/"
-            letter = failed_letter(
-                lang,
-                link=f"{root}{path}",
-                request=job.title,
-                project=project,
-                error=(error or "")[:600],
-                name=user.username,
-            )
+            letter = write(f"{root}{path}", project, user.username)
             self.mailer().send(user.email, letter.subject, letter.body)
         except Exception as exc:  # noqa: BLE001 - a lost letter must not change the outcome
-            log.warning("job %s: could not mail the owner about the failure: %s", job.id, exc)
+            log.warning("job %s: could not mail the owner about %s: %s", job.id, about, exc)
 
     def _fail(self, job: Job, note: str, detail: str | None = None) -> Job:
         try:
@@ -3381,8 +3445,9 @@ class Engine:
             raise RuntimeError(f"job {job.id} has no approved profile")
         return job.profile
 
-    def _run_gate(self, job: Job) -> GateResult:
-        """Build and test the worktree, wherever this installation runs commands.
+    def _run_gate(self, job: Job, platform: str | None = None) -> GateResult:
+        """Build and test the worktree, wherever this installation runs commands -- the
+        project's own commands, or with ``platform`` that mobile app's (T14.1).
 
         The specialist that wrote the phase has to hold ``run_commands`` for its build to
         be executed. The permission existed from the start and was never checked, which
@@ -3396,18 +3461,112 @@ class Engine:
             return GateResult(
                 ok=False,
                 output=(
-                    f"$ {profile.build_cmd}\n"
+                    f"$ {profile.commands_for(platform)[0]}\n"
                     f"[refused: {role.value} does not have the run_commands permission]"
                 ),
             )
-        kwargs: dict[str, Any] = {"runner": self.runner}
-        if self.gate_timeout_s is not None:
-            kwargs["timeout_s"] = self.gate_timeout_s
-        with self._checkout_locks[str(require_worktree(job))]:
-            gate = build_gate(profile, require_worktree(job), **kwargs)
+        lent = (
+            platform is not None
+            and not toolchains.can_build(platform)
+            and platform in self.remote_platforms(job.owner_id)
+        )
+        if lent:
+            assert platform is not None
+            gate = self._remote_gate(job, profile, platform)
+        else:
+            kwargs: dict[str, Any] = {"runner": self.runner, "platform": platform}
+            if self.gate_timeout_s is not None:
+                kwargs["timeout_s"] = self.gate_timeout_s
+            with self._checkout_locks[str(require_worktree(job))]:
+                gate = build_gate(profile, require_worktree(job), **kwargs)
         if job.project_id is not None:
             self.record_gate_run(job, gate)
         return gate
+
+    def _remote_gate(self, job: Job, profile: Profile, platform: str) -> GateResult:
+        """Build on a machine the owner lent: queue the worktree and the platform's two
+        commands, and wait for the answer.
+
+        A worker that stops being heard from while it holds the build has it taken back
+        and queued again, once; a second time, or nobody able to take it at all, is
+        ``BuilderLost`` -- a Mac gone to sleep is not a red build and must not be charged
+        as one. The queued copy is dropped whatever happens: it is a whole worktree.
+        """
+        timeout = self.gate_timeout_s or GATE_TIMEOUT_S
+        worktree = require_worktree(job)
+        with self._checkout_locks[str(worktree)]:
+            try:
+                packed = workers.snapshot(worktree)
+            except ValueError as exc:
+                return GateResult(ok=False, output=f"[{platform}: not sent to a Mac: {exc}]")
+        build, test = profile.commands_for(platform)
+        task_id = self.store.enqueue_worker_task(
+            job.owner_id,
+            job.id,
+            platform,
+            [(f"{platform} build", build), (f"{platform} test", test)],
+            timeout,
+            packed,
+        )
+        # both commands may take their whole timeout; past that and a margin, nobody is coming
+        deadline = time.monotonic() + 2 * timeout + workers.LIVE.total_seconds()
+        waiting_since = time.monotonic()
+        try:
+            while True:
+                row = self.store.worker_task_row(task_id)
+                if row is None:
+                    raise BuilderLost(f"the {platform} build was taken off the queue")
+                if row["state"] == "done":
+                    return GateResult(
+                        ok=row["exit_code"] == 0,
+                        output=str(row["output"] or ""),
+                        seconds=float(row["seconds"] or 0.0),
+                    )
+                now = time.monotonic()
+                if row["state"] == "running":
+                    holder = self.store.get_worker(
+                        str(row["worker_id"]), live_since=workers.live_since()
+                    )
+                    if holder is None or not holder.online:
+                        if int(row["tries"]) >= 2:
+                            raise BuilderLost(f"the Mac building {platform} went away twice")
+                        self.store.requeue_worker_task(task_id)
+                        waiting_since = now
+                elif (
+                    platform not in self.remote_platforms(job.owner_id)
+                    and now - waiting_since > workers.LIVE.total_seconds()
+                ):
+                    raise BuilderLost(f"no Mac that builds {platform} is connected")
+                if now > deadline:
+                    raise BuilderLost(f"no answer from the Mac building {platform} in time")
+                time.sleep(self.worker_poll_s)
+        finally:
+            self.store.drop_worker_task(task_id)
+
+    def _final_gate(self, job: Job) -> GateResult:
+        """The whole project, once QA's tests are written: its own commands, then every
+        mobile platform's that can be built here or on a machine the owner lent. One that
+        cannot is said, not failed: its phases already passed their own gates, and holding
+        the tests of everything else hostage to a Mac being awake would help nobody."""
+        gate = self._run_gate(job)
+        profile = self._profile(job)
+        outputs = [gate.output]
+        seconds = gate.seconds
+        for platform in profile.platform_names():
+            if not gate.ok:
+                break
+            if not self.can_build(job, platform):
+                outputs.append(f"[{platform}: not built here -- this machine cannot build it]")
+                continue
+            try:
+                built = self._run_gate(job, platform)
+            except BuilderLost as lost:
+                outputs.append(f"[{platform}: not built -- {lost}]")
+                continue
+            gate = built
+            outputs.append(gate.output)
+            seconds += gate.seconds
+        return GateResult(ok=gate.ok, output="\n\n".join(outputs), seconds=seconds)
 
     @staticmethod
     def _phases(job: Job) -> list[dict[str, Any]]:
@@ -3622,6 +3781,13 @@ class Engine:
         index = job.data.phase_index
         if index >= len(phases):
             return self._fail(job, f"no plan phase {index + 1} to develop")
+        if not self._phase_buildable(job, phases[index]):
+            # checked before the screens: a phase that cannot be built yet should not keep
+            # the ones that can waiting on a design approval
+            job = self._put_unbuildable_last(job)
+            phases = self._phases(job)
+            if not self._phase_buildable(job, phases[index]):
+                return self._wait_for_builder(job)
         waiting = self._design_gate(job, phases[index])
         if waiting is not None:
             return waiting
@@ -3718,6 +3884,141 @@ class Engine:
             detail=diff or "(no changes)",
         )
 
+    # -- builds this machine cannot do (T14.2) ---------------------------------------------
+
+    def remote_platforms(self, owner_id: str | None) -> frozenset[str]:
+        """What the machines this account has lent, and that are there now, can build.
+        Only its own: a Mac is lent to one account and never builds another's code."""
+        found: set[str] = set()
+        for worker in self.store.list_workers(owner_id, live_since=workers.live_since()):
+            if worker.online:
+                found.update(worker.capabilities)
+        return frozenset(found)
+
+    def can_build(self, job: Job, platform: str) -> bool:
+        """Here, or on a machine the job's owner has lent -- never somebody else's."""
+        return toolchains.can_build(platform) or platform in self.remote_platforms(job.owner_id)
+
+    def _phase_buildable(self, job: Job, phase: dict[str, Any]) -> bool:
+        platform = phase.get("platform")
+        return not platform or self.can_build(job, str(platform))
+
+    def _put_unbuildable_last(self, job: Job) -> Job:
+        """Move the phases nothing here can build behind the ones it can.
+
+        Safe because nothing depends on a platform phase -- the Architect is told so -- and
+        stable, so each group keeps its own order: an iOS phase that builds on another iOS
+        phase still comes after it. Only phases not started yet move, so every number the
+        history already speaks of stays true; the breakdown's numbers follow the plan, or
+        the board would mark the wrong tasks done.
+        """
+        plan = dict(job.data.plan or {})
+        phases: list[dict[str, Any]] = list(plan.get("phases", []))
+        index = job.data.phase_index
+        rest = phases[index:]
+        ready = [p for p in rest if self._phase_buildable(job, p)]
+        later = [p for p in rest if not self._phase_buildable(job, p)]
+        if not ready or rest == ready + later:
+            return job
+        plan["phases"] = phases[:index] + ready + later
+        if plan.get("breakdown"):
+            breakdown = Breakdown.model_validate(plan["breakdown"])
+            mapping = architect.phase_task_map(
+                [PlanPhase.model_validate(p) for p in plan["phases"]],
+                [t.id for t in breakdown.tasks()],
+            )
+            if isinstance(mapping, dict):
+                for task in breakdown.tasks():
+                    task.phase = mapping[task.id]
+                plan["breakdown"] = breakdown.model_dump(mode="json")
+        job.data.plan = plan
+        job = self.store.save(job)
+        names = ", ".join(sorted({str(p["platform"]) for p in later}))
+        self._record_gate_note(
+            job,
+            f"{len(later)} phase(s) wait until last: nothing here builds {names} yet",
+            "\n".join(str(p.get("goal", "")) for p in later),
+        )
+        return job
+
+    def _wait_for_builder(
+        self, job: Job, *, resume: JobState = JobState.DEVELOPING, why: str | None = None
+    ) -> Job:
+        """Everything left needs a machine this is not: stop and say which, and wait for
+        one to connect. No attempt is spent and nothing has failed.
+
+        ``resume`` is where it picks up: the phase itself, or -- when the Mac went away
+        with a phase already written -- only its build.
+        """
+        phases = self._phases(job)
+        index = job.data.phase_index
+        wanted = {
+            str(p["platform"])
+            for p in phases[index:]
+            if p.get("platform") and not self._phase_buildable(job, p)
+        }
+        if resume is JobState.BUILD_GATE and index < len(phases) and phases[index].get("platform"):
+            wanted.add(str(phases[index]["platform"]))
+        platforms = sorted(wanted)
+        job.data.waiting_platforms = platforms
+        job.data.builder_resume = resume.value
+        self.store.save(job)
+        names = ", ".join(platforms)
+        job = self.orchestrator.transition(
+            job,
+            JobState.AWAITING_BUILDER,
+            note=(
+                f"waiting for a builder: phase {index + 1}/{len(phases)} and after need "
+                f"{names}, which nothing here can build; it carries on when one connects"
+            ),
+            detail="\n".join(
+                ([why] if why else [])
+                + [
+                    f"{i + 1}. {p.get('goal', '')} ({p.get('platform')})"
+                    for i, p in enumerate(phases)
+                    if i >= index
+                ]
+            ),
+        )
+        self._notify_builder_wait(job)
+        return job
+
+    def builder_ready(self, job: Job) -> bool:
+        """Whether a job waiting for a builder can go on now."""
+        phases = self._phases(job)
+        index = job.data.phase_index
+        return (
+            job.state is JobState.AWAITING_BUILDER
+            and index < len(phases)
+            and self._phase_buildable(job, phases[index])
+        )
+
+    def waiting_for_builders(self, owner_id: str | None) -> list[str]:
+        """This account's developments that a builder connecting now would carry on.
+
+        The one way a waiting development moves without a person pressing anything, so it
+        is asked per account: a Mac one account lends never wakes another's work. The
+        caller resumes them, each on its own owner's keys like any other run.
+        """
+        # no owner is a local install's jobs, and "= NULL" matches no row: filter here
+        listed = self.store.list(owner_id=ANY_OWNER if owner_id is None else owner_id)
+        return [job.id for job in listed if job.owner_id == owner_id and self.builder_ready(job)]
+
+    def _notify_builder_wait(self, job: Job) -> None:
+        """Tell the owner once per wait: the chat groups that hear of gates, and a letter.
+        The letter links to the page that pairs a Mac -- it never carries a pairing code,
+        which in a mailbox or a chat history would outlive its purpose."""
+        visits = sum(
+            1 for t in job.history if t.to_state is job.state and t.from_state is not job.state
+        )
+        marker = f"{job.state.value}:{visits}"
+        if marker in job.data.notified:
+            return
+        notify_builder_wait(self, job)
+        self._mail_builder_wait(job)
+        job.data.notified.append(marker)
+        self.store.save(job)
+
     def _last_specialist(self, job: Job) -> RoleName:
         """The specialist that wrote the last phase: it also handles CI fixes."""
         phases = self._phases(job)
@@ -3729,11 +4030,18 @@ class Engine:
     def _build_gate(self, job: Job) -> Job:
         phases = self._phases(job)
         index = job.data.phase_index
-        gate = self._run_gate(job)
-        # the tester reads a failure first: a test that asserts something nobody agreed to
-        # is QA's own to correct, and the gate runs again without a specialist touching it
-        while not gate.ok and self._qa_gate_triage(job, index, gate.tail):
-            gate = self._run_gate(job)
+        # a phase that builds one platform's app is built with that platform's commands
+        platform = phases[index].get("platform") if index < len(phases) else None
+        try:
+            gate = self._run_gate(job, platform)
+            # the tester reads a failure first: a test that asserts something nobody agreed
+            # to is QA's own to correct, and the gate runs again without a specialist
+            while not gate.ok and self._qa_gate_triage(job, index, gate.tail):
+                gate = self._run_gate(job, platform)
+        except BuilderLost as lost:
+            # the phase is written and staged; only its build is owed, so that is where the
+            # development picks up again -- not with the specialist writing it twice
+            return self._wait_for_builder(job, resume=JobState.BUILD_GATE, why=str(lost))
         if gate.ok:
             job.data.build_attempts = 0
             job.data.last_build_output = None
@@ -4116,7 +4424,7 @@ class Engine:
             touched = apply_changes(job, profile, RoleName.QA, result.output.changes)
             g.stage_all(worktree)
             test_diff = g.staged_diff(worktree)
-            gate = self._run_gate(job)
+            gate = self._final_gate(job)
             if gate.ok:
                 g.commit(worktree, "slipwright: tests")
                 job.data.feedback = None

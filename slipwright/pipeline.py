@@ -18,7 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from slipwright.activity import pending_approval
 from slipwright.roles.specialists import LABEL, specialist_for
 from slipwright.schemas.job import Job, JobState, Transition, utcnow
-from slipwright.schemas.profile import RoleName
+from slipwright.schemas.profile import RoleName, platform_names
 
 
 class StepStatus(StrEnum):
@@ -37,6 +37,7 @@ class StepCard(BaseModel):
     label: str
     role: RoleName | None = None
     domain: str | None = None
+    platform: str | None = None  # a mobile phase built for one app: ios or android (T14.1)
     gate: bool = False
     editable: bool = False  # the gate's material can be changed before approval
     pending: str | None = None  # what the human is asked to approve, when waiting
@@ -81,6 +82,7 @@ class Pipeline(BaseModel):
 _PHASE_NOTE = re.compile(r"^(\w+) phase (\d+)/(\d+)")
 _REVIEW_NOTE = re.compile(r"^review phase (\d+)/(\d+)")
 _GATE_PASSED = re.compile(r"^build gate passed for phase (\d+)/")
+_BUILDER_NOTE = re.compile(r"^waiting for a builder: phase (\d+)/\d+ and after need (.+?), which")
 _GATE_FAILED = re.compile(r"^build gate failed (?:on phase|\d+ times on phase) (\d+)")
 
 Span = tuple[int, int]  # history index bounds [lo, hi)
@@ -381,6 +383,7 @@ def _phase_cards(job: Job, r: _Reader) -> list[StepCard]:
                 label=f"{LABEL[role]}: {phase.get('goal', '')}",
                 role=role,
                 domain=str(phase.get("domain") or "general"),
+                platform=phase.get("platform"),
                 status=status,
                 phase=number,
                 task_title=titles.get(str(phase.get("task_id"))),
@@ -483,6 +486,44 @@ def _insert_decision_gate(job: Job, r: _Reader, steps: list[StepCard]) -> None:
             outputs=[visits[-1]],
         ),
     )
+
+
+def _insert_builder_gate(job: Job, r: _Reader, steps: list[StepCard]) -> None:
+    """The Mac card, before the first phase that waited for one (T14.2): waiting while
+    it does, done once a builder came. Not a gate anybody approves, so it asks for nothing
+    (``pending`` stays empty) -- it says what would carry the development on."""
+    visits = r.visits(JobState.AWAITING_BUILDER, r.whole)
+    if not visits:
+        return
+    last = visits[-1]
+    m = _BUILDER_NOTE.match(r.history[last].note or "")
+    if m is None:
+        return
+    left = next(
+        (
+            i
+            for i in range(last + 1, len(r.history))
+            if r.history[i].from_state is JobState.AWAITING_BUILDER
+        ),
+        None,
+    )
+    waiting = job.state is JobState.AWAITING_BUILDER and left is None
+    apps = platform_names(m.group(2).split(", "))
+    start = r.history[last].at
+    end = r.history[left].at if left is not None else None
+    card = StepCard(
+        key="builder_gate",
+        label=f"Waiting for a Mac: {apps}",
+        gate=True,
+        status=StepStatus.WAITING if waiting else StepStatus.DONE,
+        started_at=start,
+        finished_at=end,
+        elapsed_s=_elapsed(start, end, r.now),
+        outputs=[last] + ([left] if left is not None else []),
+    )
+    keys = [c.key for c in steps]
+    anchor = f"phase:{m.group(1)}"
+    steps.insert(keys.index(anchor) if anchor in keys else len(steps), card)
 
 
 def _annotate_supervision(job: Job, steps: list[StepCard]) -> None:
@@ -627,6 +668,7 @@ def lane_for(job: Job) -> Lane:
         ),
     ]
     _insert_decision_gate(job, r, steps)
+    _insert_builder_gate(job, r, steps)
     _annotate_supervision(job, steps)
     # the state badge says what kind of work is happening ("build gate"); this says whose
     running = next((c for c in steps if c.status is StepStatus.RUNNING), None)

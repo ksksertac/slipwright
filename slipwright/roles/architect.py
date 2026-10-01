@@ -43,6 +43,14 @@ You are the Software Architect. Read the repository (`worktree`) and the approve
    that needs a device (`connectedAndroidTest`, a simulator test run) or a service this
    checkout does not start itself. These commands are yours alone: no specialist can
    change them later, so a command that cannot run makes the development unfixable.
+   A mobile app's own build goes in `profile.platforms`, one entry per platform (`ios`,
+   `android`) with its `build_cmd` and `test_cmd`, never in the project's `build_cmd` and
+   `test_cmd`: those must build and test everything else -- the backend, the web app, the
+   code a React Native or Flutter app shares between platforms -- without Xcode or an
+   Android SDK. iOS is built with `xcodebuild` (a simulator destination for the build, no
+   test that needs a booted device), Android as described above. `can_build_here` lists
+   the platforms this machine can build; the others are built on a Mac lent to it later,
+   so write their commands for that Mac all the same.
 2. `stack` — one entry for each part of the product this project needs (`backend`,
    `web`, `mobile`, `infra`), naming the language and the framework it is written in and
    one sentence of why. For a repository that already holds code, report what is there
@@ -62,7 +70,12 @@ You are the Software Architect. Read the repository (`worktree`) and the approve
    Product Owner can split it rather than writing one phase that cannot be answered.
    Backend contracts come before the front-ends that use them. A phase must not mix
    domains; if a task needs two domains, say so in `summary` so the Product Owner can
-   split it.
+   split it. A `mobile` phase that writes one platform's native app names it in
+   `platform` (`ios` or `android`) and is built with that platform's commands, so that
+   platform must be in `profile.platforms`; mobile code both platforms share has no
+   `platform`. A platform phase may wait until last for a machine that can build it, so
+   nothing may depend on one: put platform phases after everything they use, and never
+   make a later phase need what a platform phase wrote.
 If `feedback` is present, a human rejected your previous plan (`previous_plan`); address
 every point in it. If a `jira` section is present you may add Jira actions for existing
 issues. If a `standards` section is present its sections are binding unless they
@@ -97,6 +110,7 @@ def run(
     context["worktree"] = scan_worktree(worktree)
     # what the machine brings, so the commands use it instead of fetching their own
     context["toolchains"] = toolchains.installed()
+    context["can_build_here"] = toolchains.buildable()
     kwargs = {} if timeout_s is None else {"timeout_s": timeout_s}
     return invoke_role(RoleName.ARCHITECT, seed, context, provider=provider, **kwargs)
 

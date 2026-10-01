@@ -36,7 +36,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from slipwright.auth import EmailTokenKind, User, UserStatus, check_password, normalise_email
 from slipwright.roles.specialists import LABEL as AGENT_LABEL
 from slipwright.schemas.job import Job, JobState, new_job_id, utcnow
-from slipwright.schemas.profile import RoleName
+from slipwright.schemas.profile import RoleName, platform_names
 
 if TYPE_CHECKING:  # pragma: no cover - imported for types only, so the store may import us
     from slipwright.mail import MailSettings
@@ -213,6 +213,46 @@ def failed_letter(
             + "You can retry it from the page or ask for a different approach; if you have "
             'linked a chat, its "Try again" button does the same.\n\n'
             f"{link}\n"
+        ),
+    )
+
+
+def builder_letter(
+    lang: str,
+    *,
+    link: str,
+    pair_link: str,
+    request: str,
+    project: str,
+    platforms: list[str],
+    name: str,
+) -> Letter:
+    """To the owner: everything this machine can build is done, and what is left needs a
+    Mac. Not a failure, and nothing to approve: lending one carries it on."""
+    where = f" ({project})" if project else ""
+    apps = platform_names(platforms)
+    if lang == "tr":
+        return Letter(
+            subject=f"Slipwright: {apps} için bir Mac bekleniyor{where}",
+            body=(
+                f"Merhaba {name},\n\n"
+                f"“{request}” geliştirmesinde bu makinenin yapabileceği her şey bitti{where}. "
+                f"Kalan adımlar {apps} uygulamasını derlemek istiyor ve bu makine onu "
+                "derleyemiyor.\n\n"
+                "Bir Mac bağladığında geliştirme kaldığı yerden kendiliğinden devam eder. "
+                f"Bağlamak için:\n{pair_link}\n\n"
+                f"Geliştirme:\n{link}\n"
+            ),
+        )
+    return Letter(
+        subject=f"Slipwright: waiting for a Mac to build {apps}{where}",
+        body=(
+            f"Hello {name},\n\n"
+            f"“{request}” has done everything this machine can do{where}. What is left "
+            f"builds the {apps} app, which this machine cannot build.\n\n"
+            "Connect a Mac and the development carries on by itself from where it is. "
+            f"To connect one:\n{pair_link}\n\n"
+            f"The development:\n{link}\n"
         ),
     )
 
@@ -511,6 +551,7 @@ __all__ = [
     "Membership",
     "Teams",
     "agent_for_gate",
+    "builder_letter",
     "failed_letter",
     "invite_letter",
     "may_act_at",

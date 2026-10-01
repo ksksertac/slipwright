@@ -713,6 +713,8 @@ def test_a_database_written_before_notifications_upgrades_into_one(tmp_path: Pat
                 conn.execute(text(f"ALTER TABLE users DROP COLUMN {column}"))
             conn.execute(text("DROP TABLE attachments"))  # (0010)
             conn.execute(text("ALTER TABLE jobs DROP COLUMN title"))  # (0011: job title)
+            for table in ("workers", "worker_codes", "worker_tasks"):  # (0012)
+                conn.execute(text(f"DROP TABLE {table}"))
         command.stamp(_config(db), "0007_teams")
 
         migrate(db)

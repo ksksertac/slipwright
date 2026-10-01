@@ -1062,6 +1062,24 @@
         "title": "CheckoutPath",
         "type": "object"
       },
+      "CodeRequest": {
+        "properties": {
+          "address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The address the page is open at, or one the person typed: the server as the Mac should call it. Unused when the installation has its own address.",
+            "title": "Address"
+          }
+        },
+        "title": "CodeRequest",
+        "type": "object"
+      },
       "Commit": {
         "additionalProperties": false,
         "properties": {
@@ -1079,6 +1097,46 @@
           "subject"
         ],
         "title": "Commit",
+        "type": "object"
+      },
+      "ConnectionCode": {
+        "properties": {
+          "address": {
+            "description": "The address inside the code.",
+            "title": "Address",
+            "type": "string"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "command": {
+            "description": "What to run on the Mac.",
+            "title": "Command",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "install": {
+            "description": "What installs the worker on a Mac, once.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Install",
+            "type": "array"
+          }
+        },
+        "required": [
+          "address",
+          "code",
+          "command",
+          "expires_at",
+          "install"
+        ],
+        "title": "ConnectionCode",
         "type": "object"
       },
       "Credentials": {
@@ -2665,6 +2723,18 @@
             "title": "Build Attempts",
             "type": "integer"
           },
+          "builder_resume": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where a builder arriving picks the job up: developing, or build_gate when a Mac went away with the phase already written (T14.3).",
+            "title": "Builder Resume"
+          },
           "ci_attempts": {
             "default": 0,
             "minimum": 0.0,
@@ -3032,6 +3102,14 @@
             "minimum": 0.0,
             "title": "Tokens Used",
             "type": "integer"
+          },
+          "waiting_platforms": {
+            "description": "While the job waits for a builder: the mobile platforms (ios, android) its remaining phases need and nothing here can build (T14.2).",
+            "items": {
+              "type": "string"
+            },
+            "title": "Waiting Platforms",
+            "type": "array"
           }
         },
         "required": [
@@ -3041,6 +3119,7 @@
           "branch_name",
           "brief",
           "build_attempts",
+          "builder_resume",
           "ci_attempts",
           "cost_usd",
           "deploy",
@@ -3082,7 +3161,8 @@
           "supervision",
           "test_cases",
           "tests_skipped",
-          "tokens_used"
+          "tokens_used",
+          "waiting_platforms"
         ],
         "title": "JobData",
         "type": "object"
@@ -3369,6 +3449,7 @@
           "devops",
           "awaiting_deploy_approval",
           "awaiting_decision",
+          "awaiting_builder",
           "done",
           "cancelled",
           "failed"
@@ -4742,6 +4823,55 @@
         "title": "PageWrite",
         "type": "object"
       },
+      "PairRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Capabilities",
+            "type": "array"
+          },
+          "code": {
+            "maxLength": 400,
+            "minLength": 10,
+            "title": "Code",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "name"
+        ],
+        "title": "PairRequest",
+        "type": "object"
+      },
+      "Paired": {
+        "properties": {
+          "token": {
+            "description": "Shown once; the server keeps only its hash.",
+            "title": "Token",
+            "type": "string"
+          },
+          "worker_id": {
+            "title": "Worker Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "worker_id"
+        ],
+        "title": "Paired",
+        "type": "object"
+      },
       "Permission": {
         "enum": [
           "read_files",
@@ -4857,6 +4987,58 @@
         "title": "PlanEdit",
         "type": "object"
       },
+      "PlatformCommands": {
+        "additionalProperties": false,
+        "description": "How one platform's app is built and tested, apart from the rest of the project.\n\nApart on purpose: the project's own commands must not reach for Xcode, or a machine that\nhas none would fail every phase of a development that happens to have an iOS app in it.",
+        "properties": {
+          "build_cmd": {
+            "minLength": 1,
+            "title": "Build Cmd",
+            "type": "string"
+          },
+          "platform": {
+            "enum": [
+              "ios",
+              "android"
+            ],
+            "title": "Platform",
+            "type": "string"
+          },
+          "test_cmd": {
+            "minLength": 1,
+            "title": "Test Cmd",
+            "type": "string"
+          }
+        },
+        "required": [
+          "platform",
+          "build_cmd",
+          "test_cmd"
+        ],
+        "title": "PlatformCommands",
+        "type": "object"
+      },
+      "PollRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Capabilities",
+            "type": "array"
+          },
+          "wait_s": {
+            "default": 25.0,
+            "maximum": 25.0,
+            "minimum": 0.0,
+            "title": "Wait S",
+            "type": "number"
+          }
+        },
+        "title": "PollRequest",
+        "type": "object"
+      },
       "Profile": {
         "additionalProperties": false,
         "properties": {
@@ -4874,6 +5056,14 @@
             "minLength": 1,
             "title": "Package Manager",
             "type": "string"
+          },
+          "platforms": {
+            "description": "Build and test commands per mobile platform (ios, android), kept out of build_cmd/test_cmd so the project's own commands never need Xcode or an Android SDK.",
+            "items": {
+              "$ref": "#/components/schemas/PlatformCommands"
+            },
+            "title": "Platforms",
+            "type": "array"
           },
           "port": {
             "description": "Default port the project listens on.",
@@ -7089,6 +7279,17 @@
             ],
             "title": "Phase"
           },
+          "platform": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Platform"
+          },
           "recommendation": {
             "anyOf": [
               {
@@ -7161,6 +7362,7 @@
           "outputs",
           "pending",
           "phase",
+          "platform",
           "recommendation",
           "risk",
           "role",
@@ -7709,6 +7911,32 @@
           "status"
         ],
         "title": "SupportStatusIn",
+        "type": "object"
+      },
+      "TaskResult": {
+        "additionalProperties": false,
+        "properties": {
+          "exit_code": {
+            "title": "Exit Code",
+            "type": "integer"
+          },
+          "output": {
+            "maxLength": 2000000,
+            "title": "Output",
+            "type": "string"
+          },
+          "seconds": {
+            "minimum": 0.0,
+            "title": "Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "exit_code",
+          "output",
+          "seconds"
+        ],
+        "title": "TaskResult",
         "type": "object"
       },
       "TaskStatus": {
@@ -8676,6 +8904,135 @@
           "tasks"
         ],
         "title": "WorkList",
+        "type": "object"
+      },
+      "Worker": {
+        "additionalProperties": false,
+        "properties": {
+          "capabilities": {
+            "description": "What it said at its last poll it can build.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Capabilities",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "last_seen_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Seen At"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "online": {
+            "default": false,
+            "description": "Seen recently enough to be given a build.",
+            "title": "Online",
+            "type": "boolean"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The account it builds for; none on a local install.",
+            "title": "Owner Id"
+          },
+          "paired_at": {
+            "format": "date-time",
+            "title": "Paired At",
+            "type": "string"
+          },
+          "revoked_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked At"
+          }
+        },
+        "required": [
+          "capabilities",
+          "id",
+          "last_seen_at",
+          "name",
+          "online",
+          "owner_id",
+          "paired_at",
+          "revoked_at"
+        ],
+        "title": "Worker",
+        "type": "object"
+      },
+      "WorkerTask": {
+        "additionalProperties": false,
+        "description": "A build as the worker is given it: which commands, for how long. The worktree\nitself is fetched separately, being the one part that can be large.",
+        "properties": {
+          "commands": {
+            "description": "(label, command), run in order.",
+            "items": {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "string"
+                }
+              ],
+              "type": "array"
+            },
+            "title": "Commands",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "platform": {
+            "title": "Platform",
+            "type": "string"
+          },
+          "timeout_s": {
+            "title": "Timeout S",
+            "type": "number"
+          }
+        },
+        "required": [
+          "commands",
+          "id",
+          "job_id",
+          "platform",
+          "timeout_s"
+        ],
+        "title": "WorkerTask",
         "type": "object"
       }
     }
@@ -15295,6 +15652,299 @@
           }
         },
         "summary": "Get Version"
+      }
+    },
+    "/api/worker/heartbeat": {
+      "post": {
+        "description": "Still here, still building: sent while a long build runs.",
+        "operationId": "heartbeat_api_worker_heartbeat_post",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Heartbeat",
+        "tags": [
+          "workers"
+        ]
+      }
+    },
+    "/api/worker/pair": {
+      "post": {
+        "description": "Trade a connection code for a worker token. The code is spent whether it worked\nor not, so it cannot be tried twice.",
+        "operationId": "pair_api_worker_pair_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PairRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Paired"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pair",
+        "tags": [
+          "workers"
+        ]
+      }
+    },
+    "/api/worker/poll": {
+      "post": {
+        "description": "Say what this machine can build, and wait a while for a build of its account.\nDoubles as the heartbeat; an empty answer (204) means ask again.",
+        "operationId": "poll_api_worker_poll_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PollRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkerTask"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "204": {
+            "description": "nothing to build yet"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Poll",
+        "tags": [
+          "workers"
+        ]
+      }
+    },
+    "/api/worker/tasks/{task_id}/result": {
+      "post": {
+        "description": "What the build did. Only the worker holding it may say, and only once.",
+        "operationId": "task_result_api_worker_tasks__task_id__result_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "title": "Task Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskResult"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Task Result",
+        "tags": [
+          "workers"
+        ]
+      }
+    },
+    "/api/worker/tasks/{task_id}/snapshot": {
+      "get": {
+        "description": "The worktree of a build this worker holds, as a tar.gz.",
+        "operationId": "task_snapshot_api_worker_tasks__task_id__snapshot_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "title": "Task Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Task Snapshot",
+        "tags": [
+          "workers"
+        ]
+      }
+    },
+    "/api/workers": {
+      "get": {
+        "description": "The machines this account has paired, and whether each is there now.",
+        "operationId": "list_workers_api_workers_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Worker"
+                  },
+                  "title": "Response List Workers Api Workers Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Workers",
+        "tags": [
+          "workers"
+        ]
+      }
+    },
+    "/api/workers/code": {
+      "post": {
+        "description": "A fresh connection code; any earlier one stops working.\n\nThe address in it is the installation's own when it has one (the mail settings' base\nURL), else the one the page sent -- and never ``localhost``, which on the Mac would be\nthe Mac. A usable address the person gave is kept for the next code.",
+        "operationId": "connection_code_api_workers_code_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectionCode"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Connection Code",
+        "tags": [
+          "workers"
+        ]
+      }
+    },
+    "/api/workers/{worker_id}": {
+      "delete": {
+        "description": "Take a machine away. Its next poll is refused and what it was building goes back\nin the queue. Another account's worker is not found.",
+        "operationId": "revoke_worker_api_workers__worker_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "worker_id",
+            "required": true,
+            "schema": {
+              "title": "Worker Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revoke Worker",
+        "tags": [
+          "workers"
+        ]
       }
     }
   }

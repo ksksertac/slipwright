@@ -15,9 +15,12 @@ version, since the answer is wanted on every plan.
 from __future__ import annotations
 
 import os
+import platform as _platform
 import shutil
 from collections.abc import Mapping
 from pathlib import Path
+
+from slipwright.schemas.profile import PLATFORMS
 
 
 def installed(env: Mapping[str, str] | None = None) -> list[str]:
@@ -37,7 +40,42 @@ def installed(env: Mapping[str, str] | None = None) -> list[str]:
     android = _android(source.get("ANDROID_HOME") or source.get("ANDROID_SDK_ROOT"))
     if android:
         found.append(android)
+    if _platform.system() == "Darwin" and shutil.which("xcodebuild", path=path):
+        found.append("Xcode as `xcodebuild`")
     return found
+
+
+def can_build(
+    target: str,
+    env: Mapping[str, str] | None = None,
+    *,
+    system: str | None = None,
+    machine: str | None = None,
+) -> bool:
+    """Whether a mobile platform's app can be built here.
+
+    iOS wants Xcode, and Xcode is macOS's alone. Android wants a JDK and an SDK -- and not
+    Linux on arm64 even with both, because Google ships its build-tools (aapt2 among them)
+    for x86_64 only there: an Apple Silicon Mac's Docker has the SDK and still cannot build.
+    """
+    source = os.environ if env is None else env
+    system = system or _platform.system()
+    machine = (machine or _platform.machine()).lower()
+    path = source.get("PATH")
+    if target == "ios":
+        return system == "Darwin" and shutil.which("xcodebuild", path=path) is not None
+    if target == "android":
+        if system == "Linux" and machine in ("aarch64", "arm64"):
+            return False
+        sdk = _android(source.get("ANDROID_HOME") or source.get("ANDROID_SDK_ROOT"))
+        java = _java(source.get("JAVA_HOME")) or shutil.which("java", path=path)
+        return bool(sdk and java)
+    return False
+
+
+def buildable(env: Mapping[str, str] | None = None) -> list[str]:
+    """The mobile platforms this machine can build, in the order they are declared."""
+    return [p for p in PLATFORMS if can_build(p, env)]
 
 
 def _java(home: str | None) -> str | None:
@@ -75,4 +113,4 @@ def _names(folder: Path) -> list[str]:
         return []
 
 
-__all__ = ["installed"]
+__all__ = ["buildable", "can_build", "installed"]

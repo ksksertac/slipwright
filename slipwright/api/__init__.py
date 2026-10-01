@@ -453,6 +453,7 @@ def create_app(
     from slipwright.api.support import router as support_router
     from slipwright.api.teams import router as teams_router
     from slipwright.api.update import router as update_router
+    from slipwright.api.workers import router as workers_router
 
     app = FastAPI(
         title="Slipwright",
@@ -489,6 +490,7 @@ def create_app(
     app.include_router(teams_router, prefix="/api")
     app.include_router(notify_router, prefix="/api")
     app.include_router(update_router, prefix="/api")
+    app.include_router(workers_router, prefix="/api")
 
     @app.get("/healthz", include_in_schema=False)
     def healthz() -> dict[str, str]:
@@ -1366,6 +1368,8 @@ def create_app(
             return eng.set_profile(job_id, body)
         except NotAwaitingApproval as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except InvalidEdit as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     @api.put("/jobs/{job_id}/backlog", response_model=Job)
     def set_backlog(job_id: str, body: BacklogEdit, request: Request) -> Job:

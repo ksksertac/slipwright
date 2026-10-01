@@ -480,6 +480,8 @@ function stepLabel(tx: T, step: StepCard): string {
   if (step.phase && m) return `${tx(m[1]!)}: ${m[2]!}`;
   const gate = /^Review approval: phase (\d+)$/.exec(step.label);
   if (gate) return tx("Review approval: phase {n}", { n: gate[1]! });
+  const mac = /^Waiting for a Mac: (.+)$/.exec(step.label);
+  if (mac) return tx("Waiting for a Mac: {apps}", { apps: mac[1]! });
   return tx(step.label);
 }
 
@@ -552,6 +554,11 @@ function StepCardView({
             : tx(step.status)}
         </span>
         <DomainBadge domain={step.domain ?? undefined} />
+        {step.platform && (
+          <span className="tag" title={tx("platform")}>
+            {step.platform === "ios" ? "iOS" : "Android"}
+          </span>
+        )}
         {step.elapsed_s !== null && step.elapsed_s !== undefined && (
           <span className="faint tiny took">{elapsed(step.elapsed_s)}</span>
         )}
@@ -622,7 +629,22 @@ function StepPanel({
                 {tx("open development →")}
               </Link>
             </div>
-            {step.status === "waiting" && <GateEditor job={job.data} step={step} />}
+            {/* waiting for a Mac asks nobody to approve anything: it says where to lend one */}
+            {step.status === "waiting" && step.key === "builder_gate" && (
+              <div className="gate" style={{ marginBottom: 12 }}>
+                <div className="muted small" style={{ marginBottom: 8 }}>
+                  {tx(
+                    "Everything this server can build is done. The rest is built on a Mac; when one connects, the development carries on by itself from here.",
+                  )}
+                </div>
+                <Link className="btn primary small" to="/settings/workers">
+                  {tx("Connect a Mac")}
+                </Link>
+              </div>
+            )}
+            {step.status === "waiting" && step.key !== "builder_gate" && (
+              <GateEditor job={job.data} step={step} />
+            )}
             {/* the screens are worth seeing after they are signed off too */}
             {step.key === "design" && <DesignGate jobId={jobId} readOnly />}
             {step.status === "failed" && (

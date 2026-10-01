@@ -10,12 +10,24 @@ from __future__ import annotations
 import json
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 from pydantic_core import ErrorDetails
 
 PORT_PLACEHOLDER = "{port}"
+
+#: What a mobile phase can be built for. Neither builds everywhere: iOS needs Xcode, which
+#: needs macOS, and Android's build-tools exist for Linux on x86_64 only -- so these are the
+#: builds a machine may have to lend another (gates/toolchains.py, TASKS.md Phase 14).
+Platform = Literal["ios", "android"]
+PLATFORMS: tuple[Platform, ...] = ("ios", "android")
+
+
+def platform_names(platforms: list[str]) -> str:
+    """The platforms as a person writes them: iOS / Android."""
+    shown = {"ios": "iOS", "android": "Android"}
+    return " / ".join(shown.get(p, p) for p in platforms)
 
 
 class RoleName(StrEnum):
@@ -99,6 +111,20 @@ class RoleConfig(BaseModel):
         return value
 
 
+class PlatformCommands(BaseModel):
+    """How one platform's app is built and tested, apart from the rest of the project.
+
+    Apart on purpose: the project's own commands must not reach for Xcode, or a machine that
+    has none would fail every phase of a development that happens to have an iOS app in it.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    platform: Platform
+    build_cmd: str = Field(min_length=1)
+    test_cmd: str = Field(min_length=1)
+
+
 class Profile(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -112,6 +138,31 @@ class Profile(BaseModel):
     )
     port: int = Field(ge=1024, le=65535, description="Default port the project listens on.")
     roles: dict[RoleName, RoleConfig]
+    # a list rather than a map keyed by platform: this travels in the Architect's answer,
+    # and a JSON schema with free-form keys is one some vendors' structured output refuses
+    platforms: list[PlatformCommands] = Field(
+        default_factory=list,
+        description="Build and test commands per mobile platform (ios, android), kept out of "
+        "build_cmd/test_cmd so the project's own commands never need Xcode or an Android SDK.",
+    )
+
+    def commands_for(self, platform: str | None) -> tuple[str, str]:
+        """(build, test) for a platform, or the project's own for none."""
+        for entry in self.platforms:
+            if entry.platform == platform:
+                return entry.build_cmd, entry.test_cmd
+        return self.build_cmd, self.test_cmd
+
+    def platform_names(self) -> list[str]:
+        return [entry.platform for entry in self.platforms]
+
+    @field_validator("platforms")
+    @classmethod
+    def _one_entry_per_platform(cls, value: list[PlatformCommands]) -> list[PlatformCommands]:
+        names = [entry.platform for entry in value]
+        if len(set(names)) != len(names):
+            raise ValueError("platforms must name each platform once")
+        return value
 
     @field_validator("run_cmd")
     @classmethod

@@ -184,6 +184,7 @@ export const TR: Record<string, string> = {
   passed: "geçti",
   error: "hata",
   domain: "alan",
+  platform: "platform",
   backend: "backend",
   web: "web",
   mobile: "mobil",
@@ -620,6 +621,8 @@ export const TR: Record<string, string> = {
   Done: "Tamam",
   "Your decision": "Senin kararın",
   "Review approval: phase {n}": "İnceleme onayı: faz {n}",
+  "Waiting for a Mac: {apps}": "Mac bekleniyor: {apps}",
+  "waiting for a Mac": "Mac bekleniyor",
   "Nothing recorded for this step yet.": "Bu adım için henüz kayıt yok.",
   "Waiting for your approval of the": "Onayını bekleyen:",
   "Rename epics, stories and tasks or add and remove tasks; the Architect designs one phase per task from what you approve.":
@@ -786,6 +789,9 @@ export const TR: Record<string, string> = {
   Routing: "Yönlendirme",
   "Build command": "Build komutu",
   "Test command": "Test komutu",
+  "Mobile apps": "Mobil uygulamalar",
+  "{platform} build command": "{platform} build komutu",
+  "{platform} test command": "{platform} test komutu",
   "Package manager": "Paket yöneticisi",
   "Default port": "Varsayılan port",
 
@@ -2043,4 +2049,31 @@ export const TR: Record<string, string> = {
   "What you attached": "Eklediğin",
   "Reading the attached files: {usd} over {n} call(s), included above.":
     "Eklenen dosyaları okumak: {n} çağrıda {usd}, yukarıdakilere dahil.",
+  // the Macs an account lends its developments (T14.5)
+  "Mac Connect": "Mac Connect",
+  "Machines that build what this server cannot: iOS apps, and Android on Apple Silicon.":
+    "Bu sunucunun derleyemediğini derleyen makineler: iOS uygulamaları, Apple Silicon'da Android.",
+  "A development with an iOS app builds everything else here, then waits for a Mac. Connect one and it carries on by itself. The Mac calls this server -- nothing is opened on it -- and builds only this account's apps.":
+    "iOS uygulaması olan bir geliştirme her şeyi burada yapar, sonra bir Mac bekler. Bir Mac bağladığında kendiliğinden devam eder. Mac bu sunucuyu arar -- Mac'te hiçbir port açılmaz -- ve yalnızca bu hesabın uygulamalarını derler.",
+  "Connected Macs": "Bağlı Mac'ler",
+  "None yet.": "Henüz yok.",
+  "Connect a Mac": "Mac bağla",
+  "New code": "Yeni kod",
+  "Make a code": "Kod oluştur",
+  "This computer's network address: on Windows, ipconfig shows it as IPv4 Address.":
+    "Bu bilgisayarın ağ adresi: Windows'ta ipconfig bunu IPv4 Address olarak gösterir.",
+  "On the Mac, install Slipwright (once):": "Mac'te Slipwright'ı kur (bir kez):",
+  "Then run:": "Sonra çalıştır:",
+  "The code works once, for {m}:{s} more. It calls {address}.":
+    "Kod bir kez çalışır, {m}:{s} daha geçerli. {address} adresini arar.",
+  "This code has run out: make a new one.": "Bu kodun süresi doldu: yenisini oluştur.",
+  "To have it start at login:": "Mac açılınca kendiliğinden başlaması için:",
+  "It found no Xcode and no Android SDK": "Ne Xcode ne Android SDK buldu",
+  "builds nothing yet": "henüz hiçbir şey derleyemiyor",
+  online: "çevrimiçi",
+  offline: "çevrimdışı",
+  "Remove this Mac? It stops building for this account.":
+    "Bu Mac kaldırılsın mı? Bu hesap için derlemeyi bırakır.",
+  "Everything this server can build is done. The rest is built on a Mac; when one connects, the development carries on by itself from here.":
+    "Bu sunucunun derleyebileceği her şey bitti. Kalanı bir Mac'te derlenir; bir Mac bağlandığında geliştirme buradan kendiliğinden devam eder.",
 };

@@ -136,6 +136,12 @@ export function Layout() {
               <IconTicket /> {tx("Jira")}
             </NavLink>
           )}
+          {/* the owner's: a member does not lend the account machines */}
+          {owner && (
+            <NavLink to="/settings/workers" data-nav="workers">
+              <IconMonitor /> {tx("Mac Connect")}
+            </NavLink>
+          )}
           {owner && user?.is_admin && (
             <NavLink to="/settings/email" data-nav="email">
               <IconMail /> {tx("Email")}

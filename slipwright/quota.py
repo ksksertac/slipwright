@@ -242,6 +242,7 @@ def forget_everything(store: JobStore, owner_id: str, *, worktrees: Path, repos:
             store.delete_project(project.id, owner_id)
     store.forget_settings(owner_id)
     store.forget_pages(owner_id)
+    store.delete_workers_of(owner_id)  # the Macs it paired, and whatever they were building
 
 
 class _quiet:

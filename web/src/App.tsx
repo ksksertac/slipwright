@@ -22,6 +22,7 @@ import { AgentsPage } from "./pages/AgentsPage";
 import { AgentDetailPage } from "./pages/AgentDetailPage";
 import { UsersSettingsPage } from "./pages/settings/UsersSettingsPage";
 import { EmailSettingsPage } from "./pages/settings/EmailSettingsPage";
+import { WorkersPage } from "./pages/settings/WorkersPage";
 import { NotificationsPage } from "./pages/settings/NotificationsPage";
 import { RemoteControlPage } from "./pages/RemoteControlPage";
 import { SupportPage } from "./pages/SupportPage";
@@ -54,6 +55,7 @@ export function App() {
         <Route path="/settings" element={<Navigate to="/settings/models" replace />} />
         <Route path="/settings/models" element={<ModelsSettingsPage />} />
         <Route path="/settings/sources" element={<SourcesSettingsPage />} />
+        <Route path="/settings/workers" element={<WorkersPage />} />
         {/* the sources page used to be the GitHub page: old links keep working */}
         <Route path="/settings/github" element={<Navigate to="/settings/sources" replace />} />
         <Route path="/settings/jira" element={<JiraSettingsPage />} />

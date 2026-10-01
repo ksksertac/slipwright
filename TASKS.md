@@ -41,7 +41,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 
 ## Progress
 
-> **Resume here:** Phases 0–9, 11 and 12 are complete (T9.0–T9.9, T11.1–T11.6, T12.1–T12.4). Next: Phase 14 (a paired Mac worker for iOS and Apple Silicon Android builds), T14.1 first; keep the invariants and the task-by-task rhythm.
+> **Resume here:** Phases 0–9, 11, 12 and 14 are complete (T9.0–T9.9, T11.1–T11.6, T12.1–T12.4, T14.1–T14.6; the Homebrew tap in T14.6 is left to the owner). Next: whatever the user asks for; keep the invariants and the task-by-task rhythm.
 > Design note for T1.3: `run_cmd` is executed as a subprocess in the worktree (Docker is used
 > only if the profile's `run_cmd` itself invokes it).
 > Design note for T2.2: `invoke_role` talks to a `ModelProvider` (`slipwright/providers/`);
@@ -156,12 +156,12 @@ These hold at every point in the build. If a task seems to require breaking one,
 | 12 | T12.2 The invitation and the address it takes | [x] |
 | 12 | T12.3 What a member may do | [x] |
 | 12 | T12.4 Told when work arrives, told when it ends | [x] |
-| 14 | T14.1 A phase names its platform; per-platform commands | [ ] |
-| 14 | T14.2 What nothing here can build is deferred, not failed | [ ] |
-| 14 | T14.3 Pairing, and the worker's side of the API | [ ] |
-| 14 | T14.4 `slipwright worker` on the Mac | [ ] |
-| 14 | T14.5 The pages | [ ] |
-| 14 | T14.6 Getting it onto a Mac | [ ] |
+| 14 | T14.1 A phase names its platform; per-platform commands | [x] |
+| 14 | T14.2 What nothing here can build is deferred, not failed | [x] |
+| 14 | T14.3 Pairing, and the worker's side of the API | [x] |
+| 14 | T14.4 `slipwright worker` on the Mac | [x] |
+| 14 | T14.5 The pages | [x] |
+| 14 | T14.6 Getting it onto a Mac | [x] |
 
 ---
 
@@ -1269,7 +1269,7 @@ They attach the file instead, it is read once, and the agents work from what it 
   the Jira issue names it
 - [x] Reading a file is priced and counted in the project's costs
 
-## Phase 14 — Mobile builds on a Mac: a paired worker (not started)
+## Phase 14 — Mobile builds on a Mac: a paired worker
 
 An iOS app is built by Xcode, Xcode runs only on macOS, and no container can hold macOS:
 Docker on a Mac runs a Linux VM too. Android's build-tools exist for Linux on x86_64 only,
@@ -1297,97 +1297,136 @@ The shape, decided with the user before any of it was written:
 
 ### T14.1 — A phase names its platform, and the profile says how to build each
 **Done when**
-- [ ] `PlanPhase.platform: ios | android | None`, required for `domain: mobile` and refused
-  elsewhere; the Architect is told what each platform needs and that no phase may depend on
-  an iOS or Android phase (so they can always wait until last)
-- [ ] `Profile.platforms: {ios|android: {build_cmd, test_cmd}}`; the project's own
-  `build_cmd`/`test_cmd` build everything *else*, so a Windows gate never tries Xcode
-- [ ] A platform phase's build gate runs that platform's commands; QA's final gate runs the
-  project's commands and then every platform's, each where it can be built
-- [ ] `gates/toolchains.py` answers `can_build(platform)`: iOS on macOS with `xcodebuild`;
+- [x] `PlanPhase.platform: ios | android | None` on a mobile phase that writes one app's
+  native project, refused on any other domain; `None` for mobile code both apps share
+  (React Native, Flutter). The Architect is told what each platform needs and that nothing
+  may depend on a platform phase (so it can always wait until last)
+- [x] `Profile.platforms: [{platform, build_cmd, test_cmd}]` -- a list, because a map with
+  free-form keys is a schema some vendors' structured output refuses; the project's own
+  `build_cmd`/`test_cmd` build everything *else*, so a Windows gate never tries Xcode.
+  A plan naming a platform the profile cannot build is refused, from the Architect and
+  from the gate editors alike
+- [x] A platform phase's build gate runs that platform's commands; QA's final gate runs the
+  project's commands and then every platform's that can be built here, and says so for one
+  that cannot
+- [x] `gates/toolchains.py` answers `can_build(platform)`: iOS on macOS with `xcodebuild`;
   Android with a JDK and an SDK, and never on Linux arm64 (aapt2 has no build there)
-- [ ] The architecture gate shows each platform's commands and lets them be edited, as it
-  does the project's
+- [x] The architecture gate shows each platform's commands and lets them be edited, and the
+  pipeline card says which app a phase builds
+
+> Verified by `tests/test_phase14_platforms.py`.
 
 ### T14.2 — What nothing here can build is deferred, not failed
 **Done when**
-- [ ] `_develop` meets a phase whose platform neither the server nor a connected worker of
-  the job's owner can build: it records it in `data.deferred_phases`, notes why, and moves
-  to the next phase -- no attempt spent, no commit
-- [ ] When the remaining phases are done and some were deferred, the job enters
-  `AWAITING_BUILDER` (new state; legal from the working states, and back to `DEVELOPING`);
-  it survives a restart like every other state
-- [ ] A worker connecting (or reporting a new capability) wakes its owner's jobs waiting for
-  that platform -- the first wake that is not a person's click, so it is scoped to the
-  worker's own account and runs each job on its owner's keys
-- [ ] The deferred phases then run in plan order, and QA, review and DevOps follow as usual
-- [ ] Entering the state notifies the owner like a gate does (mail, chat), naming the
-  platforms and linking to the page that pairs a Mac -- the message carries no code
-- [ ] The pipeline shows a "waiting for a Mac" card after the last phase that ran, and the
-  board keeps the deferred tasks `todo`, not failed
-- [ ] A project with no platform phases behaves exactly as today
+- [x] `_develop` meets a phase whose platform neither the server nor a machine the job's
+  owner has lent can build (`Engine.can_build`): the phases not started yet are reordered
+  so the ones that can be built go first -- stable, so each platform keeps its own order,
+  and safe because nothing depends on a platform phase. The breakdown's phase numbers
+  follow, so the board marks the right tasks; no attempt is spent
+- [x] When only such phases are left the job enters `AWAITING_BUILDER` (new state, from
+  `DEVELOPING` and back), naming them in `data.waiting_platforms`; it survives a restart
+  like every other state
+- [x] `Engine.waiting_for_builders(owner)` names the developments a builder of that account
+  would carry on -- the first wake that is not a person's click, so it is asked per account
+  and each job then runs on its owner's keys; `_run` moves a ready job on by itself
+- [x] The waiting phases then run in plan order, and QA, review and DevOps follow as usual
+- [x] Entering the state is announced once per wait: the chat groups that hear of gates
+  (no buttons -- nothing is approved) and a letter to the owner naming the apps and linking
+  to the page that pairs a Mac -- neither carries a code
+- [x] The pipeline shows a "Waiting for a Mac" card before the first phase that waited, and
+  the board keeps those tasks `todo`, not failed; nobody is shown an approve button
+- [x] A project with no platform phases behaves exactly as today
+
+> Verified by `tests/test_phase14_deferral.py`.
 
 ### T14.3 — Pairing, and the worker's side of the API
 **Done when**
-- [ ] `workers` (owner, name, token hash, capabilities, paired/last-seen/revoked) and
-  `worker_codes` (hash, owner, expiry), alembic migration included; modelled on
-  `chat_codes`: only the hash is stored, a code is spent on first use, 15 minutes
-- [ ] The connection code packs the server address, the secret and a check digit into
-  base32 without look-alike letters (`SW-` prefix); a mistyped code is refused before the
-  network is touched
-- [ ] The address comes from the installation's server address (the mail `base_url`,
-  generalised), else the address the browser is on; `localhost` is never put in a code --
-  the page asks for the LAN address instead and keeps it
-- [ ] `POST /api/workers/pair` is public (like `/api/notify/inbound/`) and proves itself with
-  the code; it returns a worker token that authenticates **only** the worker endpoints
-- [ ] `POST /api/workers/poll` long-polls (~25 s) with the worker's capabilities; it doubles
-  as the heartbeat and hands out at most one task at a time, and only its owner's
-- [ ] `GET .../tasks/{id}/bundle` streams the commit; `POST .../tasks/{id}/result` takes the
-  exit code, output (capped like the gate's) and seconds
-- [ ] `RemoteRunner` implements `Runner`: it queues a task and waits for the result. A worker
-  that vanishes mid-build gets its task back in the queue once; after that the job returns to
-  `AWAITING_BUILDER` -- a lost Mac is not a failed build and spends no attempt
-- [ ] Revoking a worker stops its next poll (401) and requeues its task
+- [x] `workers` (owner, name, token hash, capabilities, paired/last-seen/revoked),
+  `worker_codes` (hash, owner, expiry) and `worker_tasks` (the queue), alembic
+  `0012_workers`; modelled on `chat_codes`: only hashes are stored, a code is spent on
+  first use, 15 minutes. Deleting an account deletes its workers
+- [x] The connection code packs the server address (six bytes for a LAN IPv4 and port), a
+  10-byte secret and a check byte into Crockford base32 (`SW-` prefix); a mistyped code is
+  refused before the network is touched, and O/I/L are read as 0/1/1
+- [x] The address comes from the installation's own (the mail `base_url`), else the one the
+  page sends; `localhost` is never put in a code -- the page is answered 422 and asked for
+  the LAN address, which is kept for the next code
+- [x] `POST /api/worker/pair` is public (`PUBLIC_PREFIXES`, like `/api/notify/inbound/`) and
+  proves itself with the code; it returns a `swk_` token that opens **only** `/api/worker/*`
+- [x] `POST /api/worker/poll` long-polls (~25 s) with the worker's capabilities; it doubles
+  as the heartbeat, claims at most one build at a time with a conditional update, and only
+  its own account's; it is also what wakes that account's waiting developments
+- [x] `GET .../tasks/{id}/snapshot` gives the worktree as a tar.gz -- tracked and untracked,
+  not ignored -- because a phase is not committed until it passes, so a git bundle would
+  have been the last phase's code; `POST .../tasks/{id}/result` takes the exit code, the
+  output and the seconds
+- [x] The engine's `_remote_gate` queues a build and waits. A worker unheard-of while it
+  holds one has it requeued once; after that, or with no Mac able to take it, `BuilderLost`
+  sends the job to `AWAITING_BUILDER` with `builder_resume=build_gate` -- a lost Mac is not a
+  failed build, spends no attempt, and the phase is not written again when one returns
+- [x] Revoking a worker stops its next poll (401) and requeues its build
+
+> Verified by `tests/test_phase14_workers.py`, including a fake Mac driving the real API
+> through a whole development, and one that falls asleep holding the iOS build.
 
 ### T14.4 — `slipwright worker` on the Mac
 **Done when**
-- [ ] `slipwright worker --connect <code>` pairs, keeps the token in
-  `~/Library/Application Support/Slipwright/worker.json` (0600) and starts polling; a
-  second run with a new code only changes the address
-- [ ] It finds Xcode (`xcodebuild -version`), a JDK and the Android SDK
-  (`ANDROID_HOME`, else `~/Library/Android/sdk`), reports what it can build, and says what
-  is missing ("Android SDK not found: install Android Studio")
-- [ ] Each task is unpacked into a fresh temporary directory, built with the `gates/env.py`
-  allow list (never the Mac user's whole environment), and deleted afterwards
-- [ ] It runs only the platform commands of the task it was handed, never anything else the
-  server might send
-- [ ] `slipwright worker service install` writes a launchd agent so it starts at login;
-  `status` and `forget` do what they say
-- [ ] The guide says to run it as a separate macOS user: the commands are written by a model,
-  and under your own user they could read your Keychain and SSH keys
+- [x] `slipwright worker --connect <code>` pairs, keeps the token in
+  `~/Library/Application Support/Slipwright/worker.json` (0600) and starts polling. A new
+  code pairs it again as a new worker -- the old entry stays listed, offline, until it is
+  removed on the page; a mistyped code is refused before the network is touched
+- [x] It finds Xcode by running `xcodebuild -version` (the Command Line Tools install a stub
+  that only says Xcode is required), and the Android SDK with a JDK -- `ANDROID_HOME`, else
+  `~/Library/Android/sdk`, and Android Studio's bundled JDK; it reports what it can build
+  and says what is missing
+- [x] Each build is unpacked into a fresh temporary directory (tar's `data` filter: nothing
+  outside it), built with the `gates/env.py` allow list plus the SDK's two variables --
+  never the Mac user's whole environment -- and deleted afterwards; a heartbeat goes out
+  every 20 s while it runs
+- [x] It runs only the commands of the build it was handed, stops at the first that fails,
+  and reports in the same shape as the server's own gate
+- [x] `slipwright worker service install|uninstall` writes or removes a launchd agent that
+  starts it at login and again if it stops; `status` and `forget` do what they say; a
+  server that no longer knows the Mac stops it rather than it polling forever
+- [x] The guide says to run it as a separate macOS user: the commands are written by a model,
+  and under your own user they could read your Keychain and SSH keys (README, T14.6)
+
+> Verified by `tests/test_phase14_worker_agent.py`, the worker driven against the real API.
 
 ### T14.5 — The pages
 **Done when**
-- [ ] Settings → Workers: "Connect a Mac" shows the command with a copy button and the time
-  left; the list shows each worker's name, what it can build, online/offline, and a revoke
-  button
-- [ ] The "waiting for a Mac" card says which platforms wait and opens the same dialog
-- [ ] Every string is in `i18n/tr.ts`
-- [ ] `schemas/openapi.json` and the TypeScript client regenerated
+- [x] Settings → Mac Connect (`/settings/workers`, the owner's): "Connect a Mac" makes a code with
+  the page's own address and, answered 422 because the page is open at localhost, asks for
+  the LAN address instead; it shows the install line, the command and the time left, each
+  with a copy button. The list shows each Mac's name, what it can build, online/offline
+  (polled every 5 s) and a remove button
+- [x] The "Waiting for a Mac" card and the development's page say which apps wait and link
+  to that page -- and offer no approve button, because there is nothing to approve
+- [x] Every string is in `i18n/tr.ts`
+- [x] `schemas/openapi.json` and the TypeScript client regenerated
 
 ### T14.6 — Getting it onto a Mac
 **Done when**
-- [ ] A release builds a wheel with the web UI inside (it is not in git) and attaches it
-- [ ] A Homebrew tap formula is updated by each release: `brew install ksksertac/tap/slipwright`
-- [ ] A macOS CI job installs the wheel and pairs a worker with a server started in the same
-  job; building a one-screen SwiftUI app through it is the proof that Xcode is reached
-- [ ] The README has a "Mac worker" section: install, connect, run as a service, Tailscale for
-  another network, a fixed LAN address for the Windows machine
+- [x] The worker installs straight from the source: `uv tool install
+  git+https://github.com/ksksertac/slipwright`. It needs none of the web UI -- the one part
+  of the package that is built rather than committed -- so a git install is a whole worker,
+  and needs no tap, release asset or image to exist first (checked: a wheel built from a
+  clean clone runs `slipwright worker`). The server hands these lines to the page
+  (`ConnectionCode.install`), so they are said in one place
+- [ ] ~~A Homebrew tap formula updated by each release~~ -- not done: it needs a second
+  repository and a token that can write to it, which is the owner's call, not a task's.
+  `brew install uv` + the git install above do the same job today
+- [x] A `macos` CI job (not a required check) runs the Phase 14 tests on a real Mac, and
+  `tests/test_phase14_macos.py` -- skipped anywhere without Xcode -- finds Xcode and builds a
+  SwiftUI package for the iOS Simulator through a paired worker and the real API
+- [x] The README has an "iOS apps: lend it a Mac" section: install, connect, run as a
+  service, a user of its own, a reserved LAN address, Tailscale for another network, and the
+  server on the same Mac in Docker
 
-> To be verified by: a development with backend + iOS phases on a server that cannot build
-> iOS runs the backend phase, waits, and finishes when a fake worker connects (scripted
-> provider, worker driven through the API); a mistyped code; another account's worker never
-> sees the job; a worker lost mid-build returns the job to waiting with no attempt spent.
+> Verified along the way: a development with backend + iOS phases on a server that cannot
+> build iOS runs the backend phase, waits, and finishes when a fake worker connects through
+> the API; a mistyped code; another account's worker never sees the build; a worker lost
+> mid-build returns the job to waiting with no attempt spent (`tests/test_phase14_*.py`).
 
 ---
 

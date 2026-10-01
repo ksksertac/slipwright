@@ -39,6 +39,9 @@ class JobState(StrEnum):
     DEVOPS = "devops"
     AWAITING_DEPLOY_APPROVAL = "awaiting_deploy_approval"  # the deployment scripts (T11.6)
     AWAITING_DECISION = "awaiting_decision"  # stuck (loop, or the supervisor asked): T9.7
+    # what is left is mobile phases nothing here can build (T14.2): not a gate -- nobody
+    # approves it -- it opens by itself when a machine that can build them connects
+    AWAITING_BUILDER = "awaiting_builder"
     DONE = "done"
     # somebody stopped it: not a failure, and not something to retry into
     CANCELLED = "cancelled"
@@ -287,6 +290,16 @@ class JobData(BaseModel):
         description="Gates whose agent's team has already been written to, as "
         "'<state>:<visit>'. Kept on the job so a restart does not write the letter "
         "again and a gate reached twice writes it twice.",
+    )
+    waiting_platforms: list[str] = Field(
+        default_factory=list,
+        description="While the job waits for a builder: the mobile platforms (ios, android) "
+        "its remaining phases need and nothing here can build (T14.2).",
+    )
+    builder_resume: str | None = Field(
+        default=None,
+        description="Where a builder arriving picks the job up: developing, or build_gate "
+        "when a Mac went away with the phase already written (T14.3).",
     )
     # -- hardening (T9.7) --
     resume_state: str | None = Field(
