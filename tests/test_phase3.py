@@ -326,6 +326,101 @@ def test_a_fix_that_changes_nothing_stops_instead_of_building_again(
     assert "[test: exit 1]" in (last.detail or "")
 
 
+# The gate fails the way tsc does: naming the file and the line, a file the phase never listed.
+NAMES_APP = (
+    f"\"{PY}\" -c \"import sys; ok = open('OK').read().strip() == 'yes'; "
+    f"print('' if ok else 'App.tsx(225,11): error TS2367: no overlap'); "
+    f'sys.exit(0 if ok else 1)"'
+)
+
+
+def _big_app(size: int) -> str:
+    """An App.tsx of about ``size`` characters whose last line is the one the build names."""
+    body = "".join(f"const line{i} = {i};\n" for i in range(size // 20))
+    return body + "const status = 'connecting'; // THE-LINE-THE-BUILD-NAMES\n"
+
+
+def _fixing(req: ModelRequest) -> bool:
+    return '"build_failure":' in req.prompt
+
+
+def test_the_file_a_build_failure_names_reaches_the_fix_whole(
+    store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
+) -> None:
+    """App.tsx was cut at 12,000 characters, so the line the build failed on never reached
+    the specialist, who -- changing a file by returning all of it -- rightly changed nothing.
+    The file the failure names is now sent, and sent whole."""
+
+    def reply(req: ModelRequest) -> dict[str, Any]:
+        if not _fixing(req):
+            return {
+                "summary": "wrote the app",
+                "changes": [
+                    {"path": "OK", "content": "no\n"},
+                    {"path": "App.tsx", "content": _big_app(40_000)},
+                ],
+            }
+        return {"summary": "fixed", "changes": [{"path": "OK", "content": "yes\n"}]}
+
+    seed = seed.model_copy(update={"test_cmd": NAMES_APP})
+    provider = _provider(seed, _plan("first"), reply)
+    engine = _engine(store, worktrees_root, seed, provider)
+    job = engine.approve(_to_plan_gate(engine, repo).id)
+
+    assert job.state is JobState.QA
+    fix = [r for r in provider.requests if r.role is RoleName.BACKEND][1]
+    assert "THE-LINE-THE-BUILD-NAMES" in fix.prompt  # past 12,000, and not in the phase's files
+    assert "files_cut" not in fix.prompt
+
+
+def test_a_file_too_large_to_send_is_named_not_blamed_on_the_machine(
+    store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
+) -> None:
+    def reply(req: ModelRequest) -> dict[str, Any]:
+        if not _fixing(req):
+            return {
+                "summary": "wrote the app",
+                "changes": [
+                    {"path": "OK", "content": "no\n"},
+                    {"path": "App.tsx", "content": _big_app(150_000)},
+                ],
+            }
+        return {"summary": "App.tsx arrived cut; I cannot return it whole", "changes": []}
+
+    seed = seed.model_copy(update={"test_cmd": NAMES_APP})
+    provider = _provider(seed, _plan("first"), reply)
+    engine = _engine(store, worktrees_root, seed, provider)
+    job = engine.approve(_to_plan_gate(engine, repo).id)
+
+    assert job.state is JobState.FAILED
+    fix = [r for r in provider.requests if r.role is RoleName.BACKEND][1]
+    assert '"files_cut": [\n    "App.tsx"' in fix.prompt or '"files_cut": ["App.tsx"]' in fix.prompt
+    assert "Never\nreturn such a file" in fix.prompt
+    note = job.history[-1].note or ""
+    assert "App.tsx is too large to be sent whole" in note
+    assert "this machine's tools" not in note
+
+
+def test_a_build_failure_names_only_the_projects_own_files(tmp_path: Path) -> None:
+    from slipwright.roles.developer import files_in_output
+
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "a.test.ts").write_text("x")
+    (tmp_path / "App.tsx").write_text("x")
+    (tmp_path / "app" / "src").mkdir(parents=True)
+    (tmp_path / "app" / "src" / "Main.kt").write_text("x")
+    output = "\n".join(
+        [
+            "App.tsx(225,11): error TS2367: no overlap",
+            "  at Object.<anonymous> (src/a.test.ts:4:9)",
+            f"e: file://{(tmp_path / 'app' / 'src' / 'Main.kt').as_posix()}:12:3 Unresolved",
+            "node_modules/react/index.js:1:1 and https://example.com/x.html, version 1.2.3",
+            "App.tsx(9,1): error again",
+        ]
+    )
+    assert files_in_output(tmp_path, output) == ["App.tsx", "src/a.test.ts", "app/src/Main.kt"]
+
+
 def test_project_commands_never_see_the_servers_python_environment(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

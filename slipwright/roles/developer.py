@@ -8,6 +8,8 @@ back so the next invocation is a fix attempt on the same phase.
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
 from typing import Any
 
 from slipwright.invoke import RoleResult, invoke_role
@@ -54,6 +56,88 @@ for the rest. If `continuation` is present, the files listed in `files_so_far` a
 already written from your earlier parts (do not repeat them unless they must change);
 continue with the next files and set `phase_complete` to true only when the phase's goal
 is fully met."""
+
+CUT_FILES = """
+A file listed in `files_cut` was too large to be sent whole: you see only its start. Never
+return such a file -- its full contents would replace the part you did not see. Change the
+other files if that fixes it; otherwise say in `summary` that the file was cut."""
+
+# A specialist changes a file by returning all of it, so a file it may change has to reach
+# it whole: cut at 12,000 characters, App.tsx arrived without the line the build failed on,
+# the specialist rightly returned nothing, and the development stopped as if the machine
+# were broken. Files it is only reading for orientation keep the small cut (MAX_FILE_BYTES).
+EDITABLE_FILE_BYTES = 100_000
+# ... and all of them together stay inside a prompt that still has to hold the plan, the
+# tree, the standards and the build output
+EDITABLE_TOTAL_BYTES = 300_000
+# how many files a build failure may add: a failure naming forty files is a broken
+# toolchain, not forty things to edit
+MAX_FAILURE_FILES = 8
+
+# a path in a compiler's or a test runner's output: "App.tsx(225,11)", "src/a.ts:12:3",
+# "e: file:///work/x/app/src/Main.kt:12:3", "  at Object.<anonymous> (src/x.test.ts:4:9)"
+_PATH_IN_OUTPUT = re.compile(
+    r"(?:file://)?((?:[A-Za-z]:)?[\w./\\@+-]*[\w-]\.[A-Za-z]\w{0,7})(?=[(:\s,)'\"]|$)"
+)
+
+
+def files_in_output(worktree: Path, output: str, limit: int = MAX_FAILURE_FILES) -> list[str]:
+    """The project's own files a build or test failure names, in the order it names them.
+
+    Only paths that are files in this worktree count, so a library's path, a URL or a
+    version number never turn into something the specialist is told to edit."""
+    root = worktree.resolve()
+    found: list[str] = []
+    for match in _PATH_IN_OUTPUT.finditer(output):
+        raw = match.group(1).replace("\\", "/")
+        candidate = Path(raw)
+        try:
+            # rooted ("/work/...", "C:/...") means somewhere on the machine: it counts only
+            # when it is inside this worktree
+            if candidate.is_absolute() or raw.startswith("/"):
+                rel = candidate.resolve().relative_to(root).as_posix()
+            else:
+                rel = Path(raw.removeprefix("./")).as_posix()
+        except (ValueError, OSError):
+            continue
+        if rel in found or rel.startswith("../") or not (root / rel).is_file():
+            continue
+        found.append(rel)
+        if len(found) >= limit:
+            break
+    return found
+
+
+def editable_files(job: Job, worktree: Path) -> list[str]:
+    """The files this call may change: the phase's own, then what its failure names."""
+    plan = job.data.plan or {}
+    phases: list[dict[str, Any]] = plan.get("phases", [])
+    index = job.data.phase_index
+    phase = phases[index] if index < len(phases) else {}
+    names = [str(f) for f in phase.get("files", [])]
+    if job.data.last_build_output:
+        names += files_in_output(worktree, job.data.last_build_output)
+    for violation in job.data.review_violations or []:
+        if isinstance(violation, dict) and violation.get("file"):
+            names.append(str(violation["file"]))
+    return list(dict.fromkeys(names))
+
+
+def too_large(worktree: Path, names: list[str]) -> list[str]:
+    """Which of these files cannot be sent whole, by the same budget ``run`` sends them by."""
+    cut: list[str] = []
+    budget = EDITABLE_TOTAL_BYTES
+    for name in names:
+        path = worktree / name
+        if not path.is_file():
+            continue
+        size = path.stat().st_size
+        if size > EDITABLE_FILE_BYTES or size > budget:
+            cut.append(name)
+        else:
+            budget -= size
+    return cut
+
 
 FIX_INSTRUCTIONS = """\
 The change set on this branch is complete but `ci_failure` shows the continuous
@@ -110,7 +194,7 @@ def run(
             context["qa_diagnosis"] = job.data.qa_diagnosis
         if review:
             context["standards_review"] = review
-        wanted = list(phase.get("files", []))
+        wanted = editable_files(job, worktree)
 
     context["project"] = project_facts(profile)
     context["plan"] = plan_outline(plan)
@@ -119,7 +203,15 @@ def run(
     if continuation:
         context["continuation"] = continuation
     context["tree"] = list_tree(worktree, first=wanted)
-    context["files"] = read_files(worktree, wanted)
+    cut = too_large(worktree, wanted)
+    context["files"] = {
+        **read_files(worktree, [n for n in wanted if n not in cut], max_bytes=EDITABLE_FILE_BYTES),
+        **read_files(worktree, cut),
+    }
+    if cut:
+        # said outright, not left to a "(truncated" marker at the end of a long file
+        context["files_cut"] = cut
+        context["instructions"] = f"{context['instructions']}{CUT_FILES}"
 
     kwargs = {} if timeout_s is None else {"timeout_s": timeout_s}
     return invoke_role(
@@ -132,4 +224,11 @@ def run(
     )
 
 
-__all__ = ["FIX_INSTRUCTIONS", "INSTRUCTIONS", "run"]
+__all__ = [
+    "FIX_INSTRUCTIONS",
+    "INSTRUCTIONS",
+    "editable_files",
+    "files_in_output",
+    "run",
+    "too_large",
+]
