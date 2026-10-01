@@ -139,7 +139,7 @@ export function Layout() {
           {/* the owner's: a member does not lend the account machines */}
           {owner && (
             <NavLink to="/settings/workers" data-nav="workers">
-              <IconMonitor /> {tx("Macs")}
+              <IconMonitor /> {tx("Mac Connect")}
             </NavLink>
           )}
           {owner && user?.is_admin && (

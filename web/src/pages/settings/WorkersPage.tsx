@@ -17,7 +17,7 @@ export function WorkersPage() {
   return (
     <div>
       <PageHead
-        title={tx("Macs")}
+        title={tx("Mac Connect")}
         subtitle={tx(
           "Machines that build what this server cannot: iOS apps, and Android on Apple Silicon.",
         )}

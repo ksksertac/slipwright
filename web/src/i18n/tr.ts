@@ -2050,7 +2050,7 @@ export const TR: Record<string, string> = {
   "Reading the attached files: {usd} over {n} call(s), included above.":
     "Eklenen dosyaları okumak: {n} çağrıda {usd}, yukarıdakilere dahil.",
   // the Macs an account lends its developments (T14.5)
-  Macs: "Mac'ler",
+  "Mac Connect": "Mac Connect",
   "Machines that build what this server cannot: iOS apps, and Android on Apple Silicon.":
     "Bu sunucunun derleyemediğini derleyen makineler: iOS uygulamaları, Apple Silicon'da Android.",
   "A development with an iOS app builds everything else here, then waits for a Mac. Connect one and it carries on by itself. The Mac calls this server -- nothing is opened on it -- and builds only this account's apps.":

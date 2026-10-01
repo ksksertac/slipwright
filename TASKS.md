@@ -1395,7 +1395,7 @@ The shape, decided with the user before any of it was written:
 
 ### T14.5 — The pages
 **Done when**
-- [x] Settings → Macs (`/settings/workers`, the owner's): "Connect a Mac" makes a code with
+- [x] Settings → Mac Connect (`/settings/workers`, the owner's): "Connect a Mac" makes a code with
   the page's own address and, answered 422 because the page is open at localhost, asks for
   the LAN address instead; it shows the install line, the command and the time left, each
   with a copy button. The list shows each Mac's name, what it can build, online/offline

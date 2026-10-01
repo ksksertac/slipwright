@@ -549,7 +549,7 @@ A development with an iOS app builds everything else as usual, then stops at **W
 a Mac**. Nothing has failed and nothing is spent; when a Mac connects it carries on by
 itself.
 
-1. **Settings → Macs → Make a code.** If the page is open at `localhost` it asks for the
+1. **Settings → Mac Connect → Make a code.** If the page is open at `localhost` it asks for the
    address the Mac should use: this computer's network address (`ipconfig` on Windows, the
    *IPv4 Address*), e.g. `http://192.168.1.20:8500`.
 2. **On the Mac**, install the worker once and run the command the page shows:
