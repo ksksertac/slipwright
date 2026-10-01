@@ -118,11 +118,17 @@ class WorkerStoreMixin:
             )
         return None if row is None else _worker(row)
 
-    def touch_worker(self, worker_id: str, capabilities: list[str] | None = None) -> None:
-        """It was just heard from; with ``capabilities``, that is what it builds now."""
+    def touch_worker(
+        self, worker_id: str, capabilities: list[str] | None = None, *, name: str | None = None
+    ) -> None:
+        """It was just heard from; with ``capabilities``, that is what it builds now, and
+        with ``name``, what it is called now -- a Mac renamed, or one paired by an older
+        worker that sent its network address for a name, is put right without re-pairing."""
         values: dict[str, Any] = {"last_seen_at": utcnow().isoformat()}
         if capabilities is not None:
             values["capabilities_json"] = json.dumps(sorted(set(capabilities)))
+        if name:
+            values["name"] = name
         with self.db.begin() as conn:
             conn.execute(update(workers).where(workers.c.id == worker_id).values(**values))
 

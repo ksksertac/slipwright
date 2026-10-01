@@ -2079,6 +2079,10 @@ export const TR: Record<string, string> = {
   "builds nothing yet": "henüz hiçbir şey derleyemiyor",
   online: "çevrimiçi",
   offline: "çevrimdışı",
+  "paired {ago}": "{ago} bağlandı",
+  "Make a code and run it on the Mac": "Kod oluştur, Mac'te çalıştır",
+  "Making a code…": "Kod oluşturuluyor…",
+  "last seen {ago}": "son görülme {ago}",
   "Remove this Mac? It stops building for this account.":
     "Bu Mac kaldırılsın mı? Bu hesap için derlemeyi bırakır.",
   "Everything this server can build is done. The rest is built on a Mac; when one connects, the development carries on by itself from here.":

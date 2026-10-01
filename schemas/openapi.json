@@ -5042,6 +5042,19 @@
             "title": "Capabilities",
             "type": "array"
           },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
           "wait_s": {
             "default": 25.0,
             "maximum": 25.0,

@@ -6,7 +6,8 @@ import { useEffect, useState } from "react";
 import { describeError, type ConnectionCode, type Worker } from "../../api/client";
 import { useConnectionCode, useRevokeWorker, useWorkers } from "../../api/hooks";
 import { Copyable } from "../../components/Copyable";
-import { ErrorBox, Loading, PageHead } from "../../components/ui";
+import { Modal } from "../../components/Modal";
+import { ErrorBox, Loading, PageHead, timeAgo } from "../../components/ui";
 import { useT } from "../../i18n";
 
 const NAMES: Record<string, string> = { ios: "iOS", android: "Android" };
@@ -27,32 +28,82 @@ export function WorkersPage() {
           "Docker runs Linux, and an iOS app is built with Xcode, which runs only on macOS. So a Mac connects here with Mac Connect and does that build in Xcode. A development with an iOS app builds everything else here, then waits for a Mac; connect one and it carries on by itself. The Mac calls this server -- nothing is opened on it -- and builds only this account's apps.",
         )}
       </p>
-      <ConnectMac />
       <h3 style={{ marginTop: 24 }}>{tx("Connected Macs")}</h3>
       {workers.isLoading && <Loading />}
       {workers.error && <ErrorBox error={workers.error} />}
-      {workers.data && workers.data.length === 0 && <p className="muted">{tx("None yet.")}</p>}
-      <div className="stack tight">
+      {/* connecting one more is a card among the Macs, not a form above them: the page is
+          the machines, and the way to add one sits where the next one will appear */}
+      <div className="mac-grid">
         {(workers.data ?? []).map((w) => (
-          <WorkerRow key={w.id} worker={w} />
+          <MacCard key={w.id} worker={w} />
         ))}
+        <ConnectCard />
       </div>
     </div>
   );
 }
 
-function ConnectMac() {
+function ConnectCard() {
   const tx = useT();
   const make = useConnectionCode();
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        className="card mac-card mac-connect"
+        onClick={() => {
+          setOpen(true);
+          // the code is what the person came for: made on the press, not one more click on
+          if (!make.data && !make.isPending) make.mutate(window.location.origin);
+        }}
+      >
+        <span className="mac-plug">
+          <IconPlug />
+        </span>
+        <strong>{tx("Connect a Mac")}</strong>
+        <span className="faint small">{tx("Make a code and run it on the Mac")}</span>
+      </button>
+      {open && (
+        <Modal title={tx("Connect a Mac")} onClose={() => setOpen(false)} wide>
+          <ConnectMac make={make} />
+        </Modal>
+      )}
+    </>
+  );
+}
+
+function IconPlug() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="28"
+      height="28"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M9 2v5M15 2v5" />
+      <path d="M6 7h12v4a6 6 0 0 1-12 0V7Z" />
+      <path d="M12 17v5" />
+    </svg>
+  );
+}
+
+function ConnectMac({ make }: { make: ReturnType<typeof useConnectionCode> }) {
+  const tx = useT();
   const code = make.data;
   // the page's own address is all the server needs: at localhost the code carries only
   // the port, and the Mac finds the server on its own network
   return (
-    <div className="card" style={{ padding: 16 }}>
+    <div>
       <div className="row spread">
-        <strong>{tx("Connect a Mac")}</strong>
+        <span className="muted small">{make.isPending ? tx("Making a code…") : null}</span>
         <button
-          className="btn primary small"
+          className="btn ghost small"
           disabled={make.isPending}
           onClick={() => make.mutate(window.location.origin)}
         >
@@ -128,40 +179,80 @@ function useSecondsLeft(until: string): number {
   return Math.max(0, Math.round((end - now) / 1000));
 }
 
-function WorkerRow({ worker: w }: { worker: Worker }) {
+// A Mac as a person recognises it: the machine, its name, whether it is there. The name
+// is the one the Mac goes by in its own System Settings, sent at every poll; a Mac paired
+// by an older worker shows its network address until that worker is updated.
+function MacCard({ worker: w }: { worker: Worker }) {
   const tx = useT();
   const revoke = useRevokeWorker();
   return (
-    <div className="card row spread" style={{ padding: "10px 14px" }}>
-      <span className="row" style={{ gap: 8 }}>
-        <strong>{w.name}</strong>
-        {w.capabilities.length === 0 && (
-          <span className="tag" title={tx("It found no Xcode and no Android SDK")}>
-            {tx("builds nothing yet")}
-          </span>
-        )}
-        {w.capabilities.map((c) => (
-          <span key={c} className="tag">
-            {NAMES[c] ?? c}
-          </span>
-        ))}
-      </span>
-      <span className="row" style={{ gap: 8 }}>
-        <span className={`badge ${w.online ? "ok" : "idle"} plain`}>
+    <div className="card mac-card" data-online={w.online ? "yes" : "no"}>
+      <div className="mac-stage">
+        <MacBook />
+        <span className="mac-status">
+          <span className="mac-dot" />
           {w.online ? tx("online") : tx("offline")}
         </span>
-        <button
-          className="btn bad small"
-          disabled={revoke.isPending}
-          onClick={() => {
-            if (window.confirm(tx("Remove this Mac? It stops building for this account."))) {
-              revoke.mutate(w.id);
-            }
-          }}
-        >
-          {tx("Remove")}
-        </button>
-      </span>
+      </div>
+      <div className="mac-body">
+        <div className="mac-name" title={w.name}>
+          {w.name}
+        </div>
+        <div className="faint small">
+          {w.online
+            ? tx("paired {ago}", { ago: timeAgo(w.paired_at) })
+            : tx("last seen {ago}", { ago: timeAgo(w.last_seen_at) })}
+        </div>
+        <div className="row mac-foot">
+          <span className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+            {w.capabilities.length === 0 && (
+              <span className="tag" title={tx("It found no Xcode and no Android SDK")}>
+                {tx("builds nothing yet")}
+              </span>
+            )}
+            {w.capabilities.map((c) => (
+              <span key={c} className="tag">
+                {NAMES[c] ?? c}
+              </span>
+            ))}
+          </span>
+          <button
+            className="btn ghost small mac-remove"
+            disabled={revoke.isPending}
+            onClick={() => {
+              if (window.confirm(tx("Remove this Mac? It stops building for this account."))) {
+                revoke.mutate(w.id);
+              }
+            }}
+          >
+            {tx("Remove")}
+          </button>
+        </div>
+      </div>
     </div>
+  );
+}
+
+// a MacBook drawn in the page's own colours, so it sits right in either theme; the screen
+// lights up while the Mac is there and goes dark when it is not (CSS, on data-online)
+function MacBook() {
+  return (
+    <svg className="macbook" viewBox="0 0 220 132" aria-hidden="true">
+      <defs>
+        <linearGradient id="mac-screen" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" className="mac-screen-a" />
+          <stop offset="1" className="mac-screen-b" />
+        </linearGradient>
+      </defs>
+      <rect className="mac-lid" x="34" y="6" width="152" height="104" rx="9" />
+      <rect x="41" y="13" width="138" height="88" rx="3" fill="url(#mac-screen)" />
+      <rect className="mac-notch" x="102" y="13" width="16" height="4" rx="2" />
+      <g className="mac-glyph">
+        <path d="M104 50c0-5 4-7 6-7-1-3-4-4-6-4-3 0-4 2-6 2s-3-2-6-2c-3 0-7 3-7 9 0 7 5 14 8 14 2 0 3-1 5-1s3 1 5 1c2 0 4-3 5-5-3-1-4-4-4-7Z" />
+        <path d="M101 37c1-2 3-3 4-3 0 2-1 4-3 5-1 0-2 0-1-2Z" />
+      </g>
+      <path className="mac-base" d="M8 112h204l-6 10c-2 3-5 4-9 4H23c-4 0-7-1-9-4Z" />
+      <rect className="mac-lip" x="94" y="112" width="32" height="4" rx="2" />
+    </svg>
   );
 }

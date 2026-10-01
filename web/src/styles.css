@@ -6692,3 +6692,173 @@ tr.run-detail td {
     grid-template-columns: 1fr;
   }
 }
+
+/* Mac Connect: the Macs as machines, and connecting one more as a card among them */
+.mac-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 14px;
+}
+.mac-card {
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+}
+.mac-card:hover {
+  border-color: var(--line-strong);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+}
+.mac-stage {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  padding: 22px 16px 14px;
+  background: radial-gradient(120% 90% at 50% 0%, var(--accent-soft), transparent 70%),
+    var(--surface-2);
+  border-bottom: 1px solid var(--line);
+}
+.mac-card[data-online="no"] .mac-stage {
+  background: var(--surface-2);
+}
+.macbook {
+  width: 100%;
+  max-width: 190px;
+  height: auto;
+  filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.18));
+}
+.macbook .mac-lid {
+  fill: var(--surface-3);
+  stroke: var(--line-strong);
+  stroke-width: 1.5;
+}
+.macbook .mac-screen-a {
+  stop-color: var(--accent);
+}
+.macbook .mac-screen-b {
+  stop-color: #7c4ddb;
+}
+.mac-card[data-online="no"] .macbook .mac-screen-a,
+.mac-card[data-online="no"] .macbook .mac-screen-b {
+  stop-color: var(--surface);
+}
+.macbook .mac-notch {
+  fill: var(--surface-3);
+}
+.macbook .mac-glyph {
+  fill: #ffffff;
+  opacity: 0.92;
+}
+.mac-card[data-online="no"] .macbook .mac-glyph {
+  fill: var(--text-3);
+  opacity: 0.5;
+}
+.macbook .mac-base {
+  fill: var(--line-strong);
+}
+.macbook .mac-lip {
+  fill: var(--surface-3);
+}
+.mac-status {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--text-2);
+}
+.mac-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-3);
+}
+.mac-card[data-online="yes"] .mac-status {
+  color: var(--good-text);
+}
+.mac-card[data-online="yes"] .mac-dot {
+  background: var(--good);
+  box-shadow: 0 0 0 3px var(--good-soft);
+  animation: mac-pulse 2s ease-in-out infinite;
+}
+@keyframes mac-pulse {
+  50% {
+    box-shadow: 0 0 0 5px transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mac-card[data-online="yes"] .mac-dot {
+    animation: none;
+  }
+}
+.mac-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px 12px;
+  flex: 1;
+}
+.mac-name {
+  font-weight: 600;
+  font-size: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mac-foot {
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 10px;
+}
+.mac-remove {
+  color: var(--bad-text);
+}
+/* the plug: a card shaped like the others, dashed, the whole of it the button */
+.mac-connect {
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 220px;
+  padding: 20px;
+  border-style: dashed;
+  border-width: 1.5px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  text-align: center;
+}
+.mac-connect:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.mac-connect:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.mac-plug {
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  margin-bottom: 6px;
+  border-radius: 50%;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid var(--line);
+  transition: transform 0.2s;
+}
+.mac-connect:hover .mac-plug {
+  transform: rotate(-12deg) scale(1.06);
+  background: var(--surface);
+}
