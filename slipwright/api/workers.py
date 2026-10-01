@@ -55,6 +55,7 @@ class CodeRequest(BaseModel):
 class ConnectionCode(BaseModel):
     code: str
     command: str = Field(description="What to run on the Mac.")
+    install: list[str] = Field(description="What installs the worker on a Mac, once.")
     address: str = Field(description="The address inside the code.")
     expires_at: datetime
 
@@ -124,6 +125,7 @@ def connection_code(body: CodeRequest, request: Request) -> ConnectionCode:
     return ConnectionCode(
         code=code,
         command=f"slipwright worker --connect {code}",
+        install=list(pairing.INSTALL),
         address=address,
         expires_at=datetime.now().astimezone() + pairing.CODE_TTL,
     )
