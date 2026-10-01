@@ -8,6 +8,12 @@ travel in one code:
 
     SW-0H4K-R8MA-2QZ7-...
 
+The address is the installation's own when it has one. A server opened at ``localhost`` --
+a local install, often in Docker, which cannot see the network address of the machine it
+runs on -- has none to give, so its code carries only the port and the Mac goes looking:
+itself first, then its own network (``worker_agent.pair``). Nobody is asked to look up an
+address in ``ipconfig``.
+
 It is packing, not encryption. The address is not a secret; the ten random bytes are, and
 they are kept only as a hash, spent on first use and good for fifteen minutes. A check
 character catches a code copied with a letter missing before the network is touched.
@@ -54,8 +60,9 @@ _LOOKALIKE = str.maketrans({"O": "0", "I": "1", "L": "1"})
 _VERSION = 1
 _SECRET_BYTES = 10
 # how the address is packed: an IPv4 address and a port fit in six bytes, which is what
-# keeps a LAN code short enough to read; anything else rides as its text
-_HTTP_V4, _HTTPS_V4, _URL = 1, 2, 3
+# keeps a LAN code short enough to read; anything else rides as its text. A code made at
+# ``localhost`` carries only its port: "this Mac, or one near it"
+_HTTP_V4, _HTTPS_V4, _URL, _NEARBY = 1, 2, 3, 4
 
 
 class CodeError(ValueError):
@@ -63,7 +70,7 @@ class CodeError(ValueError):
 
 
 class AddressNeeded(ValueError):
-    """The only address known is one a Mac could not reach (``localhost``)."""
+    """No address at all: not the installation's, and the page sent none."""
 
 
 def new_secret() -> bytes:
@@ -127,6 +134,8 @@ def unpack(code: str) -> tuple[str, bytes]:
 
 def _pack_address(address: str) -> bytes:
     parts = urlsplit(address)
+    if parts.scheme == "http" and not reachable(address):
+        return bytes([_NEARBY]) + (parts.port or 80).to_bytes(2, "big")
     try:
         ip = ipaddress.IPv4Address(parts.hostname or "")
     except ValueError:
@@ -148,6 +157,8 @@ def _unpack_address(packed: bytes) -> str:
         return f"{scheme}://{ipaddress.IPv4Address(rest[:4])}:{int.from_bytes(rest[4:], 'big')}"
     if kind == _URL:
         return rest.decode(errors="replace")
+    if kind == _NEARBY and len(rest) == 2:
+        return f"http://localhost:{int.from_bytes(rest, 'big')}"
     raise CodeError("this code's address cannot be read")
 
 
@@ -170,15 +181,18 @@ def reachable(address: str) -> bool:
 
 def choose_address(*candidates: str | None) -> str:
     """The first address a Mac could reach: the installation's own, then what the page
-    was opened at. ``localhost`` is never put into a code -- the Mac would call itself."""
-    for candidate in candidates:
-        if candidate and reachable(candidate):
-            parts = urlsplit(candidate.strip())
+    was opened at. Failing that, ``localhost`` and its port: the code then says only
+    "near you, on this port", and the worker finds the server itself."""
+    given = [c.strip() for c in candidates if c and c.strip()]
+    for candidate in given:
+        if reachable(candidate):
+            parts = urlsplit(candidate)
             return f"{parts.scheme}://{parts.netloc}"
-    raise AddressNeeded(
-        "this page is open at an address only this machine can reach; give the address "
-        "the Mac should use (this computer's network address, e.g. http://192.168.1.20:8500)"
-    )
+    for candidate in given:
+        parts = urlsplit(candidate)
+        if parts.scheme == "http" and parts.hostname:
+            return f"http://localhost:{parts.port or 80}"
+    raise AddressNeeded("no address to put in the code")
 
 
 # -- what a worker builds --------------------------------------------------------------

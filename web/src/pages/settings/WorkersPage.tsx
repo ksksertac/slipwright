@@ -2,8 +2,8 @@
 // Xcode runs only on macOS -- which no container can hold -- so a development with an iOS
 // app waits for one of these. The page is two things: a code to carry to the Mac, and the
 // Macs already paired, with whether each is there right now.
-import { useEffect, useState, type FormEvent } from "react";
-import { ApiError, describeError, type ConnectionCode, type Worker } from "../../api/client";
+import { useEffect, useState } from "react";
+import { describeError, type ConnectionCode, type Worker } from "../../api/client";
 import { useConnectionCode, useRevokeWorker, useWorkers } from "../../api/hooks";
 import { Copyable } from "../../components/Copyable";
 import { ErrorBox, Loading, PageHead } from "../../components/ui";
@@ -24,7 +24,7 @@ export function WorkersPage() {
       />
       <p className="muted">
         {tx(
-          "A development with an iOS app builds everything else here, then waits for a Mac. Connect one and it carries on by itself. The Mac calls this server -- nothing is opened on it -- and builds only this account's apps.",
+          "Docker runs Linux, and an iOS app is built with Xcode, which runs only on macOS. So a Mac connects here with Mac Connect and does that build in Xcode. A development with an iOS app builds everything else here, then waits for a Mac; connect one and it carries on by itself. The Mac calls this server -- nothing is opened on it -- and builds only this account's apps.",
         )}
       </p>
       <ConnectMac />
@@ -44,54 +44,27 @@ export function WorkersPage() {
 function ConnectMac() {
   const tx = useT();
   const make = useConnectionCode();
-  // the page's own address first: right unless it is open at localhost, which on the Mac
-  // would be the Mac -- then the server says so and the person types the real one
-  const [address, setAddress] = useState<string | null>(null);
-  const needsAddress = make.error instanceof ApiError && make.error.status === 422;
   const code = make.data;
-
-  const submit = (e?: FormEvent) => {
-    e?.preventDefault();
-    make.mutate(address?.trim() || window.location.origin);
-  };
-
+  // the page's own address is all the server needs: at localhost the code carries only
+  // the port, and the Mac finds the server on its own network
   return (
     <div className="card" style={{ padding: 16 }}>
       <div className="row spread">
         <strong>{tx("Connect a Mac")}</strong>
-        {!needsAddress && (
-          <button className="btn primary small" disabled={make.isPending} onClick={() => submit()}>
-            {code ? tx("New code") : tx("Make a code")}
-          </button>
-        )}
+        <button
+          className="btn primary small"
+          disabled={make.isPending}
+          onClick={() => make.mutate(window.location.origin)}
+        >
+          {code ? tx("New code") : tx("Make a code")}
+        </button>
       </div>
-      {needsAddress && (
-        <form onSubmit={submit} style={{ marginTop: 12 }}>
-          <div className="callout notice">{describeError(make.error)}</div>
-          <div className="row" style={{ marginTop: 8 }}>
-            <input
-              type="url"
-              className="mono"
-              placeholder="http://192.168.1.20:8500"
-              value={address ?? ""}
-              onChange={(e) => setAddress(e.target.value)}
-              style={{ flex: 1 }}
-            />
-            <button className="btn primary small" disabled={make.isPending || !address}>
-              {tx("Make a code")}
-            </button>
-          </div>
-          <div className="muted small" style={{ marginTop: 4 }}>
-            {tx("This computer's network address: on Windows, ipconfig shows it as IPv4 Address.")}
-          </div>
-        </form>
-      )}
-      {make.error && !needsAddress && (
+      {make.error && (
         <div className="callout error" style={{ marginTop: 8 }}>
           {describeError(make.error)}
         </div>
       )}
-      {code && !needsAddress && <CodeSteps code={code} />}
+      {code && <CodeSteps code={code} />}
     </div>
   );
 }
@@ -101,6 +74,12 @@ function CodeSteps({ code }: { code: ConnectionCode }) {
   const left = useSecondsLeft(code.expires_at);
   // the server says how: it knows where its own source is published
   const install = code.install.join("\n");
+  const m = String(Math.floor(left / 60));
+  const sec = String(left % 60).padStart(2, "0");
+  // a code made at localhost carries no address, only the port
+  const where = new URL(code.address);
+  const nearby = where.hostname === "localhost";
+  const port = where.port || "80";
   return (
     <ol className="stack tight" style={{ marginTop: 12, paddingLeft: 18 }}>
       <li>
@@ -116,11 +95,16 @@ function CodeSteps({ code }: { code: ConnectionCode }) {
         </Copyable>
         <div className="muted small">
           {left > 0
-            ? tx("The code works once, for {m}:{s} more. It calls {address}.", {
-                m: String(Math.floor(left / 60)),
-                s: String(left % 60).padStart(2, "0"),
-                address: code.address,
-              })
+            ? nearby
+              ? tx(
+                  "The code works once, for {m}:{s} more. The Mac looks for this server on its own network, on port {port}.",
+                  { m, s: sec, port },
+                )
+              : tx("The code works once, for {m}:{s} more. It calls {address}.", {
+                  m,
+                  s: sec,
+                  address: code.address,
+                })
             : tx("This code has run out: make a new one.")}
         </div>
       </li>
