@@ -2094,6 +2094,8 @@ export const TR: Record<string, string> = {
   "{n} tokens sent": "{n} token gönderildi",
   "{n} tokens received": "{n} token alındı",
   "This development so far": "Bu geliştirmenin şimdiye kadarki toplamı",
+  "This phase": "Bu faz",
+  "In total": "Toplam",
   "tokens not reported": "token bildirilmedi",
   "The call was given up on; it was billed, but no count came back.":
     "Çağrıdan vazgeçildi; ücretlendirildi ama token sayısı gelmedi.",

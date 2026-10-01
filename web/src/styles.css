@@ -1974,7 +1974,9 @@ button.linkish:hover {
   cursor: pointer;
   text-align: left;
   text-decoration: none;
-  transition: background 0.1s, color 0.1s;
+  transition:
+    background 0.1s,
+    color 0.1s;
 }
 .menu button svg,
 .menu a svg {
@@ -6740,6 +6742,16 @@ tr.run-detail td {
 .now-head-top .now-tokens {
   font-size: 12px;
 }
+/* the head's two counts, each named: this phase, and the development in total */
+.now-sum {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.now-sum-label {
+  font-size: 11.5px;
+  color: var(--text-3);
+}
 .now-note {
   font-size: 13px;
   color: var(--text-2);
@@ -6874,7 +6886,10 @@ tr.run-detail td {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+  transition:
+    border-color 0.15s,
+    transform 0.15s,
+    box-shadow 0.15s;
 }
 .mac-card:hover {
   border-color: var(--line-strong);
@@ -6886,8 +6901,8 @@ tr.run-detail td {
   display: flex;
   justify-content: center;
   padding: 22px 16px 14px;
-  background: radial-gradient(120% 90% at 50% 0%, var(--accent-soft), transparent 70%),
-    var(--surface-2);
+  background:
+    radial-gradient(120% 90% at 50% 0%, var(--accent-soft), transparent 70%), var(--surface-2);
   border-bottom: 1px solid var(--line);
 }
 .mac-card[data-online="no"] .mac-stage {
