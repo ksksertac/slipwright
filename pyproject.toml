@@ -21,6 +21,7 @@ dependencies = [
     "pypdf>=5",
     "pypdfium2>=4.30",
     "pillow>=11",
+    "spake2>=0.9",
 ]
 
 [project.optional-dependencies]

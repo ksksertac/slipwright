@@ -18,6 +18,7 @@ from slipwright.providers import ModelProvider
 from slipwright.schemas.profile import Profile, load_profile
 from slipwright.secrets import load_or_create_key
 from slipwright.store import JobStore
+from slipwright.transfer import enabled_by_default as transfer_enabled_by_default
 from slipwright.workspace import PortAllocator, Workspace
 
 PACKAGE_ROOT = Path(__file__).resolve().parent.parent
@@ -166,6 +167,7 @@ def build_engine(settings: Settings) -> Engine:
         timeout_s=settings.model_timeout_s or DEFAULT_TIMEOUT_S,
     )
     engine.local_repos_root = settings.local_repos
+    engine.transfer_enabled = transfer_enabled_by_default(settings.database_url)
     if settings.chatgpt_enabled:
         engine.codex_root = settings.state_dir / "codex"
     engine.host_paths = HostPaths(

@@ -160,6 +160,11 @@ export const IconMonitor = (p: P) => (
     <path d="M8 20h8M12 16v4" />
   </svg>
 );
+export const IconTransfer = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M4 8h13l-3-3M20 16H7l3 3" />
+  </svg>
+);
 export const IconLogout = (p: P) => (
   <svg {...base(p)}>
     <path d="M10 4H5a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h5M15 8l4 4-4 4M19 12H9" />

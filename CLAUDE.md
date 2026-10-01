@@ -74,6 +74,10 @@ slipwright/
   net.py              retrying a request that never left
   workers.py          a Mac lent to an account: the connection code, the address in it
   worker_agent.py     `slipwright worker`, the Mac's side; api/workers.py is the door
+  transfer/           an account moved to another installation on the network: a code
+                      that is a SPAKE2 password (channel.py), the sender (outgoing.py),
+                      the receiver's staging and all-or-nothing write (incoming.py), and
+                      looking around the LAN (nearby.py); api/transfer.py is the door
   notify/             Telegram, Slack, Discord and Teams: core.py decides who is asked
                       and what a press may do; listeners.py runs the bots
 
@@ -172,6 +176,7 @@ are marked `TEMPORARILY OFF` in `docker.yml`, one line each to turn back on.
 | `SLIPWRIGHT_MODEL_TIMEOUT_S` | `1800` | how long one model call may take; a call given up on is billed in full |
 | `SLIPWRIGHT_SECRET_KEY` | generated in the state dir | encrypts stored credentials. **Required** with PostgreSQL |
 | `SLIPWRIGHT_UPDATE_IMAGE` | `ghcr.io/ksksertac/slipwright` | where releases are looked for; `off` stops asking |
+| `SLIPWRIGHT_TRANSFER` | on locally, off when hosted | moving an account to another installation (Settings → Move) |
 
 ## How to write here
 
@@ -201,6 +206,13 @@ behaviour deliberately changed, rewrite it to state the new rule -- do not weake
   is outside the login like the Teams door; its token opens nothing else, and a worker is
   handed its own account's builds only (`claim_worker_task` filters on the owner). Never
   let the approve path or a gate editor reach that state -- there is nothing to approve.
+- **A move carries an account, never a person.** `transfer/rows.py` lists what goes;
+  users, sessions, tokens and memberships are not on it, and everything is rewritten on
+  arrival to belong to whoever showed the code. `/api/transfer/peer/` is outside the login
+  like the Mac's door: `pair` is the key exchange and every part after it must open with
+  that key. Settings arrive decrypted inside the channel and are sealed again with the
+  receiver's key -- so they are held in memory, never staged to disk. A new table that
+  belongs to a project must be added to `TABLES`, or a move silently leaves it behind.
 - **A lost Mac is not a red build.** `BuilderLost` sends the job back to waiting with
   `builder_resume=build_gate`: the phase is written, only its build is owed, and no attempt
   is spent. Charging it as a failure would fail developments because a laptop went to sleep.

@@ -448,6 +448,10 @@ p {
   --nav-h: 252;
   --nav-s: 70;
 }
+.nav a[data-nav="transfer"] {
+  --nav-h: 24;
+  --nav-s: 80;
+}
 .nav a[data-nav="users"] {
   --nav-h: 330;
   --nav-s: 68;
@@ -7046,4 +7050,380 @@ tr.run-detail td {
 .mac-connect:hover .mac-plug {
   transform: rotate(-12deg) scale(1.06);
   background: var(--surface);
+}
+
+/* -- Move: this account to another Slipwright on the network ----------------------------
+   The cards are Mac Connect's (.mac-card); what is added here is the code that counts
+   down, the route between the two machines and the steps both screens follow. */
+.move-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+  margin-top: 24px;
+}
+.move-scan {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-weight: 400;
+}
+.move-spin {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--line-strong);
+  border-top-color: var(--accent);
+  animation: move-spin 0.8s linear infinite;
+}
+@keyframes move-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.move-here {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid var(--line);
+}
+.move-peer {
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.move-peer:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.tag.move-old {
+  background: var(--warn-soft);
+  color: var(--warn-text);
+}
+.move-live {
+  cursor: default;
+  gap: 10px;
+  border-style: solid;
+  border-color: var(--accent);
+  background:
+    radial-gradient(110% 70% at 50% 0%, var(--accent-soft), transparent 70%), var(--surface);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+.move-live:hover {
+  background:
+    radial-gradient(110% 70% at 50% 0%, var(--accent-soft), transparent 70%), var(--surface);
+}
+.move-ring {
+  position: relative;
+  width: 96px;
+  height: 96px;
+}
+.move-ring svg {
+  transform: rotate(-90deg);
+}
+.move-ring-track,
+.move-ring-arc {
+  fill: none;
+  stroke-width: 6;
+}
+.move-ring-track {
+  stroke: var(--surface-3);
+}
+.move-ring-arc {
+  stroke: var(--accent);
+  stroke-linecap: round;
+  transition:
+    stroke-dashoffset 1s linear,
+    stroke 0.3s;
+}
+.move-ring-arc.late {
+  stroke: var(--warn);
+}
+.move-ring-num {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font: 700 24px/1 var(--mono);
+}
+.move-ring-num small {
+  font: 500 11px var(--font);
+  color: var(--text-3);
+  margin-top: 2px;
+}
+.move-code {
+  font: 700 17px var(--mono);
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  padding: 8px 12px;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-ctl);
+  cursor: copy;
+  user-select: all;
+}
+.move-code.flash {
+  animation: move-flash 0.5s;
+}
+@keyframes move-flash {
+  from {
+    background: var(--accent-soft);
+  }
+}
+.move-hint {
+  max-width: 250px;
+}
+.move-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 22px;
+}
+.move-pill {
+  flex: 1;
+  min-width: 230px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  font-size: 13px;
+  color: var(--text-2);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.move-pill strong {
+  display: block;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+.move-pill-icon {
+  font-size: 18px;
+  line-height: 1.2;
+}
+.move-route {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.move-node {
+  min-width: 140px;
+  padding: 8px 14px;
+  text-align: center;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.move-node strong {
+  display: block;
+}
+.move-node span {
+  font: 12px var(--mono);
+  color: var(--text-3);
+}
+.move-arrow {
+  position: relative;
+  flex: 1;
+  max-width: 120px;
+  height: 2px;
+  overflow: hidden;
+  background: linear-gradient(90deg, var(--line-strong), var(--accent));
+}
+.move-arrow.run::after {
+  content: "";
+  position: absolute;
+  top: -2px;
+  left: -30%;
+  width: 30%;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--accent);
+  animation: move-fly 1s linear infinite;
+}
+@keyframes move-fly {
+  to {
+    left: 100%;
+  }
+}
+.move-code-in {
+  font: 700 22px var(--mono) !important;
+  letter-spacing: 0.08em;
+  text-align: center;
+}
+.move-goes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 4px 0 12px;
+}
+.move-go {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--text-2);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.move-go > span {
+  color: var(--good-text);
+  font-weight: 700;
+}
+.move-go.no {
+  opacity: 0.55;
+}
+.move-go.no > span {
+  color: var(--text-3);
+}
+.move-delete {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  margin-bottom: 6px;
+}
+.move-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.move-steps li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  color: var(--text-3);
+}
+.move-steps li.doing {
+  color: var(--text);
+  background: var(--surface-2);
+}
+.move-steps li.done {
+  color: var(--text-2);
+}
+.move-step-dot {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--line-strong);
+  font-size: 12px;
+  font-weight: 800;
+}
+.move-steps li.doing .move-step-dot {
+  border-color: var(--accent);
+  border-top-color: transparent;
+  animation: move-spin 0.8s linear infinite;
+}
+.move-steps li.done .move-step-dot {
+  border-color: var(--good);
+  background: var(--good);
+  color: var(--surface);
+}
+.move-step-count {
+  margin-left: auto;
+  font: 13px var(--mono);
+}
+.move-bar {
+  height: 6px;
+  margin: 14px 0 4px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--surface-3);
+}
+.move-bar i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), #7c4ddb);
+  transition: width 0.3s;
+}
+.move-done {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+}
+.move-done h3 {
+  margin: 0;
+}
+.move-ok {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  font-size: 32px;
+  color: var(--good-text);
+  background: var(--good-soft);
+  animation: move-pop 0.4s;
+}
+@keyframes move-pop {
+  from {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+}
+.move-sum {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  width: 100%;
+  margin: 10px 0;
+}
+.move-sum div {
+  padding: 10px 6px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.move-sum strong {
+  display: block;
+  font-size: 22px;
+}
+.move-sum span {
+  font-size: 12px;
+  color: var(--text-3);
+}
+@media (max-width: 640px) {
+  .move-goes,
+  .move-sum {
+    grid-template-columns: 1fr 1fr;
+  }
+  .move-route {
+    flex-direction: column;
+  }
+  .move-arrow {
+    width: 2px;
+    height: 24px;
+    flex: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .move-spin,
+  .move-steps li.doing .move-step-dot,
+  .move-arrow.run::after {
+    animation: none;
+  }
 }

@@ -3,7 +3,7 @@ import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import { useLiveEvents } from "../api/events";
 import { isOwner } from "../api/gates";
-import { useMyTeam } from "../api/hooks";
+import { useMyTeam, useTransferHere } from "../api/hooks";
 import { BrandMark } from "./BrandMark";
 import { LangPicker } from "./LangPicker";
 import { useToast } from "./Toast";
@@ -18,6 +18,7 @@ import {
   IconLogout,
   IconMail,
   IconMonitor,
+  IconTransfer,
   IconMoon,
   IconSun,
   IconTicket,
@@ -95,6 +96,8 @@ export function Layout() {
   const pending = overview.data?.pending_approvals ?? 0;
   const team = useMyTeam();
   const owner = isOwner(team.data);
+  // offered only where it is on: a hosted server does not look around its network
+  const transfer = useTransferHere(owner);
 
   return (
     <div className="shell">
@@ -140,6 +143,12 @@ export function Layout() {
           {owner && (
             <NavLink to="/settings/workers" data-nav="workers">
               <IconMonitor /> {tx("Mac Connect")}
+            </NavLink>
+          )}
+          {/* beside Mac Connect: both are about other machines on this network */}
+          {owner && transfer.data?.enabled && (
+            <NavLink to="/settings/transfer" data-nav="transfer">
+              <IconTransfer /> {tx("Move")}
             </NavLink>
           )}
           {owner && user?.is_admin && (
