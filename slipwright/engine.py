@@ -87,7 +87,12 @@ from slipwright.roles import (
     review,
     supervisor,
 )
-from slipwright.roles.common import apply_changes, read_files, require_worktree
+from slipwright.roles.common import (
+    EditMismatch,
+    apply_changes,
+    read_files,
+    require_worktree,
+)
 from slipwright.roles.results import (
     AnalysisResult,
     ArchitectResult,
@@ -3922,12 +3927,39 @@ class Engine:
                 return self._invocation_failed(job, result)
             assert isinstance(result.output, DeveloperResult)
             try:
-                touched = apply_changes(job, profile, role, result.output.changes)
+                touched = apply_changes(
+                    job,
+                    profile,
+                    role,
+                    result.output.changes,
+                    cut=developer.too_large(worktree, developer.editable_files(job, worktree)),
+                )
             except PermissionError as exc:
                 return self._fail(
                     job,
                     f"{exc}; grant it under Agents → {role.value} → Setup and retry",
                 )
+            except EditMismatch as exc:
+                # nothing of the answer was written: the specialist is asked again with
+                # the file's real lines, as one more part of the same phase (T15.4)
+                if part == self.max_phase_parts:
+                    return self._fail(
+                        job, f"{role.value}'s changes could not be applied", detail=str(exc)
+                    )
+                self.store.update_state(
+                    job.id,
+                    job.state,
+                    note=f"{role.value} phase {index + 1}/{len(phases)}: an edit did not fit",
+                    detail=str(exc),
+                )
+                job.history = self.store.get(job.id).history
+                continuation = {
+                    "part": part + 1,
+                    "files_so_far": list(touched_all),
+                    "summary_so_far": " ".join(summaries),
+                    "edit_failed": str(exc),
+                }
+                continue
             touched_all.extend(t for t in touched if t not in touched_all)
             summaries.append(result.output.summary)
             if result.output.phase_complete or part == self.max_phase_parts:
@@ -4283,7 +4315,7 @@ class Engine:
             return False
         try:
             touched = apply_changes(job, profile, RoleName.QA, out.changes)
-        except PermissionError as exc:
+        except (PermissionError, EditMismatch) as exc:
             self._record_gate_note(job, f"{at} test fix not written ({exc})", out.summary)
             return False
         worktree = require_worktree(job)
@@ -4530,7 +4562,10 @@ class Engine:
             if not result.ok:
                 return self._invocation_failed(job, result)
             assert isinstance(result.output, QAResult)
-            touched = apply_changes(job, profile, RoleName.QA, result.output.changes)
+            try:
+                touched = apply_changes(job, profile, RoleName.QA, result.output.changes)
+            except EditMismatch as exc:
+                return self._fail(job, "qa's tests could not be applied", detail=str(exc))
             g.stage_all(worktree)
             test_diff = g.staged_diff(worktree)
             gate = self._final_gate(job)
@@ -4664,7 +4699,7 @@ class Engine:
                 )
             try:
                 written = apply_changes(job, profile, RoleName.DEVOPS, result.output.changes)
-            except PermissionError as exc:
+            except (PermissionError, EditMismatch) as exc:
                 return self._fail(job, f"devops: {exc}")
             touched.extend(t for t in written if t not in touched)
             summaries.append(result.output.summary)
@@ -4781,7 +4816,10 @@ class Engine:
             if not fix.ok:
                 return self._invocation_failed(job, fix)
             assert isinstance(fix.output, DeveloperResult)
-            apply_changes(job, profile, fixer, fix.output.changes)
+            try:
+                apply_changes(job, profile, fixer, fix.output.changes)
+            except EditMismatch as exc:
+                return self._fail(job, "the CI fix could not be applied", detail=str(exc))
             g.stage_all(worktree)
             g.commit(worktree, f"slipwright: CI fix {job.data.ci_attempts}: {fix.output.summary}")
             try:

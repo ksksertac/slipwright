@@ -175,3 +175,79 @@ def test_a_developer_is_given_the_other_phases_by_their_heading() -> None:
     assert [p["goal"] for p in mine["phases"]] == [f"Phase {i} heading" for i in range(8)]
     assert [p.get("this_phase", False) for p in mine["phases"]] == [i == 2 for i in range(8)]
     assert len(json.dumps(mine["phases"])) < len(json.dumps(full["phases"])) / 3
+
+
+# -- T15.4: a file the developer must rewrite is given whole --------------------------------
+
+
+def _big(lines: int) -> str:
+    return "".join(f"const line{i} = {i}; // keep me\n" for i in range(lines))
+
+
+def test_a_phase_is_shown_a_30_kb_file_whole(
+    store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
+) -> None:
+    (repo / "OK").write_bytes(_big(1000).encode())  # ~33 KB
+    g.run(repo, "add", "OK")
+    g.run(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "big")
+    provider = full_provider(seed, phases=1)
+    engine = full_engine(store, worktrees_root, seed, provider)
+    job = engine.start(engine.create_job("x", repo).id)
+    engine.approve(engine.approve(job.id).id)
+
+    request = next(r for r in provider.requests if r.role is RoleName.BACKEND)
+    assert _context(request)["files"]["OK"] == _big(1000)  # whole, not cut at 12 KB
+    assert "files_cut" not in _context(request)
+
+
+def test_a_file_too_big_to_show_is_changed_by_edits_until_one_fits(
+    store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
+) -> None:
+    (repo / "OK").write_bytes(_big(4000).encode())  # ~136 KB, past what is sent whole
+    g.run(repo, "add", "OK")
+    g.run(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "big")
+    provider = full_provider(seed, phases=1)
+    answers = [
+        # whole contents of a file it was shown cut: refused, it would lose the rest
+        {"summary": "rewrote", "changes": [{"path": "OK", "content": "only this\n"}]},
+        # an edit whose text is not in the file: refused, with the real lines shown
+        {
+            "summary": "edit",
+            "changes": [
+                {
+                    "path": "OK",
+                    "content": None,
+                    "edits": [{"find": "const line7 = 8;", "replace": "x"}],
+                },
+                {"path": "NEW", "content": "never written\n"},
+            ],
+        },
+        {
+            "summary": "edit",
+            "changes": [
+                {
+                    "path": "OK",
+                    "content": None,
+                    "edits": [{"find": "const line7 = 7;", "replace": "const line7 = 70;"}],
+                }
+            ],
+        },
+    ]
+    provider.replies[RoleName.BACKEND] = lambda _req: answers.pop(0)
+    engine = full_engine(store, worktrees_root, seed, provider)
+    job = engine.start(engine.create_job("x", repo).id)
+    engine.approve(engine.approve(job.id).id)
+
+    requests = [r for r in provider.requests if r.role is RoleName.BACKEND]
+    asked = [_context(r) for r in requests]
+    assert len(asked) == 3 and asked[0]["files_cut"] == ["OK"]
+    assert "`edits`" in requests[0].prompt.split("Context:")[0]  # told how to change it
+    assert "truncated" in asked[0]["files"]["OK"][-200:]
+    assert "was shown cut" in asked[1]["continuation"]["edit_failed"]
+    failed = asked[2]["continuation"]["edit_failed"]
+    assert "is not in it" in failed and "    8| const line7 = 7; // keep me" in failed
+    worktree = store.get(job.id).worktree_path
+    assert worktree is not None
+    text = (worktree / "OK").read_bytes().decode()
+    assert "const line7 = 70;" in text and text.count("// keep me") == 4000  # nothing lost
+    assert not (worktree / "NEW").exists()  # a refused answer writes none of itself

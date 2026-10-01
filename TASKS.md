@@ -1490,12 +1490,12 @@ code could not be delivered; the whole file is needed to continue", wrote nothin
 called again -- parts, then build attempts, each a 40,000-token call. The cut file is the
 loop.
 **Done when**
-- [ ] The files of the current phase are given whole up to a much larger bound (60 KB),
+- [x] The files of the current phase are given whole up to a much larger bound (60 KB),
   and the 12 KB cut stays for files read only for reference
-- [ ] A file past that bound is changed by edits (exact text to replace, and with what)
+- [x] A file past that bound is changed by edits (exact text to replace, and with what)
   instead of whole contents, and the engine applies them; an edit whose text is not found
   is refused back to the developer with the file's real lines around it
-- [ ] Test: a phase that changes a 30 KB file gets it whole and its answer keeps every
+- [x] Test: a phase that changes a 30 KB file gets it whole and its answer keeps every
   line it did not mean to change
 
 ### T15.5 — One budget for a phase, whatever the calls are for
