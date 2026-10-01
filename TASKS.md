@@ -1482,6 +1482,63 @@ repository `assets/`, `docs/` or `public/` can fill it and `src/` never appear.
 - [x] Test: a repository with 500 images in `public/` and a small `src/` gives a tree in
   which every file under `src/` appears
 
+### T15.4 — A file the developer must rewrite is given whole
+A developer returns the *complete* new contents of every file it changes, but it is shown
+each file cut at 12 KB (`MAX_FILE_BYTES`). On the "Android app" development `App.tsx`
+passed 12 KB: phase 7 answered "App.tsx was cut, so a full file that keeps the existing
+code could not be delivered; the whole file is needed to continue", wrote nothing, and was
+called again -- parts, then build attempts, each a 40,000-token call. The cut file is the
+loop.
+**Done when**
+- [ ] The files of the current phase are given whole up to a much larger bound (60 KB),
+  and the 12 KB cut stays for files read only for reference
+- [ ] A file past that bound is changed by edits (exact text to replace, and with what)
+  instead of whole contents, and the engine applies them; an edit whose text is not found
+  is refused back to the developer with the file's real lines around it
+- [ ] Test: a phase that changes a 30 KB file gets it whole and its answer keeps every
+  line it did not mean to change
+
+### T15.5 — One budget for a phase, whatever the calls are for
+A phase's calls are counted by kind -- parts (truncated answers), build attempts (3), review
+fix rounds (2), gate triage -- and each kind stops on its own, so one phase can still take
+a dozen calls. Phase 5 of the same development took 6 developer calls and 3 QA calls.
+**Done when**
+- [ ] Every model call made for a phase counts against one budget (default 8, per
+  project); the existing per-kind limits stay
+- [ ] Past it the development stops at the decision gate with what was tried, how many
+  tokens it took, and the last error -- a person decides, as with any stuck step
+- [ ] The phase's call count and tokens are shown on the phase (Phases tab) as they grow
+- [ ] Test: a phase whose build never passes stops at the budget, not later
+
+### T15.6 — The plan, as much of it as the step needs
+`plan_outline` sends the summary, the stack, every decision and every phase's goal to
+every developer, QA and supervisor call: 13,441 characters, 28% of a mobile developer's
+prompt on that development, the same on each of its 24 calls.
+**Done when**
+- [ ] A developer gets the summary, the stack, the decisions that name its domain or its
+  phase, its own phase in full, and the other phases as one line each (number and goal)
+- [ ] QA and DevOps keep the whole outline: they test and describe the whole branch
+- [ ] Test: a developer's plan for phase 3 of 8 is under half the size of the full outline
+  and still carries every decision about its domain
+
+### T15.7 — The prompt is sent compact
+The context and the output schema are serialised with `indent=2`; the indentation is
+tokens and carries nothing a model reads.
+**Done when**
+- [ ] `invoke._user_prompt` serialises both without indentation (compact separators)
+- [ ] Test: the same context is at least 10% fewer characters, and parses back equal
+
+### T15.8 — A failed build sends the errors, not the last 20,000 characters
+`build_failure` is the tail of the build's output, up to 20,000 characters, sent on every
+retry. Most of it is progress lines; the errors are a few lines in it.
+**Done when**
+- [ ] The lines that look like errors (`error`, `Error:`, `FAILED`, `✕`, a compiler's
+  `file:line:col`) are kept with a few lines around each, then the tail, within 6,000
+  characters; the person still sees the whole output in the run's detail
+- [ ] A build whose output has no recognisable error line falls back to the tail
+- [ ] Test: a Gradle failure of 50,000 characters reaches the developer under 6,000 with
+  its `e: file.kt:12:5` lines in it
+
 ---
 
 ## Phase 10 — Proposed (not started)
