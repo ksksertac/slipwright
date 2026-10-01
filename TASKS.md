@@ -160,7 +160,7 @@ These hold at every point in the build. If a task seems to require breaking one,
 | 14 | T14.2 What nothing here can build is deferred, not failed | [x] |
 | 14 | T14.3 Pairing, and the worker's side of the API | [x] |
 | 14 | T14.4 `slipwright worker` on the Mac | [x] |
-| 14 | T14.5 The pages | [ ] |
+| 14 | T14.5 The pages | [x] |
 | 14 | T14.6 Getting it onto a Mac | [ ] |
 
 ---
@@ -1395,12 +1395,15 @@ The shape, decided with the user before any of it was written:
 
 ### T14.5 — The pages
 **Done when**
-- [ ] Settings → Workers: "Connect a Mac" shows the command with a copy button and the time
-  left; the list shows each worker's name, what it can build, online/offline, and a revoke
-  button
-- [ ] The "waiting for a Mac" card says which platforms wait and opens the same dialog
-- [ ] Every string is in `i18n/tr.ts`
-- [ ] `schemas/openapi.json` and the TypeScript client regenerated
+- [x] Settings → Macs (`/settings/workers`, the owner's): "Connect a Mac" makes a code with
+  the page's own address and, answered 422 because the page is open at localhost, asks for
+  the LAN address instead; it shows the install line, the command and the time left, each
+  with a copy button. The list shows each Mac's name, what it can build, online/offline
+  (polled every 5 s) and a remove button
+- [x] The "Waiting for a Mac" card and the development's page say which apps wait and link
+  to that page -- and offer no approve button, because there is nothing to approve
+- [x] Every string is in `i18n/tr.ts`
+- [x] `schemas/openapi.json` and the TypeScript client regenerated
 
 ### T14.6 — Getting it onto a Mac
 **Done when**
