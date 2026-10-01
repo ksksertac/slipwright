@@ -3153,6 +3153,15 @@ class Engine:
             return "(base commit unknown)"
         return g.diff(worktree, base) or "(no changes)"
 
+    def _branch_files(self, job: Job) -> str:
+        """The branch's changed files with their line counts, not the lines themselves:
+        all a pull request description needs beside the draft (T15.2)."""
+        worktree = require_worktree(job)
+        base = job.data.base_commit
+        if base is None:
+            return "(base commit unknown)"
+        return g.changed_files(worktree, base) or "(no changes)"
+
     def _invocation_failed(self, job: Job, result: RoleResult) -> Job:
         assert result.error is not None
         if result.error.kind is InvokeErrorKind.BUDGET:
@@ -4697,7 +4706,7 @@ class Engine:
                 devops.run,
                 job,
                 profile=profile,
-                branch_diff=self._branch_diff(job),
+                changed_files=self._branch_files(job),
             )
             if not result.ok:
                 return self._invocation_failed(job, result)

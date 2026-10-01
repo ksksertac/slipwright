@@ -54,8 +54,8 @@ def run(
     context["previous_backlog"] = job.data.backlog
     if attachments:
         context["attachments"] = attachments
-    scan = scan_worktree(require_worktree(job))
-    context["repository"] = {"tree": scan["tree"][:120], "files": scan["files"]}
+    scan = scan_worktree(require_worktree(job), limit=120)
+    context["repository"] = {"tree": scan["tree"], "files": scan["files"]}
     kwargs = {} if timeout_s is None else {"timeout_s": timeout_s}
     return invoke_role(RoleName.PO, profile, context, provider=provider, **kwargs)
 
