@@ -99,6 +99,21 @@ def test_android_studios_sdk_is_found_where_it_keeps_it(tmp_path: Path) -> None:
     assert bare.capabilities == [] and any("Android Studio" in m for m in bare.missing)
 
 
+def test_a_mac_goes_by_the_name_its_owner_gave_it_not_its_ip_address() -> None:
+    asked: list[list[str]] = []
+
+    def scutil(argv: list[str]) -> str:
+        asked.append(argv)
+        return "Ada's MacBook Pro\n"
+
+    assert agent.machine_name(system="Darwin", ask=scutil) == "Ada's MacBook Pro"
+    assert asked == [["scutil", "--get", "ComputerName"]]
+    # no answer from scutil: the host name is better than nothing
+    assert agent.machine_name(system="Darwin", ask=lambda a: None)
+    assert agent.machine_name(system="Linux", ask=scutil)  # not asked off a Mac
+    assert len(asked) == 1
+
+
 # -- pairing -------------------------------------------------------------------------------
 
 

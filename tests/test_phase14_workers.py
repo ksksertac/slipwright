@@ -183,6 +183,21 @@ def test_a_mac_pairs_once_with_a_code_and_is_listed(client: TestClient) -> None:
     assert [(w["name"], w["online"]) for w in listed] == [("Ada's Mac", True)]
 
 
+def test_a_mac_paired_under_its_ip_address_is_renamed_by_its_next_poll(
+    client: TestClient,
+) -> None:
+    token = _pair(client, name="192.168.1.11")
+    mac = {"Authorization": f"Bearer {token}"}
+    polled = client.post(
+        "/api/worker/poll", json={"wait_s": 0, "name": "Ada's MacBook Pro"}, headers=mac
+    )
+    assert polled.status_code == 204
+    assert [w["name"] for w in client.get("/api/workers").json()] == ["Ada's MacBook Pro"]
+    # a worker from before the name was sent keeps the one it has
+    client.post("/api/worker/poll", json={"wait_s": 0}, headers=mac)
+    assert [w["name"] for w in client.get("/api/workers").json()] == ["Ada's MacBook Pro"]
+
+
 def test_a_page_open_at_localhost_gets_a_code_without_being_asked_anything(
     client: TestClient,
 ) -> None:

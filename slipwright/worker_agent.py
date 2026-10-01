@@ -143,6 +143,28 @@ def detect(
     return found
 
 
+def machine_name(
+    *, system: str | None = None, ask: Callable[[list[str]], str | None] | None = None
+) -> str:
+    """What the person calls this machine: "Sertac's MacBook Pro", as System Settings
+    shows it. ``socket.gethostname()`` is not that on a Mac -- with no name from the
+    network's DNS it answers the IP address, and the Mac Connect page listed a Mac as
+    ``192.168.1.11``."""
+    if (system or _platform.system()) == "Darwin":
+        said = (ask or _output)(["scutil", "--get", "ComputerName"])
+        if said and said.strip():
+            return said.strip()[:120]
+    return socket.gethostname()[:120] or "Mac"
+
+
+def _output(argv: list[str]) -> str | None:
+    try:
+        done = subprocess.run(argv, capture_output=True, text=True, timeout=10)  # noqa: S603
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return done.stdout if done.returncode == 0 else None
+
+
 def _exit_code(argv: list[str]) -> int:
     try:
         return subprocess.run(argv, capture_output=True, timeout=60).returncode  # noqa: S603
@@ -169,7 +191,7 @@ def pair(
     refusal and nothing else.
     """
     address, _secret = pairing.unpack(code)  # a bad copy is refused before the network
-    name = name or socket.gethostname()
+    name = name or machine_name()
     http = client or httpx.Client(timeout=30)
     body = {"code": code, "name": name, "capabilities": detect().capabilities}
     refused: str | None = None
@@ -267,8 +289,12 @@ class Worker:
         *,
         client: httpx.Client | None = None,
         found: Found | None = None,
+        name: str | None = None,
     ) -> None:
         self.address = config["address"].rstrip("/")
+        # asked afresh each start, not read from the pairing: that is how a rename (or a
+        # pairing that kept an IP address for a name) reaches the page
+        self.name = name or machine_name()
         self.headers = {"Authorization": f"Bearer {config['token']}"}
         self.http = client or httpx.Client(
             timeout=httpx.Timeout(60, read=pairing.LIVE.total_seconds())
@@ -288,7 +314,11 @@ class Worker:
         got = self._check(
             self.http.post(
                 self._url("/poll"),
-                json={"capabilities": self.found.capabilities, "wait_s": wait_s},
+                json={
+                    "capabilities": self.found.capabilities,
+                    "wait_s": wait_s,
+                    "name": self.name,
+                },
                 headers=self.headers,
             )
         )

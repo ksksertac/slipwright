@@ -79,6 +79,8 @@ class PollRequest(BaseModel):
 
     capabilities: list[str] = Field(default_factory=list)
     wait_s: float = Field(default=LONG_POLL_S, ge=0, le=LONG_POLL_S)
+    # optional: a worker from before it was sent keeps the name it paired with
+    name: str | None = Field(default=None, min_length=1, max_length=120)
 
 
 def _owner(request: Request) -> str | None:
@@ -191,7 +193,7 @@ def poll(body: PollRequest, request: Request) -> Response:
     worker = _worker(request)
     store = _engine(request).store
     capabilities = _known(body.capabilities)
-    store.touch_worker(worker.id, capabilities)
+    store.touch_worker(worker.id, capabilities, name=body.name)
     _wake(request, worker.owner_id)
     deadline = time.monotonic() + body.wait_s
     while True:
