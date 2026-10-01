@@ -67,6 +67,7 @@ class EpicView(BaseModel):
     status: TaskStatus
     job_id: str
     job_request: str
+    job_title: str = ""  # the development's short name, which the epic links to
     job_state: JobState
     stories: list[StoryView]
     jira_key: str | None = None
@@ -200,6 +201,7 @@ def job_epics(job: Job) -> list[EpicView]:
                 status=rollup([s.status for s in stories]),
                 job_id=job.id,
                 job_request=job.request,
+                job_title=job.title,
                 job_state=job.state,
                 stories=stories,
                 jira_key=keys.get(epic.id),

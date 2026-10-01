@@ -59,6 +59,8 @@ jobs = Table(
     # hottest query there is and it must not need a join to know who may see them.
     Column("owner_id", String(64)),
     Column("request", Text, nullable=False),
+    # the short name it is shown by; the request above is the agents' brief (0011)
+    Column("title", Text, nullable=False, server_default=""),
     Column("repo_path", Text, nullable=False),
     Column("worktree_path", Text),
     Column("port", Integer),

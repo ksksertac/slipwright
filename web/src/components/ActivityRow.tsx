@@ -87,7 +87,7 @@ export function ActivityRow({
           <div className="faint tiny truncate">
             <Link to={`/projects/${projectId}/jobs/${item.job_id}`} className="faint">
               {projectName ? `${projectName} · ` : ""}
-              {item.job_request}
+              {item.job_title || item.job_request}
             </Link>
           </div>
         )}

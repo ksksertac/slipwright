@@ -431,8 +431,10 @@ def test_a_database_written_before_attachments_upgrades_into_one(tmp_path: Path)
     try:
         metadata.create_all(db.engine)
         with db.begin() as conn:
-            for later in ("attachments", "workers", "worker_codes", "worker_tasks"):
-                conn.execute(text(f"DROP TABLE {later}"))
+            conn.execute(text("DROP TABLE attachments"))
+            conn.execute(text("ALTER TABLE jobs DROP COLUMN title"))  # (0011: job title)
+            for table in ("workers", "worker_codes", "worker_tasks"):  # (0012)
+                conn.execute(text(f"DROP TABLE {table}"))
         command.stamp(_config(db), "0009_two_factor")
 
         migrate(db)

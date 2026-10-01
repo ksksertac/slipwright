@@ -99,7 +99,8 @@ export const TR: Record<string, string> = {
   "If the new version does not start, the old one is put back by itself.":
     "Yeni sürüm açılmazsa eskisine kendiliğinden geri dönülür.",
   "The update failed: {error}": "Güncelleme olmadı: {error}",
-  "This server runs from source. Update it with:": "Bu sunucu kaynaktan çalışıyor. Şununla güncelle:",
+  "This server runs from source. Update it with:":
+    "Bu sunucu kaynaktan çalışıyor. Şununla güncelle:",
   "This server cannot reach Docker, so it cannot install by itself. Mount /var/run/docker.sock into its container, or run:":
     "Bu sunucu Docker'a erişemiyor, kendi kendine kuramaz. Container'ına /var/run/docker.sock bağla ya da şunu çalıştır:",
   "{running} running · {waiting} waiting for approval · {done} done · {failed} failed · last activity {when}":
@@ -420,6 +421,9 @@ export const TR: Record<string, string> = {
   "A repository for the agents to work on.": "Ajanların üzerinde çalışacağı bir depo.",
   Name: "Ad",
   Description: "Açıklama",
+  "Short name": "Kısa ad",
+  "e.g. Health endpoint": "örn. Sağlık kontrolü endpoint'i",
+  Rename: "Yeniden adlandır",
   "What this project is, for the people who will read the board":
     "Bu proje nedir — panoyu okuyacak kişiler için",
   Source: "Kaynak",

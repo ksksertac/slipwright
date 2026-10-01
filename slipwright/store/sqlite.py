@@ -174,9 +174,7 @@ class JobStore(
             )
         return self._row_to_job(row, history)
 
-    def list(
-        self, project_id: str | None = None, owner_id: str | None = ANY_OWNER
-    ) -> list[Job]:
+    def list(self, project_id: str | None = None, owner_id: str | None = ANY_OWNER) -> list[Job]:
         query = select(jobs.c.id).order_by(jobs.c.created_at, jobs.c.id)
         if project_id is not None:
             query = query.where(jobs.c.project_id == project_id)
@@ -373,9 +371,7 @@ class JobStore(
         ]
         with self.db.begin() as conn:
             conn.execute(
-                self.db.upsert(
-                    translations, values, key=["lang", "source"], update=["text", "at"]
-                )
+                self.db.upsert(translations, values, key=["lang", "source"], update=["text", "at"])
             )
 
     def find_project_by_repo(
@@ -431,9 +427,7 @@ class JobStore(
             exists = conn.execute(mine).scalar_one()
             if not exists:
                 raise ProjectNotFound(project_id)
-            states = rows(
-                conn.execute(select(jobs.c.state).where(jobs.c.project_id == project_id))
-            )
+            states = rows(conn.execute(select(jobs.c.state).where(jobs.c.project_id == project_id)))
             active = sum(1 for r in states if JobState(r["state"]) not in TERMINAL_STATES)
             if active and not force:
                 raise ProjectInUse(project_id, active)
@@ -441,9 +435,7 @@ class JobStore(
             conn.execute(delete(attachments).where(attachments.c.project_id == project_id))
             conn.execute(delete(jobs).where(jobs.c.project_id == project_id))
             conn.execute(delete(project_briefs).where(project_briefs.c.project_id == project_id))
-            gone = one(
-                conn.execute(select(projects.c.owner_id).where(projects.c.id == project_id))
-            )
+            gone = one(conn.execute(select(projects.c.owner_id).where(projects.c.id == project_id)))
             conn.execute(delete(projects).where(projects.c.id == project_id))
         self.events.emit(
             "project",
@@ -490,6 +482,7 @@ class JobStore(
                     project_id=job.project_id,
                     owner_id=job.owner_id,
                     request=job.request,
+                    title=job.title,
                     repo_path=str(job.repo_path),
                     worktree_path=None if job.worktree_path is None else str(job.worktree_path),
                     port=job.port,
@@ -507,7 +500,7 @@ class JobStore(
             project_id=job.project_id,
             job_id=job.id,
             owner_id=job.owner_id,
-            payload={"state": job.state.value, "request": job.request},
+            payload={"state": job.state.value, "request": job.request, "title": job.title},
         )
         return self.get(job.id)
 
@@ -575,13 +568,10 @@ class JobStore(
                 update(jobs)
                 .where(jobs.c.id == job.id)
                 .values(
-                    worktree_path=(
-                        None if job.worktree_path is None else str(job.worktree_path)
-                    ),
+                    title=job.title,  # the one thing about a job a person may rename
+                    worktree_path=(None if job.worktree_path is None else str(job.worktree_path)),
                     port=job.port,
-                    profile_json=(
-                        None if job.profile is None else job.profile.model_dump_json()
-                    ),
+                    profile_json=(None if job.profile is None else job.profile.model_dump_json()),
                     data_json=job.data.model_dump_json(),
                     updated_at=utcnow().isoformat(),
                 )
@@ -594,9 +584,7 @@ class JobStore(
     def _owner_of_project(self, project_id: str) -> str | None:
         """Who a project belongs to, for events raised where only its id is at hand."""
         with self.db.connect() as conn:
-            row = one(
-                conn.execute(select(projects.c.owner_id).where(projects.c.id == project_id))
-            )
+            row = one(conn.execute(select(projects.c.owner_id).where(projects.c.id == project_id)))
         return None if row is None else row["owner_id"]
 
     # -- helpers -----------------------------------------------------------------------
@@ -621,6 +609,7 @@ class JobStore(
             project_id=row["project_id"],
             owner_id=row["owner_id"],
             request=row["request"],
+            title=row["title"] or "",
             repo_path=Path(row["repo_path"]),
             worktree_path=None if row["worktree_path"] is None else Path(row["worktree_path"]),
             port=row["port"],

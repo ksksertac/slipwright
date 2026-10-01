@@ -185,7 +185,8 @@ def gate_message(
     return Message(
         kind="gate",
         headline=headline,
-        lines=[f"“{_clip(job.request, 200)}”", *_supervision(job, lang)],
+        # by its name: the whole request was a paragraph in every chat, every time
+        lines=[f"“{_clip(job.title, 200)}”", *_supervision(job, lang)],
         link=link,
         summary=headline,
     )
@@ -206,7 +207,7 @@ def builder_message(job: Job, *, project: str, link: str | None, lang: str) -> M
     return Message(
         kind="gate",
         headline=headline,
-        lines=[f"“{_clip(job.request, 200)}”", tail],
+        lines=[f"“{_clip(job.title, 200)}”", tail],
         link=link,
         summary=headline,
     )
@@ -216,7 +217,7 @@ def outcome_message(
     job: Job, kind: str, *, project: str, link: str | None, lang: str, error: str | None = None
 ) -> Message:
     where = f"{project} · " if project else ""
-    lines = [f"“{_clip(job.request, 200)}”"]
+    lines = [f"“{_clip(job.title, 200)}”"]
     if kind == "cancelled":
         # somebody stopped it on purpose: not a failure, and the group is being told
         # rather than asked, because it is already done

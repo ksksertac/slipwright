@@ -32,7 +32,7 @@ from fastapi import (
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from slipwright import attachments as attached
 from slipwright.activity import (
@@ -65,7 +65,7 @@ from slipwright.providers import ProviderUnavailableError
 from slipwright.quota import QuotaExceeded, warn_if_unprotected
 from slipwright.schemas.attachment import Attachment
 from slipwright.schemas.brief import BriefEdit, ProjectBrief
-from slipwright.schemas.job import Job, JobResult, JobState, Transition
+from slipwright.schemas.job import TITLE_MAX, Job, JobResult, JobState, Transition
 from slipwright.schemas.profile import Profile, RoleName
 from slipwright.schemas.project import (
     Language,
@@ -96,12 +96,24 @@ log = logging.getLogger(__name__)
 class NewJob(BaseModel):
     request: str = Field(min_length=1)
     repo_path: Path
+    title: str = Field(
+        default="", max_length=TITLE_MAX, description="Empty: named after the request."
+    )
 
 
 class NewProjectJob(BaseModel):
     request: str = Field(min_length=1)
+    # the short name it is shown by. The form asks for one; a caller that sends none gets
+    # the request's first sentence, so an older client keeps working
+    title: str = Field(default="", max_length=TITLE_MAX)
     # files chosen on the form: drafts uploaded to the project, handed to this development
     attachments: list[str] = Field(default_factory=list)
+
+
+class JobPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str = Field(min_length=1, max_length=TITLE_MAX)
 
 
 class NewProject(BaseModel):
@@ -115,6 +127,7 @@ class NewProject(BaseModel):
     # what the agents should build first. Held on the project until the brief is approved
     # rather than started here, so the first development knows what it is working on
     pending_request: str = ""
+    pending_title: str = Field(default="", max_length=TITLE_MAX)
     review: ReviewMode = "advisory"
     language: Language = "tr"
     # which hosting service the repository lives on (Settings → Sources)
@@ -382,9 +395,7 @@ def create_app(
         # a server anybody can sign up to, with nothing limiting what one account takes,
         # is a machine waiting to fall over. Said once, loudly, and not enforced: refusing
         # to start would be worse than the risk it is warning about.
-        unprotected = warn_if_unprotected(
-            engine.quotas.limits(), open_to_strangers=require_auth
-        )
+        unprotected = warn_if_unprotected(engine.quotas.limits(), open_to_strangers=require_auth)
         if unprotected:
             log.warning("%s", unprotected)
         # a server with nobody in it makes its first account, so that starting it is the
@@ -490,7 +501,6 @@ def create_app(
         """Which build this server serves. The page compares it with its own and says
         when a browser is still running an older one — a hashed bundle it cached."""
         return Version(build=_build_id(static_dir))
-
 
     def _owner(request: Request) -> str | None:
         """Whose data this request may touch.
@@ -747,7 +757,7 @@ def create_app(
             # checked before the development exists: one that could not have its files
             # would start without them, and the Product Owner would plan without them
             _drafts(eng, project_id, body.attachments, request)
-        job = eng.create_job(body.request, project_id=project_id)
+        job = eng.create_job(body.request, project_id=project_id, title=body.title)
         # handed over before it starts, so the Product Owner's first look includes them
         eng.store.claim_drafts(project_id, body.attachments, job.id, _owner(request))
         return _start(eng, job, background)
@@ -845,8 +855,7 @@ def create_app(
 
     def _drafts(eng: Engine, project_id: str, ids: list[str], request: Request) -> None:
         mine = {
-            a.id
-            for a in eng.store.list_attachments(project_id, _owner(request), scopes=("draft",))
+            a.id for a in eng.store.list_attachments(project_id, _owner(request), scopes=("draft",))
         }
         missing = [i for i in ids if i not in mine]
         if missing:
@@ -881,9 +890,7 @@ def create_app(
             scopes=("project", "job") if job_id is not None else ("project",),
         )
 
-    @api.post(
-        "/projects/{project_id}/attachments", response_model=Attachment, status_code=201
-    )
+    @api.post("/projects/{project_id}/attachments", response_model=Attachment, status_code=201)
     def add_attachment(
         project_id: str,
         request: Request,
@@ -1116,7 +1123,9 @@ def create_app(
             raise HTTPException(
                 status_code=400, detail=f"repo_path is not a directory: {body.repo_path}"
             )
-        return _start(eng, eng.create_job(body.request, body.repo_path), background)
+        return _start(
+            eng, eng.create_job(body.request, body.repo_path, title=body.title), background
+        )
 
     @api.get("/jobs", response_model=list[Job])
     def list_jobs(request: Request) -> list[Job]:
@@ -1125,6 +1134,17 @@ def create_app(
     @api.get("/jobs/{job_id}", response_model=Job)
     def get_job(job_id: str, request: Request) -> Job:
         return _get(engine_for(request), job_id, request)
+
+    @api.patch("/jobs/{job_id}", response_model=Job)
+    def rename_job(job_id: str, body: JobPatch, request: Request) -> Job:
+        """Give a development another name. The request it was started with -- what the
+        agents work from -- is not editable here, and the branch keeps its name."""
+        require_owner(request)
+        eng = engine_for(request)
+        try:
+            return eng.rename_job(_get(eng, job_id, request), body.title)
+        except ValueError as exc:  # nothing but spaces
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @api.delete("/jobs/{job_id}", status_code=204)
     def delete_job(job_id: str, request: Request) -> None:
@@ -1765,6 +1785,7 @@ def _resume_all(engine: Engine) -> None:
 __all__ = [
     "Message",
     "NewJob",
+    "JobPatch",
     "NewProject",
     "NewProjectJob",
     "Rejection",

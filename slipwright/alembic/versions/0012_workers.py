@@ -4,8 +4,8 @@ Three new tables and nothing rewritten. A development that never names an iOS or
 Android phase never touches any of them, and a database from before this has none to
 fill, so a release that meets it is unchanged by it.
 
-Revision ID: 0011_workers
-Revises: 0010_attachments
+Revision ID: 0012_workers
+Revises: 0011_job_title
 Create Date: 2026-09-30
 """
 
@@ -16,8 +16,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0011_workers"
-down_revision: str | None = "0010_attachments"
+revision: str = "0012_workers"
+down_revision: str | None = "0011_job_title"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

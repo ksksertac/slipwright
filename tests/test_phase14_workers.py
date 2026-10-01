@@ -268,7 +268,7 @@ def test_a_mac_that_goes_away_is_a_wait_and_the_build_is_owed_not_the_phase(
 
 
 def test_a_database_from_before_workers_upgrades_into_one(tmp_path: Path) -> None:
-    """The shape taken apart, as the attachments' test does it: drop what 0011 adds, stamp
+    """The shape taken apart, as the attachments' test does it: drop what 0012 adds, stamp
     the revision before it, and let the store upgrade itself the way a server does."""
     from alembic import command
     from sqlalchemy import inspect, text
@@ -283,7 +283,7 @@ def test_a_database_from_before_workers_upgrades_into_one(tmp_path: Path) -> Non
         with db.begin() as conn:
             for table in ("workers", "worker_codes", "worker_tasks"):
                 conn.execute(text(f"DROP TABLE {table}"))
-        command.stamp(_config(db), "0010_attachments")
+        command.stamp(_config(db), "0011_job_title")
 
         migrate(db)
 

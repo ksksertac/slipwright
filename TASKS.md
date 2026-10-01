@@ -1343,7 +1343,7 @@ The shape, decided with the user before any of it was written:
 **Done when**
 - [x] `workers` (owner, name, token hash, capabilities, paired/last-seen/revoked),
   `worker_codes` (hash, owner, expiry) and `worker_tasks` (the queue), alembic
-  `0011_workers`; modelled on `chat_codes`: only hashes are stored, a code is spent on
+  `0012_workers`; modelled on `chat_codes`: only hashes are stored, a code is spent on
   first use, 15 minutes. Deleting an account deletes its workers
 - [x] The connection code packs the server address (six bytes for a LAN IPv4 and port), a
   10-byte secret and a check byte into Crockford base32 (`SW-` prefix); a mistyped code is

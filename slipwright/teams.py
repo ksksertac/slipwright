@@ -521,7 +521,7 @@ class Teams:
                 link=self._link(f"/jobs/{job.id}", None),
                 agent=role.value,
                 gate=job.state.value.removeprefix("awaiting_").removesuffix("_approval"),
-                request=job.request,
+                request=job.title,
                 project=project_name,
                 name=membership.name or membership.email,
             )

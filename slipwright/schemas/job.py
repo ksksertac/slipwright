@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from slipwright.schemas.profile import Profile
 
@@ -88,9 +88,24 @@ def utcnow() -> datetime:
 #: any keyboard and git never has to carry bytes a shell will mangle.
 _FOLD = str.maketrans(
     {
-        "ı": "i", "İ": "i", "ğ": "g", "Ğ": "g", "ü": "u", "Ü": "u",
-        "ş": "s", "Ş": "s", "ö": "o", "Ö": "o", "ç": "c", "Ç": "c",
-        "â": "a", "î": "i", "û": "u", "é": "e", "è": "e", "ñ": "n",
+        "ı": "i",
+        "İ": "i",
+        "ğ": "g",
+        "Ğ": "g",
+        "ü": "u",
+        "Ü": "u",
+        "ş": "s",
+        "Ş": "s",
+        "ö": "o",
+        "Ö": "o",
+        "ç": "c",
+        "Ç": "c",
+        "â": "a",
+        "î": "i",
+        "û": "u",
+        "é": "e",
+        "è": "e",
+        "ñ": "n",
     }
 )
 
@@ -110,6 +125,26 @@ def slugify(text: str, *, limit: int = 40) -> str:
     slug = "".join(out)[:limit].strip("-")
     # git refuses a component ending in ".lock" and treats a leading "-" as a flag
     return slug if not slug.endswith(".lock") else slug[:-5].strip("-")
+
+
+#: The longest name a development is shown by. Long enough for "Android quiz app with
+#: Bluetooth rooms", short enough for a table cell, a chat line and an email subject.
+TITLE_MAX = 80
+
+
+def headline(request: str, limit: int = TITLE_MAX) -> str:
+    """A name for a development nobody named: the first sentence of what was asked,
+    clipped at a word. Only for a request that came without a title -- a chat message, the
+    CLI, a job from before titles existed; the form asks for one."""
+    first = request.strip().splitlines()[0] if request.strip() else ""
+    for stop in (". ", "? ", "! "):
+        if stop in first:
+            first = first.split(stop, 1)[0]
+    first = first.strip().rstrip(".!?")
+    if len(first) <= limit:
+        return first
+    clipped = first[: limit - 1].rsplit(" ", 1)[0].rstrip(",;:-")
+    return f"{clipped or first[: limit - 1]}…"
 
 
 def branch_name(project: str, request: str, job_id: str) -> str:
@@ -393,6 +428,12 @@ class Job(BaseModel):
         "see the job and, once it runs, whose model keys pay for it.",
     )
     request: str = Field(min_length=1, description="What the job should accomplish.")
+    title: str = Field(
+        default="",
+        description="The short name the development is shown by everywhere -- lists, "
+        "chat messages, emails. The request stays the agents' brief; this is only its name. "
+        "Empty on the way in means derived from the request (``headline``).",
+    )
     repo_path: Path
     worktree_path: Path | None = None
     port: int | None = Field(default=None, ge=1024, le=65535)
@@ -401,6 +442,13 @@ class Job(BaseModel):
     created_at: datetime = Field(default_factory=utcnow)
     history: list[Transition] = Field(default_factory=list)
     data: JobData = Field(default_factory=JobData)
+
+    @model_validator(mode="after")
+    def _named(self) -> Job:
+        # every job has a name, however it was made: a job without one would be shown by
+        # its whole request again, which is what titles are here to stop
+        self.title = self.title.strip() or headline(self.request)
+        return self
 
     @property
     def branch(self) -> str:

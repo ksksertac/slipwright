@@ -56,6 +56,7 @@ export function NewProjectPage() {
   const createJira = useCreateJiraProject();
   const [language, setLanguage] = useState<NewProject["language"]>("tr");
   const [firstRequest, setFirstRequest] = useState("");
+  const [firstTitle, setFirstTitle] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const toast = useToast();
   const [error, setError] = useState<string | null>(null);
@@ -84,6 +85,8 @@ export function NewProjectPage() {
       // held on the project, not started here: an agent whose brief is not ready is
       // handed an empty one and builds without knowing what the project is
       pending_request: firstRequest.trim(),
+      // with a description only, the server names it after the first sentence
+      pending_title: firstRequest.trim() ? firstTitle.trim() : "",
     };
     if (host === "local") {
       body.repo_path = repoPath.trim();
@@ -561,6 +564,17 @@ export function NewProjectPage() {
             sentence into, so it gets the width. */}
           <section className="card np-section np-first">
             <h3>{tx("The first development")}</h3>
+            <div className="field">
+              <label htmlFor="first_title">{tx("Short name")}</label>
+              <input
+                id="first_title"
+                type="text"
+                value={firstTitle}
+                maxLength={80}
+                onChange={(e) => setFirstTitle(e.target.value)}
+                placeholder={tx("e.g. Health endpoint")}
+              />
+            </div>
             <div className="field">
               <label htmlFor="first_request">
                 {tx("What should the agents build first? (optional)")}

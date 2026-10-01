@@ -8,6 +8,12 @@
   refuse it; and its terms of use, which it requires before the first call and offers no
   button for, are shown on the Models page and accepted there with a press -- never by
   Slipwright on its own. A platform key pasted where an LLM key belongs is named as such.
+- A development has a short name. The form asks for one beside the description; it is
+  what the development is listed by everywhere -- the developments table, the dashboard,
+  the activity, the lanes, chat messages and emails -- and what its branch is named
+  after, while the description stays the agents' brief. It can be renamed on the
+  development's own page. Developments from before are named after the first sentence
+  of what was asked, and so is one started from a chat or the CLI.
 
 ## 0.2.0
 

@@ -312,11 +312,6 @@ def _pending(job: Job) -> str | None:
     return job.state.value.removeprefix("awaiting_").removesuffix("_approval").replace("_", " ")
 
 
-def _headline(request: str) -> str:
-    line = request.strip().splitlines()[0] if request.strip() else ""
-    return line[:80] + "…" if len(line) > 80 else line
-
-
 def _why_it_stopped(job: Job) -> dict[str, Any] | None:
     """What actually went wrong, for a development that stopped.
 
@@ -362,7 +357,7 @@ def _how_it_is_going(job: Job, project_name: str) -> dict[str, Any]:
     note = job.history[-1].note if job.history else None
     return {
         "project": project_name,
-        "request": _headline(job.request),
+        "request": job.title,
         "steps_done": done,
         "steps_total": len(lane.steps),
         # the step with somebody's hands on it, else the next one that has not run
@@ -399,8 +394,9 @@ def _wanted(jobs: list[Job], projects: list[Any], subject: str) -> list[Job]:
     return [
         j
         for j in newest
-        if wanted in _fold(j.request)
-        or sum(s in _fold(j.request) for s in stems) >= enough
+        # by its name as much as by what was asked: "the quiz app" is what a person calls it
+        if wanted in _fold(f"{j.title} {j.request}")
+        or sum(s in _fold(f"{j.title} {j.request}") for s in stems) >= enough
     ]
 
 
@@ -475,7 +471,7 @@ def gather(notifier: Notifier, user_id: str, question: Question) -> dict[str, An
             "waiting": [
                 {
                     "project": by_project.get(j.project_id or "", ""),
-                    "request": _headline(j.request),
+                    "request": j.title,
                     "waiting_for": _pending(j),
                 }
                 for j in jobs
@@ -938,7 +934,7 @@ def _start_job(notifier: Notifier, user_id: str, project_id: str, request: str) 
         log.warning("ask: could not start a development: %r", exc)
         return _say(lang, "refused", why=str(exc))
     notifier.resume(job.id)
-    return _say(lang, "started", project=project.name, request=_headline(request))
+    return _say(lang, "started", project=project.name, request=job.title)
 
 
 def _make_project(notifier: Notifier, user_id: str, name: str, repo: str) -> str:

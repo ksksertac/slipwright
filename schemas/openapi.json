@@ -54,6 +54,11 @@
             "title": "Job Request",
             "type": "string"
           },
+          "job_title": {
+            "default": "",
+            "title": "Job Title",
+            "type": "string"
+          },
           "kind": {
             "$ref": "#/components/schemas/ActivityKind"
           },
@@ -93,6 +98,7 @@
           "index",
           "job_id",
           "job_request",
+          "job_title",
           "kind",
           "project_id",
           "role",
@@ -1460,6 +1466,11 @@
           "job_state": {
             "$ref": "#/components/schemas/JobState"
           },
+          "job_title": {
+            "default": "",
+            "title": "Job Title",
+            "type": "string"
+          },
           "status": {
             "$ref": "#/components/schemas/TaskStatus"
           },
@@ -1482,6 +1493,7 @@
           "job_id",
           "job_request",
           "job_state",
+          "job_title",
           "status",
           "stories",
           "title"
@@ -2500,6 +2512,12 @@
             "$ref": "#/components/schemas/JobState",
             "default": "created"
           },
+          "title": {
+            "default": "",
+            "description": "The short name the development is shown by everywhere -- lists, chat messages, emails. The request stays the agents' brief; this is only its name. Empty on the way in means derived from the request (``headline``).",
+            "title": "Title",
+            "type": "string"
+          },
           "worktree_path": {
             "anyOf": [
               {
@@ -2525,6 +2543,7 @@
           "repo_path",
           "request",
           "state",
+          "title",
           "worktree_path"
         ],
         "title": "Job",
@@ -2604,6 +2623,11 @@
             "title": "Timed Out Calls",
             "type": "integer"
           },
+          "title": {
+            "default": "",
+            "title": "Title",
+            "type": "string"
+          },
           "unpriced_calls": {
             "default": 0,
             "title": "Unpriced Calls",
@@ -2635,6 +2659,7 @@
           "state",
           "subscription_calls",
           "timed_out_calls",
+          "title",
           "unpriced_calls",
           "variance_usd"
         ],
@@ -3142,6 +3167,22 @@
         "title": "JobData",
         "type": "object"
       },
+      "JobPatch": {
+        "additionalProperties": false,
+        "properties": {
+          "title": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "title": "JobPatch",
+        "type": "object"
+      },
       "JobProgress": {
         "additionalProperties": false,
         "properties": {
@@ -3253,6 +3294,11 @@
           "tasks_total": {
             "title": "Tasks Total",
             "type": "integer"
+          },
+          "title": {
+            "default": "",
+            "title": "Title",
+            "type": "string"
           }
         },
         "required": [
@@ -3270,7 +3316,8 @@
           "risk",
           "state",
           "tasks_done",
-          "tasks_total"
+          "tasks_total",
+          "title"
         ],
         "title": "JobProgress",
         "type": "object"
@@ -3489,6 +3536,11 @@
               }
             ],
             "title": "Summary"
+          },
+          "title": {
+            "default": "",
+            "title": "Title",
+            "type": "string"
           }
         },
         "required": [
@@ -3501,7 +3553,8 @@
           "running_role",
           "state",
           "steps",
-          "summary"
+          "summary",
+          "title"
         ],
         "title": "Lane",
         "type": "object"
@@ -4217,6 +4270,13 @@
             "minLength": 1,
             "title": "Request",
             "type": "string"
+          },
+          "title": {
+            "default": "",
+            "description": "Empty: named after the request.",
+            "maxLength": 80,
+            "title": "Title",
+            "type": "string"
           }
         },
         "required": [
@@ -4299,6 +4359,12 @@
             "title": "Pending Request",
             "type": "string"
           },
+          "pending_title": {
+            "default": "",
+            "maxLength": 80,
+            "title": "Pending Title",
+            "type": "string"
+          },
           "plan_gate": {
             "default": "combined",
             "enum": [
@@ -4364,6 +4430,12 @@
           "request": {
             "minLength": 1,
             "title": "Request",
+            "type": "string"
+          },
+          "title": {
+            "default": "",
+            "maxLength": 80,
+            "title": "Title",
             "type": "string"
           }
         },
@@ -5148,6 +5220,12 @@
             "title": "Pending Request",
             "type": "string"
           },
+          "pending_title": {
+            "default": "",
+            "description": "The short name the first development was given beside its request; held and cleared with it.",
+            "title": "Pending Title",
+            "type": "string"
+          },
           "plan_gate": {
             "default": "separate",
             "description": "combined: the Product Owner and the Architect run together and you approve one work list; separate: the backlog and the architecture are approved one after the other.",
@@ -5218,6 +5296,7 @@
           "name",
           "owner_id",
           "pending_request",
+          "pending_title",
           "plan_gate",
           "profile",
           "repo_path",
@@ -10267,6 +10346,54 @@
           }
         },
         "summary": "Get Job"
+      },
+      "patch": {
+        "description": "Give a development another name. The request it was started with -- what the\nagents work from -- is not editable here, and the branch keeps its name.",
+        "operationId": "rename_job_api_jobs__job_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JobPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rename Job"
       }
     },
     "/api/jobs/{job_id}/approve": {

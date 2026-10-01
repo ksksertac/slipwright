@@ -27,6 +27,7 @@ import {
   StatTile,
   sentence,
   timeAgo,
+  nameOf,
 } from "../components/ui";
 import { sentenceCase, useT } from "../i18n";
 import { SayProvider } from "../i18n/said";
@@ -177,7 +178,7 @@ export function DashboardPage() {
                   <WaitingRow
                     key={w.job_id}
                     jobId={w.job_id}
-                    request={w.request}
+                    request={nameOf(w)}
                     projectName={named(byId.get(w.project_id ?? "")?.name)}
                     projectId={w.project_id ?? undefined}
                     pending={w.pending_approval ?? ""}
@@ -235,7 +236,10 @@ export function DashboardPage() {
       <BulkBar
         selected={selected}
         onClear={() => setSelected([])}
-        labelOf={(id) => waiting.find((w) => w.job_id === id)?.request ?? id}
+        labelOf={(id) => {
+          const w = waiting.find((x) => x.job_id === id);
+          return w ? nameOf(w) : id;
+        }}
       />
 
       {o.auto_approved.length > 0 && (
@@ -250,7 +254,7 @@ export function DashboardPage() {
                 <AutoApprovedRow
                   key={w.job_id}
                   jobId={w.job_id}
-                  request={w.request}
+                  request={nameOf(w)}
                   projectId={w.project_id ?? ""}
                   projectName={named(byId.get(w.project_id ?? "")?.name)}
                   phase={w.current_phase}

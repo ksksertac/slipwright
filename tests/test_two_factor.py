@@ -236,7 +236,8 @@ def test_a_database_from_before_comes_through_with_it_off(tmp_path: Path) -> Non
                 conn.execute(text(f"ALTER TABLE users DROP COLUMN {column}"))
             # and what the revisions after it add, since those replay on top (0010)
             conn.execute(text("DROP TABLE attachments"))
-            for table in ("workers", "worker_codes", "worker_tasks"):  # (0011)
+            conn.execute(text("ALTER TABLE jobs DROP COLUMN title"))  # (0011: job title)
+            for table in ("workers", "worker_codes", "worker_tasks"):  # (0012)
                 conn.execute(text(f"DROP TABLE {table}"))
             conn.execute(
                 text(

@@ -61,7 +61,7 @@ import {
   Loading,
   Pager,
   ProgressBar,
-  sentence,
+  nameOf,
   StateBadge,
   timeAgo,
 } from "../components/ui";
@@ -124,7 +124,7 @@ export function PipelineTab({ projectId }: { projectId: string }) {
   }
   const toggle = (jobId: string, on: boolean) =>
     setSelected((ids) => (on ? [...new Set([...ids, jobId])] : ids.filter((i) => i !== jobId)));
-  const requests = new Map(lanes.map((l) => [l.job_id, l.request]));
+  const requests = new Map(lanes.map((l) => [l.job_id, nameOf(l)]));
 
   return (
     <div className="stack">
@@ -199,15 +199,6 @@ function linkState(previous: StepCard | undefined): string {
   return "";
 }
 
-/** A one-line title for a development whose request is a paragraph: the first sentence,
- * clipped. The whole request is right below it, so nothing is lost by cutting here. */
-function headline(request: string): string {
-  const first = request.trim().split(/\r?\n/, 1)[0]!.trim();
-  const stop = first.search(/[;:.!?](\s|$)/);
-  const title = sentence(stop > 12 ? first.slice(0, stop) : first);
-  return title.length > 76 ? `${title.slice(0, 73).trimEnd()}…` : title;
-}
-
 /** Keeps a click on a control inside the head from also folding the lane. */
 const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
 
@@ -242,11 +233,11 @@ function LaneRow({
             checked={selected}
             onChange={(e) => onSelect(e.target.checked)}
             onClick={stop}
-            aria-label={`select ${headline(lane.request)}`}
+            aria-label={`select ${nameOf(lane)}`}
           />
         )}
         <div className="lane-id">
-          <span className="lane-title">{headline(lane.request)}</span>
+          <span className="lane-title">{nameOf(lane)}</span>
           <div className="lane-sub">
             <StateBadge state={lane.state} />
             {/* the badge says what kind of work is happening; this says whose, which is
@@ -612,7 +603,7 @@ function StepPanel({
     <aside className="drawer" role="dialog" aria-label={step?.label ?? "step"}>
       <div className="drawer-head">
         <div style={{ minWidth: 0 }}>
-          <div className="faint tiny truncate">{lane && sentence(lane.request)}</div>
+          <div className="faint tiny truncate">{lane && nameOf(lane)}</div>
           <h3 className="truncate">{step ? stepLabel(tx, step) : "…"}</h3>
         </div>
         <button className="btn ghost icon" onClick={onClose} aria-label={tx("Close")}>

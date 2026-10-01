@@ -436,7 +436,8 @@ def test_a_database_written_before_teams_upgrades_into_one(tmp_path: Path) -> No
             for later in ("chat_prompts", "chat_codes", "chat_links"):
                 conn.execute(text(f"DROP TABLE {later}"))
             conn.execute(text("DROP TABLE attachments"))  # (0010: attachments)
-            for table in ("workers", "worker_codes", "worker_tasks"):  # (0011)
+            conn.execute(text("ALTER TABLE jobs DROP COLUMN title"))  # (0011: job title)
+            for table in ("workers", "worker_codes", "worker_tasks"):  # (0012)
                 conn.execute(text(f"DROP TABLE {table}"))
             # (0009: two-step sign-in)
             for column in ("totp_secret", "totp_enabled_at", "totp_last_step", "totp_recovery"):

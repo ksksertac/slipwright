@@ -146,6 +146,7 @@ def test_a_short_name_finds_a_long_request_suffixes_and_all() -> None:
         request: str
         created_at: datetime
         project_id: str = "p1"
+        title: str = ""
 
     maths = Fake(
         "tek ekran matematik sorusu random 100 taneden sırayla çözsün, "
