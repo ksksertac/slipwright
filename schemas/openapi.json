@@ -767,6 +767,20 @@
             ],
             "title": "Max Invocations"
           },
+          "max_phase_calls": {
+            "anyOf": [
+              {
+                "minimum": 2.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": 8,
+            "description": "Model calls one phase may take -- building, fixing, triage and review alike -- before a person is asked what to do, with a recommendation (T15.5). None means no limit beyond the per-kind ones.",
+            "title": "Max Phase Calls"
+          },
           "max_tokens": {
             "anyOf": [
               {
@@ -2748,6 +2762,18 @@
             "title": "Cost Usd",
             "type": "number"
           },
+          "decision_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the decision gate stopped, when that changes what it offers: \"phase_budget\" waits for a written answer and offers no plain approve.",
+            "title": "Decision Kind"
+          },
           "deploy": {
             "anyOf": [
               {
@@ -2970,6 +2996,25 @@
             "description": "HEAD when the current phase started; the review diffs from it.",
             "title": "Phase Base Commit"
           },
+          "phase_calls": {
+            "default": 0,
+            "description": "Model calls made for `phase_calls_for` since it started or since a person last answered for it: building, fixing, triage and review alike.",
+            "minimum": 0.0,
+            "title": "Phase Calls",
+            "type": "integer"
+          },
+          "phase_calls_for": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The phase (1-based) `phase_calls` counts.",
+            "title": "Phase Calls For"
+          },
           "phase_index": {
             "default": 0,
             "description": "Next plan phase to execute.",
@@ -3032,6 +3077,18 @@
             "minimum": 1.0,
             "title": "Qa Stage",
             "type": "integer"
+          },
+          "recommendation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What QA proposes at a phase-budget stop, for the person to accept as written or rewrite.",
+            "title": "Recommendation"
           },
           "reject_rounds": {
             "default": 0,
@@ -3135,6 +3192,7 @@
           "builder_resume",
           "ci_attempts",
           "cost_usd",
+          "decision_kind",
           "deploy",
           "deploy_skipped",
           "deploy_written",
@@ -3159,6 +3217,8 @@
           "notified",
           "output_hashes",
           "phase_base_commit",
+          "phase_calls",
+          "phase_calls_for",
           "phase_index",
           "plan",
           "plan_gate",
@@ -3166,6 +3226,7 @@
           "qa_diagnosis",
           "qa_gate_fixes",
           "qa_stage",
+          "recommendation",
           "reject_rounds",
           "rerun_only",
           "resume_state",

@@ -105,6 +105,7 @@ from slipwright.roles.results import (
     PlanPhase,
     POResult,
     QAResult,
+    Recommendation,
     StackChoice,
     SupervisorResult,
     unbuilt_platforms,
@@ -1786,6 +1787,11 @@ class Engine:
         if by:
             note = f"{note} by {by}"
         if job.state is JobState.AWAITING_DECISION:
+            if job.data.decision_kind == "phase_budget":
+                raise EmptyApproval(
+                    "this phase spent its budget: write what to do next, or send QA's "
+                    "recommendation as it is"
+                )
             note = f"{note}: continue with {edges[0].value}"
             job.data.resume_state = None
         job.data.feedback = None
@@ -1875,6 +1881,12 @@ class Engine:
             job.data.feedback = None
             job.data.reject_rounds = 0
             job.data.resume_state = None
+            if job.data.decision_kind == "phase_budget":
+                # the person's words are the next attempt's instruction, on a fresh budget
+                job.data.phase_calls = 0
+                job.data.build_attempts = 0
+                job.data.decision_kind = None
+                job.data.recommendation = None
         self.store.save(job)
         job = self.orchestrator.transition(job, edges[1], note=f"rejected: {feedback}")
         return self._run(job) if run else job
@@ -3173,6 +3185,8 @@ class Engine:
             return self._fail(job, f"budget exhausted: {result.error.message}")
         if result.error.kind is InvokeErrorKind.LOOP:
             return self._ask_human(job, f"loop detected: {result.error.message}")
+        if result.error.kind is InvokeErrorKind.PHASE_BUDGET:
+            return self._phase_budget_stop(job, result.error.message)
         attempts = f" after {result.attempts} attempts" if result.attempts > 1 else ""
         return self._fail(
             job,
@@ -3188,6 +3202,90 @@ class Engine:
         return self.orchestrator.transition(
             job, JobState.AWAITING_DECISION, note=note, detail=detail
         )
+
+    # -- one budget for a phase (T15.5) -------------------------------------------------------
+
+    @staticmethod
+    def _phase_number(job: Job) -> int | None:
+        """The phase (1-based) a call in this state is made for, or None outside one. The
+        review runs after the phase is committed, when the index has moved on."""
+        if job.state in (JobState.DEVELOPING, JobState.BUILD_GATE):
+            return job.data.phase_index + 1
+        if job.state is JobState.REVIEW and job.data.phase_index >= 1:
+            return job.data.phase_index
+        return None
+
+    def _phase_over_budget(self, job: Job) -> str | None:
+        """Why the next call of this phase is not made, or None.
+
+        Parts, build attempts, fix rounds and triage each stop on their own, and one phase
+        could still take a dozen calls between them: phase 5 of an Android development took
+        six developer calls and three QA calls. Every call of a phase counts here. Only a
+        call that would build or fix is stopped -- the review runs on a committed phase,
+        and stopping it half-way would leave nowhere sound to go back to; it counts, and
+        the fix it asks for is what stops.
+        """
+        limit = self.budget_for(job).max_phase_calls
+        phase = self._phase_number(job)
+        if limit is None or phase is None or job.state is JobState.REVIEW:
+            return None
+        spent = job.data.phase_calls if job.data.phase_calls_for == phase else 0
+        if spent < limit:
+            return None
+        return f"phase {phase} took {spent} model calls (limit {limit})"
+
+    def _phase_budget_stop(self, job: Job, why: str) -> Job:
+        """Stop at the decision gate with a recommendation, and wait for words.
+
+        QA reads what the phase went through and says what to do; the person accepts that
+        as written or writes their own, and the text reaches the developer as the
+        instruction for the next attempt, on a fresh budget. A plain "continue" is not
+        offered: it would spend another budget the same way.
+        """
+        phases = self._phases(job)
+        index = job.data.phase_index
+        phase = phases[index] if index < len(phases) else {}
+        attempts = self._phase_attempts(job)
+        recommendation: str | None = None
+        result = self._invoke(
+            RoleName.QA,
+            qa.recommend,
+            job,
+            profile=job.profile or self.seed_for(job),
+            phase=phase,
+            attempts=attempts,
+            over_phase_budget=True,
+        )
+        if result.ok and isinstance(result.output, Recommendation):
+            recommendation = result.output.recommendation
+        job = self.store.get(job.id)
+        job.data.decision_kind = "phase_budget"
+        job.data.recommendation = recommendation
+        job = self._ask_human(
+            job,
+            f"{why}; QA recommends what to do next -- write the instruction for the next try",
+            detail="\n\n".join(attempts[-8:]) or None,
+        )
+        # whatever stopped it, the next attempt is the developer's, and the answer with it
+        job.data.resume_state = JobState.DEVELOPING.value
+        self.store.save(job)
+        return job
+
+    def _phase_attempts(self, job: Job) -> list[str]:
+        """What this phase went through, oldest first: the notes written since it began,
+        each with the start of its detail."""
+        phase = self._phase_number(job)
+        mark = f"phase {phase}/"
+        start = next((i for i, t in enumerate(job.history) if t.note and mark in t.note), 0)
+        lines: list[str] = []
+        for t in job.history[start:]:
+            if not t.note:
+                continue
+            text = t.note
+            if t.detail:
+                text += "\n" + t.detail[:1200]
+            lines.append(text)
+        return lines[-20:]
 
     # -- budgets (T9.7) ----------------------------------------------------------------------
 
@@ -3249,6 +3347,15 @@ class Engine:
                 model=profile.roles[role].model,
                 thinking_depth=profile.roles[role].thinking_depth,
                 error=InvokeError(kind=InvokeErrorKind.BUDGET, message=problem),
+            )
+        # the recommendation at a phase-budget stop is that budget's last allowance
+        spent = None if kw.pop("over_phase_budget", False) else self._phase_over_budget(job)
+        if spent is not None:
+            return RoleResult(
+                role=role,
+                model=profile.roles[role].model,
+                thinking_depth=profile.roles[role].thinking_depth,
+                error=InvokeError(kind=InvokeErrorKind.PHASE_BUDGET, message=spent),
             )
         self._take_off(job, role, profile)
         try:
@@ -3455,7 +3562,7 @@ class Engine:
             "provider": provider,
             "model": model,
             "state": job.state.value,
-            "phase": job.data.phase_index + 1 if job.state is JobState.DEVELOPING else None,
+            "phase": self._phase_number(job),
             "started_at": utcnow().isoformat(),
         }
         self.store.save(job)
@@ -3478,12 +3585,18 @@ class Engine:
         )
         if cost is not None:
             job.data.cost_usd = round(job.data.cost_usd + cost, 6)
+        phase = self._phase_number(job)
+        if phase is not None:
+            if job.data.phase_calls_for != phase:
+                job.data.phase_calls_for, job.data.phase_calls = phase, 0
+            job.data.phase_calls += result.attempts
         job.data.invocation_log.append(
             {
                 "role": role.value,
                 "model": result.model,  # what answered: the assignment, not the profile
                 "state": job.state.value,
-                "phase": job.data.phase_index + 1 if job.state is JobState.DEVELOPING else None,
+                # building, its gate and its review alike: the phase the call was for
+                "phase": phase,
                 "attempts": result.attempts,
                 "prompt_chars": result.prompt_chars,
                 "provider": result.provider,

@@ -2095,6 +2095,19 @@ export const TR: Record<string, string> = {
   "{n} tokens received": "{n} token alındı",
   "This development so far": "Bu geliştirmenin şimdiye kadarki toplamı",
   "This phase": "Bu faz",
+  "Answer…": "Cevapla…",
+  "This phase spent its budget. Say what to do next; it is sent to the developer.":
+    "Bu faz bütçesini doldurdu. Sırada ne yapılacağını yaz; geliştiriciye gönderilir.",
+  "QA recommends": "QA'nın önerisi",
+  "what should the developer do next?": "geliştirici sırada ne yapmalı?",
+  "Send QA's recommendation": "QA'nın önerisini gönder",
+  "The phase spent its budget of model calls without getting through. Nothing more is spent until you answer: what you write goes to the developer as the instruction for the next try, on a fresh budget.":
+    "Faz, model çağrısı bütçesini doldurdu ama geçemedi. Sen cevap verene kadar hiçbir şey harcanmıyor: yazdığın, bir sonraki denemede geliştiriciye talimat olarak gider ve bütçe sıfırlanır.",
+  "Model calls per phase": "Faz başına model çağrısı",
+  "A phase that reaches its own limit stops instead, with QA's recommendation, and waits for you to say what to do.":
+    "Kendi sınırına ulaşan bir faz ise başarısız olmaz; QA'nın önerisiyle durur ve ne yapılacağını söylemeni bekler.",
+  "model calls made for this phase, and the tokens they sent":
+    "bu faz için yapılan model çağrıları ve gönderdikleri token",
   "In total": "Toplam",
   "tokens not reported": "token bildirilmedi",
   "The call was given up on; it was billed, but no count came back.":

@@ -369,6 +369,16 @@ class FileChange(BaseModel):
     )
 
 
+class Recommendation(RoleOutput):
+    """What QA proposes when a phase has spent its budget of calls (T15.5)."""
+
+    recommendation: str = Field(
+        min_length=1,
+        description="What to do next, in one to three sentences a person can act on: "
+        "split the phase, change the approach, relax a check, or drop a part.",
+    )
+
+
 class DeveloperResult(RoleOutput):
     changes: list[FileChange] = Field(default_factory=list)
     phase_complete: bool = Field(

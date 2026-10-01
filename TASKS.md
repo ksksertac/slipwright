@@ -1503,20 +1503,20 @@ A phase's calls are counted by kind -- parts (truncated answers), build attempts
 fix rounds (2), gate triage -- and each kind stops on its own, so one phase can still take
 a dozen calls. Phase 5 of the same development took 6 developer calls and 3 QA calls.
 **Done when**
-- [ ] Every model call made for a phase counts against one budget (default 8, per
+- [x] Every model call made for a phase counts against one budget (default 8, per
   project); the existing per-kind limits stay
-- [ ] Past it the development stops at the decision gate with what was tried, how many
+- [x] Past it the development stops at the decision gate with what was tried, how many
   tokens it took, and the last error -- a person decides, as with any stuck step
-- [ ] It stops with a recommendation, not only a question: one model call (the phase's
+- [x] It stops with a recommendation, not only a question: one model call (the phase's
   QA, on the same budget's last allowance) reads the attempts and proposes what to do
   next -- split the phase, change the approach, relax a check, give up on a part -- in a
   sentence or two a person can act on
-- [ ] It then waits for a written answer. The gate shows the recommendation and a text
+- [x] It then waits for a written answer. The gate shows the recommendation and a text
   box; the person writes what to do (or accepts the recommendation as written), and that
   text goes to the developer as the instruction for the next attempt, which starts a
   fresh budget. A bare "retry" with nothing written is not offered here
-- [ ] The phase's call count and tokens are shown on the phase (Phases tab) as they grow
-- [ ] Test: a phase whose build never passes stops at the budget, not later, with a
+- [x] The phase's call count and tokens are shown on the phase (Phases tab) as they grow
+- [x] Test: a phase whose build never passes stops at the budget, not later, with a
   recommendation; the person's written answer reaches the developer's next prompt
 
 ### T15.6 — The plan, as much of it as the step needs

@@ -323,6 +323,9 @@ export function GateActions({ job, compact = false }: { job: Job; compact?: bool
     );
   }
   const error = approve.error ?? reject.error ?? skipTests.error ?? skipDeployment.error;
+  if (job.state === "awaiting_decision" && job.data.decision_kind === "phase_budget") {
+    return <BudgetAnswer job={job} compact={compact} />;
+  }
 
   return (
     <div className={compact ? "row" : "gate"}>
@@ -405,6 +408,75 @@ export function GateActions({ job, compact = false }: { job: Job; compact?: bool
         </div>
       )}
       {error && <div className="callout error">{describeError(error)}</div>}
+    </div>
+  );
+}
+
+/**
+ * A phase that spent its budget of calls (T15.5) waits for words, not a yes: a plain
+ * "continue" would spend another budget the same way. The box opens holding QA's
+ * recommendation -- to send as it stands, or to rewrite -- and what is sent is the
+ * developer's instruction for the next try, on a fresh budget.
+ */
+function BudgetAnswer({ job, compact }: { job: Job; compact: boolean }) {
+  const tx = useT();
+  const say = useSay();
+  const reject = useReject(job.id);
+  const recommendation = job.data.recommendation ?? "";
+  const [open, setOpen] = useState(!compact);
+  const [answer, setAnswer] = useState<string | null>(null);
+  // the recommendation is the agent's prose: shown in the reader's language, but the box
+  // holds it as written, since what is sent goes to the developer as it stands
+  const text = answer ?? recommendation;
+  const send = () => reject.mutate(text.trim(), { onSuccess: () => setAnswer(null) });
+  if (!open) {
+    return (
+      <div className="row">
+        <button className="btn primary small" onClick={() => setOpen(true)}>
+          {tx("Answer…")}
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className={compact ? "stack tight" : "gate"}>
+      {!compact && (
+        <div style={{ marginBottom: 8 }}>
+          {tx("This phase spent its budget. Say what to do next; it is sent to the developer.")}
+        </div>
+      )}
+      {recommendation && (
+        <div className="callout notice small" style={{ marginBottom: 8 }}>
+          <strong>{tx("QA recommends")}:</strong> {say(recommendation)}
+        </div>
+      )}
+      <textarea
+        rows={compact ? 4 : 5}
+        style={{ width: "100%", maxWidth: compact ? 320 : 640 }}
+        placeholder={tx("what should the developer do next?")}
+        value={text}
+        onChange={(e) => setAnswer(e.target.value)}
+        aria-label={tx("what should the developer do next?")}
+      />
+      <div className="row" style={{ marginTop: 6 }}>
+        <button
+          className="btn primary small"
+          disabled={!text.trim() || reject.isPending}
+          onClick={send}
+        >
+          {reject.isPending
+            ? tx("Sending…")
+            : recommendation && text.trim() === recommendation.trim()
+              ? tx("Send QA's recommendation")
+              : tx("Send")}
+        </button>
+        {compact && (
+          <button className="btn small" onClick={() => setOpen(false)}>
+            {tx("Cancel")}
+          </button>
+        )}
+      </div>
+      {reject.error && <div className="callout error">{describeError(reject.error)}</div>}
     </div>
   );
 }

@@ -305,6 +305,26 @@ class JobData(BaseModel):
     resume_state: str | None = Field(
         default=None, description="Where the job continues after the decision gate."
     )
+    # -- one budget for a phase (T15.5) --
+    phase_calls: int = Field(
+        default=0,
+        ge=0,
+        description="Model calls made for `phase_calls_for` since it started or since a "
+        "person last answered for it: building, fixing, triage and review alike.",
+    )
+    phase_calls_for: int | None = Field(
+        default=None, description="The phase (1-based) `phase_calls` counts."
+    )
+    decision_kind: str | None = Field(
+        default=None,
+        description="Why the decision gate stopped, when that changes what it offers: "
+        '"phase_budget" waits for a written answer and offers no plain approve.',
+    )
+    recommendation: str | None = Field(
+        default=None,
+        description="What QA proposes at a phase-budget stop, for the person to accept as "
+        "written or rewrite.",
+    )
     invocations: int = Field(default=0, ge=0, description="Model calls made so far.")
     tokens_used: int = Field(default=0, ge=0, description="Input + output tokens so far.")
     cost_usd: float = Field(

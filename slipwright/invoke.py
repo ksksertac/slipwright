@@ -54,6 +54,7 @@ class InvokeErrorKind(StrEnum):
     REFUSED = "refused"
     MALFORMED_OUTPUT = "malformed_output"
     BUDGET = "budget"  # the job's budget is exhausted (T9.7)
+    PHASE_BUDGET = "phase_budget"  # one phase spent its calls; a person decides (T15.5)
     LOOP = "loop"  # the role produced the same output twice in a row (T9.7)
     TRUNCATED = "truncated"  # the answer hit the output limit; ask for a smaller part
     PROVIDER_REJECTED = "provider_rejected"  # no balance, bad key: asking again cannot mend it

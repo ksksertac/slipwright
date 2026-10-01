@@ -56,6 +56,13 @@ class BudgetSettings(BaseModel):
     max_tokens: int | None = Field(default=None, ge=1000)
     max_wall_clock_s: int | None = Field(default=None, ge=60)
     max_invocations: int | None = Field(default=None, ge=1)
+    max_phase_calls: int | None = Field(
+        default=8,
+        ge=2,
+        description="Model calls one phase may take -- building, fixing, triage and review "
+        "alike -- before a person is asked what to do, with a recommendation (T15.5). None "
+        "means no limit beyond the per-kind ones.",
+    )
 
 
 class Project(BaseModel):

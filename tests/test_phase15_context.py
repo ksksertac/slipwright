@@ -251,3 +251,49 @@ def test_a_file_too_big_to_show_is_changed_by_edits_until_one_fits(
     text = (worktree / "OK").read_bytes().decode()
     assert "const line7 = 70;" in text and text.count("// keep me") == 4000  # nothing lost
     assert not (worktree / "NEW").exists()  # a refused answer writes none of itself
+
+
+# -- T15.5: one budget for a phase ------------------------------------------------------------
+
+
+def test_a_phase_whose_build_never_passes_stops_at_its_budget_and_waits_for_words(
+    store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
+) -> None:
+    import pytest
+
+    from slipwright.engine import EmptyApproval
+    from tests.pipeline import FALSE
+
+    broken = seed.model_copy(update={"test_cmd": FALSE})
+    provider = full_provider(broken, phases=1)
+    written = iter(range(1000))
+    provider.replies[RoleName.BACKEND] = lambda _req: {
+        "summary": "another try",
+        "changes": [{"path": "OK", "content": f"try {next(written)}\n"}],
+    }
+
+    def qa(req: Any) -> dict[str, Any]:
+        if "spent its budget" in req.prompt:
+            return {"summary": "it loops", "recommendation": "Split the phase in two."}
+        return {"summary": "the code", "gate_verdict": "code_is_wrong"}
+
+    provider.replies[RoleName.QA] = qa
+    engine = full_engine(store, worktrees_root, broken, provider, max_build_attempts=50)
+    job = engine.start(engine.create_job("x", repo).id)
+    job = engine.approve(engine.approve(job.id).id)
+
+    assert job.state is JobState.AWAITING_DECISION
+    assert job.data.decision_kind == "phase_budget"
+    assert job.data.recommendation == "Split the phase in two."
+    # eight calls, developer and triage alike, then the recommendation as the last allowance
+    assert job.data.phase_calls == 9
+    before = len(provider.requests)
+
+    with pytest.raises(EmptyApproval):
+        engine.approve(job.id)  # a plain yes would spend another budget the same way
+    assert len(provider.requests) == before
+
+    job = engine.reject(job.id, "Only make the OK file say yes.")
+    asked = [r for r in provider.requests[before:] if r.role is RoleName.BACKEND]
+    assert asked and _context(asked[0])["messages_from_human"] == ["Only make the OK file say yes."]
+    assert store.get(job.id).data.decision_kind == "phase_budget"  # and stopped again, fresh
