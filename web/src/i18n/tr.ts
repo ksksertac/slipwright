@@ -2061,19 +2061,19 @@ export const TR: Record<string, string> = {
   "Mac Connect": "Mac Connect",
   "Machines that build what this server cannot: iOS apps, and Android on Apple Silicon.":
     "Bu sunucunun derleyemediğini derleyen makineler: iOS uygulamaları, Apple Silicon'da Android.",
-  "A development with an iOS app builds everything else here, then waits for a Mac. Connect one and it carries on by itself. The Mac calls this server -- nothing is opened on it -- and builds only this account's apps.":
-    "iOS uygulaması olan bir geliştirme her şeyi burada yapar, sonra bir Mac bekler. Bir Mac bağladığında kendiliğinden devam eder. Mac bu sunucuyu arar -- Mac'te hiçbir port açılmaz -- ve yalnızca bu hesabın uygulamalarını derler.",
+  "Docker runs Linux, and an iOS app is built with Xcode, which runs only on macOS. So a Mac connects here with Mac Connect and does that build in Xcode. A development with an iOS app builds everything else here, then waits for a Mac; connect one and it carries on by itself. The Mac calls this server -- nothing is opened on it -- and builds only this account's apps.":
+    "Docker Linux tabanlıdır; iOS uygulamaları ise yalnızca macOS'ta çalışan Xcode ile derlenir. Bu yüzden bir Mac, Mac Connect ile buraya bağlanır ve derlemeyi Xcode'da yapar. iOS uygulaması olan bir geliştirme geri kalan her şeyi burada yapar, sonra bir Mac bekler; Mac bağlandığında kendiliğinden devam eder. Mac bu sunucuyu arar -- Mac'te hiçbir port açılmaz -- ve yalnızca bu hesabın uygulamalarını derler.",
   "Connected Macs": "Bağlı Mac'ler",
   "None yet.": "Henüz yok.",
   "Connect a Mac": "Mac bağla",
   "New code": "Yeni kod",
   "Make a code": "Kod oluştur",
-  "This computer's network address: on Windows, ipconfig shows it as IPv4 Address.":
-    "Bu bilgisayarın ağ adresi: Windows'ta ipconfig bunu IPv4 Address olarak gösterir.",
   "On the Mac, install Slipwright (once):": "Mac'te Slipwright'ı kur (bir kez):",
   "Then run:": "Sonra çalıştır:",
   "The code works once, for {m}:{s} more. It calls {address}.":
     "Kod bir kez çalışır, {m}:{s} daha geçerli. {address} adresini arar.",
+  "The code works once, for {m}:{s} more. The Mac looks for this server on its own network, on port {port}.":
+    "Kod bir kez çalışır, {m}:{s} daha geçerli. Mac bu sunucuyu kendi ağında, {port} portunda arar.",
   "This code has run out: make a new one.": "Bu kodun süresi doldu: yenisini oluştur.",
   "To have it start at login:": "Mac açılınca kendiliğinden başlaması için:",
   "It found no Xcode and no Android SDK": "Ne Xcode ne Android SDK buldu",

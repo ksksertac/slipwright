@@ -155,11 +155,15 @@ def test_a_code_carries_the_address_and_a_secret_and_catches_a_bad_copy() -> Non
         pairing.unpack("hello")
 
 
-def test_localhost_is_never_put_in_a_code() -> None:
+def test_a_code_made_at_localhost_carries_only_the_port() -> None:
     assert pairing.choose_address(None, "http://localhost:8500", LAN) == LAN
     assert pairing.choose_address("https://sw.example.com/", LAN) == "https://sw.example.com"
-    with pytest.raises(pairing.AddressNeeded):
-        pairing.choose_address("http://127.0.0.1:8500", "http://localhost:8500")
+    nearby = pairing.choose_address(None, "http://127.0.0.1:8500")
+    assert nearby == "http://localhost:8500"
+    secret = pairing.new_secret()
+    code = pairing.pack(nearby, secret)
+    assert len(code) < len(pairing.pack(LAN, secret))  # shorter still than a LAN one
+    assert pairing.unpack(code) == ("http://localhost:8500", secret)
 
 
 # -- pairing ------------------------------------------------------------------------------
@@ -179,10 +183,12 @@ def test_a_mac_pairs_once_with_a_code_and_is_listed(client: TestClient) -> None:
     assert [(w["name"], w["online"]) for w in listed] == [("Ada's Mac", True)]
 
 
-def test_the_page_must_say_an_address_a_mac_can_reach(client: TestClient) -> None:
-    refused = client.post("/api/workers/code", json={"address": "http://localhost:8500"})
-    assert refused.status_code == 422 and "address" in refused.json()["detail"]
-    # once given, the address is kept for the next code
+def test_a_page_open_at_localhost_gets_a_code_without_being_asked_anything(
+    client: TestClient,
+) -> None:
+    made = client.post("/api/workers/code", json={"address": "http://localhost:8500"})
+    assert made.status_code == 200 and made.json()["address"] == "http://localhost:8500"
+    # a page once open at an address another machine can reach is remembered for the next
     client.post("/api/workers/code", json={"address": LAN})
     again = client.post("/api/workers/code", json={"address": "http://localhost:8500"})
     assert again.status_code == 200 and again.json()["address"] == LAN

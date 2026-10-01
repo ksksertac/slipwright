@@ -11,7 +11,9 @@ import sys
 import tarfile
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Any
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
@@ -117,6 +119,64 @@ def test_a_bad_copy_of_the_code_never_reaches_the_network() -> None:
 
     with pytest.raises(CodeError):
         agent.pair("SW-0000-0000", client=Unreachable())  # type: ignore[arg-type]
+
+
+class OnlyAt:
+    """The network as the Mac sees it: the server answers at one address only."""
+
+    def __init__(self, client: TestClient, where: str) -> None:
+        self.client, self.where = client, where
+        self.tried: list[str] = []
+
+    def post(self, url: str, **kwargs: Any) -> Any:
+        self.tried.append(url)
+        if not url.startswith(self.where):
+            raise httpx.ConnectError("nobody there")
+        return self.client.post(url.removeprefix(self.where), **kwargs)
+
+
+def test_a_code_made_at_localhost_finds_the_server_on_the_macs_network(
+    client: TestClient,
+) -> None:
+    code = client.post("/api/workers/code", json={"address": "http://localhost:8500"})
+    net = OnlyAt(client, "http://192.168.1.30:8500")
+    config = agent.pair(
+        code.json()["code"],
+        name="test mac",
+        client=net,  # type: ignore[arg-type]
+        look_around=lambda port: ["192.168.1.7", "192.168.1.30"],
+    )
+    # this Mac first (the server in Docker beside it), then its network, in order
+    assert [u.removesuffix("/api/worker/pair") for u in net.tried] == [
+        "http://localhost:8500",
+        "http://192.168.1.7:8500",
+        "http://192.168.1.30:8500",
+    ]
+    assert config["address"] == "http://192.168.1.30:8500"
+
+
+def test_the_network_is_searched_only_when_nothing_nearer_answered(client: TestClient) -> None:
+    code = client.post("/api/workers/code", json={"address": LAN}).json()["code"]
+
+    def never(port: int) -> list[str]:
+        raise AssertionError("the network was searched")
+
+    config = agent.pair(
+        code,
+        client=OnlyAt(client, LAN),
+        look_around=never,  # type: ignore[arg-type]
+    )
+    assert config["address"] == LAN
+
+
+def test_a_server_nowhere_near_is_said_plainly(client: TestClient) -> None:
+    code = client.post("/api/workers/code", json={"address": "http://localhost:8500"})
+    with pytest.raises(agent.Unpaired, match="same network"):
+        agent.pair(
+            code.json()["code"],
+            client=OnlyAt(client, "http://10.9.9.9:1"),  # type: ignore[arg-type]
+            look_around=lambda port: [],
+        )
 
 
 # -- building --------------------------------------------------------------------------------

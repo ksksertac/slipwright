@@ -40,14 +40,15 @@ router = APIRouter(tags=["workers"])
 LONG_POLL_S = 25.0
 #: How often a waiting poll looks for a build.
 POLL_TICK_S = 1.0
-#: Where the address a person gave for their server is kept, for the next code.
+#: The last address a page was opened at that another machine could reach, for the next
+#: code made at ``localhost``.
 ADDRESS_SETTING = "workers.address"
 
 
 class CodeRequest(BaseModel):
     address: str | None = Field(
         default=None,
-        description="The address the page is open at, or one the person typed: the server "
+        description="The address the page is open at: the server "
         "as the Mac should call it. Unused when the installation has its own address.",
     )
 
@@ -105,8 +106,9 @@ def connection_code(body: CodeRequest, request: Request) -> ConnectionCode:
     """A fresh connection code; any earlier one stops working.
 
     The address in it is the installation's own when it has one (the mail settings' base
-    URL), else the one the page sent -- and never ``localhost``, which on the Mac would be
-    the Mac. A usable address the person gave is kept for the next code.
+    URL), else the one the page was opened at, else the last such one kept. A page open at
+    ``localhost`` still gets a code: it carries the port, and the Mac finds the server on
+    its own network. Nobody is asked for an address.
     """
     owner = _owner(request)
     engine = engine_for(request)

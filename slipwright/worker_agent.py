@@ -16,6 +16,7 @@ Keychain and SSH keys of the person who owns the Mac; the README says so.
 from __future__ import annotations
 
 import io
+import ipaddress
 import json
 import logging
 import os
@@ -27,10 +28,12 @@ import tarfile
 import tempfile
 import threading
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -151,25 +154,97 @@ def _exit_code(argv: list[str]) -> int:
 
 
 def pair(
-    code: str, *, name: str | None = None, client: httpx.Client | None = None
+    code: str,
+    *,
+    name: str | None = None,
+    client: httpx.Client | None = None,
+    look_around: Callable[[int], list[str]] | None = None,
 ) -> dict[str, str]:
-    """Trade a connection code for a token, and keep both with the address."""
+    """Trade a connection code for a token, and keep both with the address that took it.
+
+    The code's address is tried first. A code made at ``localhost`` has none -- only a
+    port -- and an address can go stale, so after it come this Mac itself (the server in
+    Docker beside the worker) and then the hosts of this Mac's own network that answer on
+    that port. Only the server that made the code accepts it, so a wrong door costs a
+    refusal and nothing else.
+    """
     address, _secret = pairing.unpack(code)  # a bad copy is refused before the network
     name = name or socket.gethostname()
     http = client or httpx.Client(timeout=30)
-    got = http.post(
-        f"{address}/api/worker/pair",
-        json={"code": code, "name": name, "capabilities": detect().capabilities},
+    body = {"code": code, "name": name, "capabilities": detect().capabilities}
+    refused: str | None = None
+    for candidate in _candidates(address, look_around or nearby_servers):
+        try:
+            got = http.post(f"{candidate}/api/worker/pair", json=body)
+        except httpx.TransportError:
+            continue
+        if got.status_code == 200:
+            answer = got.json()
+            return {
+                "address": candidate,
+                "worker_id": answer["worker_id"],
+                "token": answer["token"],
+                "name": name,
+            }
+        # the first refusal is the one to show: a server further down the list that
+        # never made this code would only say it does not know it
+        refused = refused or _detail(got)
+    if refused:
+        raise Unpaired(refused)
+    port = urlsplit(address).port or 80
+    raise Unpaired(
+        f"no Slipwright server found: tried {address}, this Mac and its network on port "
+        f"{port}. Is the Mac on the same network as the server?"
     )
-    if got.status_code != 200:
-        raise Unpaired(_detail(got))
-    answer = got.json()
-    return {
-        "address": address,
-        "worker_id": answer["worker_id"],
-        "token": answer["token"],
-        "name": name,
-    }
+
+
+def _candidates(address: str, look_around: Callable[[int], list[str]]) -> Iterator[str]:
+    """Where the server may be, best first. Lazy: the network is only searched when
+    nothing nearer answered."""
+    parts = urlsplit(address)
+    if pairing.reachable(address):
+        yield address
+    if parts.scheme != "http":
+        return  # a server behind https has a real name; it is not looked for nearby
+    port = parts.port or 80
+    yield f"http://localhost:{port}"
+    for host in look_around(port):
+        yield f"http://{host}:{port}"
+
+
+def nearby_servers(port: int) -> list[str]:
+    """The hosts of this Mac's network (its /24) that accept a connection on ``port``.
+
+    A probe is only a TCP connect, a few hundred milliseconds at most and many at once,
+    so the whole of a home network is looked at in a second or two.
+    """
+    me = _own_address()
+    if me is None:
+        return []
+    hosts = [str(h) for h in ipaddress.ip_network(f"{me}/24", strict=False).hosts() if str(h) != me]
+    with ThreadPoolExecutor(max_workers=64) as pool:
+        answers = list(pool.map(lambda host: _answers(host, port), hosts))
+    return [host for host, ok in zip(hosts, answers, strict=True) if ok]
+
+
+def _own_address() -> str | None:
+    """This Mac's address on its network: the one a packet out would leave from. A UDP
+    socket that is only connected sends nothing."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+            probe.connect(("192.0.2.1", 9))  # TEST-NET: never routed anywhere real
+            me = str(probe.getsockname()[0])
+    except OSError:
+        return None
+    return None if ipaddress.ip_address(me).is_loopback else me
+
+
+def _answers(host: str, port: int, timeout: float = 0.4) -> bool:
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
 
 
 def _detail(response: httpx.Response) -> str:
