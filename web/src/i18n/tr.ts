@@ -2087,4 +2087,11 @@ export const TR: Record<string, string> = {
     "Bu Mac kaldırılsın mı? Bu hesap için derlemeyi bırakır.",
   "Everything this server can build is done. The rest is built on a Mac; when one connects, the development carries on by itself from here.":
     "Bu sunucunun derleyebileceği her şey bitti. Kalanı bir Mac'te derlenir; bir Mac bağlandığında geliştirme buradan kendiliğinden devam eder.",
+  // what each call sent and got back, in the corner of the Right now feed
+  "{n} tokens sent": "{n} token gönderildi",
+  "{n} tokens received": "{n} token alındı",
+  "This development so far": "Bu geliştirmenin şimdiye kadarki toplamı",
+  "tokens not reported": "token bildirilmedi",
+  "The call was given up on; it was billed, but no count came back.":
+    "Çağrıdan vazgeçildi; ücretlendirildi ama token sayısı gelmedi.",
 };

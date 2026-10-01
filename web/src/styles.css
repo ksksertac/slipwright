@@ -6621,6 +6621,60 @@ tr.run-detail td {
   margin-left: auto;
   white-space: nowrap;
 }
+/* the corner of a call: what went to the model and what came back, then when */
+.now-right {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+}
+.now-right .now-time {
+  margin-left: 0;
+}
+.now-tokens {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 3px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-2);
+  font-size: 11.5px;
+  cursor: default;
+}
+.now-tok {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  color: var(--text-2);
+}
+.now-tok i {
+  font-style: normal;
+  font-weight: 700;
+}
+.now-tok.in i {
+  color: var(--accent);
+}
+.now-tok.out i {
+  color: var(--good-text);
+}
+.now-cost {
+  padding: 1px 7px 1px 6px;
+  border-left: 1px solid var(--line);
+  color: var(--text-3);
+}
+.now-tokens.unknown {
+  padding: 1px 8px;
+  color: var(--text-3);
+  font-family: inherit;
+  border-style: dashed;
+}
+.now-head-top .now-tokens {
+  font-size: 12px;
+}
 .now-note {
   font-size: 13px;
   color: var(--text-2);

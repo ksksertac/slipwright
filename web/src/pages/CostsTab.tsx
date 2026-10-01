@@ -14,7 +14,7 @@ import { useT, type T } from "../i18n";
 
 /** Dollars, at the precision the number deserves: cents are noise above a dollar, and a
  *  tenth of a cent is the whole story below one. */
-function usd(value: number | null | undefined): string {
+export function usd(value: number | null | undefined): string {
   if (value === null || value === undefined) return "—";
   const abs = Math.abs(value);
   if (abs >= 100) return `$${value.toFixed(0)}`;
