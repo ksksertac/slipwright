@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Job, Transition } from "../api/client";
-import { useT } from "../i18n";
+import { currentLang, useT } from "../i18n";
+import { usd } from "../pages/CostsTab";
 import { noteText } from "../i18n/notes";
 import { useSay } from "../i18n/said";
 import { AgentIcon, ROLE_LABEL } from "./agents";
@@ -18,6 +19,9 @@ interface Call {
   attempts?: number;
   input_tokens?: number | null;
   output_tokens?: number | null;
+  cost_usd?: number | null;
+  /** attempts that timed out: generated and billed, with no count ever sent back */
+  unreported_attempts?: number | null;
   ok: boolean;
   error?: string | null;
   started_at?: string | null;
@@ -58,7 +62,7 @@ export function NowFeed({ job }: { job: Job }) {
 
   return (
     <div className="now">
-      <NowHead job={job} inflight={inflight} />
+      <NowHead job={job} inflight={inflight} calls={calls} />
       <ol className="now-feed">
         {inflight && !hasFinished(job.state) && <Waiting call={inflight} />}
         {entries.map((e, i) =>
@@ -77,8 +81,12 @@ export function NowFeed({ job }: { job: Job }) {
 }
 
 /** Where the development is: the stage, the phase and the task it is on, and who has it. */
-function NowHead({ job, inflight }: { job: Job; inflight: InFlight | null }) {
+function NowHead({ job, inflight, calls }: { job: Job; inflight: InFlight | null; calls: Call[] }) {
   const tx = useT();
+  // the development so far, from the same log the cards below are drawn from, so the
+  // total is always the sum of what the page shows
+  const sent = sum(calls.map((c) => c.input_tokens));
+  const got = sum(calls.map((c) => c.output_tokens));
   const say = useSay();
   const plan = job.data.plan as PlanShape | null;
   const index = job.data.phase_index ?? 0;
@@ -97,6 +105,11 @@ function NowHead({ job, inflight }: { job: Job; inflight: InFlight | null }) {
               <AgentIcon role={inflight.role} />
             </span>
             {tx(ROLE_LABEL[inflight.role] ?? inflight.role)}
+          </span>
+        )}
+        {(sent !== null || got !== null) && (
+          <span className="now-right" title={tx("This development so far")}>
+            <Tokens input={sent} output={got} cost={job.data.cost_usd ? job.data.cost_usd : null} />
           </span>
         )}
       </div>
@@ -156,10 +169,7 @@ function CallItem({ call }: { call: Call }) {
   const tx = useT();
   const say = useSay();
   const took = duration(call.started_at, call.at);
-  const tokens =
-    call.input_tokens != null || call.output_tokens != null
-      ? `${call.input_tokens ?? "—"} → ${call.output_tokens ?? "—"}`
-      : null;
+  const counted = call.input_tokens != null || call.output_tokens != null;
   return (
     <li className={`now-item ${call.ok ? "" : "bad"}`} data-agent={call.role}>
       <div className="now-item-head">
@@ -171,16 +181,28 @@ function CallItem({ call }: { call: Call }) {
         <span className={`badge plain ${call.ok ? "ok" : "bad"}`}>
           {call.ok ? tx("answered") : (call.error ?? tx("failed"))}
         </span>
-        <span className="now-time faint small" title={formatTime(call.at)}>
-          {took && <span className="mono">{took} · </span>}
-          {timeAgo(call.at)}
+        <span className="now-right">
+          {counted ? (
+            <Tokens input={call.input_tokens} output={call.output_tokens} cost={call.cost_usd} />
+          ) : call.unreported_attempts ? (
+            // a call given up on was still written, and billed; no vendor says how much
+            <span
+              className="now-tokens unknown"
+              title={tx("The call was given up on; it was billed, but no count came back.")}
+            >
+              {tx("tokens not reported")}
+            </span>
+          ) : null}
+          <span className="now-time faint small" title={formatTime(call.at)}>
+            {took && <span className="mono">{took} · </span>}
+            {timeAgo(call.at)}
+          </span>
         </span>
       </div>
       {call.summary && <p className="now-summary">{say(call.summary)}</p>}
       <div className="now-meta faint tiny mono">
         {[
           call.phase ? tx("phase {n}", { n: call.phase }) : null,
-          tokens ? `${tokens} tokens` : null,
           call.attempts && call.attempts > 1 ? `${call.attempts} ${tx("attempts")}` : null,
         ]
           .filter(Boolean)
@@ -227,6 +249,59 @@ function Model({ provider, model }: { provider?: string | null; model?: string |
       {model ?? ""}
     </span>
   );
+}
+
+/** What went to the model and what came back, small enough for a card's corner: the
+ *  rounded figures to read at a glance, the exact ones (and the price) under the pointer. */
+function Tokens({
+  input,
+  output,
+  cost,
+}: {
+  input?: number | null;
+  output?: number | null;
+  cost?: number | null;
+}) {
+  const tx = useT();
+  const exact = new Intl.NumberFormat(currentLang());
+  const title = [
+    input != null ? tx("{n} tokens sent", { n: exact.format(input) }) : null,
+    output != null ? tx("{n} tokens received", { n: exact.format(output) }) : null,
+    cost != null ? usd(cost) : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  return (
+    <span className="now-tokens mono" title={title}>
+      <span className="now-tok in">
+        <i aria-hidden="true">↑</i>
+        {compact(input)}
+      </span>
+      <span className="now-tok out">
+        <i aria-hidden="true">↓</i>
+        {compact(output)}
+      </span>
+      {cost != null && <span className="now-cost">{usd(cost)}</span>}
+    </span>
+  );
+}
+
+/** 12431 -> "12.4k": the size of a prompt is read in thousands, not to the token. */
+function compact(n: number | null | undefined): string {
+  if (n == null) return "—";
+  if (n < 1000) return String(n);
+  if (n < 1_000_000) return `${trim(n / 1000)}k`;
+  return `${trim(n / 1_000_000)}M`;
+}
+
+function trim(x: number): string {
+  return (x < 10 ? x.toFixed(1) : Math.round(x).toString()).replace(/\.0$/, "");
+}
+
+/** The sum of what is known; null when nothing is, so "no count" never reads as zero. */
+function sum(values: (number | null | undefined)[]): number | null {
+  const known = values.filter((v): v is number => v != null);
+  return known.length ? known.reduce((a, b) => a + b, 0) : null;
 }
 
 function taskTitle(job: Job, taskId: string | null | undefined): string | null {
