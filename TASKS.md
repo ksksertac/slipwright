@@ -1430,6 +1430,60 @@ The shape, decided with the user before any of it was written:
 
 ---
 
+## Phase 15 — What a model is sent: only what the step needs
+
+A development stopped at the standards review because QA's prompt was 153,745,385
+characters against a limit of 1,048,576: phase 1 had committed all of `node_modules`, and
+the review is given the phase's diff whole. Looking at it step by step, every role is
+sent a JSON context built before the call -- the model reads nothing itself -- and three
+parts of that context have no bound: the phase diff, the branch diff and the file tree's
+choice of what to show. Roughly, 20,000 characters is 5,000-7,000 tokens; a path list
+costs a little more per character than prose.
+
+Where a diff is sent, and whether it has to be:
+
+| Step | Gets | Needs it? |
+|---|---|---|
+| Standards review | `phase_diff` | yes: it checks the lines against the standards |
+| Gate triage (test wrong or code wrong) | `phase_diff` | yes |
+| QA, proposing cases | `branch_diff` | yes: the real names of what was built |
+| QA, writing tests | `branch_diff` | yes: it cannot test code it has not seen |
+| DevOps, the pull request | `branch_diff` | no: the draft has the plan and history; it needs which files changed |
+
+### T15.1 — Dependencies are never committed, no diff is sent unbounded (#45)
+**Done when**
+- [x] `NEVER_COMMITTED` (node_modules, .gradle, build, .venv, __pycache__, DerivedData, ...)
+  is written to the repository's `info/exclude`; the project's `.gitignore` is untouched
+- [x] What an earlier commit let in by mistake leaves the branch with the next commit; the
+  files stay on disk for the build
+- [x] Lock files and `dist/` stay committed but are left out of every diff a role is shown
+- [x] A diff past 400,000 characters names every changed file and sends what fits
+
+### T15.2 — DevOps writes the pull request from the files that changed, not the diff
+**Done when**
+- [ ] DevOps is given `git diff --stat` (files and line counts) instead of `branch_diff`;
+  the draft already carries the plan and the history it describes
+- [ ] The instructions say the pull request is described from the draft and the file list,
+  and that nothing is invented beyond them
+- [ ] Test: the DevOps prompt of a development whose branch diff is large stays small, and
+  still names every changed file
+
+### T15.3 — The developer's file tree shows the code first
+`tree` is the project's map: paths only, at most 400 entries (~6,000 tokens), so the
+developer imports what exists, puts a new file where the project keeps its kind and does
+not write a second `util`. It walks folders alphabetically and stops at 400, so in a big
+repository `assets/`, `docs/` or `public/` can fill it and `src/` never appear.
+**Done when**
+- [ ] The folders of the files this phase touches, and then the source folders, are listed
+  before anything else
+- [ ] Files that are not code (images, fonts, media, fixtures past a few) are summarised
+  per folder with their count (`public/images: 214 files`) instead of one line each
+- [ ] The cap stays; what is cut says how many entries were left out and where
+- [ ] Test: a repository with 500 images in `public/` and a small `src/` gives a tree in
+  which every file under `src/` appears
+
+---
+
 ## Phase 10 — Proposed (not started)
 
 ### T10.1 — Parallel phases per domain
