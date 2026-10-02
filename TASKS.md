@@ -1582,9 +1582,98 @@ were being built a second time.
 
 ---
 
+## Phase 16 — Every step is on the remote, and independent phases run side by side
+
+Two things a person watching the pipeline expected and did not get. Every box that
+changes the code committed it, but nothing was pushed until DevOps opened the pull request
+at the very end: ten phases of the Android app, fourteen hours of work, and the remote had
+none of it -- nothing to look at, review or rescue if the machine went away. And the phases
+ran one after another in one worktree, so a backend phase waited for a web phase it had
+nothing to do with. T10.1 proposed the second; this phase replaces it with what the engine
+has since learned (phase budgets, re-plans from a phase, the Mac worker, `files_cut`).
+
+### T16.1 — Every step that changes the code is committed and pushed
+Commits already happen per phase (`slipwright: phase N: …`), for the tests and for the
+deployment files. The push is what is missing.
+**Done when**
+- [ ] After every commit the job branch is pushed (`--force-with-lease`, as DevOps does):
+  each phase, a standards-review fix round, QA's tests, the deployment files, a CI fix
+- [ ] A push that fails does not stop the development: the step notes it ("committed,
+  not pushed: …") and the next push carries it; a checkout with no remote, or a project
+  with pushing turned off, skips it without a word
+- [ ] The first push opens the pull request as a **draft**, titled from the request, so the
+  work can be followed on the host from phase 1; DevOps writes its description at the end
+  and marks it ready for review instead of opening it
+- [ ] The commit message names the phase, its task and its Jira key
+  (`phase 3/10: Soru sırası … [SCRUM-131]`); the pipeline card links the commit
+- [ ] The pushes go to the project's own repository, on the development's branch, and
+  carry only the project's code. The boxes that change no file (backlog, architecture,
+  design, the gates) commit nothing: their record is Slipwright's and Jira's, never the
+  project's repository
+- [ ] Tests: a three-phase development pushes three times before DevOps, the draft PR
+  exists after phase 1, a push refused by the host leaves a note and the next one succeeds
+
+### T16.2 — The plan says what each phase needs
+Before anything runs side by side the engine has to know what may. Useful on its own:
+today's order is the Architect's guess, and a re-plan cannot tell which later phases a
+changed one breaks.
+**Done when**
+- [ ] Each plan phase carries `depends_on`: the phase numbers it builds on. The Architect is
+  told the rules: a phase depends on every phase whose files it changes or reads, on the
+  backend contract a front-end uses, and a platform phase on everything it ships; two
+  phases that touch the same file are never independent
+- [ ] The engine checks it: no cycle, no forward reference, and touching the same file
+  without a dependency is refused back to the Architect like any other bad plan
+- [ ] The plan view and the pipeline draw the dependencies; a phase whose dependencies are
+  all done is shown as *ready*
+- [ ] A re-plan keeps the dependencies of kept phases, and a new phase may depend on them
+- [ ] Still run one at a time here, in dependency order: this task changes no behaviour
+  beyond the order, and is what T16.3 stands on
+- [ ] Tests: a plan with a cycle or a shared file is asked again; the order respects the
+  dependencies
+
+### T16.3 — Ready phases run side by side
+**Done when**
+- [ ] Phases whose dependencies are done start together, each in a worktree of its own on
+  a branch of its own (`<job branch>-p<N>`) cut from the job branch as it stands -- jobs and
+  phases never share a checkout
+- [ ] At most N at once per development (project setting, default 3) and per model
+  provider (its rate limit); the rest wait their turn as *ready*
+- [ ] Each runs the phase as today: its own build gate, standards review, fix rounds and
+  phase budget. A phase that stops (budget, a failed gate, a Mac it waits for) stops only
+  itself; the others carry on, and the development waits for a person only when nothing
+  else can run
+- [ ] A finished phase is merged into the job branch in plan order, the build gate runs
+  once more on the merged branch, and the branch is pushed (T16.1). A merge conflict goes
+  to the specialist of the later phase with the conflict shown, then to the person at a
+  gate if it stays
+- [ ] A re-plan while phases run lets the running ones finish their call and keeps every
+  phase already merged
+- [ ] What the job keeps for one phase today becomes per phase: the call in flight, the
+  build attempts, the last build output, the review rounds and the phase budget
+- [ ] The pipeline shows the running phases side by side with their own state; *Right now*
+  shows every call in flight; Jira moves each task on its own
+- [ ] Tests: two independent phases run at once (a scripted provider with a barrier), a
+  dependent one waits for both, a conflict reaches the later phase's specialist and then
+  the gate, a stopped phase does not stop its neighbour
+
+> What to expect: parallelism pays across domains -- a backend phase beside a web phase
+> beside a mobile one. The Android app's ten phases all changed `App.tsx` and its screens,
+> so T16.2 would have made them a chain and they would have run as they did. That is the
+> point of T16.2: the plan says when side by side is safe, not the scheduler's hope.
+
+### Order
+T16.1 first: small, and every later step is safer once the work is on the remote.
+T16.2 next: it changes only the order, and makes T16.3's question answerable. T16.3 last,
+in two pull requests -- the per-phase state of the job first, then the scheduler.
+
+---
+
 ## Phase 10 — Proposed (not started)
 
 ### T10.1 — Parallel phases per domain
+> Superseded by Phase 16 (T16.2 and T16.3), which plans the same with what the engine has
+> learned since.
 Today the phases of one development run one after another in a single worktree (a phase
 commits, the next builds on it). Backend, web and mobile phases are often independent once
 the architecture is approved.
