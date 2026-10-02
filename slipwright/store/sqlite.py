@@ -55,6 +55,23 @@ from slipwright.store.workers import WorkerStoreMixin
 #: long list is slow everywhere, so long lookups are chunked.
 _IN_CHUNK = 400
 
+#: The longest detail a history entry keeps. A diff is cut to ``MAX_DIFF_CHARS`` before it
+#: is written and a build log to its tail, but nothing stopped a caller that forgot: one QA
+#: note carried a 145 MB diff of node_modules, and every read of that development -- the
+#: page polls it -- loaded, parsed and sent it whole. The start and the end are kept, where
+#: a diff's file list and a log's error are.
+MAX_DETAIL = 500_000
+DETAIL_TAIL = 100_000
+
+
+def bounded(detail: str | None) -> str | None:
+    if detail is None or len(detail) <= MAX_DETAIL:
+        return detail
+    head = MAX_DETAIL - DETAIL_TAIL
+    cut = len(detail) - MAX_DETAIL
+    return f"{detail[:head]}\n\n(... {cut:,} characters cut here ...)\n\n{detail[-DETAIL_TAIL:]}"
+
+
 #: Passed as ``owner_id`` to mean "no filter". ``None`` cannot mean that, because ``None``
 #: is also a real owner: the one projects made before accounts had owners belong to.
 ANY_OWNER = "*"
@@ -151,9 +168,13 @@ class JobStore(
 
     # -- reads -------------------------------------------------------------------------
 
-    def get(self, job_id: str, owner_id: str | None = ANY_OWNER) -> Job:
+    def get(self, job_id: str, owner_id: str | None = ANY_OWNER, *, details: bool = True) -> Job:
         """One job. With ``owner_id``, a job belonging to somebody else is *not found*
-        rather than forbidden: a 404 says nothing about what exists."""
+        rather than forbidden: a 404 says nothing about what exists.
+
+        ``details=False`` leaves every history entry's ``detail`` unread and gives its
+        size instead: what a list or a page that polls needs. The diffs and logs are most
+        of a development's bytes, and only the one somebody opens is worth reading."""
         with self.db.connect() as conn:
             query = select(jobs).where(jobs.c.id == job_id)
             if owner_id != ANY_OWNER:
@@ -161,15 +182,18 @@ class JobStore(
             row = one(conn.execute(query))
             if row is None:
                 raise JobNotFound(job_id)
+            columns = [
+                job_history.c.from_state,
+                job_history.c.to_state,
+                job_history.c.at,
+                job_history.c.note,
+                job_history.c.detail_size,
+            ]
+            if details:
+                columns.append(job_history.c.detail)
             history = rows(
                 conn.execute(
-                    select(
-                        job_history.c.from_state,
-                        job_history.c.to_state,
-                        job_history.c.at,
-                        job_history.c.note,
-                        job_history.c.detail,
-                    )
+                    select(*columns)
                     .where(job_history.c.job_id == job_id)
                     .order_by(job_history.c.seq)
                 )
@@ -179,7 +203,13 @@ class JobStore(
         job.data.inbox = inbox
         return job
 
-    def list(self, project_id: str | None = None, owner_id: str | None = ANY_OWNER) -> list[Job]:
+    def list(
+        self,
+        project_id: str | None = None,
+        owner_id: str | None = ANY_OWNER,
+        *,
+        details: bool = True,
+    ) -> list[Job]:
         query = select(jobs.c.id).order_by(jobs.c.created_at, jobs.c.id)
         if project_id is not None:
             query = query.where(jobs.c.project_id == project_id)
@@ -187,7 +217,24 @@ class JobStore(
             query = query.where(jobs.c.owner_id == owner_id)
         with self.db.connect() as conn:
             ids = [r["id"] for r in rows(conn.execute(query))]
-        return [self.get(job_id) for job_id in ids]
+        return [self.get(job_id, details=details) for job_id in ids]
+
+    def transition(self, job_id: str, index: int) -> Transition | None:
+        """One history entry, whole: the ``index``-th of the job's, as ``Job.history``
+        numbers them. Read on its own, so opening one does not read all the others."""
+        if index < 0:
+            return None
+        with self.db.connect() as conn:
+            row = one(
+                conn.execute(
+                    select(job_history)
+                    .where(job_history.c.job_id == job_id)
+                    .order_by(job_history.c.seq)
+                    .offset(index)
+                    .limit(1)
+                )
+            )
+        return None if row is None else self._transition(row)
 
     # -- projects ----------------------------------------------------------------------
 
@@ -599,6 +646,7 @@ class JobStore(
 
     @staticmethod
     def _insert_transition(conn: Any, job_id: str, t: Transition) -> None:
+        detail = bounded(t.detail)
         conn.execute(
             insert(job_history).values(
                 job_id=job_id,
@@ -606,8 +654,20 @@ class JobStore(
                 to_state=t.to_state.value,
                 at=t.at.isoformat(),
                 note=t.note,
-                detail=t.detail,
+                detail=detail,
+                detail_size=None if detail is None else len(detail),
             )
+        )
+
+    @staticmethod
+    def _transition(h: Mapping[str, Any]) -> Transition:
+        return Transition(
+            from_state=JobState(h["from_state"]),
+            to_state=JobState(h["to_state"]),
+            at=datetime.fromisoformat(h["at"]),
+            note=h["note"],
+            detail=h.get("detail"),
+            detail_size=h.get("detail_size"),
         )
 
     @staticmethod
@@ -628,16 +688,7 @@ class JobStore(
                 else Profile.model_validate_json(row["profile_json"])
             ),
             created_at=datetime.fromisoformat(row["created_at"]),
-            history=[
-                Transition(
-                    from_state=JobState(h["from_state"]),
-                    to_state=JobState(h["to_state"]),
-                    at=datetime.fromisoformat(h["at"]),
-                    note=h["note"],
-                    detail=h["detail"],
-                )
-                for h in history
-            ],
+            history=[JobStore._transition(h) for h in history],
             data=(
                 JobData()
                 if row["data_json"] is None

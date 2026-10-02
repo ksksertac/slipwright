@@ -199,6 +199,16 @@ class Transition(BaseModel):
     detail: str | None = Field(
         default=None, description="Long-form record for this step: a diff, a build log, ..."
     )
+    detail_size: int | None = Field(
+        default=None,
+        description="How long `detail` is, in characters. A job read without its details "
+        "(the lists, and the page that follows a development) carries this and not "
+        "`detail`: GET /jobs/{id}/history/{index} is the entry with it.",
+    )
+
+    @property
+    def has_detail(self) -> bool:
+        return bool(self.detail) or bool(self.detail_size)
 
 
 class InboxMessage(BaseModel):

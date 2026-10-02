@@ -22,6 +22,8 @@ import { AgentIcon, DomainBadge, ROLE_LABEL } from "../components/agents";
 import { Crumbs } from "../components/Crumbs";
 import { DesignGate } from "../components/DesignGate";
 import { Detail } from "../components/Detail";
+import { hasDetail, useEntryDetail } from "../components/EntryDetail";
+import { EntryFold } from "../components/EntryFold";
 import { TestCaseList } from "../components/TestCases";
 import { Diff } from "../components/Diff";
 import { ReviewDetail, ViolationsTable, type ReviewRecord } from "../components/Review";
@@ -397,12 +399,12 @@ function GatePanel({ job }: { job: Job }) {
             </span>
             <RetryActions job={job} />
           </div>
-          {last?.detail && (
-            <details style={{ marginTop: 6 }}>
-              <summary>{tx("detail")}</summary>
-              <Detail text={last.detail} />
-            </details>
-          )}
+          <EntryFold
+            job={job}
+            entry={last}
+            style={{ marginTop: 6 }}
+            summary={<summary>{tx("detail")}</summary>}
+          />
           <div className="small muted" style={{ marginTop: 6 }}>
             {tx("Retry continues from the step that failed")} (
             <code>{last?.from_state ?? "backlog"}</code>); {tx("everything built so far stays.")}
@@ -600,12 +602,11 @@ function DecisionGate({ job }: { job: Job }) {
           )}
         </p>
       )}
-      {stop?.detail && (
-        <details>
-          <summary className="small">{tx("what happened")}</summary>
-          <Detail text={stop.detail} />
-        </details>
-      )}
+      <EntryFold
+        job={job}
+        entry={stop}
+        summary={<summary className="small">{tx("what happened")}</summary>}
+      />
     </div>
   );
 }
@@ -733,6 +734,8 @@ function WrittenTestsGate({ job }: { job: Job }) {
   const entry = [...job.history]
     .reverse()
     .find((t) => t.to_state === "awaiting_test_approval" && (t.note ?? "").startsWith("qa: tests"));
+  // the tests themselves are what is being approved: fetched as soon as the gate is shown
+  const written = useEntryDetail(job, entry, true);
   return (
     <div style={{ marginTop: 12 }}>
       <p className="muted small">
@@ -740,7 +743,7 @@ function WrittenTestsGate({ job }: { job: Job }) {
           "QA wrote tests for the approved cases and they passed the build gate. Approving hands the branch to DevOps.",
         )}
       </p>
-      {entry?.detail && <Detail text={entry.detail} />}
+      {written.loading ? <Loading rows={2} /> : written.text && <Detail text={written.text} />}
     </div>
   );
 }
@@ -930,7 +933,7 @@ function PhasePanel({ job, group, open }: { job: Job; group: PhaseGroup; open: b
           <div className="muted small">{tx("Nothing has run in this phase yet.")}</div>
         ) : (
           group.entries.map((t, i) => (
-            <Step key={i} entry={t} last={i === group.entries.length - 1} />
+            <Step key={i} job={job} entry={t} last={i === group.entries.length - 1} />
           ))
         )}
       </div>
@@ -938,17 +941,22 @@ function PhasePanel({ job, group, open }: { job: Job; group: PhaseGroup; open: b
   );
 }
 
-function Step({ entry, last }: { entry: Transition; last: boolean }) {
+function Step({ job, entry, last }: { job: Job; entry: Transition; last: boolean }) {
   const note = entry.note ?? "";
   const { kind, tone, body } = stepKind(note);
-  const detail = entry.detail ?? "";
+  const first = kind === "diff" && last;
+  const [open, setOpen] = useState(first);
+  const fetched = useEntryDetail(job, entry, open);
+  const detail = fetched.text;
   return (
-    <details className="step-row" open={kind === "diff" && last}>
+    <details className="step-row" open={first} onToggle={(e) => setOpen(e.currentTarget.open)}>
       <summary>
         <span className={`badge ${tone}`}>{kind}</span> {note}{" "}
         <span className="muted small">· {formatTime(entry.at)}</span>
       </summary>
-      {body === "review" ? (
+      {fetched.loading ? (
+        <Loading rows={2} />
+      ) : body === "review" ? (
         <ReviewDetail text={detail} />
       ) : body === "standards" ? (
         <StandardsList text={detail} />
@@ -1163,7 +1171,7 @@ function History({ job, projectId }: { job: Job; projectId: string }) {
           kind: classify(t) as "role",
           role: null,
           title: t.note ?? `${t.from_state} -> ${t.to_state}`,
-          has_detail: !!t.detail,
+          has_detail: hasDetail(t),
         }))
         .reverse(),
     [job],

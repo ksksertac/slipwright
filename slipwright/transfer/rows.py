@@ -32,7 +32,8 @@ TABLES = (
 #: Version 3 carries what people said to a development's agents (``job_messages``).
 #: Version 4 replaces a project the receiver already has, and carries the ChatGPT
 #: sign-in: an older receiver would skip the first and refuse the second.
-PROTOCOL = 4
+#: Version 5 carries a history entry's ``detail_size``.
+PROTOCOL = 5
 #: The largest piece of anything in one part: a run of rows, a slice of a checkout. Rows
 #: are a stream of JSON lines cut at this size, wherever the cut falls, so neither a long
 #: history nor a fifty-megabyte attachment is ever more than one part can carry.

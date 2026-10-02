@@ -85,6 +85,10 @@ job_history = Table(
     Column("at", Text, nullable=False),
     Column("note", Text),
     Column("detail", Text),
+    # how long ``detail`` is. A job read without its details -- every list, the page that
+    # polls it -- selects this and not the detail, which SQLite would load whole even to
+    # take its length (0014)
+    Column("detail_size", Integer),
     Index("job_history_job_id", "job_id", "seq"),
 )
 

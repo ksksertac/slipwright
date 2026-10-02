@@ -641,9 +641,9 @@ def create_app(
             holders=holders,
         )
 
-    def _get(eng: Engine, job_id: str, request: Request) -> Job:
+    def _get(eng: Engine, job_id: str, request: Request, *, details: bool = True) -> Job:
         try:
-            return eng.store.get(job_id, _owner(request))
+            return eng.store.get(job_id, _owner(request), details=details)
         except JobNotFound as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -686,14 +686,16 @@ def create_app(
         eng = engine_for(request)
         owner = _owner(request)
         return overview(
-            len(eng.store.list_projects(owner)), eng.store.list(owner_id=owner), recent=recent
+            len(eng.store.list_projects(owner)),
+            eng.store.list(owner_id=owner, details=False),
+            recent=recent,
         )
 
     @api.get("/activity", response_model=list[ActivityItem])
     def get_all_activity(
         request: Request, limit: int | None = 50, role: RoleName | None = None
     ) -> list[ActivityItem]:
-        jobs = engine_for(request).store.list(owner_id=_owner(request))
+        jobs = engine_for(request).store.list(owner_id=_owner(request), details=False)
         return project_activity(jobs, limit=limit, role=role)
 
     @api.get("/agents", response_model=list[AgentSummary])
@@ -840,7 +842,7 @@ def create_app(
         eng = engine_for(request)
         _get_project(eng, project_id, request)
         jobs = sorted(
-            eng.store.list(project_id, owner_id=_owner(request)),
+            eng.store.list(project_id, owner_id=_owner(request), details=False),
             key=lambda j: j.created_at,
             reverse=True,
         )
@@ -850,7 +852,9 @@ def create_app(
     def get_progress(project_id: str, request: Request) -> ProjectProgress:
         eng = engine_for(request)
         _get_project(eng, project_id, request)
-        return project_progress(project_id, eng.store.list(project_id, owner_id=_owner(request)))
+        return project_progress(
+            project_id, eng.store.list(project_id, owner_id=_owner(request), details=False)
+        )
 
     @api.get("/projects/{project_id}/costs", response_model=ProjectCosts)
     def get_costs(project_id: str, request: Request) -> ProjectCosts:
@@ -1188,11 +1192,15 @@ def create_app(
 
     @api.get("/jobs", response_model=list[Job])
     def list_jobs(request: Request) -> list[Job]:
-        return engine_for(request).store.list(owner_id=_owner(request))
+        """Every development, each history entry without its detail (its size instead)."""
+        return engine_for(request).store.list(owner_id=_owner(request), details=False)
 
     @api.get("/jobs/{job_id}", response_model=Job)
     def get_job(job_id: str, request: Request) -> Job:
-        return _get(engine_for(request), job_id, request)
+        """A development, each history entry without its detail (its size instead): the
+        page asks for this every time something happens to it, and the diffs and logs are
+        most of its bytes. One entry with its detail is ``/history/{index}``."""
+        return _get(engine_for(request), job_id, request, details=False)
 
     @api.patch("/jobs/{job_id}", response_model=Job)
     def rename_job(job_id: str, body: JobPatch, request: Request) -> Job:
@@ -1220,10 +1228,12 @@ def create_app(
     @api.get("/jobs/{job_id}/history/{index}", response_model=Transition)
     def get_transition(job_id: str, index: int, request: Request) -> Transition:
         """One history entry in full (its ``detail`` holds the diff, log or JSON)."""
-        job = _get(engine_for(request), job_id, request)
-        if index < 0 or index >= len(job.history):
+        eng = engine_for(request)
+        _get(eng, job_id, request, details=False)  # 404 for a job that is not the caller's
+        entry: Transition | None = eng.store.transition(job_id, index)
+        if entry is None:
             raise HTTPException(status_code=404, detail=f"no history entry {index}")
-        return job.history[index]
+        return entry
 
     @api.get("/jobs/{job_id}/steps/{step_key}", response_model=StepDetail)
     def get_step_detail(job_id: str, step_key: str, request: Request) -> StepDetail:

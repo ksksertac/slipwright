@@ -190,6 +190,13 @@ behaviour deliberately changed, rewrite it to state the new rule -- do not weake
 
 ## Traps
 
+- **A read that polls asks for `details=False`.** A development's history details (diffs,
+  logs) are most of its bytes; one 145 MB diff once made every poll of the page load,
+  parse and send it -- two cores and 40 GB in six hours. `store.get`/`list` with
+  `details=False` select `detail_size` instead (SQLite loads a value whole even for
+  `length()`), and one entry is `store.transition(job_id, index)`. Every detail is bounded
+  when written (`MAX_DETAIL`). The web reads an entry's detail when it is opened
+  (`components/EntryDetail.ts`), never from the job.
 - **`_may_act` guards the gates.** Approve, reject and the gate editors go through it. It
   also refuses the demo project. A new mutating endpoint that skips it has no guard.
 - **The demo project has no checkout.** Anything that would run something in it must
