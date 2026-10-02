@@ -23,7 +23,7 @@ import threading
 import time
 import traceback
 from collections import defaultdict
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import timedelta
@@ -427,6 +427,15 @@ def _clip(text: object, limit: int) -> str | None:
     return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
 
 
+def _env_int(name: str, default: int) -> int:
+    """A whole number from the environment, or ``default`` when it is unset or not one."""
+    raw = os.environ.get(name, "").strip()
+    try:
+        return int(raw) if raw else default
+    except ValueError:
+        return default
+
+
 def _plan_problem(
     kept: list[PlanPhase], new: list[PlanPhase], task_ids: list[str]
 ) -> dict[str, int] | str:
@@ -554,6 +563,14 @@ class Engine:
         # takes what is ready when the phase comes up
         self._ahead: dict[str, dict[int, Future[RoleResult]]] = {}
         self._ahead_pool = ThreadPoolExecutor(max_workers=8, thread_name_prefix="ahead")
+        #: Model calls one account makes at once on one provider, across all its
+        #: developments (SLIPWRIGHT_MAX_CALLS_PER_PROVIDER, 0 = no limit). Answers written
+        #: side by side multiply the calls on one key, and a provider answers too many at
+        #: once with rate-limit errors that cost a retry each -- or, on a subscription,
+        #: with the plan's limit for the rest of the day.
+        self.max_calls_per_provider = _env_int("SLIPWRIGHT_MAX_CALLS_PER_PROVIDER", 4)
+        self._provider_slots: dict[str, threading.BoundedSemaphore] = {}
+        self._provider_slots_lock = threading.Lock()
         # one analysis or intake round at a time per project (T11.2)
         self._brief_locks: defaultdict[str, threading.Lock] = defaultdict(threading.Lock)
         # one test run at a time per checkout, so runs never trample each other's files
@@ -4356,6 +4373,32 @@ class Engine:
         job.data.inbox = self.store.inbox(job.id)
         return result
 
+    @contextlib.contextmanager
+    def _provider_slot(self, job: Job, role: RoleName) -> Iterator[None]:
+        """Wait for a free place among the calls this account has running on the provider
+        this role is routed to. A development told to stop stops waiting."""
+        limit = self.max_calls_per_provider
+        if limit <= 0:
+            yield
+            return
+        profile = job.profile or self.seed_for(job)
+        cfg = profile.roles[role]
+        provider: str | None = cfg.provider
+        route = getattr(self.provider_for(job.owner_id), "route", None)
+        if route is not None:
+            with contextlib.suppress(Exception):
+                provider, _model = route(role.value, cfg.provider, cfg.model)
+        key = f"{job.owner_id or ''}:{provider or 'default'}"
+        with self._provider_slots_lock:
+            slot = self._provider_slots.setdefault(key, threading.BoundedSemaphore(limit))
+        while not slot.acquire(timeout=1.0):
+            if job.id in self._stopping:
+                raise _Stopped
+        try:
+            yield
+        finally:
+            slot.release()
+
     def _call_with_retries(
         self, role: RoleName, run: Callable[..., RoleResult], job: Job, retries: int, **kw: Any
     ) -> RoleResult:
@@ -4397,7 +4440,8 @@ class Engine:
             if job.id in self._stopping:
                 raise _Stopped
             attempt += 1
-            result = run(job, provider=provider, timeout_s=self.timeout_s, **kw)
+            with self._provider_slot(job, role):
+                result = run(job, provider=provider, timeout_s=self.timeout_s, **kw)
             result.attempts = attempt
             if (
                 result.error is not None

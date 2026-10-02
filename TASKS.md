@@ -1670,7 +1670,9 @@ machine, which every gate and retry is written against, is untouched.
 - [ ] ~~Worktrees and branches per phase, merged in plan order~~ -- not built: the answer is
   what takes the time, and running gates side by side would have meant per-phase state for
   every gate, retry and budget in the engine, for seconds
-- [ ] ~~Per-provider rate limits~~ -- the per-development cap is the only one so far
+- [x] Model calls one account runs at once on one provider are capped across all its
+  developments (`SLIPWRIGHT_MAX_CALLS_PER_PROVIDER`, default 4, 0 = none): a call
+  waits for a place, and a development told to stop stops waiting
 
 > What to expect: parallelism pays across domains -- a backend phase beside a web phase
 > beside a mobile one. The Android app's ten phases all changed `App.tsx` and its screens,
