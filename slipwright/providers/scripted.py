@@ -132,7 +132,12 @@ def canned(profile: Profile) -> ScriptedProvider:
                 "profile": profile.model_dump(mode="json"),
                 "decisions": ["write the request into SLIPWRIGHT.md"],
                 "phases": [
-                    {"goal": "record the request", "files": ["SLIPWRIGHT.md"], "task_id": "t1"}
+                    {
+                        "goal": "record the request",
+                        "files": ["SLIPWRIGHT.md"],
+                        "task_id": "t1",
+                        "depends_on": [],
+                    }
                 ],
             },
             RoleName.BACKEND: lambda req: {

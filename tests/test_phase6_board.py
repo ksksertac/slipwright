@@ -31,14 +31,24 @@ def _plan(phases: list[dict[str, Any]]) -> dict[str, Any]:
 
 def test_architect_phases_must_name_a_task_and_may_split_one() -> None:
     ok = ArchitectResult.model_validate(
-        _plan([{"goal": "a", "task_id": "t1"}, {"goal": "b", "task_id": "t2"}])
+        _plan(
+            [
+                {"goal": "a", "task_id": "t1", "depends_on": []},
+                {"goal": "b", "task_id": "t2", "depends_on": []},
+            ]
+        )
     )
     assert [p.task_id for p in ok.phases] == ["t1", "t2"]
     with pytest.raises(ValueError, match="has no task_id"):
         ArchitectResult.model_validate(_plan([{"goal": "a"}]))
     # a task too large for one answer is split into parts, each its own phase
     parts = ArchitectResult.model_validate(
-        _plan([{"goal": "a, part 1", "task_id": "t1"}, {"goal": "a, part 2", "task_id": "t1"}])
+        _plan(
+            [
+                {"goal": "a, part 1", "task_id": "t1", "depends_on": []},
+                {"goal": "a, part 2", "task_id": "t1", "depends_on": [1]},
+            ]
+        )
     )
     assert [p.task_id for p in parts.phases] == ["t1", "t1"]
     with pytest.raises(ValueError, match="unique"):

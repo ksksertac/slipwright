@@ -11,7 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 from enum import StrEnum
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
@@ -91,8 +91,18 @@ class RoleOutput(BaseModel):
     )
 
 
+def _depends_on_required(schema: dict[str, Any]) -> None:
+    """What the Architect is shown: `depends_on` is to be answered, `[]` when a phase needs
+    none. Left optional, it was left out -- every phase of a plan then needed every earlier
+    one, and nothing could be written side by side (T16.3). A stored plan from before it
+    still reads: only the schema a model is given says required."""
+    required = schema.setdefault("required", [])
+    if "depends_on" not in required:
+        required.append("depends_on")
+
+
 class PlanPhase(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", json_schema_extra=_depends_on_required)
 
     goal: str = Field(min_length=1)
     files: list[str] = Field(default_factory=list, description="Files expected to change.")
@@ -236,6 +246,11 @@ class ArchitectResult(RoleOutput):
         for i, phase in enumerate(self.phases, start=1):
             if not phase.task_id:
                 raise ValueError(f"phase {i} has no task_id")
+            if phase.depends_on is None:
+                raise ValueError(
+                    f"phase {i} does not say what it needs: give `depends_on` -- the numbers "
+                    "of the earlier phases it builds on, or [] when it needs none"
+                )
         missing = unbuilt_platforms(self.phases, self.profile)
         if missing:
             raise ValueError(

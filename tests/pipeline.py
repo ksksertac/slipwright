@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 from typing import Any
@@ -103,7 +104,11 @@ def set_plan(provider: ScriptedProvider, seed: Profile, phases: list[dict[str, A
         "summary": f"{len(phases)} phases",
         "profile": seed.model_dump(mode="json"),
         "decisions": [],
-        "phases": [{**phase, "task_id": f"t{i + 1}"} for i, phase in enumerate(phases)],
+        # each builds on the one before unless the test says otherwise
+        "phases": [
+            {"depends_on": [i] if i else [], **phase, "task_id": f"t{i + 1}"}
+            for i, phase in enumerate(phases)
+        ],
     }
 
 
@@ -129,6 +134,8 @@ def full_provider(
                 "files": ["OK"],
                 "task_id": tid,
                 "domain": (domains[i % len(domains)] if domains else "general"),
+                # every phase writes OK, so each comes after the one before (T16.2)
+                "depends_on": [i] if i else [],
             }
             for i, tid in enumerate(ids)
         ],
@@ -192,3 +199,28 @@ def past_design(engine: Engine, job: Job) -> Job:
     if job.state is JobState.AWAITING_DESIGN_APPROVAL:
         return engine.approve(job.id)
     return job
+
+
+def replan_aware(provider: ScriptedProvider) -> None:
+    """The scripted Architect's plan, answered as a re-plan would be: after the kept phases,
+    with its `depends_on` counted from where it now starts (T16.2)."""
+    plan = provider.replies[RoleName.ARCHITECT]
+    assert isinstance(plan, dict)
+
+    def answer(req: Any) -> dict[str, Any]:
+        text = req.prompt
+        body = text[text.index("Context:\n") + len("Context:\n") : text.index("\n\nRespond with")]
+        kept = len(json.loads(body).get("kept_phases") or [])
+        return {
+            **plan,
+            "phases": [
+                {
+                    **p,
+                    "depends_on": [d + kept for d in p.get("depends_on") or []]
+                    or ([kept] if kept else []),
+                }
+                for p in plan["phases"]
+            ],
+        }
+
+    provider.replies[RoleName.ARCHITECT] = answer

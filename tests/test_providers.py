@@ -345,7 +345,7 @@ def test_roles_run_on_the_provider_named_in_the_profile(
         "summary": "s",
         "profile": seed.model_dump(mode="json"),
         "decisions": [],
-        "phases": [{"goal": "g", "task_id": "t1"}],
+        "phases": [{"goal": "g", "task_id": "t1", "depends_on": []}],
     }
 
     def handler(request: httpx.Request) -> httpx.Response:

@@ -436,6 +436,32 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
+def _renumbered(before: list[dict[str, Any]], after: list[Any]) -> list[Any]:
+    """A person's edit of the plan with each `depends_on` following its phases to where
+    they now stand. The page sends the phases as they are to be, reordered, with the numbers
+    they depended on still those of the old order; a phase is recognised by its task and
+    goal. A number that names no phase of the old plan is left for the check to refuse."""
+
+    def key(p: Any) -> tuple[str, str] | None:
+        if not isinstance(p, dict):
+            return None
+        return (str(p.get("task_id")), str(p.get("goal")))
+
+    old = {i: key(p) for i, p in enumerate(before, start=1)}
+    new = {key(p): i for i, p in enumerate(after, start=1) if key(p) is not None}
+    out: list[Any] = []
+    for p in after:
+        deps = p.get("depends_on") if isinstance(p, dict) else None
+        if isinstance(deps, list):
+            moved = [new.get(old.get(d)) if isinstance(d, int) else None for d in deps]
+            p = {
+                **p,
+                "depends_on": [m if m is not None else d for m, d in zip(moved, deps, strict=True)],
+            }
+        out.append(p)
+    return out
+
+
 def _plan_problem(
     kept: list[PlanPhase], new: list[PlanPhase], task_ids: list[str]
 ) -> dict[str, int] | str:
@@ -445,7 +471,7 @@ def _plan_problem(
     mapping = architect.phase_task_map(phases, task_ids)
     if isinstance(mapping, str):
         return mapping
-    return architect.dependency_problem(phases) or mapping
+    return architect.dependency_problem(phases, built=len(kept)) or mapping
 
 
 class Engine:
@@ -2173,7 +2199,10 @@ class Engine:
             raise NotAwaitingApproval(job)
         current = job.data.plan or {}
         try:
-            phases = [PlanPhase.model_validate(p) for p in plan.get("phases", [])]
+            phases = [
+                PlanPhase.model_validate(p)
+                for p in _renumbered(current.get("phases", []), plan.get("phases", []))
+            ]
             breakdown = Breakdown.model_validate(
                 plan.get("breakdown") or current.get("breakdown") or job.data.backlog
             )
