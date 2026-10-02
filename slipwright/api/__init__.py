@@ -452,6 +452,7 @@ def create_app(
     from slipwright.api.settings import router as settings_router
     from slipwright.api.support import router as support_router
     from slipwright.api.teams import router as teams_router
+    from slipwright.api.transfer import router as transfer_router
     from slipwright.api.update import router as update_router
     from slipwright.api.workers import router as workers_router
 
@@ -491,6 +492,7 @@ def create_app(
     app.include_router(notify_router, prefix="/api")
     app.include_router(update_router, prefix="/api")
     app.include_router(workers_router, prefix="/api")
+    app.include_router(transfer_router, prefix="/api")
 
     @app.get("/healthz", include_in_schema=False)
     def healthz() -> dict[str, str]:

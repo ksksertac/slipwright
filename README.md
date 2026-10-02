@@ -469,6 +469,8 @@ Settings come from the environment (or `serve` flags):
 | `SLIPWRIGHT_DEMO_PROJECT` | on | the worked example a new account starts with |
 | `SLIPWRIGHT_CHATGPT_SUBSCRIPTION` | on locally, off when hosted | offer **ChatGPT subscription (Codex)** under Settings → Models |
 | `SLIPWRIGHT_UPDATE_IMAGE` | `ghcr.io/ksksertac/slipwright` | where newer releases are looked for; `off` stops asking |
+| `SLIPWRIGHT_TRANSFER` | on locally, off when hosted | **Settings → Move**: move an account to another Slipwright on the network |
+| `SLIPWRIGHT_NAME` | the host name | what this installation is called on another's **Move** page |
 | `SLIPWRIGHT_DEV` | `0` | allow the Vite dev server's origin (CORS) |
 
 ### Moving to PostgreSQL
@@ -493,6 +495,33 @@ docker compose restart slipwright                   # pick up in-flight work fro
 It leaves the SQLite file where it was, so removing `SLIPWRIGHT_DATABASE_URL` goes back to
 it. Stored credentials travel still encrypted: keep the same `SLIPWRIGHT_SECRET_KEY`, or
 the same `/data` volume, where `secret.key` lives.
+
+### Moving to another computer
+
+A new laptop, or the work moving from one desk to another: **Settings → Move** on both.
+
+1. On the computer the work goes **to**, press **Receive here**. A code shows for thirty
+   seconds, then the next one (the last one still works while you type it).
+2. On the computer it comes **from**, the installations on the same network are cards;
+   press the one that is receiving and type its code. Not listed -- the server is in
+   Docker and opened at `localhost`, say? *Connect by address* takes the address the
+   receiving card shows.
+
+Everything the account has goes, all at once or not at all: projects, developments at
+whatever gate they stopped at, their history, attachments, briefs, standards pages, and
+settings with the model keys and Git and Jira tokens -- sealed again with the receiving
+installation's own key. Every checkout goes as the repository itself, with its branches,
+pushed or not, and the work not yet committed. An administrator's move also carries the
+installation's settings (mail, prices) to an installation whose administrator received it.
+
+People do not move. Accounts, sessions, sign-in and team memberships stay where they are;
+on arrival everything belongs to whoever showed the code. A connected Mac is paired again.
+
+The code is the input to a key exchange (SPAKE2), not a password sent to be checked:
+nothing on the network can be tested against a guess, and the first attempt spends it.
+Both computers must run the same version, and nothing may be running -- a development
+waiting at a gate is fine. *Delete them from this computer* removes the projects from the
+sender once the receiver has written them.
 
 ### A ChatGPT plan instead of API credit
 

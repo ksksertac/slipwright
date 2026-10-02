@@ -48,6 +48,10 @@ import {
   type SourceSettings,
   type SourceSettingsIn,
   type Worker,
+  type TransferCode,
+  type TransferHere,
+  type TransferPeer,
+  type TransferStatus,
   type ConnectionCode,
   type Overview,
   type WorkList,
@@ -110,6 +114,8 @@ export const keys = {
   github: ["settings", "github"] as const,
   sources: ["settings", "sources"] as const,
   workers: ["settings", "workers"] as const,
+  transfer: ["settings", "transfer"] as const,
+  nearby: ["settings", "transfer", "nearby"] as const,
   sourceRepos: (name: string) => ["settings", "sources", name, "repos"] as const,
   githubRepos: ["settings", "github", "repos"] as const,
   jira: ["settings", "jira"] as const,
@@ -1370,5 +1376,76 @@ export function useRevokeWorker() {
   return useMutation({
     mutationFn: (id: string) => api.delete<void>(`/api/workers/${id}`),
     onSuccess: () => void qc.invalidateQueries({ queryKey: keys.workers }),
+  });
+}
+
+// -- moving the account to another Slipwright on the network ---------------------------
+
+const here = () => encodeURIComponent(window.location.origin);
+
+/** This installation as its own card shows it; also whether moving is on at all (it is
+ *  off on a hosted server, and then the menu does not offer it). */
+export function useTransferHere(enabled = true) {
+  return useQuery({
+    queryKey: keys.transfer,
+    queryFn: () => api.get<TransferHere>(`/api/transfer?address=${here()}`),
+    staleTime: 60_000,
+    enabled,
+  });
+}
+
+/** The other installations on this network. A look takes a few seconds -- every host of
+ *  a /24 is knocked on -- so it is asked for once and again only on request. */
+export function useNearby(enabled: boolean) {
+  return useQuery({
+    queryKey: keys.nearby,
+    queryFn: () => api.get<TransferPeer[]>(`/api/transfer/nearby?address=${here()}`),
+    enabled,
+    staleTime: Infinity,
+    retry: false,
+  });
+}
+
+export function useTransferCode() {
+  return useMutation({
+    mutationFn: () => api.post<TransferCode>("/api/transfer/code", {}),
+  });
+}
+
+export function useStopReceiving() {
+  return useMutation({ mutationFn: () => api.delete<void>("/api/transfer/code") });
+}
+
+/** What is arriving here, polled while a code is on show so the screen can follow it. */
+export function useIncomingTransfer(poll: boolean) {
+  return useQuery({
+    queryKey: [...keys.transfer, "incoming"],
+    // nothing arriving is a 204, which the client reads as undefined; a query wants null
+    queryFn: () =>
+      api.get<TransferStatus | undefined>("/api/transfer/incoming").then((s) => s ?? null),
+    refetchInterval: poll ? 1_000 : false,
+    // the receiving screen is often not the one in front: the person is at the other
+    // computer, typing the code, and this tab must still notice the transfer start
+    refetchIntervalInBackground: poll,
+  });
+}
+
+export function useSendTransfer() {
+  return useMutation({
+    mutationFn: (body: { address: string; code: string; delete_after: boolean }) =>
+      api.post<TransferStatus>("/api/transfer/send", body),
+  });
+}
+
+/** A transfer from here, polled until it ends. */
+export function useSendingStatus(id: string | null) {
+  return useQuery({
+    queryKey: [...keys.transfer, "send", id],
+    queryFn: () => api.get<TransferStatus>(`/api/transfer/send/${id}`),
+    enabled: id !== null,
+    refetchInterval: (q) => {
+      const state = q.state.data?.state;
+      return state === "done" || state === "failed" ? false : 700;
+    },
   });
 }
