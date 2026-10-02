@@ -159,6 +159,49 @@ def triage(
     return invoke_role(RoleName.QA, profile, context, provider=provider, **kwargs)
 
 
+RECOMMEND = """\
+You are QA. The phase in `current_phase` has spent its budget of model calls without
+getting through: `attempts` is what happened on it, oldest first, and `build_failure` the
+last failed build if there was one. A person will now decide what happens next, and
+reads your `recommendation` first. Say in one to three plain sentences what to do: split
+the phase into smaller ones (and where), change the approach (and to what), relax a check
+that is wrong for this project, or drop a part that cannot be done here (and why). Be
+concrete and name files or errors where it helps; do not repeat the history back. Put the
+reason in `summary`. Write no code and change no files."""
+
+
+def recommend(
+    job: Job,
+    profile: Profile,
+    *,
+    phase: dict[str, Any],
+    attempts: list[str],
+    provider: ModelProvider | None = None,
+    timeout_s: float | None = None,
+    jira: dict[str, Any] | None = None,
+    standards: dict[str, Any] | None = None,
+) -> RoleResult:
+    """What to do with a phase that spent its budget (T15.5), for the person who decides."""
+    from slipwright.roles.results import Recommendation
+
+    context = base_context(job, instructions=RECOMMEND)
+    context["project"] = project_facts(profile)
+    context["plan"] = plan_outline(job.data.plan, job.data.phase_index)
+    context["current_phase"] = phase
+    context["attempts"] = attempts
+    if job.data.last_build_output:
+        context["build_failure"] = job.data.last_build_output
+    kwargs = {} if timeout_s is None else {"timeout_s": timeout_s}
+    return invoke_role(
+        RoleName.QA,
+        profile,
+        context,
+        provider=provider,
+        output_schema_cls=Recommendation,
+        **kwargs,
+    )
+
+
 def is_test_path(path: str) -> bool:
     """Whether a path is somewhere QA may write while triaging a gate.
 

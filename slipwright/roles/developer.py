@@ -59,8 +59,14 @@ is fully met."""
 
 CUT_FILES = """
 A file listed in `files_cut` was too large to be sent whole: you see only its start. Never
-return such a file -- its full contents would replace the part you did not see. Change the
-other files if that fixes it; otherwise say in `summary` that the file was cut."""
+return its whole contents -- they would replace the part you did not see. Change it with
+`edits` instead, `content: null`: each an exact `find` copied from the file, long enough to
+occur in it once, and its `replace`."""
+
+EDIT_FAILED = """
+If `continuation.edit_failed` is present, your previous answer was not applied: it names
+the change that did not fit and shows the file's real lines; return your changes again,
+with any `find` copied from those lines."""
 
 # A specialist changes a file by returning all of it, so a file it may change has to reach
 # it whole: cut at 12,000 characters, App.tsx arrived without the line the build failed on,
@@ -197,7 +203,8 @@ def run(
         wanted = editable_files(job, worktree)
 
     context["project"] = project_facts(profile)
-    context["plan"] = plan_outline(plan)
+    # a CI fix touches the whole branch and keeps every phase whole; a phase sees its own
+    context["plan"] = plan_outline(plan, None if ci_failure is not None else job.data.phase_index)
     if truncated:
         context["output_was_truncated"] = truncated
     if continuation:
@@ -212,6 +219,8 @@ def run(
         # said outright, not left to a "(truncated" marker at the end of a long file
         context["files_cut"] = cut
         context["instructions"] = f"{context['instructions']}{CUT_FILES}"
+    if (continuation or {}).get("edit_failed"):
+        context["instructions"] = f"{context['instructions']}{EDIT_FAILED}"
 
     kwargs = {} if timeout_s is None else {"timeout_s": timeout_s}
     return invoke_role(

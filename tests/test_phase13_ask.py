@@ -269,8 +269,8 @@ def test_how_many_are_done_is_counted_over_all_of_them(
     _asked(bot, store, "noteapp projesinde işler ne durumda")
 
     given = bot.engine._provider.requests[-1].prompt  # noqa: SLF001
-    assert '"developments": 8' in given
-    assert '"finished": 4' in given
+    assert '"developments":8' in given
+    assert '"finished":4' in given
     assert given.count('"steps_done"') == SHOWN, "only a handful are described one by one"
 
 

@@ -394,8 +394,9 @@ def test_a_file_too_large_to_send_is_named_not_blamed_on_the_machine(
 
     assert job.state is JobState.FAILED
     fix = [r for r in provider.requests if r.role is RoleName.BACKEND][1]
-    assert '"files_cut": [\n    "App.tsx"' in fix.prompt or '"files_cut": ["App.tsx"]' in fix.prompt
-    assert "Never\nreturn such a file" in fix.prompt
+    assert '"files_cut":["App.tsx"]' in fix.prompt
+    # never its whole contents: it changes the file with edits, or not at all (T15.4)
+    assert "Never\nreturn its whole contents" in fix.prompt and "`edits`" in fix.prompt
     note = job.history[-1].note or ""
     assert "App.tsx is too large to be sent whole" in note
     assert "this machine's tools" not in note

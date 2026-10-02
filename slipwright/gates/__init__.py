@@ -10,6 +10,7 @@ what to run and what a failure means.
 
 from __future__ import annotations
 
+import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -24,6 +25,17 @@ from slipwright.gates.runner import (
 from slipwright.schemas.profile import Profile
 
 MAX_OUTPUT_CHARS = 20_000
+#: What of a failed build a model is sent, on every retry (T15.8). Most of a build's
+#: output is progress; the errors are a few lines in it.
+MAX_MODEL_CHARS = 6_000
+#: A line that reports a failure: a word that says so, a test runner's cross, or a
+#: compiler's ``file.ext:line`` (Kotlin's ``e: file:///…/App.kt:12:5``, tsc's
+#: ``src/a.ts(3,7)``, Python's ``File "x.py", line 4``).
+_ERROR_LINE = re.compile(
+    r"(?i)\b(error|errors|failed|failure|exception|traceback|cannot find|unresolved"
+    r"|undefined|not found)\b|[✕✗×]|^\s*e: |\w\.\w+(:\d+|\(\d+,\d+\))|, line \d+"
+)
+_AROUND = 3
 
 
 @dataclass(frozen=True)
@@ -35,6 +47,43 @@ class GateResult:
     @property
     def tail(self) -> str:
         return self.output[-MAX_OUTPUT_CHARS:]
+
+    @property
+    def for_model(self) -> str:
+        """What a role fixing this failure is sent: its error lines, then its last lines.
+        The person still sees ``tail`` in the run's detail."""
+        return condensed(self.output)
+
+
+def condensed(output: str, limit: int = MAX_MODEL_CHARS) -> str:
+    """A build's output cut to ``limit``: every line that reports a failure with a few
+    around it, earliest first (the first error is usually the cause), then the end of
+    the run. Output with no such line is its tail, as before."""
+    if len(output) <= limit:
+        return output
+    lines = output.splitlines()
+    hits = [i for i, line in enumerate(lines) if _ERROR_LINE.search(line)]
+    if not hits:
+        return f"(the first {len(output) - limit:,} characters were cut)\n{output[-limit:]}"
+    tail = output[-(limit // 3) :]
+    keep: set[int] = set()
+    for i in hits:
+        keep.update(range(max(0, i - _AROUND), min(len(lines), i + _AROUND + 1)))
+    pieces: list[str] = []
+    previous = -2
+    for i in sorted(keep):
+        if i != previous + 1:
+            pieces.append("...")
+        pieces.append(lines[i][:400])
+        previous = i
+    errors = "\n".join(pieces)
+    room = limit - len(tail) - 200
+    if len(errors) > room:
+        errors = errors[:room] + "\n..."
+    return (
+        f"(the build's error lines, then its last lines; {len(output):,} characters in all)"
+        f"\n{errors}\n\n--- the end of the run ---\n{tail}"
+    )
 
 
 def run_command(

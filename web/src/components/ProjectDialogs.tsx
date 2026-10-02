@@ -254,10 +254,30 @@ export function EditProjectModal({ project, onClose }: { project: Project; onClo
               }
             />
           </div>
+          <div className="field">
+            <label htmlFor="ep-b-phase" className="small">
+              {tx("Model calls per phase")}
+            </label>
+            <input
+              id="ep-b-phase"
+              type="number"
+              min={2}
+              value={budget.max_phase_calls ?? ""}
+              onChange={(e) =>
+                setBudget({
+                  ...budget,
+                  max_phase_calls: e.target.value ? Number(e.target.value) : null,
+                })
+              }
+            />
+          </div>
         </div>
         <div className="help faint small">
           {tx(
             "Exceeding a limit fails the development with the reason in its history — never silently.",
+          )}{" "}
+          {tx(
+            "A phase that reaches its own limit stops instead, with QA's recommendation, and waits for you to say what to do.",
           )}
         </div>
       </fieldset>
@@ -311,7 +331,9 @@ export function DeleteProjectModal({
             </p>
             <p className="muted small" style={{ marginBottom: 0 }}>
               {ourCheckout
-                ? tx("The checkout Slipwright cloned is deleted too. Whatever was pushed stays on the host.")
+                ? tx(
+                    "The checkout Slipwright cloned is deleted too. Whatever was pushed stays on the host.",
+                  )
                 : tx("The folder you pointed Slipwright at is left exactly as it is.")}
             </p>
           </>

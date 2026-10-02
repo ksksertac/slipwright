@@ -50,7 +50,7 @@ import {
   nameOf,
   StateBadge,
 } from "../components/ui";
-import { sentenceCase, useT } from "../i18n";
+import { currentLang, sentenceCase, useT } from "../i18n";
 import { SayProvider, useSay } from "../i18n/said";
 import { Copyable } from "../components/Copyable";
 import { ResultCard } from "../components/ResultCard";
@@ -577,12 +577,20 @@ function DecisionGate({ job }: { job: Job }) {
       <p>
         <strong>{stop?.note}</strong>
       </p>
-      <p className="muted small">
-        {tx("Approving continues with")} <code>{resume}</code>{" "}
-        {tx(
-          "as it was; rejecting continues too, with your feedback delivered to the agent that runs next. Nothing more is spent until you decide.",
-        )}
-      </p>
+      {job.data.decision_kind === "phase_budget" ? (
+        <p className="muted small">
+          {tx(
+            "The phase spent its budget of model calls without getting through. Nothing more is spent until you answer: what you write goes to the developer as the instruction for the next try, on a fresh budget.",
+          )}
+        </p>
+      ) : (
+        <p className="muted small">
+          {tx("Approving continues with")} <code>{resume}</code>{" "}
+          {tx(
+            "as it was; rejecting continues too, with your feedback delivered to the agent that runs next. Nothing more is spent until you decide.",
+          )}
+        </p>
+      )}
       {stop?.detail && (
         <details>
           <summary className="small">{tx("what happened")}</summary>
@@ -850,6 +858,29 @@ function Phases({ job }: { job: Job }) {
   );
 }
 
+/** What a phase has cost so far: its model calls -- building, its gate's triage and its
+ *  review alike -- and the tokens they sent (T15.5). A phase that keeps growing here is
+ *  the one that will stop at its budget. */
+function PhaseSpend({ job, phase }: { job: Job; phase: number }) {
+  const tx = useT();
+  const calls = (job.data.invocation_log ?? []).filter(
+    (c) => (c as { phase?: number | null }).phase === phase,
+  ) as { attempts?: number; input_tokens?: number | null }[];
+  if (calls.length === 0) return null;
+  const made = calls.reduce((n, c) => n + (c.attempts ?? 1), 0);
+  const sent = calls.reduce((n, c) => n + (c.input_tokens ?? 0), 0);
+  const short = new Intl.NumberFormat(currentLang(), {
+    notation: "compact",
+    maximumFractionDigits: 1,
+  });
+  return (
+    <span className="tag" title={tx("model calls made for this phase, and the tokens they sent")}>
+      {tx("{n} call(s)", { n: made })}
+      {sent > 0 && ` · ↑${short.format(sent)}`}
+    </span>
+  );
+}
+
 function PhasePanel({ job, group, open }: { job: Job; group: PhaseGroup; open: boolean }) {
   const tx = useT();
   const say = useSay();
@@ -879,6 +910,7 @@ function PhasePanel({ job, group, open }: { job: Job; group: PhaseGroup; open: b
             {failures > 0 && (
               <span className="tag bad">{tx("{n} gate failure(s)", { n: failures })}</span>
             )}
+            <PhaseSpend job={job} phase={group.number} />
             {group.files.length > 0 && <span className="tag mono">{group.files.join(", ")}</span>}
           </span>
         </span>

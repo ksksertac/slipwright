@@ -142,7 +142,7 @@ def test_context_is_rendered_into_prompt(profile: Profile) -> None:
     (request,) = provider.requests
     assert request.system == "custom system"
     assert request.prompt.startswith("do the thing")
-    assert '"request": "add login"' in request.prompt
+    assert '"request":"add login"' in request.prompt
     assert "JSON Schema" in request.prompt
 
 

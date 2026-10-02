@@ -1490,12 +1490,14 @@ code could not be delivered; the whole file is needed to continue", wrote nothin
 called again -- parts, then build attempts, each a 40,000-token call. The cut file is the
 loop.
 **Done when**
-- [ ] The files of the current phase are given whole up to a much larger bound (60 KB),
-  and the 12 KB cut stays for files read only for reference
-- [ ] A file past that bound is changed by edits (exact text to replace, and with what)
+- [x] The files of the current phase are given whole up to a much larger bound, and the
+  12 KB cut stays for files read only for reference -- done by #51 while this was being
+  built: 100,000 characters a file, 300,000 for all, and the files a build failure names
+  are sent too; a file past it is listed in `files_cut`
+- [x] A file past that bound is changed by edits (exact text to replace, and with what)
   instead of whole contents, and the engine applies them; an edit whose text is not found
   is refused back to the developer with the file's real lines around it
-- [ ] Test: a phase that changes a 30 KB file gets it whole and its answer keeps every
+- [x] Test: a phase that changes a 30 KB file gets it whole and its answer keeps every
   line it did not mean to change
 
 ### T15.5 — One budget for a phase, whatever the calls are for
@@ -1503,20 +1505,20 @@ A phase's calls are counted by kind -- parts (truncated answers), build attempts
 fix rounds (2), gate triage -- and each kind stops on its own, so one phase can still take
 a dozen calls. Phase 5 of the same development took 6 developer calls and 3 QA calls.
 **Done when**
-- [ ] Every model call made for a phase counts against one budget (default 8, per
+- [x] Every model call made for a phase counts against one budget (default 8, per
   project); the existing per-kind limits stay
-- [ ] Past it the development stops at the decision gate with what was tried, how many
+- [x] Past it the development stops at the decision gate with what was tried, how many
   tokens it took, and the last error -- a person decides, as with any stuck step
-- [ ] It stops with a recommendation, not only a question: one model call (the phase's
+- [x] It stops with a recommendation, not only a question: one model call (the phase's
   QA, on the same budget's last allowance) reads the attempts and proposes what to do
   next -- split the phase, change the approach, relax a check, give up on a part -- in a
   sentence or two a person can act on
-- [ ] It then waits for a written answer. The gate shows the recommendation and a text
+- [x] It then waits for a written answer. The gate shows the recommendation and a text
   box; the person writes what to do (or accepts the recommendation as written), and that
   text goes to the developer as the instruction for the next attempt, which starts a
   fresh budget. A bare "retry" with nothing written is not offered here
-- [ ] The phase's call count and tokens are shown on the phase (Phases tab) as they grow
-- [ ] Test: a phase whose build never passes stops at the budget, not later, with a
+- [x] The phase's call count and tokens are shown on the phase (Phases tab) as they grow
+- [x] Test: a phase whose build never passes stops at the budget, not later, with a
   recommendation; the person's written answer reaches the developer's next prompt
 
 ### T15.6 — The plan, as much of it as the step needs
@@ -1524,28 +1526,34 @@ a dozen calls. Phase 5 of the same development took 6 developer calls and 3 QA c
 every developer, QA and supervisor call: 13,441 characters, 28% of a mobile developer's
 prompt on that development, the same on each of its 24 calls.
 **Done when**
-- [ ] A developer gets the summary, the stack, the decisions that name its domain or its
-  phase, its own phase in full, and the other phases as one line each (number and goal)
-- [ ] QA and DevOps keep the whole outline: they test and describe the whole branch
-- [ ] Test: a developer's plan for phase 3 of 8 is under half the size of the full outline
-  and still carries every decision about its domain
+- [x] A developer gets the summary, the stack, every decision, and the phases by their
+  heading only (the part of the goal before its colon), its own marked: it has that one
+  whole in `current_phase`. The decisions are not filtered after all: they are free text
+  no one tagged by domain (29 sentences on that development), and they bind every phase
+- [x] QA and DevOps keep the whole outline: they test and describe the whole branch
+- [x] Test: a developer's phases for phase 3 of 8 are under a third of the full ones, and
+  every decision is still there
+
+> Measured on that development: the plan went from 13,441 characters to 9,251 with T15.7
+> alone (the indentation, and `\u` escapes for every Turkish letter), and the phase goals
+> from 3,198 characters to their headings.
 
 ### T15.7 — The prompt is sent compact
 The context and the output schema are serialised with `indent=2`; the indentation is
 tokens and carries nothing a model reads.
 **Done when**
-- [ ] `invoke._user_prompt` serialises both without indentation (compact separators)
-- [ ] Test: the same context is at least 10% fewer characters, and parses back equal
+- [x] `invoke._user_prompt` serialises both without indentation (compact separators)
+- [x] Test: the same context is at least 10% fewer characters, and parses back equal
 
 ### T15.8 — A failed build sends the errors, not the last 20,000 characters
 `build_failure` is the tail of the build's output, up to 20,000 characters, sent on every
 retry. Most of it is progress lines; the errors are a few lines in it.
 **Done when**
-- [ ] The lines that look like errors (`error`, `Error:`, `FAILED`, `✕`, a compiler's
+- [x] The lines that look like errors (`error`, `Error:`, `FAILED`, `✕`, a compiler's
   `file:line:col`) are kept with a few lines around each, then the tail, within 6,000
   characters; the person still sees the whole output in the run's detail
-- [ ] A build whose output has no recognisable error line falls back to the tail
-- [ ] Test: a Gradle failure of 50,000 characters reaches the developer under 6,000 with
+- [x] A build whose output has no recognisable error line falls back to the tail
+- [x] Test: a Gradle failure of 50,000 characters reaches the developer under 6,000 with
   its `e: file.kt:12:5` lines in it
 
 ---

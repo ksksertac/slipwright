@@ -64,7 +64,7 @@ def store(tmp_path: Path) -> Iterator[JobStore]:
 
 def _qa_reply(stage_two: Callable[[ModelRequest], list[dict[str, Any]]]) -> Any:
     def reply(req: ModelRequest) -> dict[str, Any]:
-        if '"stage": 1' in req.prompt:
+        if '"stage":1' in req.prompt:
             return {"summary": "proposed", "test_cases": CASES}
         return {"summary": "written", "changes": stage_two(req)}
 
@@ -135,7 +135,7 @@ def test_stage_one_proposes_cases_and_stops(
     assert job.data.test_cases == CASES
     (req,) = _requests(provider, RoleName.QA)
     assert req.model == seed.roles[RoleName.QA].model
-    assert '"stage": 1' in req.prompt
+    assert '"stage":1' in req.prompt
     assert "+yes" in req.prompt  # the branch diff is in context
     assert "1 test cases proposed" in (job.history[-1].note or "")
 
@@ -160,7 +160,7 @@ def test_human_edits_are_persisted_and_used_in_stage_two(
     assert job.state is JobState.AWAITING_TEST_APPROVAL
     assert job.data.qa_stage == 2
     stage_two = _requests(provider, RoleName.QA)[1]
-    assert '"stage": 2' in stage_two.prompt
+    assert '"stage":2' in stage_two.prompt
     assert "OK never says no" in stage_two.prompt
     assert "tests written and green" in (job.history[-1].note or "")
     assert "tests/test_ok.txt" in (job.history[-1].detail or "")
@@ -227,7 +227,7 @@ def test_reject_reruns_the_current_stage_with_feedback(
     job = engine.reject(job.id, "tests are too shallow")
     assert job.state is JobState.AWAITING_TEST_APPROVAL and job.data.qa_stage == 2
     last = _requests(provider, RoleName.QA)[-1]
-    assert '"stage": 2' in last.prompt and "tests are too shallow" in last.prompt
+    assert '"stage":2' in last.prompt and "tests are too shallow" in last.prompt
 
 
 def test_the_tests_can_be_skipped_at_the_first_gate_but_not_the_second(
@@ -331,7 +331,7 @@ def test_devops_opens_pr_and_finishes_on_green_ci(
 
     # DevOps is asked twice now: how this is deployed (T11.6), then the pull request
     proposal, req = _requests(provider, RoleName.DEVOPS)
-    assert '"deployment_folder": "deployment"' in proposal.prompt
+    assert '"deployment_folder":"deployment"' in proposal.prompt
     assert '"draft":' in req.prompt and "write OK" in req.prompt
     # the small model named in the example profile is what got called - no fallback
     assert req.model == seed.roles[RoleName.DEVOPS].model

@@ -109,7 +109,7 @@ def test_project_seed_profile_overrides_the_engine_default(
     assert job.state is JobState.AWAITING_BACKLOG_APPROVAL
     engine.handlers[JobState.ARCHITECTURE] = engine._architecture
     job = engine.approve(job.id)  # the architect is handed the project's seed profile
-    assert '"language": "elixir"' in provider.requests[-1].prompt
+    assert '"language":"elixir"' in provider.requests[-1].prompt
     assert engine.seed_for(job) == custom
 
 

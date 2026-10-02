@@ -8,7 +8,7 @@ permission checks are in one place.
 from __future__ import annotations
 
 import os
-from collections.abc import Iterable
+from collections.abc import Collection, Iterable
 from pathlib import Path
 from typing import Any
 
@@ -201,21 +201,45 @@ def base_context(
     return ctx
 
 
-def plan_outline(plan: dict[str, Any] | None) -> dict[str, Any] | None:
+def plan_outline(plan: dict[str, Any] | None, current: int | None = None) -> dict[str, Any] | None:
     """The plan as a role that implements or tests it needs it: summary, stack,
     decisions and the phase goals — never the breakdown tree or file lists of other
-    phases."""
+    phases.
+
+    With ``current`` (a phase index), the phases are named by their heading only and that
+    one is marked (T15.6): a developer building phase 7 needs to know phase 8 exists, not
+    what it will verify, and its own phase it has whole in ``current_phase``. It was sent
+    every phase in full on every call. The decisions stay whole: they are free text no
+    one tagged by domain, and they bind every phase."""
     if not plan:
         return None
+    phases: list[dict[str, Any]] = []
+    for i, p in enumerate(plan.get("phases", [])):
+        entry = {
+            "number": i + 1,
+            "goal": p.get("goal") if current is None else _heading(p.get("goal")),
+            "domain": p.get("domain", "general"),
+        }
+        if current == i:
+            entry["this_phase"] = True
+        phases.append(entry)
     return {
         "summary": plan.get("summary"),
         "stack": plan.get("stack", []),
         "decisions": plan.get("decisions", []),
-        "phases": [
-            {"number": i + 1, "goal": p.get("goal"), "domain": p.get("domain", "general")}
-            for i, p in enumerate(plan.get("phases", []))
-        ],
+        "phases": phases,
     }
+
+
+def _heading(goal: Any) -> Any:
+    """A phase goal's heading: the part before its colon ("Show the result and the cup:
+    from the host's final view..."), or its first 100 characters."""
+    if not isinstance(goal, str):
+        return goal
+    head, colon, _ = goal.partition(":")
+    if colon and len(head) <= 120:
+        return head.strip()
+    return goal if len(goal) <= 100 else goal[:100].rstrip() + "…"
 
 
 def project_facts(profile: Profile) -> dict[str, str | int]:
@@ -237,33 +261,94 @@ def require_worktree(job: Job) -> Path:
 
 
 def apply_changes(
-    job: Job, profile: Profile, role: RoleName, changes: list[FileChange]
+    job: Job,
+    profile: Profile,
+    role: RoleName,
+    changes: list[FileChange],
+    cut: Collection[str] = (),
 ) -> list[str]:
     """Write a role's file changes into the worktree. Returns the touched paths.
 
     Enforces the role's ``write_files`` permission and confines every path to the worktree.
+    ``cut`` names the files the role was shown only part of: those take edits, never whole
+    contents. Raises ``EditMismatch`` -- and writes nothing -- when an answer cannot be
+    applied as written.
     """
     if not changes:
         return []
     if Permission.WRITE_FILES not in profile.roles[role].permissions:
         raise PermissionError(f"role {role.value} lacks the write_files permission")
     root = require_worktree(job).resolve()
-    touched: list[str] = []
+    # every change is worked out before any is written: an edit that does not fit refuses
+    # the whole answer, and a refused answer must not leave half of itself on disk
+    planned: list[tuple[Path, str | None]] = []
     for change in changes:
         target = (root / change.path).resolve()
         if root not in target.parents and target != root:
             raise PermissionError(f"path escapes the worktree: {change.path}")
-        if change.content is None:
+        if change.edits:
+            planned.append((target, _edited(change, target)))
+        elif change.content is not None and change.path in cut:
+            raise EditMismatch(
+                f"{change.path} was shown cut, so whole contents would lose the rest of "
+                "it: change it with `edits`"
+            )
+        else:
+            planned.append((target, change.content))
+    touched: list[str] = []
+    for (target, text), change in zip(planned, changes, strict=True):
+        if text is None:
             target.unlink(missing_ok=True)
         else:
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(change.content, encoding="utf-8", newline="\n")
+            target.write_text(text, encoding="utf-8", newline="\n")
         touched.append(change.path)
     return touched
 
 
+class EditMismatch(ValueError):
+    """An answer that cannot be applied as written: an edit whose text is not in the file
+    (or is in it more than once), or whole contents for a file the role was shown cut.
+    Says what to do, with the file's real lines, for the role's next attempt."""
+
+
+def _edited(change: FileChange, target: Path) -> str:
+    """The file at ``target`` with ``change.edits`` applied in order."""
+    try:
+        text = target.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise EditMismatch(f"{change.path} cannot be edited: it does not exist") from exc
+    for n, edit in enumerate(change.edits or [], start=1):
+        found = text.count(edit.find)
+        if found == 1:
+            text = text.replace(edit.find, edit.replace, 1)
+            continue
+        why = "is not in it" if found == 0 else f"is in it {found} times; make it longer"
+        raise EditMismatch(
+            f"edit {n} of {change.path}: its `find` text {why}. The file's lines nearest "
+            f"to it, as they are now:\n{_nearest(text, edit.find)}"
+        )
+    return text
+
+
+def _nearest(text: str, find: str, around: int = 6) -> str:
+    """The lines of ``text`` around the one that shares the most with ``find``'s first
+    line, numbered: what the role should copy from instead."""
+    lines = text.splitlines()
+    first = next((ln.strip() for ln in find.splitlines() if ln.strip()), find.strip())
+    words = set(first.split())
+
+    def score(line: str) -> int:
+        return len(words & set(line.split())) + (100 if first and first in line else 0)
+
+    best = max(range(len(lines)), key=lambda i: score(lines[i]), default=0)
+    start, end = max(0, best - around), min(len(lines), best + around + 1)
+    return "\n".join(f"{i + 1:>5}| {lines[i]}" for i in range(start, end))
+
+
 __all__ = [
     "MANIFEST_FILES",
+    "EditMismatch",
     "SKIP_DIRS",
     "apply_changes",
     "base_context",

@@ -24,6 +24,7 @@ import {
 import { AgentIcon, DomainBadge, ROLE_LABEL } from "../components/agents";
 import { BulkBar } from "../components/BulkBar";
 import {
+  BudgetAnswer,
   Recommendation,
   RetryActions,
   SkipDeploymentButton,
@@ -795,6 +796,18 @@ function GateEditor({ job, step }: { job: Job; step: StepCard }) {
   const [rejecting, setRejecting] = useState(false);
   const [feedback, setFeedback] = useState("");
   const error = approve.error ?? reject.error ?? skipDeployment.error;
+
+  // a phase out of budget is answered in words, not approved: the server refuses a plain
+  // approve there, and the drawer offering one -- under a supervisor's verdict on an older
+  // gate -- turned the press into an English error. It asks the way the development's own
+  // page does: QA's recommendation, in a box to send as it is or rewrite.
+  if (job.state === "awaiting_decision" && job.data.decision_kind === "phase_budget") {
+    return (
+      <div style={{ marginBottom: 14 }}>
+        <BudgetAnswer job={job} compact={false} />
+      </div>
+    );
+  }
 
   return (
     <div className="gate" style={{ marginBottom: 14 }}>

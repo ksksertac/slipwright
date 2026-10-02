@@ -341,13 +341,42 @@ class DesignResult(RoleOutput):
         return self
 
 
+class Edit(BaseModel):
+    """One replacement in a file too big to return whole (T15.4)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    find: str = Field(
+        min_length=1,
+        description="Text copied exactly from the file, long enough to occur in it once.",
+    )
+    replace: str = Field(description="What that text becomes.")
+
+
 class FileChange(BaseModel):
-    """Full new contents of one file; ``content: null`` deletes it."""
+    """Full new contents of one file; ``content: null`` deletes it -- unless ``edits``
+    are given, which change a file in place."""
 
     model_config = ConfigDict(extra="forbid")
 
     path: str = Field(min_length=1, description="Path relative to the worktree root.")
-    content: str | None = Field(description="Complete file contents, or null to delete.")
+    content: str | None = Field(
+        description="Complete file contents, or null to delete (or null with `edits`)."
+    )
+    edits: list[Edit] | None = Field(
+        default=None,
+        description="For a file shown cut: replacements applied in order, instead of `content`.",
+    )
+
+
+class Recommendation(RoleOutput):
+    """What QA proposes when a phase has spent its budget of calls (T15.5)."""
+
+    recommendation: str = Field(
+        min_length=1,
+        description="What to do next, in one to three sentences a person can act on: "
+        "split the phase, change the approach, relax a check, or drop a part.",
+    )
 
 
 class DeveloperResult(RoleOutput):
