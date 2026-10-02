@@ -11,14 +11,18 @@
 //   phases still to build, keeping the ones built, and the new plan comes back to the
 //   architecture gate.
 //
-// An answer that heard a request in the question says so (`change`), and offers the two
-// ways to act on it. Nothing happens because the agent said it could: the person presses.
-// What the agent wrote is read through `say()`; the instruction box it fills is editable
-// and is sent as typed, so it is not.
-import { useState } from "react";
+// It reads like a chat: the conversation scrolls in a box of its own, newest at the
+// bottom and followed as answers arrive, and there is one place to write. An answer that
+// heard a request in the question (`change`) puts what it heard into that box, where the
+// person edits it and presses one of the two ways to act on it -- a second box under the
+// answer for the same words read as two places to write. Nothing happens because the agent
+// said it could: the person presses. What the agent wrote is read through `say()`; the
+// box holds its words as written, since what is sent goes on as typed.
+import { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { describeError, type JobMessage, type StepTalk } from "../api/client";
 import { isOwner } from "../api/gates";
-import { useAsk, useMyTeam, useRedirect, useSteer, useTalk } from "../api/hooks";
+import { keys, useAsk, useMyTeam, useRedirect, useSteer, useTalk } from "../api/hooks";
 import { useT } from "../i18n";
 import { useSay } from "../i18n/said";
 import { ROLE_LABEL } from "./agents";
@@ -34,11 +38,17 @@ export function AgentTalk({
   talk: StepTalk;
 }) {
   const tx = useT();
+  const qc = useQueryClient();
   const team = useMyTeam();
   const said = useTalk(jobId, stepKey);
   const ask = useAsk(jobId, stepKey);
   const steer = useSteer(jobId, stepKey);
+  const redirect = useRedirect(jobId);
   const [text, setText] = useState("");
+  // the question whose heard change is in the box, so what is sent answers it
+  const [replyTo, setReplyTo] = useState<string | null>(null);
+  const offered = useRef<Set<string>>(new Set());
+  const scroller = useRef<HTMLDivElement>(null);
   const owner = isOwner(team.data);
   const agent = tx(ROLE_LABEL[talk.agent] ?? talk.agent);
   // a member writes to the agent they hold, and to no other
@@ -46,86 +56,157 @@ export function AgentTalk({
   const messages = said.data ?? [];
   const replies = (id: string) => messages.filter((m) => m.reply_to === id);
   const loose = messages.filter((m) => !m.reply_to);
-  const send = (how: "ask" | "steer") => {
-    const typed = text.trim();
-    if (!typed) return;
-    const done = { onSuccess: () => setText("") };
-    if (how === "ask") ask.mutate(typed, done);
-    else steer.mutate({ text: typed }, done);
+
+  // a change the agent heard, not yet acted on, goes into the box -- once, and never over
+  // something the person is already writing
+  const heard = owner
+    ? [...loose]
+        .reverse()
+        .find((m) => m.kind === "question" && m.change && replies(m.id).length === 0)
+    : undefined;
+  useEffect(() => {
+    if (!heard?.change || offered.current.has(heard.id)) return;
+    offered.current.add(heard.id);
+    if (text.trim()) return;
+    setText(heard.change);
+    setReplyTo(heard.id);
+  }, [heard?.id, heard?.change, text]);
+
+  // follow the conversation as it grows: newest at the bottom, like a chat
+  const last = messages[messages.length - 1];
+  const tail = `${messages.length}:${last?.status ?? ""}:${last?.id ?? ""}`;
+  useEffect(() => {
+    const box = scroller.current;
+    if (box) box.scrollTop = box.scrollHeight;
+  }, [tail]);
+
+  const clear = () => {
+    setText("");
+    setReplyTo(null);
   };
-  const error = ask.error ?? steer.error;
+  const typed = text.trim();
+  const fromHeard = replyTo !== null;
+  const send = (how: "ask" | "steer" | "replan") => {
+    if (!typed) return;
+    if (how === "ask") ask.mutate(typed, { onSuccess: clear });
+    else if (how === "steer") steer.mutate({ text: typed, replyTo }, { onSuccess: clear });
+    else
+      redirect.mutate(
+        { text: typed, replyTo },
+        {
+          onSuccess: () => {
+            clear();
+            void qc.invalidateQueries({ queryKey: keys.talk(jobId, stepKey) });
+          },
+        },
+      );
+  };
+  const error = ask.error ?? steer.error ?? redirect.error;
+  const busy = ask.isPending || steer.isPending || redirect.isPending;
   return (
     <section className="step-group agent-talk">
       <div className="step-group-head">
         <h4>{tx("Write to the agent")}</h4>
         <span className="faint tiny">{messages.length || ""}</span>
       </div>
-      <div className="muted small">
-        {tx(
-          "Ask {agent} about this step and read its answer. When you want it done differently, tell it, or have the plan made again from here.",
-          { agent },
+      <div className="talk-window">
+        <div className="talk-scroll" ref={scroller}>
+          {loose.length === 0 ? (
+            <div className="muted small talk-empty">
+              {tx(
+                "Ask {agent} about this step and read its answer. When you want it done differently, tell it, or have the plan made again from here.",
+                { agent },
+              )}
+            </div>
+          ) : (
+            <ul className="talk-thread">
+              {loose.map((m) => (
+                <Said key={m.id} message={m} replies={replies(m.id)} heard={m.id === replyTo} />
+              ))}
+            </ul>
+          )}
+        </div>
+        {mayAsk ? (
+          <form
+            className="talk-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              send(fromHeard ? "steer" : "ask");
+            }}
+          >
+            {fromHeard && (
+              <div className="talk-heard">
+                <span>
+                  {tx("The agent heard a change: edit it, then choose what to do with it")}
+                </span>
+                <button type="button" className="btn ghost tiny" onClick={clear}>
+                  {tx("Clear")}
+                </button>
+              </div>
+            )}
+            <textarea
+              rows={fromHeard ? 3 : 2}
+              value={text}
+              placeholder={tx("e.g. why is the Bluetooth module written by hand?")}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                  e.preventDefault();
+                  send(fromHeard ? "steer" : "ask");
+                }
+              }}
+              aria-label={tx("Write to the agent")}
+            />
+            <div className="row">
+              {!fromHeard && (
+                <button type="submit" className="btn primary small" disabled={!typed || busy}>
+                  {ask.isPending ? tx("Sending…") : tx("Ask")}
+                </button>
+              )}
+              {owner && talk.steer && (
+                <button
+                  type="button"
+                  className={`btn small ${fromHeard ? "primary" : ""}`}
+                  disabled={!typed || busy}
+                  onClick={() => send("steer")}
+                  title={tx("read by {agent}'s next call on this step", { agent })}
+                >
+                  {fromHeard ? tx("Do it in this step") : tx("Send as an instruction")}
+                </button>
+              )}
+              {owner && talk.replan && (fromHeard || typed) && (
+                <button
+                  type="button"
+                  className="btn small"
+                  disabled={!typed || busy}
+                  onClick={() => send("replan")}
+                  title={tx(
+                    "the Architect plans the phases still to build again; what is built stays, and you approve the new plan",
+                  )}
+                >
+                  {tx("Plan it again from here")}
+                </button>
+              )}
+              {fromHeard && (
+                <button
+                  type="button"
+                  className="btn ghost small"
+                  disabled={!typed || busy}
+                  onClick={() => send("ask")}
+                  title={tx("ask it instead: nothing is changed")}
+                >
+                  {tx("Ask")}
+                </button>
+              )}
+              {error && <span className="error small">{describeError(error)}</span>}
+            </div>
+          </form>
+        ) : (
+          <div className="faint small">
+            {tx("This step's agent is somebody else's on the team.")}
+          </div>
         )}
       </div>
-      {loose.length > 0 && (
-        <ul className="talk-thread">
-          {loose.map((m) => (
-            <Said
-              key={m.id}
-              message={m}
-              replies={replies(m.id)}
-              jobId={jobId}
-              stepKey={stepKey}
-              talk={talk}
-              owner={owner}
-            />
-          ))}
-        </ul>
-      )}
-      {mayAsk ? (
-        <form
-          className="talk-form"
-          onSubmit={(e) => {
-            e.preventDefault();
-            send("ask");
-          }}
-        >
-          <textarea
-            rows={2}
-            value={text}
-            placeholder={tx("e.g. why is the Bluetooth module written by hand?")}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-                e.preventDefault();
-                send("ask");
-              }
-            }}
-          />
-          <div className="row">
-            <button
-              type="submit"
-              className="btn primary small"
-              disabled={!text.trim() || ask.isPending}
-            >
-              {ask.isPending ? tx("Sending…") : tx("Ask")}
-            </button>
-            {owner && talk.steer && (
-              <button
-                type="button"
-                className="btn small"
-                disabled={!text.trim() || steer.isPending}
-                onClick={() => send("steer")}
-                title={tx("read by {agent}'s next call on this step", { agent })}
-              >
-                {tx("Send as an instruction")}
-              </button>
-            )}
-            {error && <span className="error small">{describeError(error)}</span>}
-          </div>
-        </form>
-      ) : (
-        <div className="faint small">{tx("This step's agent is somebody else's on the team.")}</div>
-      )}
     </section>
   );
 }
@@ -134,17 +215,11 @@ export function AgentTalk({
 function Said({
   message,
   replies,
-  jobId,
-  stepKey,
-  talk,
-  owner,
+  heard,
 }: {
   message: JobMessage;
   replies: JobMessage[];
-  jobId: string;
-  stepKey: string;
-  talk: StepTalk;
-  owner: boolean;
+  heard: boolean;
 }) {
   const tx = useT();
   const say = useSay();
@@ -171,10 +246,14 @@ function Said({
         <div className="talk-bubble agent">
           <div className="talk-who">{tx(ROLE_LABEL[message.role ?? ""] ?? message.role ?? "")}</div>
           <div className="talk-text">{say(message.answer)}</div>
+          {message.change && replies.length === 0 && (
+            <div className="talk-who talk-change-note">
+              {heard
+                ? tx("It heard a change -- it is in the box below")
+                : tx("It heard a change: {change}", { change: message.change })}
+            </div>
+          )}
         </div>
-      )}
-      {message.change && owner && replies.length === 0 && (
-        <Change question={message} jobId={jobId} stepKey={stepKey} talk={talk} />
       )}
       {replies.map((r) => (
         <Followed key={r.id} message={r} />
@@ -209,60 +288,5 @@ function Followed({ message }: { message: JobMessage }) {
       </div>
       <div className="talk-text">{message.text}</div>
     </li>
-  );
-}
-
-/** What the agent understood the person to want changed, in a box they may edit, and the
- * two ways to act on it. */
-function Change({
-  question,
-  jobId,
-  stepKey,
-  talk,
-}: {
-  question: JobMessage;
-  jobId: string;
-  stepKey: string;
-  talk: StepTalk;
-}) {
-  const tx = useT();
-  const [text, setText] = useState(question.change ?? "");
-  const steer = useSteer(jobId, stepKey);
-  const redirect = useRedirect(jobId);
-  if (!talk.steer && !talk.replan) return null;
-  const typed = text.trim();
-  const error = steer.error ?? redirect.error;
-  return (
-    <div className="talk-change">
-      <div className="talk-who">{tx("The agent heard a change")}</div>
-      <textarea rows={3} value={text} onChange={(e) => setText(e.target.value)} />
-      <div className="row">
-        {talk.steer && (
-          <button
-            type="button"
-            className="btn small"
-            disabled={!typed || steer.isPending}
-            onClick={() => steer.mutate({ text: typed, replyTo: question.id })}
-            title={tx("the agent reads it on its next call on this step")}
-          >
-            {tx("Do it in this step")}
-          </button>
-        )}
-        {talk.replan && (
-          <button
-            type="button"
-            className="btn small"
-            disabled={!typed || redirect.isPending}
-            onClick={() => redirect.mutate({ text: typed, replyTo: question.id })}
-            title={tx(
-              "the Architect plans the phases still to build again; what is built stays, and you approve the new plan",
-            )}
-          >
-            {tx("Plan it again from here")}
-          </button>
-        )}
-        {error && <span className="error small">{describeError(error)}</span>}
-      </div>
-    </div>
   );
 }

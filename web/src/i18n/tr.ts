@@ -2266,6 +2266,11 @@ export const TR: Record<string, string> = {
 
   // writing to the agent on a step (components/AgentTalk.tsx)
   "Write to the agent": "Agenta yaz",
+  "The agent heard a change: edit it, then choose what to do with it":
+    "Ajan bir değişiklik isteği anladı: düzenle, sonra ne yapılacağını seç",
+  "ask it instead: nothing is changed": "bunun yerine sor: hiçbir şey değişmez",
+  "It heard a change -- it is in the box below": "Bir değişiklik isteği anladı -- aşağıdaki kutuda",
+  "It heard a change: {change}": "Bir değişiklik isteği anladı: {change}",
   "Ask {agent} about this step and read its answer. When you want it done differently, tell it, or have the plan made again from here.":
     "{agent} ajanına bu adımla ilgili soru sor ve cevabını oku. Farklı yapılmasını istiyorsan ona söyle ya da planı buradan yeniden yaptır.",
   "e.g. why is the Bluetooth module written by hand?": "ör. Bluetooth modülü neden elle yazılıyor?",

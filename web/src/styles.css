@@ -7598,3 +7598,40 @@ tr.run-detail td {
   flex-direction: column;
   gap: 6px;
 }
+/* a chat: the conversation scrolls in a box of its own and the place to write stays
+   under it, so a long thread never pushes the box off the screen */
+.talk-window {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: hidden;
+}
+.talk-scroll {
+  max-height: min(55vh, 520px);
+  min-height: 120px;
+  overflow-y: auto;
+  padding: 12px;
+  overscroll-behavior: contain;
+}
+.talk-empty {
+  padding: 4px 2px;
+}
+.talk-window .talk-form {
+  padding: 10px 12px 12px;
+  border-top: 1px solid var(--line);
+  background: var(--surface-2);
+}
+.talk-heard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--warn-text);
+}
+.talk-change-note {
+  margin: 6px 0 0;
+  font-style: italic;
+}
