@@ -498,9 +498,13 @@ export function useStepDetail(jobId: string, stepKey: string | null) {
   });
 }
 
+/** What every answer at a gate refreshes: the development, and every project view --
+ *  the pipeline included, which is what the drawer reads a step's "waiting" from. Reject
+ *  once refreshed only the development, so the drawer kept the answered gate open and drew
+ *  its form again, and a second press was refused. */
 function useJobAction(jobId: string) {
   const qc = useQueryClient();
-  return (fn: () => Promise<Job>) => ({
+  return <A = void>(fn: (arg: A) => Promise<Job>) => ({
     mutationFn: fn,
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: keys.job(jobId) });
@@ -543,31 +547,24 @@ export function useApprove(jobId: string) {
 }
 
 export function useReject(jobId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (feedback: string) => api.post<Job>(`/api/jobs/${jobId}/reject`, { feedback }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.job(jobId) }),
-  });
+  const wrap = useJobAction(jobId);
+  return useMutation(
+    wrap((feedback: string) => api.post<Job>(`/api/jobs/${jobId}/reject`, { feedback })),
+  );
 }
 
 /** Go on without tests. Only the test-cases gate offers it; the server refuses anywhere
  *  else. */
 export function useSkipTests(jobId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: () => api.post<Job>(`/api/jobs/${jobId}/skip-tests`, {}),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.job(jobId) }),
-  });
+  const wrap = useJobAction(jobId);
+  return useMutation(wrap(() => api.post<Job>(`/api/jobs/${jobId}/skip-tests`, {})));
 }
 
 /** Open the pull request without the deployment files. Only the deployment gate offers
  *  it; the server refuses anywhere else. */
 export function useSkipDeployment(jobId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: () => api.post<Job>(`/api/jobs/${jobId}/skip-deployment`, {}),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.job(jobId) }),
-  });
+  const wrap = useJobAction(jobId);
+  return useMutation(wrap(() => api.post<Job>(`/api/jobs/${jobId}/skip-deployment`, {})));
 }
 
 export function useUndoAutoApproval(jobId: string) {

@@ -797,6 +797,10 @@ function GateEditor({ job, step }: { job: Job; step: StepCard }) {
   const [feedback, setFeedback] = useState("");
   const error = approve.error ?? reject.error ?? skipDeployment.error;
 
+  // the development is fresher than the pipeline: once it has left the gate, the step's
+  // "waiting" is only the pipeline not having caught up, and a form drawn on it is a lie
+  if (!job.state.startsWith("awaiting_")) return null;
+
   // a phase out of budget is answered in words, not approved: the server refuses a plain
   // approve there, and the drawer offering one -- under a supervisor's verdict on an older
   // gate -- turned the press into an English error. It asks the way the development's own
