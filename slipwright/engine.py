@@ -5465,6 +5465,7 @@ class Engine:
             g.stage_all(worktree)
             goal = phases[index].get("goal", "") if index < len(phases) else ""
             if g.commit(worktree, self._commit_message(job, index, goal)):
+                job.data.phase_commits[str(index + 1)] = g.head_commit(worktree)
                 self._push(job, worktree, f"phase {index + 1}/{len(phases)}")
             job.data.phase_index = index + 1
             self.store.save(job)

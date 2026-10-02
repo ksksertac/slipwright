@@ -479,6 +479,10 @@ class JobData(BaseModel):
         "alone. The deployment may be done by hand, or not wanted at all.",
     )
     pr_url: str | None = None
+    phase_commits: dict[str, str] = Field(
+        default_factory=dict,
+        description="Phase number -> the commit that recorded it, for the pipeline's link.",
+    )
     draft_pr_url: str | None = Field(
         default=None,
         description="The pull request opened as a draft at the first push (T16.1), so the "

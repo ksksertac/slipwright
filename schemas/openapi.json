@@ -3100,6 +3100,14 @@
             "description": "The phase (1-based) `phase_calls` counts.",
             "title": "Phase Calls For"
           },
+          "phase_commits": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Phase number -> the commit that recorded it, for the pipeline's link.",
+            "title": "Phase Commits",
+            "type": "object"
+          },
           "phase_index": {
             "default": 0,
             "description": "Next plan phase to execute.",
@@ -3353,6 +3361,7 @@
           "phase_base_commit",
           "phase_calls",
           "phase_calls_for",
+          "phase_commits",
           "phase_index",
           "phase_outcomes",
           "plan",
@@ -7689,6 +7698,11 @@
       "StepCard": {
         "additionalProperties": false,
         "properties": {
+          "ahead": {
+            "default": false,
+            "title": "Ahead",
+            "type": "boolean"
+          },
           "auto_approved": {
             "default": false,
             "title": "Auto Approved",
@@ -7698,6 +7712,28 @@
             "default": false,
             "title": "By Hand",
             "type": "boolean"
+          },
+          "commit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commit"
+          },
+          "commit_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commit Url"
           },
           "confidence": {
             "anyOf": [
@@ -7817,6 +7853,11 @@
             ],
             "title": "Platform"
           },
+          "ready": {
+            "default": false,
+            "title": "Ready",
+            "type": "boolean"
+          },
           "recommendation": {
             "anyOf": [
               {
@@ -7877,8 +7918,11 @@
           }
         },
         "required": [
+          "ahead",
           "auto_approved",
           "by_hand",
+          "commit",
+          "commit_url",
           "confidence",
           "depends_on",
           "domain",
@@ -7892,6 +7936,7 @@
           "pending",
           "phase",
           "platform",
+          "ready",
           "recommendation",
           "risk",
           "role",

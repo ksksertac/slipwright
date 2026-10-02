@@ -2264,6 +2264,8 @@ export const TR: Record<string, string> = {
   "the phases this one builds on": "bu fazın üzerine kurulduğu fazlar",
   "after {phases}": "{phases}. fazdan sonra",
   "needs no other phase": "başka faza bağlı değil",
+  "being written alongside": "yanında yazılıyor",
+  "the commit that recorded this phase": "bu fazı kaydeden commit",
   partial: "kısmen",
   untouched: "dokunulmadı",
   "Every phase left is finished: approving goes straight to QA.":
