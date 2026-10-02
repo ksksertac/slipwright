@@ -23,7 +23,7 @@ from slipwright.roles.specialists import DEVELOPER_ROLES
 from slipwright.schemas.job import InboxMessage, Job, JobState
 from slipwright.schemas.profile import Profile, RoleName
 from slipwright.store import JobStore
-from tests.pipeline import full_engine, full_provider, full_seed
+from tests.pipeline import full_engine, full_provider, full_seed, replan_aware
 
 ASKED = "A person is following this development"
 
@@ -340,6 +340,7 @@ def test_a_running_development_is_planned_again_from_the_phase_it_is_on(
     store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
 ) -> None:
     provider = full_provider(seed, phases=2)
+    replan_aware(provider)
     engine = full_engine(store, worktrees_root, seed, provider)
     job = _developing(engine, repo)
     asked: list[Job] = []

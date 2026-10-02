@@ -59,7 +59,15 @@ def test_a_plan_cannot_name_a_platform_nobody_says_how_to_build(seed: Profile) -
     answer = {
         "summary": "plan",
         "profile": seed.model_dump(mode="json"),
-        "phases": [{"goal": "app", "task_id": "t1", "domain": "mobile", "platform": "ios"}],
+        "phases": [
+            {
+                "goal": "app",
+                "task_id": "t1",
+                "domain": "mobile",
+                "platform": "ios",
+                "depends_on": [],
+            }
+        ],
     }
     with pytest.raises(ValidationError, match="profile.platforms has no commands"):
         ArchitectResult.model_validate(answer)

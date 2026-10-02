@@ -76,9 +76,10 @@ You are the Software Architect. Read the repository (`worktree`) and the approve
    `platform`. A platform phase may wait until last for a machine that can build it, so
    nothing may depend on one: put platform phases after everything they use, and never
    make a later phase need what a platform phase wrote.
-   Every phase says what it needs in `depends_on`: the numbers of the earlier phases it
-   builds on -- every phase whose files it changes or reads, the backend phase whose
-   contract a front-end uses, everything a platform phase ships. `[]` when it needs none.
+   Every phase must say what it needs in `depends_on` (a plan without it is refused): the
+   numbers of the earlier phases it builds on -- every phase whose files it changes or
+   reads, the backend phase whose contract a front-end uses, everything a platform phase
+   ships. `[]` when it needs none.
    Two phases that change the same file are never independent: the later one depends on
    the earlier. A phase never depends on a later one. Phases that need none of each other
    may be built side by side, so do not add a dependency that is not real -- and never
@@ -163,17 +164,21 @@ def kept_phases(job: Job) -> list[dict[str, Any]]:
     return list(phases[: job.data.replan_from])
 
 
-def dependency_problem(phases: Sequence[PlanPhase]) -> str | None:
+def dependency_problem(phases: Sequence[PlanPhase], built: int = 0) -> str | None:
     """Why the phases' `depends_on` cannot be built from, or None (T16.2).
 
     A phase depends only on earlier ones -- so the plan's own order is always one that
     respects them, and nothing can wait for itself. Two phases that change the same file
     must be ordered by a dependency: built side by side they would each write it, and
     one would lose. A phase with no `depends_on` at all (an older plan) needs every
-    earlier phase, which is the order it always ran in."""
+    earlier phase, which is the order it always ran in.
+
+    The first ``built`` phases are built and committed (a re-plan's kept ones): every
+    later phase comes after them whatever it says, so sharing a file with one is no
+    conflict -- the rule is about phases that could be written side by side."""
     needs: list[set[int]] = []
     for number, phase in enumerate(phases, start=1):
-        if phase.depends_on is None:
+        if phase.depends_on is None or number <= built:
             direct = set(range(1, number))
         else:
             direct = set(phase.depends_on)
@@ -183,8 +188,8 @@ def dependency_problem(phases: Sequence[PlanPhase]) -> str | None:
                     f"phase {number} depends on phase {ahead[0]}, which does not come before "
                     "it: a phase may depend only on earlier ones"
                 )
-        # everything it needs, through what those need
-        closure = set(direct)
+        # everything it needs, through what those need -- and what is built already
+        closure = set(direct) | set(range(1, min(built, number - 1) + 1))
         for d in direct:
             closure |= needs[d - 1]
         needs.append(closure)

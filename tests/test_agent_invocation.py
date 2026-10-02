@@ -28,7 +28,9 @@ PLAN_JSON = json.dumps(
         "summary": "one phase",
         "profile": _PROFILE.model_dump(mode="json"),
         "decisions": [],
-        "phases": [{"goal": "add endpoint", "files": ["app/main.py"], "task_id": "t1"}],
+        "phases": [
+            {"goal": "add endpoint", "files": ["app/main.py"], "task_id": "t1", "depends_on": []}
+        ],
     }
 )
 BACKLOG_JSON = json.dumps(

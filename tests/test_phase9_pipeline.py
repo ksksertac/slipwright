@@ -34,8 +34,14 @@ def _two_domain_engine(store: JobStore, worktrees_root: Path, seed: Profile) -> 
         provider,
         seed,
         [
-            {"goal": "add the endpoint", "files": ["OK"], "domain": "backend"},
-            {"goal": "show it", "files": ["OK"], "domain": "web"},
+            # two files, neither needing the other: they may be put in either order
+            {
+                "goal": "add the endpoint",
+                "files": ["api.py"],
+                "domain": "backend",
+                "depends_on": [],
+            },
+            {"goal": "show it", "files": ["page.tsx"], "domain": "web", "depends_on": []},
         ],
     )
     return full_engine(store, worktrees_root, seed, provider), provider
@@ -292,8 +298,10 @@ def test_plan_edits_are_checked_like_the_architects(
     # the edited order puts the mobile phase first, so the screens are wanted straight away
     job = past_design(engine, engine.approve(job.id))
     assert job.state is JobState.AWAITING_TEST_APPROVAL
-    roles = [r.role for r in provider.requests if r.role in (RoleName.MOBILE_UI, RoleName.BACKEND)]
-    assert roles == [RoleName.MOBILE_UI, RoleName.BACKEND]
+    # each phase by its own specialist; the two need nothing of each other, so the second
+    # may be written alongside the first (T16.3) and the order of the calls says nothing
+    roles = {r.role for r in provider.requests if r.role in (RoleName.MOBILE_UI, RoleName.BACKEND)}
+    assert roles == {RoleName.MOBILE_UI, RoleName.BACKEND}
     with pytest.raises(NotAwaitingApproval):
         engine.set_plan(job.id, edited)
 

@@ -51,9 +51,27 @@ def _scripted(seed: Profile, domains: list[str] | None = None) -> Any:
             **first,  # type: ignore[dict-item]
             "summary": "phase 2 in two parts",
             "phases": [
-                {"goal": "step 2a", "files": ["OK"], "task_id": "t2", "domain": domain},
-                {"goal": "step 2b", "files": ["OK"], "task_id": "t2", "domain": domain},
-                {"goal": "step 3", "files": ["OK"], "task_id": "t3", "domain": domain},
+                {
+                    "goal": "step 2a",
+                    "files": ["OK"],
+                    "task_id": "t2",
+                    "domain": domain,
+                    "depends_on": [1],
+                },
+                {
+                    "goal": "step 2b",
+                    "files": ["OK"],
+                    "task_id": "t2",
+                    "domain": domain,
+                    "depends_on": [2],
+                },
+                {
+                    "goal": "step 3",
+                    "files": ["OK"],
+                    "task_id": "t3",
+                    "domain": domain,
+                    "depends_on": [3],
+                },
             ],
         }
 

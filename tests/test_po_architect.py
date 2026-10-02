@@ -210,7 +210,7 @@ def test_architect_roles_always_come_from_seed(seed: Profile) -> None:
     result = ArchitectResult(
         summary="ts",
         profile=Profile.model_validate(data),
-        phases=[PlanPhase(goal="g", files=[], task_id="t1")],
+        phases=[PlanPhase(goal="g", files=[], task_id="t1", depends_on=[])],
     )
 
     profile = accepted_profile(result, seed)
@@ -224,7 +224,7 @@ def test_phase_task_map_requires_one_phase_per_task(seed: Profile) -> None:
         return ArchitectResult(
             summary="x",
             profile=seed,
-            phases=[PlanPhase(goal=t, files=[], task_id=t) for t in task_ids],
+            phases=[PlanPhase(goal=t, files=[], task_id=t, depends_on=[]) for t in task_ids],
         )
 
     assert phase_task_map(result("t2", "t1").phases, ["t1", "t2"]) == {"t2": 1, "t1": 2}
@@ -244,7 +244,7 @@ def test_architect_plan_that_ignores_the_backlog_is_asked_for_once_more_then_fai
             "summary": next(answers),
             "profile": seed.model_dump(mode="json"),
             "decisions": [],
-            "phases": [{"goal": "g", "files": [], "task_id": "t42"}],
+            "phases": [{"goal": "g", "files": [], "task_id": "t42", "depends_on": []}],
         }
 
     provider = canned(seed)
@@ -271,7 +271,7 @@ def test_a_plan_that_leaves_a_task_out_is_fixed_on_the_second_ask(
             "summary": "ok" if fixed else "t2 is large; it should be split",
             "profile": seed.model_dump(mode="json"),
             "decisions": [],
-            "phases": [{"goal": t, "files": [], "task_id": t} for t in tasks],
+            "phases": [{"goal": t, "files": [], "task_id": t, "depends_on": []} for t in tasks],
         }
 
     provider = canned(seed)
