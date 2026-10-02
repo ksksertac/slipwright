@@ -418,7 +418,7 @@ export function GateActions({ job, compact = false }: { job: Job; compact?: bool
  * recommendation -- to send as it stands, or to rewrite -- and what is sent is the
  * developer's instruction for the next try, on a fresh budget.
  */
-function BudgetAnswer({ job, compact }: { job: Job; compact: boolean }) {
+export function BudgetAnswer({ job, compact }: { job: Job; compact: boolean }) {
   const tx = useT();
   const say = useSay();
   const reject = useReject(job.id);
