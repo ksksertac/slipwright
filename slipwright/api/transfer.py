@@ -45,7 +45,7 @@ from slipwright.schemas.transfer import (
 from slipwright.store.migrate import current_revision
 from slipwright.transfer import incoming, nearby, outgoing
 from slipwright.transfer.channel import confirmation
-from slipwright.transfer.rows import Progress
+from slipwright.transfer.rows import PROTOCOL, Progress
 from slipwright.update import running_version
 
 log = logging.getLogger(__name__)
@@ -164,6 +164,7 @@ def here(request: Request, address: str | None = None) -> TransferHere:
         admin=scope.admin,
         database=engine.raw_store.db.dialect,
         networks=nearby.targets(address, own=nearby.own_address())[0] if enabled else [],
+        os=nearby.machine_os(),
     )
 
 
@@ -190,9 +191,12 @@ def nearby_installations(request: Request, address: str | None = None) -> list[T
             name=str(p.get("name", "")) or str(p["address"]),
             version=str(p.get("version", "")),
             revision=p.get("revision") if isinstance(p.get("revision"), str) else None,
-            compatible=not p.get("legacy") and p.get("revision") == mine,
+            compatible=not p.get("legacy")
+            and p.get("revision") == mine
+            and p.get("protocol") == PROTOCOL,
             database=p.get("database") if isinstance(p.get("database"), str) else None,
             projects=p.get("projects") if isinstance(p.get("projects"), int) else None,
+            os=p.get("os") if isinstance(p.get("os"), str) else None,
             this_one=bool(p.get("this_one")),
             legacy=bool(p.get("legacy")),
         )
@@ -319,6 +323,8 @@ def hello(request: Request) -> TransferHello:
         revision=_revision(engine),
         database=engine.raw_store.db.dialect,
         projects=len([p for p in engine.store.list_projects() if not p.is_demo]),
+        os=nearby.machine_os(),
+        protocol=PROTOCOL,
     )
 
 
@@ -331,6 +337,12 @@ def pair(body: TransferPairRequest, request: Request) -> TransferPaired:
     if engine.store.hit_rate_limit(f"transfer:{caller}", limit=PAIR_LIMIT, window_s=60):
         raise HTTPException(status_code=429, detail="too many attempts; try again in a minute")
     mine = _revision(engine)
+    if body.protocol != PROTOCOL:
+        raise HTTPException(
+            status_code=409,
+            detail="the two machines run different versions of Slipwright; update both to "
+            "the same release first",
+        )
     if body.revision != mine:
         raise HTTPException(
             status_code=409,

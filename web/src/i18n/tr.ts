@@ -2128,6 +2128,7 @@ export const TR: Record<string, string> = {
     "Checkout'lar olmadan projeler karşıda uzak depodan klonlanır: push edilmemiş branch'ler ve commit edilmemiş iş burada kalır.",
   "Move to another computer": "Başka bir bilgisayara taşı",
   "The code on the receiving screen": "Alan ekrandaki kod",
+  min: "dk",
   "Nothing is chosen to send.": "Gönderilecek bir şey seçilmedi.",
   "All ({n})": "Tümü ({n})",
   All: "Tümü",
@@ -2139,8 +2140,8 @@ export const TR: Record<string, string> = {
     "Orada görünmüyor mu? Adresi bu bilgisayarın IPv4 adresi (ipconfig), port {port}.",
   "Move this account to another Slipwright on the same network in one go: projects, developments, settings, model keys and attachments.":
     "Bu hesabı aynı ağdaki başka bir Slipwright'a tek seferde taşıyın: projeler, geliştirmeler, ayarlar, model anahtarları ve ekler.",
-  "On the receiving computer press Receive here: a code appears for 30 seconds. On the sending computer press that installation's card and type the code. Accounts and sessions do not move; everything goes to the account signed in on the receiving side.":
-    "Alacak bilgisayarda Buraya al'a basın: 30 saniyelik bir kod çıkar. Gönderecek bilgisayarda o kurulumun kartına basıp kodu girin. Kullanıcı hesapları ve oturumlar taşınmaz; her şey alan tarafta oturum açmış hesaba geçer.",
+  "On the receiving computer press Receive here: a code appears for 3 minutes. On the sending computer press that installation's card and type the code. Accounts and sessions do not move; everything goes to the account signed in on the receiving side.":
+    "Alacak bilgisayarda Buraya al'a basın: 3 dakikalık bir kod çıkar. Gönderecek bilgisayarda o kurulumun kartına basıp kodu girin. Kullanıcı hesapları ve oturumlar taşınmaz; her şey alan tarafta oturum açmış hesaba geçer.",
   "Moving to another computer is off on this server.":
     "Bu sunucuda başka bilgisayara taşıma kapalı.",
   "Slipwrights on this network": "Ağdaki Slipwright'lar",

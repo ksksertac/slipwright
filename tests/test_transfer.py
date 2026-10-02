@@ -22,6 +22,7 @@ from slipwright.schemas.project import Project
 from slipwright.secrets import generate_key
 from slipwright.store import JobStore
 from slipwright.transfer import channel, incoming, nearby
+from slipwright.transfer.rows import PROTOCOL
 from tests.pipeline import full_engine, full_provider
 
 #: Where the receiving app answers inside the test process.
@@ -319,6 +320,7 @@ def test_different_versions_do_not_move(there: Machine) -> None:
             "message": base64.b64encode(handshake.start()).decode(),
             "revision": "0001_older",
             "version": "0.1.0",
+            "protocol": PROTOCOL,
         },
     )
     assert got.status_code == 409
@@ -338,6 +340,7 @@ def test_a_part_without_the_key_ends_the_transfer(there: Machine) -> None:
             "slot": slot,
             "message": base64.b64encode(handshake.start()).decode(),
             "revision": current_revision(there.store.db),
+            "protocol": PROTOCOL,
         },
     ).json()
     forged = channel.seal(b"k" * 32, paired["session"], 0, channel.Part({"kind": "manifest"}))
@@ -481,6 +484,7 @@ def test_a_part_too_large_is_refused_unread(there: Machine) -> None:
             "slot": slot,
             "message": base64.b64encode(channel.SenderHandshake(secret).start()).decode(),
             "revision": current_revision(there.store.db),
+            "protocol": PROTOCOL,
         },
     ).json()
     got = there.client.post(
@@ -573,3 +577,124 @@ def test_without_a_remote_a_project_needs_its_checkout(
     )
     assert refused.status_code == 409
     assert "no remote" in refused.json()["detail"]
+
+
+# -- what broke on a real account -------------------------------------------------------------
+
+
+def test_a_long_history_and_a_large_file_go_in_many_parts(
+    linked: tuple[Machine, Machine], repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two hundred rows of agent transcripts in one part were once more than a part may be;
+    rows now travel as a stream cut at a size, whatever the rows are."""
+    from slipwright.transfer import rows
+
+    monkeypatch.setattr(rows, "CHUNK", 1000)
+    here, there = linked
+    project = _project(here, repo)
+    job = _at_a_gate_with_work(here, project)
+    big = bytes(range(256)) * 40  # ten kilobytes: ten parts and more
+    here.store.add_attachment(
+        project_id=project.id,
+        owner_id=None,
+        name="screens.pdf",
+        media_type="application/pdf",
+        data=big,
+        text="x" * 5000,
+        pages=3,
+        scope="project",
+    )
+    here.store.set_setting("sources.github.token", "ghp_" + "s" * 3000, secret=True)
+
+    status = _send(here, _code(there))
+
+    assert status["state"] == "done", status["error"]
+    assert len(there.store.get(job.id).history) == len(here.store.get(job.id).history)
+    (moved,) = there.store.list_attachments(project.id)
+    assert there.store.attachment_data(moved.id)[1] == big
+    assert there.store.get_setting("sources.github.token") == "ghp_" + "s" * 3000
+
+
+def test_a_sender_that_fails_half_way_frees_the_receiver(
+    linked: tuple[Machine, Machine], repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from slipwright.transfer import outgoing
+
+    here, there = linked
+    _project(here, repo)
+    real = outgoing._send_checkout
+
+    def broken(*_a: Any, **_k: Any) -> None:
+        raise RuntimeError("the disk went away")
+
+    monkeypatch.setattr(outgoing, "_send_checkout", broken)
+    failed = _send(here, _code(there))
+    assert failed["state"] == "failed"
+    arrived = there.client.get("/api/transfer/incoming").json()
+    assert arrived["state"] == "failed"
+    assert "the disk went away" in arrived["error"]
+
+    monkeypatch.setattr(outgoing, "_send_checkout", real)
+    assert _send(here, _code(there))["state"] == "done"
+
+
+def test_a_receiver_left_waiting_does_not_hold_the_next_transfer(
+    linked: tuple[Machine, Machine], repo: Path
+) -> None:
+    import base64
+
+    from slipwright.store.migrate import current_revision
+    from slipwright.transfer.rows import PROTOCOL
+
+    here, there = linked
+    _project(here, repo)
+    slot, secret = channel.parse_code(_code(there))
+    paired = there.client.post(  # a sender that paired and was never heard from again
+        "/api/transfer/peer/pair",
+        json={
+            "slot": slot,
+            "message": base64.b64encode(channel.SenderHandshake(secret).start()).decode(),
+            "revision": current_revision(there.store.db),
+            "protocol": PROTOCOL,
+        },
+    )
+    assert paired.status_code == 200
+    assert _send(here, _code(there))["state"] == "done"
+
+
+def test_a_receiver_of_another_protocol_is_refused_before_its_code_is_spent(
+    linked: tuple[Machine, Machine], repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from slipwright.transfer import rows
+
+    here, there = linked
+    _project(here, repo)
+    code = _code(there)
+    monkeypatch.setattr(rows, "PROTOCOL", rows.PROTOCOL + 1)  # the sender is newer
+    failed = _send(here, code)
+    assert failed["state"] == "failed"
+    assert "update both computers" in failed["error"]
+    monkeypatch.undo()
+    assert _send(here, code)["state"] == "done"  # the code was never tried
+
+
+def test_a_card_says_what_computer_it_is(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("SLIPWRIGHT_HOST_OS", "macos")
+    assert nearby.machine_os() == "macos"
+    monkeypatch.delenv("SLIPWRIGHT_HOST_OS")
+    monkeypatch.setattr(nearby, "in_container", lambda: True)
+    kernel = tmp_path / "version"
+    for text, expected in (
+        ("Linux version 5.15.153.1-microsoft-standard-WSL2", "windows"),
+        ("Linux version 6.10.14-linuxkit", "macos"),
+        ("Linux version 6.8.0-45-generic (buildd@ubuntu)", "linux"),
+    ):
+        kernel.write_text(text, encoding="utf-8")
+        real = nearby.Path
+
+        def fake(p: str, _k: Path = kernel, _real: Any = real) -> Any:
+            return _k if p == "/proc/version" else _real(p)
+
+        monkeypatch.setattr(nearby, "Path", fake)
+        assert nearby.machine_os() == expected
+        monkeypatch.setattr(nearby, "Path", real)

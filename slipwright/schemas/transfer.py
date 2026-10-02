@@ -24,6 +24,7 @@ class TransferPeer(BaseModel):
     compatible: bool = Field(description="On the same schema as this one, so a transfer works.")
     database: str | None = Field(default=None, description="sqlite or postgresql.")
     projects: int | None = Field(default=None, description="How many projects it holds.")
+    os: str | None = Field(default=None, description="macos, windows or linux: how it is drawn.")
     this_one: bool = Field(
         default=False, description="This installation, found at an address of its own."
     )
@@ -50,6 +51,7 @@ class TransferHere(BaseModel):
     admin: bool = Field(description="Whether the installation's own settings go too.")
     database: str = Field(description="sqlite or postgresql.")
     networks: list[str] = Field(description="What looking around the network looks at.")
+    os: str = Field(description="macos, windows or linux: how its card is drawn.")
 
 
 class TransferHello(BaseModel):
@@ -64,6 +66,8 @@ class TransferHello(BaseModel):
     revision: str | None
     database: str
     projects: int = Field(description="How many projects it holds, the worked example aside.")
+    os: str = Field(description="macos, windows or linux.")
+    protocol: int = Field(description="What a transfer to it must speak.")
 
 
 class TransferCode(BaseModel):
@@ -108,6 +112,7 @@ class TransferPairRequest(BaseModel):
     name: str = Field(default="", max_length=120)
     revision: str | None = Field(default=None, max_length=64)
     version: str = Field(default="", max_length=40)
+    protocol: int = Field(default=1, description="What the sender speaks (rows.PROTOCOL).")
 
 
 class TransferPaired(BaseModel):

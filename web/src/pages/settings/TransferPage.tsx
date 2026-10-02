@@ -47,7 +47,7 @@ export function TransferPage() {
       />
       <p className="muted">
         {tx(
-          "On the receiving computer press Receive here: a code appears for 30 seconds. On the sending computer press that installation's card and type the code. Accounts and sessions do not move; everything goes to the account signed in on the receiving side.",
+          "On the receiving computer press Receive here: a code appears for 3 minutes. On the sending computer press that installation's card and type the code. Accounts and sessions do not move; everything goes to the account signed in on the receiving side.",
         )}
       </p>
       {here.isLoading && <Loading />}
@@ -141,7 +141,7 @@ function HereCard({ here, seen }: { here: TransferHere; seen: TransferPeer | und
     <div className="card mac-card" data-online="yes">
       <div className="mac-stage">
         <span className="move-here">{tx("this computer")}</span>
-        <Desktop />
+        <Machine os={here.os} />
         <span className="mac-status">
           <span className="mac-dot" />
           {tx("online")}
@@ -175,7 +175,7 @@ function PeerCard({ peer, onPick }: { peer: TransferPeer; onPick: () => void }) 
   return (
     <button type="button" className="card mac-card move-peer" data-online="yes" onClick={onPick}>
       <div className="mac-stage">
-        <Desktop />
+        <Machine os={peer.os} />
         <span className="mac-status">
           <span className="mac-dot" />
           {tx("online")}
@@ -293,8 +293,8 @@ function ReceiveCard({ here }: { here: TransferHere }) {
               />
             </svg>
             <span className="move-ring-num">
-              {Math.max(left, 0)}
-              <small>{tx("sec")}</small>
+              {clock(Math.max(left, 0))}
+              <small>{left >= 60 ? tx("min") : tx("sec")}</small>
             </span>
           </div>
           <CodeChip code={code?.code} />
@@ -776,6 +776,12 @@ function Sum({ n, label }: { n: number; label: string }) {
 
 // -- drawing -----------------------------------------------------------------------------
 
+function clock(seconds: number): string {
+  return seconds >= 60
+    ? `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`
+    : String(seconds);
+}
+
 function hostOf(address: string | undefined): string {
   if (!address) return "";
   try {
@@ -785,9 +791,37 @@ function hostOf(address: string | undefined): string {
   }
 }
 
-// a desktop drawn in the page's own colours, beside the Mac Connect page's MacBook: the
-// same classes, so it lights up and goes dark the same way
-function Desktop() {
+// a computer as the person knows it: a MacBook for a Mac, a monitor with the Windows
+// mark for Windows, a terminal prompt for Linux or a computer that did not say. Drawn in
+// the page's own colours with the Mac Connect page's classes, so it sits right in either
+// theme
+function Machine({ os }: { os: string | null | undefined }) {
+  return os === "macos" ? <MacBook /> : <Desktop windows={os === "windows"} />;
+}
+
+function MacBook() {
+  return (
+    <svg className="macbook" viewBox="0 0 220 132" aria-hidden="true">
+      <defs>
+        <linearGradient id="move-mac-screen" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" className="mac-screen-a" />
+          <stop offset="1" className="mac-screen-b" />
+        </linearGradient>
+      </defs>
+      <rect className="mac-lid" x="34" y="6" width="152" height="104" rx="9" />
+      <rect x="41" y="13" width="138" height="88" rx="3" fill="url(#move-mac-screen)" />
+      <rect className="mac-notch" x="102" y="13" width="16" height="4" rx="2" />
+      <g className="mac-glyph">
+        <path d="M104 50c0-5 4-7 6-7-1-3-4-4-6-4-3 0-4 2-6 2s-3-2-6-2c-3 0-7 3-7 9 0 7 5 14 8 14 2 0 3-1 5-1s3 1 5 1c2 0 4-3 5-5-3-1-4-4-4-7Z" />
+        <path d="M101 37c1-2 3-3 4-3 0 2-1 4-3 5-1 0-2 0-1-2Z" />
+      </g>
+      <path className="mac-base" d="M8 112h204l-6 10c-2 3-5 4-9 4H23c-4 0-7-1-9-4Z" />
+      <rect className="mac-lip" x="94" y="112" width="32" height="4" rx="2" />
+    </svg>
+  );
+}
+
+function Desktop({ windows }: { windows: boolean }) {
   return (
     <svg className="macbook" viewBox="0 0 220 150" aria-hidden="true">
       <defs>
@@ -798,12 +832,19 @@ function Desktop() {
       </defs>
       <rect className="mac-lid" x="20" y="6" width="180" height="110" rx="9" />
       <rect x="28" y="14" width="164" height="94" rx="3" fill="url(#pc-screen)" />
-      <g className="mac-glyph">
-        <rect x="96" y="44" width="13" height="13" rx="1.5" />
-        <rect x="111" y="44" width="13" height="13" rx="1.5" />
-        <rect x="96" y="59" width="13" height="13" rx="1.5" />
-        <rect x="111" y="59" width="13" height="13" rx="1.5" />
-      </g>
+      {windows ? (
+        <g className="mac-glyph">
+          <rect x="96" y="44" width="13" height="13" rx="1.5" />
+          <rect x="111" y="44" width="13" height="13" rx="1.5" />
+          <rect x="96" y="59" width="13" height="13" rx="1.5" />
+          <rect x="111" y="59" width="13" height="13" rx="1.5" />
+        </g>
+      ) : (
+        <g className="move-prompt">
+          <path d="M90 48l12 10-12 10" />
+          <path d="M108 70h22" />
+        </g>
+      )}
       <path className="mac-base" d="M98 116h24l5 22H93z" />
       <rect className="mac-base" x="72" y="136" width="76" height="7" rx="3.5" />
     </svg>

@@ -8537,9 +8537,19 @@
             "title": "Name",
             "type": "string"
           },
+          "os": {
+            "description": "macos, windows or linux.",
+            "title": "Os",
+            "type": "string"
+          },
           "projects": {
             "description": "How many projects it holds, the worked example aside.",
             "title": "Projects",
+            "type": "integer"
+          },
+          "protocol": {
+            "description": "What a transfer to it must speak.",
+            "title": "Protocol",
             "type": "integer"
           },
           "revision": {
@@ -8563,7 +8573,9 @@
           "database",
           "instance",
           "name",
+          "os",
           "projects",
+          "protocol",
           "revision",
           "version"
         ],
@@ -8613,6 +8625,11 @@
             "title": "Networks",
             "type": "array"
           },
+          "os": {
+            "description": "macos, windows or linux: how its card is drawn.",
+            "title": "Os",
+            "type": "string"
+          },
           "projects": {
             "description": "This account's projects: what a transfer would send.",
             "title": "Projects",
@@ -8642,6 +8659,7 @@
           "instance",
           "name",
           "networks",
+          "os",
           "projects",
           "revision",
           "version"
@@ -8665,6 +8683,12 @@
             "maxLength": 120,
             "title": "Name",
             "type": "string"
+          },
+          "protocol": {
+            "default": 1,
+            "description": "What the sender speaks (rows.PROTOCOL).",
+            "title": "Protocol",
+            "type": "integer"
           },
           "revision": {
             "anyOf": [
@@ -8765,6 +8789,18 @@
             "title": "Name",
             "type": "string"
           },
+          "os": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "macos, windows or linux: how it is drawn.",
+            "title": "Os"
+          },
           "projects": {
             "anyOf": [
               {
@@ -8808,6 +8844,7 @@
           "instance",
           "legacy",
           "name",
+          "os",
           "projects",
           "revision",
           "this_one",
