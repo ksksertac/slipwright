@@ -18,17 +18,17 @@ export function WorkersPage() {
   return (
     <div>
       <PageHead
-        title={tx("Mac Connect")}
+        title={tx("Mobile Builder")}
         subtitle={tx(
-          "Machines that build what this server cannot: iOS apps, and Android on Apple Silicon.",
+          "Builds the mobile apps this server cannot: iOS with Xcode, Android with Android Studio.",
         )}
       />
       <p className="muted">
         {tx(
-          "Docker runs Linux, and an iOS app is built with Xcode, which runs only on macOS. So a Mac connects here with Mac Connect and does that build in Xcode. A development with an iOS app builds everything else here, then waits for a Mac; connect one and it carries on by itself. The Mac calls this server -- nothing is opened on it -- and builds only this account's apps.",
+          "Slipwright runs in Docker, and Docker is Linux even on a Mac: it cannot reach Xcode or the Mac's Android Studio. The Mobile Builder is a small helper that runs on the Mac itself, outside Docker, and does the mobile builds: iOS with Xcode, and Android with Android Studio when this server cannot build it. The server may be on the same Mac or another machine; the helper finds it by itself, nothing is opened on the Mac, and it builds only this account's apps.",
         )}
       </p>
-      <h3 style={{ marginTop: 24 }}>{tx("Connected Macs")}</h3>
+      <h3 style={{ marginTop: 24 }}>{tx("Connected builders")}</h3>
       {workers.isLoading && <Loading />}
       {workers.error && <ErrorBox error={workers.error} />}
       {/* connecting one more is a card among the Macs, not a form above them: the page is
@@ -61,11 +61,11 @@ function ConnectCard() {
         <span className="mac-plug">
           <IconPlug />
         </span>
-        <strong>{tx("Connect a Mac")}</strong>
+        <strong>{tx("Connect a builder")}</strong>
         <span className="faint small">{tx("Make a code and run it on the Mac")}</span>
       </button>
       {open && (
-        <Modal title={tx("Connect a Mac")} onClose={() => setOpen(false)} wide>
+        <Modal title={tx("Connect a builder")} onClose={() => setOpen(false)} wide>
           <ConnectMac make={make} />
         </Modal>
       )}

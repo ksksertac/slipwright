@@ -589,18 +589,20 @@ person's decision, never a model's.
 
 </details>
 
-### iOS apps: lend it a Mac
+### Mobile apps: the Mobile Builder
 
 An iOS app is built by Xcode, Xcode runs only on macOS, and no container can hold macOS:
 Docker on a Mac runs a Linux VM too. Android's build tools exist for Linux on x86_64 only,
 so on an Apple Silicon Mac the image cannot build Android either. Slipwright stays where it
-is, and a Mac *lends* it the builds it cannot do.
+is, and the **Mobile Builder** -- a small helper on a Mac, outside Docker -- does the builds
+it cannot do: iOS with Xcode, Android with Android Studio. The server may be on that same
+Mac, in Docker, or on another machine.
 
 A development with an iOS app builds everything else as usual, then stops at **Waiting for
-a Mac**. Nothing has failed and nothing is spent; when a Mac connects it carries on by
-itself.
+the Mobile Builder**. Nothing has failed and nothing is spent; when it connects the
+development carries on by itself.
 
-1. **Settings → Mac Connect → Make a code.** Nothing is asked. The code carries the
+1. **Settings → Mobile Builder → Make a code.** Nothing is asked. The code carries the
    server's address when it has one; a page open at `localhost` has none to give (Docker
    cannot see the address of the machine it runs on), so its code carries only the port,
    and the Mac looks for the server itself: on the Mac first, then on its own network.

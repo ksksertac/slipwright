@@ -142,7 +142,7 @@ export function Layout() {
           {/* the owner's: a member does not lend the account machines */}
           {owner && (
             <NavLink to="/settings/workers" data-nav="workers">
-              <IconMonitor /> {tx("Mac Connect")}
+              <IconMonitor /> {tx("Mobile Builder")}
             </NavLink>
           )}
           {/* beside Mac Connect: both are about other machines on this network */}
