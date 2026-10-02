@@ -49,7 +49,7 @@ export const STATE_LABEL: Record<JobState, string> = {
   devops: "devops",
   awaiting_deploy_approval: "needs deployment approval",
   awaiting_decision: "needs your decision",
-  awaiting_builder: "waiting for a Mac",
+  awaiting_builder: "waiting for the Mobile Builder",
   paused: "paused",
   reconcile: "reading work done by hand",
   awaiting_reconcile_approval: "needs approval of work done by hand",

@@ -632,8 +632,8 @@ export const TR: Record<string, string> = {
   "Written tests approval": "Yazılan testlerin onayı",
   Done: "Tamam",
   "Your decision": "Senin kararın",
-  "Waiting for a Mac: {apps}": "Mac bekleniyor: {apps}",
-  "waiting for a Mac": "Mac bekleniyor",
+  "Waiting for the Mobile Builder: {apps}": "Mobil Derleyici bekleniyor: {apps}",
+  "waiting for the Mobile Builder": "Mobil Derleyici bekleniyor",
   "Nothing recorded for this step yet.": "Bu adım için henüz kayıt yok.",
   "Waiting for your approval of the": "Onayını bekleyen:",
   "Rename epics, stories and tasks or add and remove tasks; the Architect designs one phase per task from what you approve.":
@@ -2066,14 +2066,14 @@ export const TR: Record<string, string> = {
   "Reading the attached files: {usd} over {n} call(s), included above.":
     "Eklenen dosyaları okumak: {n} çağrıda {usd}, yukarıdakilere dahil.",
   // the Macs an account lends its developments (T14.5)
-  "Mac Connect": "Mac Connect",
-  "Machines that build what this server cannot: iOS apps, and Android on Apple Silicon.":
-    "Bu sunucunun derleyemediğini derleyen makineler: iOS uygulamaları, Apple Silicon'da Android.",
-  "Docker runs Linux, and an iOS app is built with Xcode, which runs only on macOS. So a Mac connects here with Mac Connect and does that build in Xcode. A development with an iOS app builds everything else here, then waits for a Mac; connect one and it carries on by itself. The Mac calls this server -- nothing is opened on it -- and builds only this account's apps.":
-    "Docker Linux tabanlıdır; iOS uygulamaları ise yalnızca macOS'ta çalışan Xcode ile derlenir. Bu yüzden bir Mac, Mac Connect ile buraya bağlanır ve derlemeyi Xcode'da yapar. iOS uygulaması olan bir geliştirme geri kalan her şeyi burada yapar, sonra bir Mac bekler; Mac bağlandığında kendiliğinden devam eder. Mac bu sunucuyu arar -- Mac'te hiçbir port açılmaz -- ve yalnızca bu hesabın uygulamalarını derler.",
-  "Connected Macs": "Bağlı Mac'ler",
+  "Mobile Builder": "Mobil Derleyici",
+  "Builds the mobile apps this server cannot: iOS with Xcode, Android with Android Studio.":
+    "Bu sunucunun derleyemediği mobil uygulamaları derler: iOS'u Xcode ile, Android'i Android Studio ile.",
+  "Slipwright runs in Docker, and Docker is Linux even on a Mac: it cannot reach Xcode or the Mac's Android Studio. The Mobile Builder is a small helper that runs on the Mac itself, outside Docker, and does the mobile builds: iOS with Xcode, and Android with Android Studio when this server cannot build it. The server may be on the same Mac or another machine; the helper finds it by itself, nothing is opened on the Mac, and it builds only this account's apps.":
+    "Slipwright Docker'da çalışır ve Docker, Mac'te bile Linux'tur: Xcode'a ve Mac'teki Android Studio'ya erişemez. Mobil Derleyici, Mac'in kendisinde, Docker'ın dışında çalışan küçük bir yardımcıdır ve mobil derlemeleri o yapar: iOS için Xcode, sunucu derleyemediğinde Android için Android Studio. Sunucu aynı Mac'te ya da başka bir makinede olabilir; yardımcı onu kendisi bulur, Mac'te hiçbir port açılmaz ve yalnızca bu hesabın uygulamalarını derler.",
+  "Connected builders": "Bağlı derleyiciler",
   "None yet.": "Henüz yok.",
-  "Connect a Mac": "Mac bağla",
+  "Connect a builder": "Derleyici bağla",
   "New code": "Yeni kod",
   "Make a code": "Kod oluştur",
   "On the Mac, install Slipwright (once):": "Mac'te Slipwright'ı kur (bir kez):",
@@ -2094,8 +2094,8 @@ export const TR: Record<string, string> = {
   "last seen {ago}": "son görülme {ago}",
   "Remove this Mac? It stops building for this account.":
     "Bu Mac kaldırılsın mı? Bu hesap için derlemeyi bırakır.",
-  "Everything this server can build is done. The rest is built on a Mac; when one connects, the development carries on by itself from here.":
-    "Bu sunucunun derleyebileceği her şey bitti. Kalanı bir Mac'te derlenir; bir Mac bağlandığında geliştirme buradan kendiliğinden devam eder.",
+  "Everything this server can build is done. The rest is built by the Mobile Builder on a Mac; when it connects, the development carries on by itself from here.":
+    "Bu sunucunun derleyebildiği her şey bitti. Gerisini bir Mac'teki Mobil Derleyici derler; bağlandığında geliştirme buradan kendiliğinden devam eder.",
   // what each call sent and got back, in the corner of the Right now feed
   "{n} tokens sent": "{n} token gönderildi",
   "{n} tokens received": "{n} token alındı",
@@ -2185,7 +2185,7 @@ export const TR: Record<string, string> = {
   "{name} runs another version of Slipwright (v{v}, this one v{mine}). Their databases differ, so nothing can move yet: update the older one from the corner of its screen, then try again.":
     "{name} başka bir Slipwright sürümünde çalışıyor (v{v}, bu bilgisayar v{mine}). Veritabanları farklı olduğu için henüz taşıma yapılamaz: eski olanı ekranının köşesinden güncelleyin, sonra tekrar deneyin.",
   "Try again": "Tekrar dene",
-  "Open on {name} ↗": "{name} üzerinde aç ↗",
+  OK: "Tamam",
   "Moving…": "Taşınıyor…",
   "Its address": "Adresi",
   "The code on {name}'s screen": "{name} ekranındaki kod",
@@ -2197,8 +2197,8 @@ export const TR: Record<string, string> = {
   "Accounts and sessions": "Kullanıcılar ve oturumlar",
   "Delete them from this computer once they are there":
     "Karşıya ulaştıktan sonra bu bilgisayardan sil",
-  "Connected Macs do not move: pair the Mac again with the new computer. A development that is running must finish or stop at a gate first.":
-    "Bağlı Mac'ler taşınmaz: Mac'i yeni bilgisayarla yeniden eşleştirin. Çalışmakta olan bir geliştirmenin önce bitmesi ya da bir kapıda durması gerekir.",
+  "Connected builders do not move: connect the Mobile Builder again to the new computer. A development that is running must finish or stop at a gate first.":
+    "Bağlı derleyiciler taşınmaz: Mobil Derleyici'yi yeni bilgisayara yeniden bağla. Çalışan bir geliştirme önce bitmeli ya da bir onay kapısında durmalı.",
   "Pairing and a sealed channel": "Eşleşme ve şifreli kanal",
   "Developments and their history": "Geliştirmeler ve geçmişleri",
   "Settings and keys": "Ayarlar ve anahtarlar",

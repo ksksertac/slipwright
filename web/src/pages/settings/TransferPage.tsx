@@ -446,19 +446,11 @@ function SendModal({
             </button>
           </>
         ) : status.data?.state === "done" ? (
-          <>
-            <button className="btn ghost" onClick={onClose}>
-              {tx("Close")}
-            </button>
-            <a
-              className="btn primary"
-              href={`${address.replace(/\/$/, "")}/projects`}
-              target="_blank"
-              rel="noreferrer"
-            >
-              {tx("Open on {name} ↗", { name })}
-            </a>
-          </>
+          // the work is over there now and this screen has said so: nothing is left to do
+          // here but close it
+          <button className="btn primary" onClick={onClose}>
+            {tx("OK")}
+          </button>
         ) : (
           <button className="btn ghost" disabled>
             {tx("Moving…")}
@@ -569,7 +561,7 @@ function SendModal({
           </label>
           <p className="faint small">
             {tx(
-              "Connected Macs do not move: pair the Mac again with the new computer. A development that is running must finish or stop at a gate first.",
+              "Connected builders do not move: connect the Mobile Builder again to the new computer. A development that is running must finish or stop at a gate first.",
             )}
           </p>
         </>
