@@ -102,7 +102,11 @@ export function AgentTalk({
             }}
           />
           <div className="row">
-            <button className="btn primary small" disabled={!text.trim() || ask.isPending}>
+            <button
+              type="submit"
+              className="btn primary small"
+              disabled={!text.trim() || ask.isPending}
+            >
               {ask.isPending ? tx("Sending…") : tx("Ask")}
             </button>
             {owner && talk.steer && (
@@ -192,12 +196,11 @@ function Followed({ message }: { message: JobMessage }) {
         })
       : tx("waiting for the agent's next call");
   } else {
-    state =
-      message.status === "applied"
-        ? tx("sent to the Architect")
-        : message.status === "dropped"
-          ? tx("not acted on: the development was stopped or moved on")
-          : tx("after the call it is on");
+    const replan: Record<string, string> = {
+      applied: "sent to the Architect",
+      dropped: "not acted on: the development was stopped or moved on",
+    };
+    state = tx(replan[message.status] ?? "after the call it is on");
   }
   return (
     <li className={`talk-followed ${message.kind}`}>
@@ -236,6 +239,7 @@ function Change({
       <div className="row">
         {talk.steer && (
           <button
+            type="button"
             className="btn small"
             disabled={!typed || steer.isPending}
             onClick={() => steer.mutate({ text: typed, replyTo: question.id })}
@@ -246,6 +250,7 @@ function Change({
         )}
         {talk.replan && (
           <button
+            type="button"
             className="btn small"
             disabled={!typed || redirect.isPending}
             onClick={() => redirect.mutate({ text: typed, replyTo: question.id })}
