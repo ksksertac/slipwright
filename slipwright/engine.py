@@ -427,6 +427,9 @@ class Engine:
         self.gate_timeout_s = gate_timeout_s
         # how often a build sent to a Mac is looked in on; tests make it quick
         self.worker_poll_s = 1.0
+        # whether this installation moves accounts to and from others on its network
+        # (slipwright/transfer); build_engine turns it off for a hosted one
+        self.transfer_enabled = True
         self._git_host = git_host
         # tests answer GitHub/Jira HTTP locally through a mock transport
         self.http_transport = http_transport

@@ -8324,6 +8324,423 @@
         "title": "TokenOnly",
         "type": "object"
       },
+      "TransferCode": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "shown_s": {
+            "description": "Seconds until the next one; the old one works a while on.",
+            "title": "Shown S",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "code",
+          "shown_s"
+        ],
+        "title": "TransferCode",
+        "type": "object"
+      },
+      "TransferHello": {
+        "additionalProperties": false,
+        "description": "What any installation says about itself to anybody on its network.",
+        "properties": {
+          "app": {
+            "const": "slipwright",
+            "default": "slipwright",
+            "title": "App",
+            "type": "string"
+          },
+          "instance": {
+            "title": "Instance",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "app",
+          "instance",
+          "name",
+          "revision",
+          "version"
+        ],
+        "title": "TransferHello",
+        "type": "object"
+      },
+      "TransferHere": {
+        "additionalProperties": false,
+        "description": "This installation, for its own card.",
+        "properties": {
+          "addresses": {
+            "description": "Where another machine may reach this one, to type in when it is not found by looking.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Addresses",
+            "type": "array"
+          },
+          "admin": {
+            "description": "Whether the installation's own settings go too.",
+            "title": "Admin",
+            "type": "boolean"
+          },
+          "enabled": {
+            "description": "Off on a hosted installation (SLIPWRIGHT_TRANSFER).",
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "instance": {
+            "title": "Instance",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "projects": {
+            "description": "This account's projects: what a transfer would send.",
+            "title": "Projects",
+            "type": "integer"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "addresses",
+          "admin",
+          "enabled",
+          "instance",
+          "name",
+          "projects",
+          "revision",
+          "version"
+        ],
+        "title": "TransferHere",
+        "type": "object"
+      },
+      "TransferPairRequest": {
+        "additionalProperties": false,
+        "description": "The sender's half of the key exchange. Public: the exchange is the proof.",
+        "properties": {
+          "message": {
+            "description": "SPAKE2, base64.",
+            "maxLength": 200,
+            "minLength": 8,
+            "title": "Message",
+            "type": "string"
+          },
+          "name": {
+            "default": "",
+            "maxLength": 120,
+            "title": "Name",
+            "type": "string"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "slot": {
+            "maxLength": 3,
+            "minLength": 3,
+            "title": "Slot",
+            "type": "string"
+          },
+          "version": {
+            "default": "",
+            "maxLength": 40,
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slot",
+          "message"
+        ],
+        "title": "TransferPairRequest",
+        "type": "object"
+      },
+      "TransferPaired": {
+        "additionalProperties": false,
+        "properties": {
+          "confirm": {
+            "description": "Proof the receiver derived the same key.",
+            "title": "Confirm",
+            "type": "string"
+          },
+          "message": {
+            "description": "The receiver's half of the exchange, base64.",
+            "title": "Message",
+            "type": "string"
+          },
+          "session": {
+            "title": "Session",
+            "type": "string"
+          }
+        },
+        "required": [
+          "confirm",
+          "message",
+          "session"
+        ],
+        "title": "TransferPaired",
+        "type": "object"
+      },
+      "TransferPeer": {
+        "additionalProperties": false,
+        "description": "A Slipwright on this network, as it describes itself.",
+        "properties": {
+          "address": {
+            "description": "Where it answers, as this server reached it.",
+            "title": "Address",
+            "type": "string"
+          },
+          "compatible": {
+            "description": "On the same schema as this one, so a transfer works.",
+            "title": "Compatible",
+            "type": "boolean"
+          },
+          "instance": {
+            "description": "Which installation: the same one seen twice is one.",
+            "title": "Instance",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Its database schema; a transfer needs the same.",
+            "title": "Revision"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "address",
+          "compatible",
+          "instance",
+          "name",
+          "revision",
+          "version"
+        ],
+        "title": "TransferPeer",
+        "type": "object"
+      },
+      "TransferSendRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "description": "The receiver, http://host:port.",
+            "maxLength": 300,
+            "minLength": 4,
+            "title": "Address",
+            "type": "string"
+          },
+          "code": {
+            "maxLength": 40,
+            "minLength": 10,
+            "title": "Code",
+            "type": "string"
+          },
+          "delete_after": {
+            "default": false,
+            "description": "Delete the projects here once the receiver has them all.",
+            "title": "Delete After",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "address",
+          "code"
+        ],
+        "title": "TransferSendRequest",
+        "type": "object"
+      },
+      "TransferStatus": {
+        "additionalProperties": false,
+        "description": "A transfer under way, from either end.",
+        "properties": {
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "Rows written, per table.",
+            "title": "Counts",
+            "type": "object"
+          },
+          "direction": {
+            "enum": [
+              "out",
+              "in"
+            ],
+            "title": "Direction",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "moved": {
+            "description": "Names of the projects moved.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Moved",
+            "type": "array"
+          },
+          "peer": {
+            "description": "The other machine: its address, or the name it gave.",
+            "title": "Peer",
+            "type": "string"
+          },
+          "skipped": {
+            "default": 0,
+            "description": "Projects the receiver already had.",
+            "title": "Skipped",
+            "type": "integer"
+          },
+          "state": {
+            "enum": [
+              "running",
+              "receiving",
+              "importing",
+              "done",
+              "failed"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/TransferStep"
+            },
+            "title": "Steps",
+            "type": "array"
+          }
+        },
+        "required": [
+          "counts",
+          "direction",
+          "error",
+          "id",
+          "moved",
+          "peer",
+          "skipped",
+          "state",
+          "steps"
+        ],
+        "title": "TransferStatus",
+        "type": "object"
+      },
+      "TransferStep": {
+        "additionalProperties": false,
+        "properties": {
+          "done": {
+            "title": "Done",
+            "type": "integer"
+          },
+          "key": {
+            "enum": [
+              "pair",
+              "projects",
+              "jobs",
+              "settings",
+              "attachments",
+              "standards",
+              "repos",
+              "finish",
+              "delete"
+            ],
+            "title": "Key",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "waiting",
+              "doing",
+              "done",
+              "skipped"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "done",
+          "key",
+          "state",
+          "total"
+        ],
+        "title": "TransferStep",
+        "type": "object"
+      },
       "Transition": {
         "properties": {
           "at": {
@@ -15213,6 +15630,363 @@
         "summary": "Revoke Token",
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/api/transfer": {
+      "get": {
+        "description": "This installation, as its own card shows it, and whether transfers are on.",
+        "operationId": "here_api_transfer_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "address",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Address"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransferHere"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Here",
+        "tags": [
+          "transfer"
+        ]
+      }
+    },
+    "/api/transfer/code": {
+      "delete": {
+        "description": "No more codes: whatever is on show stops working.",
+        "operationId": "stop_receiving_api_transfer_code_delete",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Stop Receiving",
+        "tags": [
+          "transfer"
+        ]
+      },
+      "post": {
+        "description": "A code to type on the sending machine. The page asks for a new one when this one's\ntime is up; the one before keeps working for a while, for whoever is half-way\nthrough typing it.",
+        "operationId": "transfer_code_api_transfer_code_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransferCode"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Transfer Code",
+        "tags": [
+          "transfer"
+        ]
+      }
+    },
+    "/api/transfer/incoming": {
+      "get": {
+        "description": "The transfer arriving for this account, or the last one that did.",
+        "operationId": "incoming_status_api_transfer_incoming_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransferStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "204": {
+            "description": "nothing arriving"
+          }
+        },
+        "summary": "Incoming Status",
+        "tags": [
+          "transfer"
+        ]
+      }
+    },
+    "/api/transfer/nearby": {
+      "get": {
+        "description": "The other Slipwrights on this network. ``address`` is where the page is open:\nthe best clue to which network that is. Takes a few seconds.",
+        "operationId": "nearby_installations_api_transfer_nearby_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "address",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Address"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TransferPeer"
+                  },
+                  "title": "Response Nearby Installations Api Transfer Nearby Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Nearby Installations",
+        "tags": [
+          "transfer"
+        ]
+      }
+    },
+    "/api/transfer/peer/hello": {
+      "get": {
+        "description": "What this is, to anybody on the network who asks: a name and a version, nothing\nof anybody's.",
+        "operationId": "hello_api_transfer_peer_hello_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransferHello"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Hello",
+        "tags": [
+          "transfer"
+        ]
+      }
+    },
+    "/api/transfer/peer/pair": {
+      "post": {
+        "description": "The sender's half of the exchange in, the receiver's out. The code is spent.",
+        "operationId": "pair_api_transfer_peer_pair_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransferPairRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransferPaired"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pair",
+        "tags": [
+          "transfer"
+        ]
+      }
+    },
+    "/api/transfer/peer/{session}/part": {
+      "post": {
+        "description": "One sealed part of a transfer. The body is opaque to anybody without the key.",
+        "operationId": "part_api_transfer_peer__session__part_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session",
+            "required": true,
+            "schema": {
+              "title": "Session",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Part Api Transfer Peer  Session  Part Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Part",
+        "tags": [
+          "transfer"
+        ]
+      }
+    },
+    "/api/transfer/send": {
+      "post": {
+        "description": "Start moving this account to ``address`` with the code shown there. Runs in the\nbackground; ask ``/transfer/send/{id}`` how it goes. Refused at once (409) while a\ndevelopment is running.",
+        "operationId": "send_api_transfer_send_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransferSendRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransferStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Send",
+        "tags": [
+          "transfer"
+        ]
+      }
+    },
+    "/api/transfer/send/{sending_id}": {
+      "get": {
+        "operationId": "sending_status_api_transfer_send__sending_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sending_id",
+            "required": true,
+            "schema": {
+              "title": "Sending Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransferStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sending Status",
+        "tags": [
+          "transfer"
         ]
       }
     },
