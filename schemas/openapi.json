@@ -2875,6 +2875,18 @@
             "title": "Devops Stage",
             "type": "integer"
           },
+          "draft_pr_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The pull request opened as a draft at the first push (T16.1), so the work can be followed on the host as it is built. `pr_url` is set when DevOps finishes it; until then everything that waits for a pull request still waits.",
+            "title": "Draft Pr Url"
+          },
           "feedback": {
             "anyOf": [
               {
@@ -3296,6 +3308,7 @@
           "design_approvals",
           "design_feedback",
           "devops_stage",
+          "draft_pr_url",
           "feedback",
           "inbox",
           "inflight",

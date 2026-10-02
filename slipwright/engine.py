@@ -958,6 +958,56 @@ class Engine:
     def _host_of(self, job: Job) -> SourceHost:
         return self.host_for(self._project_of(job))
 
+    def _push(self, job: Job, worktree: Path, what: str) -> None:
+        """Put what was just committed on the project's own repository (T16.1).
+
+        Everything was committed step by step and pushed only when DevOps opened the pull
+        request at the end: fourteen hours of an Android app, and the repository had none of
+        it -- nothing to follow, review or rescue. A push that fails never stops the
+        development: it is noted, and the next one carries it. A checkout with nowhere to
+        push is the ordinary local case and says nothing. The first push opens the pull
+        request as a draft where the host can; DevOps finishes it.
+        """
+        if not g.has_remote(worktree):
+            return
+        try:
+            host = self._host_of(job)
+            host.push(worktree, job.branch)
+        except NoRemote:
+            return
+        # whatever went wrong -- the host refused, its tool is not installed (`gh` missing
+        # is a FileNotFoundError, not a host error) -- the work is committed and carries on
+        except Exception as exc:  # noqa: BLE001
+            self._record_gate_note(job, f"{what}: committed, not pushed", str(exc))
+            return
+        if job.data.pr_url or job.data.draft_pr_url:
+            return
+        draft = getattr(host, "open_draft", None)
+        if draft is None:
+            return  # a host with no draft pull request: DevOps opens it, as before
+        title = (job.title or job.request).strip().splitlines()[0][:120]
+        body = (
+            f"{job.request}\n\n"
+            "_Opened as a draft by Slipwright while the development is built; the "
+            "description is written when it is done._"
+        )
+        try:
+            job.data.draft_pr_url = str(draft(worktree, job.branch, title, body))
+        except Exception as exc:  # noqa: BLE001 -- as above: a draft never stops the work
+            self._record_gate_note(job, "draft pull request not opened", str(exc))
+            return
+        self.store.save(job)
+        self._record_gate_note(job, f"draft pull request: {job.data.draft_pr_url}", None)
+
+    def _commit_message(self, job: Job, index: int, goal: str) -> str:
+        """The phase, its task and the task's Jira key: what the host's history shows."""
+        phases = (job.data.plan or {}).get("phases", [])
+        task = phases[index].get("task_id") if index < len(phases) else None
+        key = job.data.jira_keys.get(str(task)) if task else None
+        head = goal.strip().splitlines()[0] if goal.strip() else f"phase {index + 1}"
+        suffix = f" [{key}]" if key else ""
+        return f"slipwright: phase {index + 1}/{len(phases)}: {head}{suffix}"
+
     def _migrate_github_settings(self) -> None:
         """Settings written before the sources page keep working: github.* moves under
         sources.github once, and the old keys are left alone in case of a rollback."""
@@ -5256,7 +5306,8 @@ class Engine:
             worktree = require_worktree(job)
             g.stage_all(worktree)
             goal = phases[index].get("goal", "") if index < len(phases) else ""
-            g.commit(worktree, f"slipwright: phase {index + 1}: {goal}")
+            if g.commit(worktree, self._commit_message(job, index, goal)):
+                self._push(job, worktree, f"phase {index + 1}/{len(phases)}")
             job.data.phase_index = index + 1
             self.store.save(job)
             done = job.data.phase_index >= len(phases)
@@ -5394,7 +5445,7 @@ class Engine:
         )
         return False
 
-    def _record_gate_note(self, job: Job, note: str, detail: str) -> None:
+    def _record_gate_note(self, job: Job, note: str, detail: str | None) -> None:
         self.store.update_state(job.id, job.state, note=note, detail=detail)
         job.history = self.store.get(job.id).history
 
@@ -5622,7 +5673,8 @@ class Engine:
             test_diff = g.staged_diff(worktree)
             gate = self._final_gate(job)
             if gate.ok:
-                g.commit(worktree, "slipwright: tests")
+                if g.commit(worktree, "slipwright: tests"):
+                    self._push(job, worktree, "qa: tests")
                 job.data.feedback = None
                 job.data.build_attempts = 0
                 job.data.last_build_output = None
@@ -5779,7 +5831,8 @@ class Engine:
         self.store.save(job)
         g.stage_all(worktree)
         diff = g.staged_diff(worktree)
-        g.commit(worktree, f"slipwright: deployment ({plan.get('target')})")
+        if g.commit(worktree, f"slipwright: deployment ({plan.get('target')})"):
+            self._push(job, worktree, "devops: deployment files")
         parts = f" in {len(summaries)} parts" if len(summaries) > 1 else ""
         self.store.update_state(
             job.id,
@@ -5826,9 +5879,17 @@ class Engine:
                 return self._fail(job, f"devops: {exc}")
             try:
                 host.push(worktree, job.branch)
-                job.data.pr_url = host.open_pr(
-                    worktree, job.branch, result.output.pr_title, result.output.pr_body
-                )
+                finish = getattr(host, "finish_pr", None)
+                if job.data.draft_pr_url and finish is not None:
+                    # the draft opened at the first push gets DevOps' words and is made
+                    # ready for review, rather than a second pull request being opened
+                    job.data.pr_url = finish(
+                        worktree, job.branch, result.output.pr_title, result.output.pr_body
+                    )
+                else:
+                    job.data.pr_url = host.open_pr(
+                        worktree, job.branch, result.output.pr_title, result.output.pr_body
+                    )
             except NoRemote:
                 return self._done_locally(job, result.output)
             except GitHostError as exc:

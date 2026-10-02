@@ -147,8 +147,15 @@ class BitbucketHost:
         if not g.has_remote(worktree, "origin"):
             raise NoRemote("the checkout has no remote named 'origin'")
         url = self.authenticated_url(_origin(worktree))
+        # pushed to a URL, not to a remote by name, there is no tracking branch for a bare
+        # --force-with-lease to compare with: it took the branch for one that must not
+        # exist, and refused the second push of a development -- harmless while a
+        # development pushed once, at the end, and every step pushes now (T16.1). The
+        # lease is spelt out: overwrite only what the host has right now.
+        head = self.remote_head(worktree, branch)
+        lease = f"--force-with-lease=refs/heads/{branch}:{head or ''}"
         try:
-            g.run(worktree, "push", "--force-with-lease", "-u", url, branch)
+            g.run(worktree, "push", lease, url, f"{branch}:refs/heads/{branch}")
         except g.GitError as exc:
             raise GitHostError(f"push failed: {_scrub(exc.stderr, self.creds.token)}") from exc
 

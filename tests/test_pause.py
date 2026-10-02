@@ -208,7 +208,7 @@ def test_carrying_on_without_a_pull_builds_the_phase_as_if_it_had_never_stopped(
     assert job.worktree_path is not None
     subjects = _git(job.worktree_path, "log", "--format=%s")
     assert "work in progress" not in subjects, "the commit made for the push was taken back"
-    assert "slipwright: phase 1: step 1" in subjects
+    assert "slipwright: phase 1/3: step 1" in subjects
 
 
 def test_carrying_on_without_a_pull_is_refused_when_somebody_pushed(

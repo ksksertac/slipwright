@@ -649,15 +649,25 @@ def _devops_groups(job: Job, card: StepCard) -> list[StepGroup]:
         ),
         None,
     )
+    # the draft opened at the first push (T16.1) is the pull request until DevOps finishes it
+    draft = job.data.draft_pr_url if not pushed else None
     delivery = [
         StepItem(kind="fact", title="Branch", detail=job.branch, status=ItemStatus.DONE),
         StepItem(
             kind="fact",
             title="Pull request",
-            detail=job.data.pr_url or (failed_note or "not opened"),
-            status=ItemStatus.DONE if pushed else ItemStatus.FAILED,
+            detail=job.data.pr_url or draft or (failed_note or "not opened"),
+            status=ItemStatus.DONE
+            if pushed
+            else ItemStatus.IN_PROGRESS
+            if draft
+            else ItemStatus.FAILED,
             badges=[
-                Badge(label="pushed" if pushed else "not pushed", tone="ok" if pushed else "bad")
+                Badge(label="draft", tone="work")
+                if draft
+                else Badge(
+                    label="pushed" if pushed else "not pushed", tone="ok" if pushed else "bad"
+                )
             ],
         ),
     ]
