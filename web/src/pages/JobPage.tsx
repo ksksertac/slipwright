@@ -589,7 +589,7 @@ function DecisionGate({ job }: { job: Job }) {
       {job.data.decision_kind === "phase_budget" ? (
         <p className="muted small">
           {tx(
-            "The phase spent its budget of model calls without getting through. Nothing more is spent until you answer: what you write goes to the developer as the instruction for the next try, on a fresh budget.",
+            "The phase spent its budget of model calls without getting through. Nothing more is spent until you answer: what you write goes to the developer as the instruction for the next try, or to the Architect to plan this phase again -- either way on a fresh budget, and the phases already built stay.",
           )}
         </p>
       ) : (

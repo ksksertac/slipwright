@@ -224,13 +224,11 @@ class ArchitectResult(RoleOutput):
 
     @model_validator(mode="after")
     def _phases_name_tasks(self) -> ArchitectResult:
-        seen: set[str] = set()
+        # a task may take several phases -- one too large for an answer is split into
+        # parts -- so a repeated task_id is allowed; a phase with none is not
         for i, phase in enumerate(self.phases, start=1):
             if not phase.task_id:
                 raise ValueError(f"phase {i} has no task_id")
-            if phase.task_id in seen:
-                raise ValueError(f"task {phase.task_id!r} has more than one phase")
-            seen.add(phase.task_id)
         missing = unbuilt_platforms(self.phases, self.profile)
         if missing:
             raise ValueError(
@@ -376,6 +374,12 @@ class Recommendation(RoleOutput):
         min_length=1,
         description="What to do next, in one to three sentences a person can act on: "
         "split the phase, change the approach, relax a check, or drop a part.",
+    )
+    route: Literal["developer", "architect"] = Field(
+        default="developer",
+        description="Who acts on it: `developer` tries this phase again with it as the "
+        "instruction; `architect` plans this phase again (split it, reorder, change "
+        "what earlier phases did).",
     )
 
 

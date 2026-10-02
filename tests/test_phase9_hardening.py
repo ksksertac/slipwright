@@ -373,11 +373,15 @@ def test_supervisor_chooses_replan(
     job = engine.start(engine.create_job("x", project_id=project.id).id)
     job = engine.approve(engine.approve(job.id).id)
     assert job.state is JobState.AWAITING_ARCHITECTURE_APPROVAL
-    assert any("supervisor: re-plan (because replan)" in (t.note or "") for t in job.history)
+    # a re-plan starts from the phase that failed -- here the first, so nothing is kept
+    assert any(
+        "supervisor: re-plan from phase 1 (because replan)" in (t.note or "") for t in job.history
+    )
     architect = [r for r in provider.requests if r.role is RoleName.ARCHITECT]
     assert len(architect) == 2
     ctx = _context(architect[-1])
     assert "failed the build gate" in ctx["feedback"] and "previous_plan" in ctx
+    assert ctx["kept_phases"] == []
     assert job.data.phase_index == 0 and job.data.build_attempts == 0
 
 

@@ -76,14 +76,23 @@ You are the Software Architect. Read the repository (`worktree`) and the approve
    `platform`. A platform phase may wait until last for a machine that can build it, so
    nothing may depend on one: put platform phases after everything they use, and never
    make a later phase need what a platform phase wrote.
-   Every backlog task gets exactly one phase, with no exception: a task that is too large,
-   mixes domains or looks unnecessary still gets its phase (the closest fit you can
-   write), and the concern goes in `summary`. A plan that leaves a task out is not
-   reviewable and is thrown away.
+   Every backlog task gets a phase, with no exception: a task that mixes domains or looks
+   unnecessary still gets its phase (the closest fit you can write), and the concern goes
+   in `summary`. A task too large for one answer may take several consecutive phases, each
+   a part of it with the same `task_id`. A plan that leaves a task out is not reviewable
+   and is thrown away.
 If `feedback` is present, a human rejected your previous plan (`previous_plan`); address
 every point in it. If a `jira` section is present you may add Jira actions for existing
 issues. If a `standards` section is present its sections are binding unless they
 contradict the core rules."""
+
+
+REPLAN = """
+This is a re-plan from phase {start}: phases 1 to {kept} are built and committed, and stay
+(`kept_phases`). `feedback` says what failed and what to try instead. Return in `phases`
+only the phases from {start} on -- they replace the old ones from there -- and every task
+the kept phases do not implement still needs one. Never repeat a kept phase. If the cause
+is in a kept phase's code, add a phase here that changes it, and say so in `summary`."""
 
 
 def run(
@@ -117,6 +126,10 @@ def run(
     context["backlog"] = job.data.backlog
     context["domains"] = [d.value for d in Domain]
     context["previous_plan"] = job.data.plan
+    kept = kept_phases(job)
+    if job.data.replan_from is not None:
+        context["kept_phases"] = kept
+        context["instructions"] += REPLAN.format(start=len(kept) + 1, kept=len(kept))
     context["previous_profile"] = (
         None if job.profile is None else job.profile.model_dump(mode="json")
     )
@@ -133,16 +146,24 @@ def accepted_profile(result: ArchitectResult, seed: Profile) -> Profile:
     return result.profile.model_copy(update={"roles": seed.roles})
 
 
+def kept_phases(job: Job) -> list[dict[str, Any]]:
+    """The phases a re-plan keeps: built and committed before the one it starts from."""
+    if job.data.replan_from is None:
+        return []
+    phases = (job.data.plan or {}).get("phases", [])
+    return list(phases[: job.data.replan_from])
+
+
 def phase_task_map(phases: Sequence[PlanPhase], task_ids: list[str]) -> dict[str, int] | str:
-    """Map task id -> 1-based phase number, or a readable reason the plan is invalid."""
+    """Map task id -> 1-based phase number, or a readable reason the plan is invalid.
+
+    A task may take several phases -- one too large for an answer is split into parts --
+    and is mapped to its last: the board calls it done when every part is."""
     mapping: dict[str, int] = {}
     known = set(task_ids)
     for number, phase in enumerate(phases, start=1):
         if phase.task_id not in known:
             return f"phase {number} names unknown task {phase.task_id!r}"
-        if phase.task_id in mapping:
-            first = mapping[phase.task_id]
-            return f"task {phase.task_id!r} has more than one phase ({first}, {number})"
         mapping[phase.task_id] = number
     missing = [t for t in task_ids if t not in mapping]
     if missing:
@@ -150,4 +171,4 @@ def phase_task_map(phases: Sequence[PlanPhase], task_ids: list[str]) -> dict[str
     return mapping
 
 
-__all__ = ["INSTRUCTIONS", "accepted_profile", "phase_task_map", "run"]
+__all__ = ["INSTRUCTIONS", "accepted_profile", "kept_phases", "phase_task_map", "run"]

@@ -1556,6 +1556,30 @@ retry. Most of it is progress lines; the errors are a few lines in it.
 - [x] Test: a Gradle failure of 50,000 characters reaches the developer under 6,000 with
   its `e: file.kt:12:5` lines in it
 
+### T15.9 — A re-plan picks up where it failed
+Phase 8 of the Android app spent its budget; QA recommended splitting it in three and the
+answer went to the developer, who cannot split a phase. The build failed again, the
+supervisor asked for a re-plan, and the engine set `phase_index = 0`: the Architect wrote
+all eight phases again (the "one phase per task" rule forbade the split anyway), the
+Designer drew all eight screens again in ten minutes, and phases 1-7, built and committed,
+were being built a second time.
+**Done when**
+- [x] A supervisor's re-plan at a failed gate starts from the failing phase: the phases
+  before it are `kept_phases`, the Architect returns only the ones from there on (and may
+  add one that changes kept code when the cause is there), and development resumes at
+  the first new phase. The owner's "replan" from a failed development still goes back to
+  the backlog, as before
+- [x] A task may take several consecutive phases (parts of it); the board maps it to the
+  last, so it is done when every part is
+- [x] The Designer runs only when a UI task still to build has no screen: a re-plan with
+  the same tasks keeps their screens and their approvals
+- [x] At a phase-budget stop QA says who should act (`route`), and the answer has two
+  ways out: to the developer (try again with it) or to the Architect (plan this phase
+  again, `POST /jobs/{id}/replan-phase`, the owner's); QA's choice is offered first
+- [x] Tests: a supervisor's re-plan keeps phase 1, splits phase 2 and finishes without
+  building phase 1 twice; a re-plan draws no screen its tasks already have; a budget stop
+  is planned again from its phase (`tests/test_replan_from.py`)
+
 ---
 
 ## Phase 10 — Proposed (not started)

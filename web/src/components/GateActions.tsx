@@ -6,6 +6,7 @@ import {
   useCancelJob,
   useMyTeam,
   useReject,
+  useReplanPhase,
   useReplanJob,
   useRetryJob,
   useSkipDeployment,
@@ -424,14 +425,23 @@ export function GateActions({ job, compact = false }: { job: Job; compact?: bool
 export function BudgetAnswer({ job, compact }: { job: Job; compact: boolean }) {
   const tx = useT();
   const say = useSay();
+  const team = useMyTeam();
   const reject = useReject(job.id);
+  const replan = useReplanPhase(job.id);
   const recommendation = job.data.recommendation ?? "";
+  // QA says who should act: the developer (the same phase, better told) or the Architect
+  // (a different plan -- "split it in three" is not something a developer can do)
+  const toArchitect = job.data.recommendation_route === "architect";
   const [open, setOpen] = useState(!compact);
   const [answer, setAnswer] = useState<string | null>(null);
   // the recommendation is the agent's prose: shown in the reader's language, but the box
-  // holds it as written, since what is sent goes to the developer as it stands
+  // holds it as written, since what is sent goes on as it stands
   const text = answer ?? recommendation;
-  const send = () => reject.mutate(text.trim(), { onSuccess: () => setAnswer(null) });
+  const busy = reject.isPending || replan.isPending;
+  const toDeveloper = () => reject.mutate(text.trim(), { onSuccess: () => setAnswer(null) });
+  const toPlan = () => replan.mutate(text.trim(), { onSuccess: () => setAnswer(null) });
+  // a re-plan is the owner's, like every re-plan; a member answers with the developer
+  const mayReplan = isOwner(team.data);
   if (!open) {
     return (
       <div className="row">
@@ -441,45 +451,64 @@ export function BudgetAnswer({ job, compact }: { job: Job; compact: boolean }) {
       </div>
     );
   }
+  const developerButton = (
+    <button
+      key="dev"
+      className={`btn small ${toArchitect && mayReplan ? "" : "primary"}`}
+      disabled={!text.trim() || busy}
+      onClick={toDeveloper}
+      title={tx("the same phase is tried again, with this as the instruction")}
+    >
+      {reject.isPending ? tx("Sending…") : tx("Send to the developer")}
+    </button>
+  );
+  const planButton = mayReplan ? (
+    <button
+      key="plan"
+      className={`btn small ${toArchitect ? "primary" : ""}`}
+      disabled={!text.trim() || busy}
+      onClick={toPlan}
+      title={tx(
+        "the Architect plans this phase again -- it may split it -- and the phases already built stay",
+      )}
+    >
+      {replan.isPending ? tx("Sending…") : tx("Plan this phase again")}
+    </button>
+  ) : null;
   return (
     <div className={compact ? "stack tight" : "gate"}>
       {!compact && (
         <div style={{ marginBottom: 8 }}>
-          {tx("This phase spent its budget. Say what to do next; it is sent to the developer.")}
+          {tx(
+            "This phase spent its budget. Say what to do next: the developer tries the phase again with it, or the Architect plans the phase again.",
+          )}
         </div>
       )}
       {recommendation && (
         <div className="callout notice small" style={{ marginBottom: 8 }}>
           <strong>{tx("QA recommends")}:</strong> {say(recommendation)}
+          {toArchitect && <span className="faint"> {tx("(a new plan for this phase)")}</span>}
         </div>
       )}
       <textarea
         rows={compact ? 4 : 5}
         style={{ width: "100%", maxWidth: compact ? 320 : 640 }}
-        placeholder={tx("what should the developer do next?")}
+        placeholder={tx("what should happen next?")}
         value={text}
         onChange={(e) => setAnswer(e.target.value)}
-        aria-label={tx("what should the developer do next?")}
+        aria-label={tx("what should happen next?")}
       />
       <div className="row" style={{ marginTop: 6 }}>
-        <button
-          className="btn primary small"
-          disabled={!text.trim() || reject.isPending}
-          onClick={send}
-        >
-          {reject.isPending
-            ? tx("Sending…")
-            : recommendation && text.trim() === recommendation.trim()
-              ? tx("Send QA's recommendation")
-              : tx("Send")}
-        </button>
+        {toArchitect ? [planButton, developerButton] : [developerButton, planButton]}
         {compact && (
           <button className="btn small" onClick={() => setOpen(false)}>
             {tx("Cancel")}
           </button>
         )}
       </div>
-      {reject.error && <div className="callout error">{describeError(reject.error)}</div>}
+      {(reject.error ?? replan.error) && (
+        <div className="callout error">{describeError(reject.error ?? replan.error)}</div>
+      )}
     </div>
   );
 }

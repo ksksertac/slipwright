@@ -3124,6 +3124,18 @@
             "description": "What QA proposes at a phase-budget stop, for the person to accept as written or rewrite.",
             "title": "Recommendation"
           },
+          "recommendation_route": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who QA says should act on the recommendation: \"developer\" (try again with it) or \"architect\" (plan the phase again).",
+            "title": "Recommendation Route"
+          },
           "reconcile": {
             "anyOf": [
               {
@@ -3142,6 +3154,18 @@
             "minimum": 0.0,
             "title": "Reject Rounds",
             "type": "integer"
+          },
+          "replan_from": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "While the plan is being made again from a phase on: that phase's index (0-based). The phases before it are built and committed, and stay as they are.",
+            "title": "Replan From"
           },
           "rerun_only": {
             "default": false,
@@ -3276,8 +3300,10 @@
           "qa_gate_fixes",
           "qa_stage",
           "recommendation",
+          "recommendation_route",
           "reconcile",
           "reject_rounds",
+          "replan_from",
           "rerun_only",
           "resume_state",
           "review_rounds",
@@ -11906,6 +11932,56 @@
           }
         },
         "summary": "Replan"
+      }
+    },
+    "/api/jobs/{job_id}/replan-phase": {
+      "post": {
+        "description": "At a phase-budget stop: have the Architect plan this phase again, keeping the\nphases already built. The owner's, like every re-plan.",
+        "operationId": "replan_phase_api_jobs__job_id__replan_phase_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Replan"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Replan Phase"
       }
     },
     "/api/jobs/{job_id}/rerun": {

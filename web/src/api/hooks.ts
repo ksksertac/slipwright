@@ -677,6 +677,18 @@ export function useReplanJob(jobId: string) {
   });
 }
 
+/** At a phase-budget stop: the Architect plans this phase again, keeping what is built. */
+export function useReplanPhase(jobId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (note: string) => api.post<Job>(`/api/jobs/${jobId}/replan-phase`, { note }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.job(jobId) });
+      void qc.invalidateQueries({ queryKey: keys.overview });
+    },
+  });
+}
+
 export function useRetryJob(jobId: string) {
   const qc = useQueryClient();
   return useMutation({

@@ -313,6 +313,11 @@ class JobData(BaseModel):
     resume_state: str | None = Field(
         default=None, description="Where the job continues after the decision gate."
     )
+    replan_from: int | None = Field(
+        default=None,
+        description="While the plan is being made again from a phase on: that phase's index "
+        "(0-based). The phases before it are built and committed, and stay as they are.",
+    )
     # -- one budget for a phase (T15.5) --
     phase_calls: int = Field(
         default=0,
@@ -327,6 +332,11 @@ class JobData(BaseModel):
         default=None,
         description="Why the decision gate stopped, when that changes what it offers: "
         '"phase_budget" waits for a written answer and offers no plain approve.',
+    )
+    recommendation_route: str | None = Field(
+        default=None,
+        description='Who QA says should act on the recommendation: "developer" (try again '
+        'with it) or "architect" (plan the phase again).',
     )
     recommendation: str | None = Field(
         default=None,
