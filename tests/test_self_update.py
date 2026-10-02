@@ -536,3 +536,17 @@ def test_without_docker_the_button_says_what_to_run_instead(
         assert status["blocked"] == "no_docker"
         assert f"{IMAGE}:0.2.0" in status["command"]
         assert client.post("/api/update", json={"version": "0.2.0"}).status_code == 409
+
+
+def test_what_to_run_instead_runs_as_pasted_in_zsh_too(tmp_path: Path) -> None:
+    """zsh, macOS's shell, does not take ``#`` as a comment where a line is typed or pasted:
+    the advice after it went to ``docker pull`` as arguments, and it refused the line."""
+    command = _updater(None, tmp_path).command()
+    assert "#" not in command
+    lines = command.splitlines()
+    assert lines[0] == f"docker pull {IMAGE}:0.2.0"
+    assert "docker stop slipwright && docker rm slipwright" in lines
+    # the same volumes, and the socket, so the next release installs from the page
+    assert "-v slipwright-state:/data -v slipwright-work:/work" in command
+    assert "-v /var/run/docker.sock:/var/run/docker.sock" in command
+    assert lines[-1].strip() == f"{IMAGE}:0.2.0"
