@@ -36,3 +36,10 @@ htmlcov/
 # The relay (cd relay && npm install)
 relay/node_modules/
 relay/.wrangler/
+
+# The desktop app (cd desktop && npm run build); its icon source is kept
+desktop/node_modules/
+desktop/out/
+desktop/dist/
+desktop/*.tsbuildinfo
+!/desktop/build/
