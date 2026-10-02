@@ -563,6 +563,14 @@ function StepCardView({
       )}
       {step.auto_approved && <div className="chip idle">{tx("approved by supervisor")}</div>}
       {step.by_hand && <div className="chip idle">{tx("done by hand")}</div>}
+      {/* what the phase builds on (T16.2): a phase with none can be built beside others */}
+      {step.depends_on && (
+        <div className="chip idle" title={tx("the phases this one builds on")}>
+          {step.depends_on.length
+            ? tx("after {phases}", { phases: step.depends_on.join(", ") })
+            : tx("needs no other phase")}
+        </div>
+      )}
       <div className="meta">
         <span className={`badge ${STATUS_CLASS[step.status]} plain`}>
           {step.status === "waiting"

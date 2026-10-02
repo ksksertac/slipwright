@@ -54,6 +54,8 @@ class StepCard(BaseModel):
     risk: str | None = None
     auto_approved: bool = False  # this gate was approved by the supervisor
     by_hand: bool = False  # a phase people finished on the branch while it was paused
+    # the phases this one builds on (T16.2); None for a plan that does not say
+    depends_on: list[int] | None = None
 
 
 class Lane(BaseModel):
@@ -394,6 +396,7 @@ def _phase_cards(job: Job, r: _Reader) -> list[StepCard]:
                 elapsed_s=_elapsed(start, end, r.now),
                 outputs=sorted(set(outputs + gate_logs)),
                 by_hand=str(number) in job.data.phase_outcomes,
+                depends_on=phase.get("depends_on"),
             )
         )
         gate = _review_gate(job, r, number)
