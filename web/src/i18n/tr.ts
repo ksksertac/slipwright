@@ -2175,7 +2175,7 @@ export const TR: Record<string, string> = {
   "{name} runs another version of Slipwright (v{v}, this one v{mine}). Their databases differ, so nothing can move yet: update the older one from the corner of its screen, then try again.":
     "{name} başka bir Slipwright sürümünde çalışıyor (v{v}, bu bilgisayar v{mine}). Veritabanları farklı olduğu için henüz taşıma yapılamaz: eski olanı ekranının köşesinden güncelleyin, sonra tekrar deneyin.",
   "Try again": "Tekrar dene",
-  "Open on {name} ↗": "{name} üzerinde aç ↗",
+  OK: "Tamam",
   "Moving…": "Taşınıyor…",
   "Its address": "Adresi",
   "The code on {name}'s screen": "{name} ekranındaki kod",

@@ -446,19 +446,11 @@ function SendModal({
             </button>
           </>
         ) : status.data?.state === "done" ? (
-          <>
-            <button className="btn ghost" onClick={onClose}>
-              {tx("Close")}
-            </button>
-            <a
-              className="btn primary"
-              href={`${address.replace(/\/$/, "")}/projects`}
-              target="_blank"
-              rel="noreferrer"
-            >
-              {tx("Open on {name} ↗", { name })}
-            </a>
-          </>
+          // the work is over there now and this screen has said so: nothing is left to do
+          // here but close it
+          <button className="btn primary" onClick={onClose}>
+            {tx("OK")}
+          </button>
         ) : (
           <button className="btn ghost" disabled>
             {tx("Moving…")}
