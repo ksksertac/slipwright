@@ -56,6 +56,13 @@ class BudgetSettings(BaseModel):
     max_tokens: int | None = Field(default=None, ge=1000)
     max_wall_clock_s: int | None = Field(default=None, ge=60)
     max_invocations: int | None = Field(default=None, ge=1)
+    max_parallel_phases: int | None = Field(
+        default=3,
+        ge=1,
+        description="How many phases' answers are written at once (T16.3): the phase being "
+        "built and the ready ones after it that need nothing it does. 1 or None writes one "
+        "at a time, as before.",
+    )
     max_phase_calls: int | None = Field(
         default=8,
         ge=2,

@@ -24,6 +24,7 @@ import time
 import traceback
 from collections import defaultdict
 from collections.abc import Callable
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
@@ -548,6 +549,11 @@ class Engine:
         #: already paid for -- so the run loop reads this between steps and stops before
         #: the next one.
         self._stopping: dict[str, _Halt] = {}
+        # answers being written ahead of their phase's turn (T16.3), by job and phase
+        # number. Held here, not on the job: a thread never writes the job, the run loop
+        # takes what is ready when the phase comes up
+        self._ahead: dict[str, dict[int, Future[RoleResult]]] = {}
+        self._ahead_pool = ThreadPoolExecutor(max_workers=8, thread_name_prefix="ahead")
         # one analysis or intake round at a time per project (T11.2)
         self._brief_locks: defaultdict[str, threading.Lock] = defaultdict(threading.Lock)
         # one test run at a time per checkout, so runs never trample each other's files
@@ -4090,6 +4096,7 @@ class Engine:
         before the failing one are kept; the Architect replaces the rest, and may add a
         phase that changes kept code when that is where the cause is.
         """
+        self._drop_ahead(job)
         job.data.replan_from = index
         job.data.phase_index = index
         job.data.feedback = why
@@ -4508,8 +4515,11 @@ class Engine:
         }
         self.store.save(job)
 
-    def _account(self, job: Job, role: RoleName, result: RoleResult) -> None:
-        """Count the call against the job's budget and keep the per-call log."""
+    def _account(
+        self, job: Job, role: RoleName, result: RoleResult, *, phase: int | None = None
+    ) -> None:
+        """Count the call against the job's budget and keep the per-call log. ``phase`` is
+        for an answer written ahead: counted against the phase it was for, not this one."""
         started = (job.data.inflight or {}).get("started_at")
         job.data.inflight = None
         usage = result.usage
@@ -4526,7 +4536,7 @@ class Engine:
         )
         if cost is not None:
             job.data.cost_usd = round(job.data.cost_usd + cost, 6)
-        phase = self._phase_number(job)
+        phase = phase if phase is not None else self._phase_number(job)
         if phase is not None:
             if job.data.phase_calls_for != phase:
                 job.data.phase_calls_for, job.data.phase_calls = phase, 0
@@ -5010,9 +5020,13 @@ class Engine:
         allowed = self.max_phase_parts
         steered = False
         part = 0
+        fresh = job.data.build_attempts == 0 and review_ctx is None
+        # the phases after this one that need nothing it does start writing now (T16.3)
+        job = self._write_ahead(job, index)
         while part < allowed:
             part += 1
-            result = self._invoke(
+            ahead = self._take_ahead(job, index, role) if part == 1 and fresh else None
+            result = ahead or self._invoke(
                 role,
                 developer.run,
                 job,
@@ -5149,6 +5163,125 @@ class Engine:
     def _phase_buildable(self, job: Job, phase: dict[str, Any]) -> bool:
         platform = phase.get("platform")
         return not platform or self.can_build(job, str(platform))
+
+    # -- answers written ahead (T16.3) ----------------------------------------------------
+
+    def _write_ahead(self, job: Job, index: int) -> Job:
+        """Start writing the answers of the phases after ``index`` that need nothing still
+        to be built -- by the plan's `depends_on` (T16.2) -- so they are ready when their
+        turn comes.
+
+        The model's answer is where a phase's time goes: minutes to most of an hour, while
+        its build gate takes seconds. So that is what runs side by side. Each phase is still
+        applied, built, reviewed, committed and pushed in its turn, in plan order, on the
+        one branch: no second checkout, no merge, no conflict to resolve. A phase that needs
+        nothing still to be built cannot need what the phases before it are writing, and
+        two phases on one file are always ordered (T16.2), so an answer written ahead
+        touches nothing another one does.
+        """
+        limit = self.budget_for(job).max_parallel_phases or 1
+        phases = self._phases(job)
+        running = self._ahead.setdefault(job.id, {})
+        # what an earlier run of the server started is gone with it
+        shown = {k: v for k, v in job.data.ahead.items() if int(k) in running}
+        if shown != job.data.ahead:
+            job.data.ahead = shown
+            self.store.save(job)
+        room = limit - 1 - sum(1 for f in running.values() if not f.done())
+        if room <= 0:
+            return job
+        done = set(range(1, index + 1))  # the phases committed, and this one
+        started: list[int] = []
+        for j in range(index + 1, len(phases)):
+            if room <= 0:
+                break
+            number = j + 1
+            phase = phases[j]
+            needs = phase.get("depends_on")
+            if number in running or needs is None or not set(needs) <= done - {index + 1}:
+                continue
+            if not self._phase_buildable(job, phase) or (
+                phase.get("domain") in ("web", "mobile") and designer.pending_screens(job)
+            ):
+                continue  # it waits for a Mac or a design approval, and so does its answer
+            running[number] = self._start_ahead(job, j)
+            job.data.ahead[str(number)] = {
+                "role": specialist_for(phase.get("domain")).value,
+                "started_at": utcnow().isoformat(),
+            }
+            started.append(number)
+            room -= 1
+        if started:
+            self.store.save(job)
+            names = ", ".join(str(n) for n in started)
+            self._record_gate_note(
+                job,
+                f"phase(s) {names}: their answers are written alongside phase {index + 1}",
+                None,
+            )
+        return job
+
+    def _start_ahead(self, job: Job, j: int) -> Future[RoleResult]:
+        """One phase's first answer, on a thread, from a copy of the job that is on it."""
+        phases = self._phases(job)
+        role = specialist_for(phases[j].get("domain"))
+        profile = self._profile(job)
+        ahead = job.model_copy(deep=True)
+        ahead.data.phase_index = j
+        ahead.data.last_build_output = None
+        ahead.data.qa_diagnosis = None
+        ahead.data.review_violations = []
+        ahead.data.inbox = []  # what a person wrote is for the phase that reads it in turn
+        retrieved = self.standards_for(ahead, role, profile)
+        kw: dict[str, Any] = {"profile": profile, "as_role": role}
+        if retrieved is not None:
+            kw["standards"] = retrieved.as_context()
+        retries = profile.roles[role].retries
+
+        def write() -> RoleResult:
+            return self._call_with_retries(role, developer.run, ahead, retries, **kw)
+
+        return self._ahead_pool.submit(write)
+
+    def _take_ahead(self, job: Job, index: int, role: RoleName) -> RoleResult | None:
+        """The answer written ahead for this phase, once it is ready; None when there is
+        none, or it failed -- then the phase is asked as it always was."""
+        number = index + 1
+        future = self._ahead.get(job.id, {}).pop(number, None)
+        if job.data.ahead.pop(str(number), None) is not None:
+            self.store.save(job)
+        if future is None:
+            return None
+        self._take_off(job, role, self._profile(job))  # shown as the call it is waiting on
+        try:
+            result = future.result()
+        except Exception as exc:  # noqa: BLE001 -- the phase is asked in turn instead
+            job.data.inflight = None
+            self.store.save(job)
+            self._record_gate_note(
+                job, f"phase {number}: the answer written ahead failed", str(exc)
+            )
+            return None
+        self._account(job, role, result, phase=number)
+        if not result.ok:
+            self._record_gate_note(
+                job,
+                f"phase {number}: the answer written ahead failed; asking in turn",
+                result.error.message if result.error else None,
+            )
+            return None
+        project = self._project_of(job)
+        if result.output is not None and project is not None:
+            profile = self._profile(job)
+            self._apply_jira_actions(job, role, profile, project, result.output.jira_actions)
+        return result
+
+    def _drop_ahead(self, job: Job) -> None:
+        """Forget what is being written ahead: the plan it was for is going. What is already
+        on its way is paid for and finishes; nobody reads it."""
+        for future in self._ahead.pop(job.id, {}).values():
+            future.cancel()
+        job.data.ahead = {}
 
     def _put_unbuildable_last(self, job: Job) -> Job:
         """Move the phases nothing here can build behind the ones it can.
