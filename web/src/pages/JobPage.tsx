@@ -562,15 +562,15 @@ function BuilderWait({ job }: { job: Job }) {
     <div className="callout notice" style={{ display: "block" }}>
       <div className="row spread">
         <span>
-          <strong>{tx("Waiting for a Mac: {apps}", { apps })}</strong>
+          <strong>{tx("Waiting for the Mobile Builder: {apps}", { apps })}</strong>
         </span>
         <button className="btn primary small" onClick={() => navigate("/settings/workers")}>
-          {tx("Connect a Mac")}
+          {tx("Connect a builder")}
         </button>
       </div>
       <div className="small muted" style={{ marginTop: 6 }}>
         {tx(
-          "Everything this server can build is done. The rest is built on a Mac; when one connects, the development carries on by itself from here.",
+          "Everything this server can build is done. The rest is built by the Mobile Builder on a Mac; when it connects, the development carries on by itself from here.",
         )}
       </div>
     </div>

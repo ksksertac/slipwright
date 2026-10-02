@@ -493,7 +493,7 @@ function stepLabel(tx: T, say: (s: string) => string, step: StepCard): string {
   const gate = /^Review approval: phase (\d+)$/.exec(step.label);
   if (gate) return tx("Review approval · {phase}", { phase: phaseName(tx, Number(gate[1])) });
   const mac = /^Waiting for a Mac: (.+)$/.exec(step.label);
-  if (mac) return tx("Waiting for a Mac: {apps}", { apps: mac[1]! });
+  if (mac) return tx("Waiting for the Mobile Builder: {apps}", { apps: mac[1]! });
   return tx(step.label);
 }
 
@@ -660,11 +660,11 @@ function StepPanel({
               <div className="gate" style={{ marginBottom: 12 }}>
                 <div className="muted small" style={{ marginBottom: 8 }}>
                   {tx(
-                    "Everything this server can build is done. The rest is built on a Mac; when one connects, the development carries on by itself from here.",
+                    "Everything this server can build is done. The rest is built by the Mobile Builder on a Mac; when it connects, the development carries on by itself from here.",
                   )}
                 </div>
                 <Link className="btn primary small" to="/settings/workers">
-                  {tx("Connect a Mac")}
+                  {tx("Connect a builder")}
                 </Link>
               </div>
             )}
