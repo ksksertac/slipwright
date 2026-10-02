@@ -85,6 +85,7 @@ export function TransferPage() {
               <PeerCard key={peer.instance} peer={peer} onPick={() => setPicked({ peer })} />
             ))}
             <ReceiveCard here={here.data} />
+            <SendCard onPick={() => setPicked({ peer: null })} />
           </div>
           <div className="move-pills">
             <Pill title={tx("Sealed end to end")} icon="🔐">
@@ -274,11 +275,14 @@ function ReceiveCard({ here }: { here: TransferHere }) {
               {tx("On the sending computer, press this installation's card and type the code.")}
             </span>
           )}
-          {here.addresses.length > 0 && (
-            <span className="faint small move-hint">
-              {tx("Not found there? Its address: {a}", { a: here.addresses[0] ?? "" })}
-            </span>
-          )}
+          <span className="faint small move-hint">
+            {here.addresses.length > 0
+              ? tx("Not found there? Its address: {a}", { a: here.addresses[0] ?? "" })
+              : tx(
+                  "Not found there? Its address is this computer's IPv4 address (ipconfig), port {port}.",
+                  { port: window.location.port || "80" },
+                )}
+          </span>
           <button className="btn ghost small" onClick={cancel}>
             {tx("Cancel")}
           </button>
@@ -303,6 +307,22 @@ function ReceiveCard({ here }: { here: TransferHere }) {
 
 // a new code flashes as it replaces the last: keyed on the code, so the button is drawn
 // afresh and its animation plays again
+// The sending end, always there: the other computer is a card when looking around the
+// network found it, and this when it did not -- a server in Docker opened at localhost
+// often cannot see the network it is on, and the address is then typed instead.
+function SendCard({ onPick }: { onPick: () => void }) {
+  const tx = useT();
+  return (
+    <button type="button" className="card mac-card mac-connect" onClick={onPick}>
+      <span className="mac-plug">
+        <IconSend />
+      </span>
+      <strong>{tx("Send to another computer")}</strong>
+      <span className="faint small">{tx("Type its address and the code on its screen")}</span>
+    </button>
+  );
+}
+
 function CodeChip({ code }: { code: string | undefined }) {
   const tx = useT();
   return (
@@ -621,6 +641,25 @@ function Desktop() {
       </g>
       <path className="mac-base" d="M98 116h24l5 22H93z" />
       <rect className="mac-base" x="72" y="136" width="76" height="7" rx="3.5" />
+    </svg>
+  );
+}
+
+function IconSend() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="28"
+      height="28"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 15V3M7 8l5-5 5 5" />
+      <path d="M5 19h14" />
     </svg>
   );
 }

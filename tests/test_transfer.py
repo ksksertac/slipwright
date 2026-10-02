@@ -412,8 +412,14 @@ def test_the_page_says_which_network_to_look_at() -> None:
     networks, ports = nearby.targets("http://192.168.1.11:8600", None, own="10.0.0.5")
     assert networks == ["192.168.1.0/24", "10.0.0.0/24"]
     assert ports == {8500, 8600}
+    # nothing to go on -- localhost, in Docker -- and the usual home networks are tried
     networks, _ = nearby.targets("http://localhost:8500", own=None)
-    assert networks == []
+    assert networks == list(nearby.USUAL_NETWORKS)
+
+
+def test_a_container_does_not_offer_its_bridge_address(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(nearby, "in_container", lambda: True)
+    assert nearby.own_address() is None
 
 
 def test_looking_around_finds_the_others_and_not_itself() -> None:
