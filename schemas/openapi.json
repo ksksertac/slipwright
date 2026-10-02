@@ -8716,6 +8716,18 @@
             "title": "Address",
             "type": "string"
           },
+          "attachments": {
+            "default": true,
+            "description": "Attachments and standards pages.",
+            "title": "Attachments",
+            "type": "boolean"
+          },
+          "checkouts": {
+            "default": true,
+            "description": "Send each checkout whole -- branches and work not committed. Without, the receiver clones from the remote and only what was pushed arrives.",
+            "title": "Checkouts",
+            "type": "boolean"
+          },
           "code": {
             "maxLength": 40,
             "minLength": 10,
@@ -8726,6 +8738,33 @@
             "default": false,
             "description": "Delete the projects here once the receiver has them all.",
             "title": "Delete After",
+            "type": "boolean"
+          },
+          "installation": {
+            "default": true,
+            "description": "The installation's settings; an administrator's only.",
+            "title": "Installation",
+            "type": "boolean"
+          },
+          "projects": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Which projects; none given is every one of them.",
+            "title": "Projects"
+          },
+          "settings": {
+            "default": true,
+            "description": "The account's settings and keys.",
+            "title": "Settings",
             "type": "boolean"
           }
         },

@@ -374,6 +374,31 @@ def _rebuild(rec: Receiving, project_id: str, meta: dict[str, Any], target: Path
         g.set_remote(target, "origin", _without_credentials(origin))
 
 
+def _clone(
+    engine: Engine, owner: str | None, project: Project, meta: dict[str, Any], target: Path
+) -> None:
+    """A project sent without its checkout, cloned from where it is pushed -- on this
+    account's Git token here, as a project created here would be."""
+    url = meta.get("origin") or project.effective_clone_url
+    if not isinstance(url, str) or not url:
+        raise ValueError(f"{project.name} came without a checkout or a remote to clone")
+    url = _without_credentials(url)
+    mine = engine.for_user(owner)
+    source = project.source or mine.default_source()
+    try:
+        g.clone(mine._authenticated(url, source), target)
+    except g.GitError as exc:
+        raise ValueError(
+            f"could not clone {project.name} from {url}: add a token for it under "
+            "Settings -> Sources here, or send it with its checkout"
+        ) from exc
+    g.set_remote(target, "origin", url)
+    head = meta.get("head")
+    if isinstance(head, str) and head.startswith("refs/heads/"):
+        branch = head.removeprefix("refs/heads/")
+        g.run(target, "checkout", "-q", branch, check=False)
+
+
 def _without_credentials(url: str) -> str:
     """A remote with a token written into it is put back without one: the engine
     supplies credentials per push, and a token left in ``.git/config`` is readable by
@@ -410,7 +435,13 @@ def import_transfer(engine: Engine, rec: Receiving) -> dict[str, Any]:
             pid = row["id"]
             target = _free(engine.repos_root / pid)
             made.append(target)
-            _rebuild(rec, pid, manifest["repos"].get(pid, {}), target)
+            meta = manifest["repos"].get(pid, {})
+            if manifest.get("checkouts", True):
+                _rebuild(rec, pid, meta, target)
+            else:
+                _clone(
+                    engine, rec.owner, Project.model_validate_json(row["data_json"]), meta, target
+                )
             repo_of[pid] = target
         for job_id, tree in (manifest.get("trees") or {}).items():
             pid = tree.get("project")

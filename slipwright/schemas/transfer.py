@@ -83,6 +83,19 @@ class TransferSendRequest(BaseModel):
     delete_after: bool = Field(
         default=False, description="Delete the projects here once the receiver has them all."
     )
+    projects: list[str] | None = Field(
+        default=None, description="Which projects; none given is every one of them."
+    )
+    checkouts: bool = Field(
+        default=True,
+        description="Send each checkout whole -- branches and work not committed. Without, "
+        "the receiver clones from the remote and only what was pushed arrives.",
+    )
+    settings: bool = Field(default=True, description="The account's settings and keys.")
+    attachments: bool = Field(default=True, description="Attachments and standards pages.")
+    installation: bool = Field(
+        default=True, description="The installation's settings; an administrator's only."
+    )
 
 
 class TransferPairRequest(BaseModel):

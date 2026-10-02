@@ -1432,8 +1432,17 @@ export function useIncomingTransfer(poll: boolean) {
 
 export function useSendTransfer() {
   return useMutation({
-    mutationFn: (body: { address: string; code: string; delete_after: boolean }) =>
-      api.post<TransferStatus>("/api/transfer/send", body),
+    mutationFn: (body: {
+      address: string;
+      code: string;
+      delete_after: boolean;
+      /** absent: every project */
+      projects?: string[];
+      checkouts: boolean;
+      settings: boolean;
+      attachments: boolean;
+      installation: boolean;
+    }) => api.post<TransferStatus>("/api/transfer/send", body),
   });
 }
 
