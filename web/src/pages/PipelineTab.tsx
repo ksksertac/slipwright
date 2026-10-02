@@ -31,6 +31,7 @@ import {
   StopAction,
 } from "../components/GateActions";
 import { DeploymentGate } from "../components/DeploymentGate";
+import { CarryOnAction, PauseAction, ReconcileGate } from "../components/Pause";
 import { DesignGate } from "../components/DesignGate";
 import { Detail } from "../components/Detail";
 import { ReviewDetail } from "../components/Review";
@@ -332,6 +333,9 @@ function LaneDetail({
       job={job.data}
       projectId={projectId}
       flow={<LaneFlow lane={lane} onOpen={onOpen} openKey={openKey} />}
+      // ending it for good is in here, behind Details: the head offers the pause, which is
+      // what somebody pressing a stop button there usually means
+      end={<StopAction job={job.data} compact />}
     />
   );
 }
@@ -474,7 +478,12 @@ function LaneRetry({ jobId }: { jobId: string }) {
 
 function LaneStop({ jobId }: { jobId: string }) {
   const job = useJob(jobId);
-  return job.data ? <StopAction job={job.data} lane /> : null;
+  if (!job.data) return null;
+  return job.data.state === "paused" ? (
+    <CarryOnAction job={job.data} lane />
+  ) : (
+    <PauseAction job={job.data} lane />
+  );
 }
 
 /** Card labels come from the server in English; the fixed ones translate, and a phase card
@@ -553,6 +562,7 @@ function StepCardView({
         </div>
       )}
       {step.auto_approved && <div className="chip idle">{tx("approved by supervisor")}</div>}
+      {step.by_hand && <div className="chip idle">{tx("done by hand")}</div>}
       <div className="meta">
         <span className={`badge ${STATUS_CLASS[step.status]} plain`}>
           {step.status === "waiting"
@@ -580,6 +590,7 @@ const STATUS_CLASS: Record<StepCard["status"], string> = {
   failed: "bad",
   waiting: "wait",
   skipped: "idle",
+  paused: "wait",
 };
 
 // -- the side panel ----------------------------------------------------------------------
@@ -822,6 +833,7 @@ function GateEditor({ job, step }: { job: Job; step: StepCard }) {
       {step.key === "design_gate" && <DesignGate jobId={job.id} />}
       {step.key === "test_gate:1" && <TestCasesGateEditor job={job} />}
       {step.key === "deploy_gate" && <DeploymentGate job={job} />}
+      {step.key === "reconcile_gate" && <ReconcileGate job={job} />}
       {!EDITOR_APPROVES.has(step.key) && (
         <div className="row">
           <button

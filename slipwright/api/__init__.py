@@ -49,12 +49,15 @@ from slipwright.board import Board, project_board
 from slipwright.costs import ProjectCosts, project_costs
 from slipwright.engine import (
     BriefIsRunning,
+    CannotSync,
     EmptyApproval,
     Engine,
     InvalidEdit,
     JobIsRunning,
     NotAwaitingApproval,
     ProjectCloneError,
+    PullConflict,
+    RemoteMoved,
     UnknownScreen,
 )
 from slipwright.firstrun import WARNING as FIRST_RUN_WARNING
@@ -253,6 +256,28 @@ class DesignReview(BaseModel):
 
 class Retry(BaseModel):
     feedback: str | None = None
+
+
+class Pause(BaseModel):
+    """Pause a development to work on its branch by hand; ``push`` sends the branch to the
+    host as it stands, so there is something to check out."""
+
+    push: bool = False
+
+
+class CarryOn(BaseModel):
+    """Carry a paused development on; ``pull`` merges what was pushed meanwhile first."""
+
+    pull: bool = False
+
+
+class SyncStatus(BaseModel):
+    """What the pause and carry-on dialogs can offer, read from the host as they open."""
+
+    can_push: bool
+    why_not: str | None = None
+    # somebody pushed to the branch since the development last did; None: not known
+    moved: bool | None = None
 
 
 class Replan(BaseModel):
@@ -1446,6 +1471,53 @@ def create_app(
             raise HTTPException(
                 status_code=409, detail="this development has already ended"
             ) from exc
+
+    @api.post("/jobs/{job_id}/pause", response_model=Job)
+    def pause(job_id: str, request: Request, body: Pause | None = None) -> Job:
+        """Pause a development so people can work on its branch; it keeps its place.
+        409 when it has ended or is already paused, or when it cannot be pushed."""
+        eng = engine_for(request)
+        _refuse_if_demo(request, _get(eng, job_id, request))
+        try:
+            return eng.pause(
+                job_id, push=bool(body and body.push), by=require_owner(request).username
+            )
+        except NotAwaitingApproval as exc:
+            raise HTTPException(
+                status_code=409, detail="only a development that is still going can be paused"
+            ) from exc
+        except CannotSync as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    @api.post("/jobs/{job_id}/carry-on", response_model=Job)
+    def carry_on(
+        job_id: str, request: Request, background: BackgroundTasks, body: CarryOn | None = None
+    ) -> Job:
+        """Carry a paused development on from where it was paused, with what was pushed to
+        its branch meanwhile or without it. 409 when it is not paused, when commits were
+        pushed and no pull was asked for, or when the pull cannot be made."""
+        eng = engine_for(request)
+        _refuse_if_demo(request, _get(eng, job_id, request))
+        try:
+            job = eng.carry_on(
+                job_id,
+                pull=bool(body and body.pull),
+                by=require_owner(request).username,
+                run=False,
+            )
+        except NotAwaitingApproval as exc:
+            raise HTTPException(status_code=409, detail="this development is not paused") from exc
+        except (CannotSync, RemoteMoved, PullConflict) as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        background.add_task(_resume, eng, job.id)
+        return job
+
+    @api.get("/jobs/{job_id}/sync", response_model=SyncStatus)
+    def sync_status(job_id: str, request: Request) -> SyncStatus:
+        """Whether the branch can be pushed, and whether somebody pushed to it since."""
+        eng = engine_for(request)
+        _get(eng, job_id, request)  # 404 for an unknown job
+        return SyncStatus(**eng.sync_status(job_id))
 
     @api.post("/jobs/{job_id}/retry", response_model=Job)
     def retry(

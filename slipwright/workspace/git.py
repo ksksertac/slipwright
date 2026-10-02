@@ -174,6 +174,43 @@ def contains(repo: Path, commit: str, branch: str) -> bool:
     return proc.returncode == 0
 
 
+def known(repo: Path, commit: str) -> bool:
+    """Whether this checkout has ``commit`` at all -- one pushed from elsewhere and never
+    fetched is not."""
+    proc = run(repo, "cat-file", "-e", f"{commit}^{{commit}}", check=False)
+    return proc.returncode == 0
+
+
+def reset_soft(repo: Path, commit: str) -> None:
+    """Move the branch back to ``commit`` and keep what came after it staged."""
+    run(repo, "reset", "-q", "--soft", commit)
+
+
+def merge(repo: Path, ref: str) -> list[str]:
+    """Bring ``ref`` into the branch: a fast-forward when it can be, a merge commit when
+    both sides moved. Returns the files that conflicted -- and then the merge is undone
+    and the checkout is as it was, because nobody is there to resolve it."""
+    if run(repo, "merge", "-q", "--ff-only", ref, check=False).returncode == 0:
+        return []
+    proc = run(
+        repo,
+        "-c",
+        "user.name=slipwright",
+        "-c",
+        "user.email=slipwright@localhost",
+        "merge",
+        "-q",
+        "--no-edit",
+        ref,
+        check=False,
+    )
+    if proc.returncode == 0:
+        return []
+    conflicted = run(repo, "diff", "--name-only", "--diff-filter=U", check=False).stdout
+    run(repo, "merge", "--abort", check=False)
+    return conflicted.split() or [proc.stderr.strip() or "the merge failed"]
+
+
 def has_remote(repo: Path, name: str = "origin") -> bool:
     proc = run(repo, "remote", "get-url", name, check=False)
     return proc.returncode == 0

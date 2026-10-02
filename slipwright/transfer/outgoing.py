@@ -62,7 +62,15 @@ log = logging.getLogger(__name__)
 
 #: A development in one of these is not doing anything: it waits for a person, a Mac, or
 #: nothing at all. Anything else is running, and its checkout is changing under us.
-IDLE = APPROVAL_STATES | TERMINAL_STATES | {JobState.AWAITING_BUILDER, JobState.CREATED}
+IDLE = (
+    APPROVAL_STATES
+    | TERMINAL_STATES
+    | {
+        JobState.AWAITING_BUILDER,
+        JobState.CREATED,
+        JobState.PAUSED,
+    }
+)
 
 
 class Refused(RuntimeError):

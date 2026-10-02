@@ -276,7 +276,12 @@ def test_two_jobs_run_concurrently_end_to_end_without_interference(
     assert sorted(engine.git_host.prs) == sorted(j.branch for j in done)  # type: ignore[attr-defined]
 
 
-@pytest.mark.parametrize("stop_at", sorted(WORKING_STATES, key=lambda s: s.value))
+# reading what people pushed while it was paused is only reached through a pull, which
+# this pipeline never makes; a restart there is tested with the pause (test_pause.py)
+@pytest.mark.parametrize(
+    "stop_at",
+    sorted(WORKING_STATES - {JobState.RECONCILE}, key=lambda s: s.value),
+)
 def test_restart_at_every_phase_resumes_the_job(
     store: JobStore, repo: Path, worktrees_root: Path, seed: Profile, stop_at: JobState
 ) -> None:

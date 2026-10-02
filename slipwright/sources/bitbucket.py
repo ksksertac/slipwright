@@ -152,6 +152,29 @@ class BitbucketHost:
         except g.GitError as exc:
             raise GitHostError(f"push failed: {_scrub(exc.stderr, self.creds.token)}") from exc
 
+    def remote_head(self, worktree: Path, branch: str) -> str | None:
+        if not g.has_remote(worktree, "origin"):
+            raise NoRemote("the checkout has no remote named 'origin'")
+        url = self.authenticated_url(_origin(worktree))
+        try:
+            out = g.run(worktree, "ls-remote", "--heads", url, f"refs/heads/{branch}").stdout
+        except g.GitError as exc:
+            raise GitHostError(
+                f"could not read the branch: {_scrub(exc.stderr, self.creds.token)}"
+            ) from exc
+        return out.split()[0] if out.strip() else None
+
+    def fetch(self, worktree: Path, branch: str) -> str | None:
+        if self.remote_head(worktree, branch) is None:
+            return None
+        url = self.authenticated_url(_origin(worktree))
+        tracking = f"refs/remotes/origin/{branch}"
+        try:
+            g.run(worktree, "fetch", "-q", url, f"+refs/heads/{branch}:{tracking}")
+        except g.GitError as exc:
+            raise GitHostError(f"pull failed: {_scrub(exc.stderr, self.creds.token)}") from exc
+        return g.run(worktree, "rev-parse", tracking).stdout.strip()
+
     def open_pr(self, worktree: Path, branch: str, title: str, body: str) -> str:
         repo = self._repo_of(worktree)
         existing = self._get(

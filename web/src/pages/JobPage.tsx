@@ -38,6 +38,7 @@ import { isOwner } from "../api/gates";
 import { JiraLink } from "../components/JiraLink";
 import { ConfirmModal } from "../components/Modal";
 import { DeploymentGate } from "../components/DeploymentGate";
+import { CarryOnAction, PausedPanel, PauseAction, ReconcileGate } from "../components/Pause";
 import { ProfileForm } from "../components/ProfileForm";
 import { StackPanel } from "../components/StackPanel";
 import { useToast } from "../components/Toast";
@@ -172,6 +173,8 @@ function JobHead({ job, projectId }: { job: Job; projectId: string }) {
               <IconExternal /> {tx("Pull request")}
             </a>
           )}
+          <PauseAction job={job} />
+          <CarryOnAction job={job} />
           <StopAction job={job} />
           <DeleteJobButton job={job} projectId={projectId} />
         </div>
@@ -216,10 +219,13 @@ export function JobDetail({
   job,
   projectId,
   flow,
+  end,
 }: {
   job: Job;
   projectId: string;
   flow?: ReactNode;
+  /** drawn at the foot of a lane's detail: ending the development for good */
+  end?: ReactNode;
 }) {
   if (flow) {
     // A lane is opened to see the flow, so the flow is what it lands on -- with one thing
@@ -235,6 +241,7 @@ export function JobDetail({
         <StageStepper job={job} projectId={projectId} />
         {!pendingApproval(job) && <GatePanel job={job} />}
         <JobTabs job={job} projectId={projectId} flow={flow} />
+        {end && <div className="row lane-end">{end}</div>}
       </>
     );
   }
@@ -404,6 +411,7 @@ function GatePanel({ job }: { job: Job }) {
       );
     }
     if (job.state === "awaiting_builder") return <BuilderWait job={job} />;
+    if (job.state === "paused") return <PausedPanel job={job} />;
     return null;
   }
   return (
@@ -427,6 +435,7 @@ function GatePanel({ job }: { job: Job }) {
         <WrittenTestsGate job={job} />
       )}
       {job.state === "awaiting_deploy_approval" && <DeploymentGate job={job} />}
+      {job.state === "awaiting_reconcile_approval" && <ReconcileGate job={job} />}
     </div>
   );
 }

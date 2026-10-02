@@ -22,6 +22,10 @@ const STATE_CLASS: Record<JobState, string> = {
   awaiting_deploy_approval: "wait",
   awaiting_decision: "wait",
   awaiting_builder: "wait",
+  // waiting for the person who paused it, and for nobody else
+  paused: "wait",
+  reconcile: "work",
+  awaiting_reconcile_approval: "wait",
   done: "ok",
   failed: "bad",
   // stopped on purpose: settled, but not an achievement and not a fault
@@ -46,6 +50,9 @@ export const STATE_LABEL: Record<JobState, string> = {
   awaiting_deploy_approval: "needs deployment approval",
   awaiting_decision: "needs your decision",
   awaiting_builder: "waiting for a Mac",
+  paused: "paused",
+  reconcile: "reading work done by hand",
+  awaiting_reconcile_approval: "needs approval of work done by hand",
   done: "done",
   failed: "failed",
   cancelled: "stopped",

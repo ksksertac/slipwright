@@ -117,10 +117,17 @@ because it is expensive and not always wanted:
 - **Go on without deployment.** You deploy by hand, or not at all. DevOps writes no
   deployment files and still opens the pull request with the code.
 
-And when a development has gone somewhere nobody wants, **Stop** it, wherever it is.
-Stopping is not failing: nothing went wrong, so there is no red and no retry, and the
-branch with everything built so far stays where it is. A call already in flight is
-allowed to finish, because its answer is already paid for; nothing after it begins.
+When you want to write a piece yourself, **Stop** a development, wherever it is. It keeps
+its place -- the step, the phase, everything written so far -- and **Stop and push** sends
+the branch to the repository as it stands, so people can check it out and work on it.
+**Carry on** picks up exactly where it stopped; **Pull and carry on** merges what people
+pushed first, the Architect reads what they did against the plan, and once you approve
+that reading the phases they finished are not built again.
+
+And when a development has gone somewhere nobody wants, **End** it. Ending is not
+failing: nothing went wrong, so there is no red and no retry, and the branch with
+everything built so far stays where it is. Either way a call already in flight is allowed
+to finish, because its answer is already paid for; nothing after it begins.
 
 ### One pipeline for every development
 

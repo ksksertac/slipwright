@@ -1863,8 +1863,14 @@ export const TR: Record<string, string> = {
   "Yes, stop it": "Evet, durdur",
   "stop this development; what it has built stays":
     "bu geliştirmeyi durdur; o ana kadar yapılanlar kalır",
-  stopped: "durduruldu",
-  "Somebody stopped a development": "Biri bir geliştirmeyi durdurdu",
+  End: "Sonlandır",
+  "Ending…": "Sonlandırılıyor…",
+  "Yes, end it": "Evet, sonlandır",
+  "end this development for good; what it has built stays":
+    "bu geliştirmeyi kalıcı olarak sonlandır; o ana kadar yapılanlar kalır",
+  // "Stop" is the pause since a development can be carried on; the old stop is "End"
+  stopped: "sonlandırıldı",
+  "Somebody stopped a development": "Biri bir geliştirmeyi sonlandırdı",
   "Remote control": "Uzaktan Yönet",
   "Run it from Telegram, without opening this page.": "Telegram'dan yönet, bu sayfayı açmadan.",
   "Link your Telegram account once and the bot answers where things stand, starts a development when you ask it to, and brings your own gates to you with two buttons. It reads your account and nobody else's.":
@@ -2191,4 +2197,47 @@ export const TR: Record<string, string> = {
   "Go to projects": "Projelere git",
   "The transfer failed.": "Taşıma başarısız oldu.",
   "Nothing was changed on either computer.": "İki bilgisayarda da hiçbir şey değişmedi.",
+  // pausing a development to work on it by hand (components/Pause.tsx)
+  paused: "durduruldu",
+  "pause this development; it keeps its place": "bu geliştirmeyi durdur; kaldığı yeri korur",
+  "Stop the development": "Geliştirmeyi durdur",
+  "Stop and push": "Durdur ve pushla",
+  "It stops before its next call -- whatever is being answered now finishes -- and keeps its place: the step, the phase and everything written so far. It carries on from there when you say so.":
+    "Bir sonraki çağrıdan önce durur -- o an yanıtlanan çağrı biter -- ve kaldığı yeri korur: adımı, fazı ve o ana kadar yazılan her şeyi. Sen söylediğinde oradan devam eder.",
+  "Stop and push also sends the branch to the repository as it stands, half-written phase included, so people can check it out and work on it by hand.":
+    "Durdur ve pushla, dalı yarım kalan faz dahil olduğu gibi depoya da gönderir; böylece yazılımcılar dalı alıp elle üzerinde çalışabilir.",
+  "nothing has been written yet: there is no branch to push":
+    "henüz hiçbir şey yazılmadı: pushlanacak bir dal yok",
+  "the project's checkout has no remote: set its repository to push the branch":
+    "projenin checkout'unun remote'u yok: dalı pushlamak için projenin deposunu ayarla",
+  "nothing has been written yet: there is no branch to pull":
+    "henüz hiçbir şey yazılmadı: pull alınacak bir dal yok",
+  "the project's checkout has no remote: set its repository to pull the branch":
+    "projenin checkout'unun remote'u yok: pull almak için projenin deposunu ayarla",
+  "Carry on": "Devam et",
+  "Carry on with the development": "Geliştirmeye devam et",
+  "Pull and carry on": "Pull al ve devam et",
+  "Working…": "Çalışıyor…",
+  "Carry on picks up exactly where it was paused. Pull and carry on first merges what people pushed to the branch meanwhile; the Architect then reads what they did against the plan, and once you approve that, the phases they finished are not built again.":
+    "Devam et, tam kaldığı yerden sürdürür. Pull al ve devam et önce bu arada dala pushlananları birleştirir; ardından Yazılım Mimarı yapılanları planla karşılaştırır ve sen onayladıktan sonra elle bitirilen fazlar yeniden yapılmaz.",
+  "Somebody has pushed to this branch since it was paused. Carrying on without those commits would build beside them, so pull them in.":
+    "Durdurulduktan sonra bu dala push yapılmış. O commit'leri almadan devam etmek onların yanına ayrı bir iş kurar; önce pull al.",
+  "Paused by {who} {ago}": "{who} durdurdu · {ago}",
+  "Paused {ago}": "Durduruldu · {ago}",
+  "The branch is pushed. To work on it:": "Dal pushlandı. Üzerinde çalışmak için:",
+  "The branch was not pushed:": "Dal pushlanamadı:",
+  Phase: "Faz",
+  Goal: "Hedef",
+  Evidence: "Kanıt",
+  "done by hand": "elle yapıldı",
+  partial: "kısmen",
+  untouched: "dokunulmadı",
+  "Every phase left is finished: approving goes straight to QA.":
+    "Kalan fazların hepsi bitmiş: onaylarsan doğrudan QA'ye geçer.",
+  "Approving carries on with phase {n}.": "Onaylarsan {n}. fazdan devam eder.",
+  "work done by hand": "elle yapılanlar",
+  "reading work done by hand": "elle yapılanlar okunuyor",
+  "needs approval of work done by hand": "elle yapılanların onayını bekliyor",
+  "Architect: work done by hand": "Mimar: elle yapılanlar",
+  "Work done by hand approval": "Elle yapılanların onayı",
 };

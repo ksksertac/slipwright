@@ -94,6 +94,8 @@ GATE_AGENT: dict[JobState, RoleName] = {
     JobState.AWAITING_REVIEW_APPROVAL: RoleName.QA,
     JobState.AWAITING_TEST_APPROVAL: RoleName.QA,
     JobState.AWAITING_DEPLOY_APPROVAL: RoleName.DEVOPS,
+    # the Architect's reading of what people did by hand is the Architect's to answer for
+    JobState.AWAITING_RECONCILE_APPROVAL: RoleName.ARCHITECT,
     # a development that stopped itself: the supervisor's own gate
     JobState.AWAITING_DECISION: RoleName.SUPERVISOR,
 }

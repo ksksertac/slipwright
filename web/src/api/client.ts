@@ -78,6 +78,7 @@ export type Onboarding = Schemas["Onboarding"];
 export type LocalRepos = Schemas["LocalRepos"];
 export type Lane = Schemas["Lane"];
 export type StepCard = Schemas["StepCard"];
+export type SyncStatus = Schemas["SyncStatus"];
 export type StepStatus = StepCard["status"];
 export type StepDetail = Schemas["StepDetail"];
 export type StepGroup = Schemas["StepGroup"];

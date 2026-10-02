@@ -46,6 +46,10 @@ function stageOf(step: StepCard): string | null {
     case "develop":
     case "phase":
     case "review_gate":
+    // the Architect reading what people did by hand while it was paused, and its gate:
+    // they decide which phases are left, so they sit with the phases
+    case "reconcile":
+    case "reconcile_gate":
       return "build";
     case "qa":
     case "test_gate":
@@ -74,7 +78,9 @@ export function stages(steps: StepCard[]): Stage[] {
 
 /** The agent a stage belongs to: the first of its steps that has one. */
 export function stageAgent(steps: StepCard[]): string | undefined {
-  return steps.find((s) => s.role)?.role ?? undefined;
+  // the Architect's reading of work done by hand can open the build stage; the stage is
+  // still the specialists'
+  return steps.find((s) => s.role && s.key !== "reconcile")?.role ?? undefined;
 }
 
 // -- how a phase is named -----------------------------------------------------------------
@@ -104,7 +110,9 @@ export function phaseGoal(step: StepCard): string {
  *  way, otherwise how many of its steps are done -- written as a count, not as a phase. */
 export function stageCount(tx: T, stage: Stage): string {
   const phases = stage.steps.filter((s) => s.key.startsWith("phase:"));
-  const running = phases.find((s) => s.status === "running" || s.status === "failed");
+  const running = phases.find(
+    (s) => s.status === "running" || s.status === "failed" || s.status === "paused",
+  );
   if (running?.phase) return phaseName(tx, running.phase, phases.length);
   const { done, total } = stageTally(stage);
   return tx("{done}/{total} done", { done, total });
@@ -123,6 +131,7 @@ export function stageStatus(steps: StepCard[]): string {
   if (steps.some((s) => s.status === "waiting")) return "waiting";
   if (steps.some((s) => s.status === "failed")) return "failed";
   if (steps.some((s) => s.status === "running")) return "running";
+  if (steps.some((s) => s.status === "paused")) return "paused";
   // a step that was deliberately passed over is settled, not outstanding: a stage whose
   // tests were skipped is finished with, and must not sit at "pending" for ever
   return steps.every((s) => s.status === "done" || s.status === "skipped") ? "done" : "pending";

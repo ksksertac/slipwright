@@ -550,6 +550,28 @@ class SupervisorResult(RoleOutput):
     feedback: str = Field(default="", description="What to change, when rejecting.")
 
 
+class PhaseFinding(BaseModel):
+    """One remaining phase of the plan, against what people pushed while it was paused."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    number: int = Field(ge=1, description="The phase's number in `remaining_phases`.")
+    status: Literal["done", "partial", "untouched"] = Field(
+        description="done: everything the phase's goal asks for is in the code. partial: "
+        "some of it is. untouched: none of it."
+    )
+    evidence: str = Field(
+        default="", description="The files or commits that show it, in one sentence."
+    )
+
+
+class ReconcileResult(RoleOutput):
+    """The Architect's reading of a branch people worked on while the development was
+    paused: which of the phases still to build they already built."""
+
+    phases: list[PhaseFinding] = Field(default_factory=list)
+
+
 RESULT_SCHEMAS: dict[RoleName, type[RoleOutput]] = {
     RoleName.PO: POResult,
     RoleName.ARCHITECT: ArchitectResult,
@@ -591,7 +613,9 @@ __all__ = [
     "JiraAction",
     "JiraActionType",
     "PlanPhase",
+    "PhaseFinding",
     "QAResult",
+    "ReconcileResult",
     "ScreenDesign",
     "RoleOutput",
     "StackChoice",

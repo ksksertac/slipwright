@@ -12,6 +12,7 @@ export const GATE_AGENT: Partial<Record<JobState, RoleName>> = {
   awaiting_review_approval: "qa",
   awaiting_test_approval: "qa",
   awaiting_deploy_approval: "devops",
+  awaiting_reconcile_approval: "architect",
   awaiting_decision: "supervisor",
 };
 
