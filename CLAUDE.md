@@ -156,6 +156,20 @@ opened again, and an image with no driver in it.
 every running installation is offered it. A bigger step (`v0.3.0`) is a tag pushed by
 hand; the patches count on from it.
 
+**A release has to say what it brings, or nobody installs it.** The release page is what
+a person sees before pressing *Update now*, and a page that reads only "A development is
+sent without its history details" in a developer's shorthand gives them no reason to.
+`--generate-notes` copies the merged PRs' *titles* and nothing else, so:
+
+- The PR title is the release's headline. Write it as what a person running Slipwright
+  will notice, in plain words -- not the name of the function that changed.
+- The PR body opens with a short **What changes for you** section: what is new or fixed,
+  where in the interface it is, and anything they must do (a setting, a restart, a
+  migration that takes a while). Internals, tests and reasoning come after it.
+- Once CI has published the release, put that section into the release's notes (edit
+  the release through the API) so the page carries more than the one-line title. A
+  release whose page says nothing is not finished.
+
 **For now the test suite does not run in CI** (since 2026-10-01; it cost ~10 minutes a
 PR). The `test` check runs ruff and mypy only, and the macOS job is off. So run
 `uv run pytest -q` locally, against the branch as it will merge (rebased on `main`),
