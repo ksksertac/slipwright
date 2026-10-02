@@ -1596,22 +1596,25 @@ has since learned (phase budgets, re-plans from a phase, the Mac worker, `files_
 Commits already happen per phase (`slipwright: phase N: …`), for the tests and for the
 deployment files. The push is what is missing.
 **Done when**
-- [ ] After every commit the job branch is pushed (`--force-with-lease`, as DevOps does):
-  each phase, a standards-review fix round, QA's tests, the deployment files, a CI fix
-- [ ] A push that fails does not stop the development: the step notes it ("committed,
-  not pushed: …") and the next push carries it; a checkout with no remote, or a project
-  with pushing turned off, skips it without a word
-- [ ] The first push opens the pull request as a **draft**, titled from the request, so the
-  work can be followed on the host from phase 1; DevOps writes its description at the end
-  and marks it ready for review instead of opening it
-- [ ] The commit message names the phase, its task and its Jira key
-  (`phase 3/10: Soru sırası … [SCRUM-131]`); the pipeline card links the commit
-- [ ] The pushes go to the project's own repository, on the development's branch, and
+- [x] After every commit the job branch is pushed (`--force-with-lease`, as DevOps does):
+  each phase (a standards-review fix round commits as its phase), QA's tests, the
+  deployment files; a CI fix already pushed
+- [x] A push that fails does not stop the development: the step notes it ("committed,
+  not pushed") and the next push carries it; a checkout with no remote skips it without a
+  word. Anything a push or a draft raises counts -- a missing `gh` is a FileNotFoundError
+- [x] The first push opens the pull request as a **draft** (`draft_pr_url`), titled from
+  the request, where the host can (GitHub; Bitbucket opens it at the end as before); DevOps
+  writes its description at the end and marks it ready for review instead of opening it
+- [x] The commit message names the phase of how many, and the task's Jira key
+  (`slipwright: phase 3/10: Soru sırası … [SCRUM-131]`); the DevOps card shows the draft
+- [ ] ~~The pipeline card links the commit~~ -- not done: a card has no place for it yet
+- [x] The pushes go to the project's own repository, on the development's branch, and
   carry only the project's code. The boxes that change no file (backlog, architecture,
   design, the gates) commit nothing: their record is Slipwright's and Jira's, never the
   project's repository
-- [ ] Tests: a three-phase development pushes three times before DevOps, the draft PR
-  exists after phase 1, a push refused by the host leaves a note and the next one succeeds
+- [x] Tests (`tests/test_phase16_push.py`): every phase and the tests pushed, the draft
+  after the first and finished by DevOps, a refused push noted and carried by the next, no
+  remote no word, a host with no drafts gets its pull request at the end
 
 ### T16.2 — The plan says what each phase needs
 Before anything runs side by side the engine has to know what may. Useful on its own:

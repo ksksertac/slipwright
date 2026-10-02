@@ -167,6 +167,27 @@ class GhHost:
         )
         return created.stdout.strip().splitlines()[-1]
 
+    def open_draft(self, worktree: Path, branch: str, title: str, body: str) -> str:
+        """The branch's pull request as a draft: opened at the first push so the work can
+        be followed while it is built. One that is already open is returned as it is."""
+        existing = self._gh(worktree, "pr", "view", branch, "--json", "url", check=False)
+        if existing.returncode == 0:
+            url: str = json.loads(existing.stdout)["url"]
+            return url
+        created = self._gh(
+            worktree, "pr", "create", "--draft", "--head", branch, "--title", title, "--body", body
+        )
+        return created.stdout.strip().splitlines()[-1]
+
+    def finish_pr(self, worktree: Path, branch: str, title: str, body: str) -> str:
+        """DevOps' title and description on the draft, and it marked ready for review."""
+        self._gh(worktree, "pr", "edit", branch, "--title", title, "--body", body)
+        # already ready (a person pressed it on the host) is not a failure
+        self._gh(worktree, "pr", "ready", branch, check=False)
+        view = self._gh(worktree, "pr", "view", branch, "--json", "url")
+        url: str = json.loads(view.stdout)["url"]
+        return url
+
     def ci_status(self, worktree: Path, branch: str, pr_url: str) -> CiStatus:
         view = self._gh(worktree, "pr", "view", pr_url, "--json", "statusCheckRollup")
         checks: list[dict[str, Any]] = json.loads(view.stdout).get("statusCheckRollup") or []

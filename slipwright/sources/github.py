@@ -168,6 +168,14 @@ class GitHubHost:
         with self._quiet_about_the_token():
             return self._gh.open_pr(worktree, branch, title, body)
 
+    def open_draft(self, worktree: Path, branch: str, title: str, body: str) -> str:
+        with self._quiet_about_the_token():
+            return self._gh.open_draft(worktree, branch, title, body)
+
+    def finish_pr(self, worktree: Path, branch: str, title: str, body: str) -> str:
+        with self._quiet_about_the_token():
+            return self._gh.finish_pr(worktree, branch, title, body)
+
     def ci_status(self, worktree: Path, branch: str, pr_url: str) -> CiStatus:
         with self._quiet_about_the_token():
             return self._gh.ci_status(worktree, branch, pr_url)
