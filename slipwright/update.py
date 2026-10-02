@@ -685,11 +685,26 @@ class Updater:
         return "no_docker" if self.in_container else "source"
 
     def command(self) -> str:
-        """What a person would type instead, for a server that cannot do it itself."""
+        """What a person would type instead, for a server that cannot do it itself.
+
+        Commands that run as pasted, and nothing else: the prose that once followed a
+        ``#`` is a comment to bash but an argument to zsh, macOS's shell, where it made
+        ``docker pull`` refuse the line. The names are the README's; the new container is
+        given the socket, so the next release installs from the page."""
         if not self.in_container:
             return "git pull && uv sync && uv run slipwright serve"
         ref = f"{self.image}:{self.latest or 'latest'}"
-        return f"docker pull {ref}  # then start the container again on {ref}, same volumes"
+        port = os.environ.get("SLIPWRIGHT_PORT", "8500")
+        return "\n".join(
+            [
+                f"docker pull {ref}",
+                "docker stop slipwright && docker rm slipwright",
+                f"docker run -d --name slipwright --restart unless-stopped -p {port}:{port} \\",
+                "    -v slipwright-state:/data -v slipwright-work:/work \\",
+                "    -v /var/run/docker.sock:/var/run/docker.sock --group-add 0 \\",
+                f"    {ref}",
+            ]
+        )
 
     def status(self) -> Status:
         return Status(
