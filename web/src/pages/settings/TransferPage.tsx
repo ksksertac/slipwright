@@ -14,6 +14,7 @@ import {
 import {
   useIncomingTransfer,
   useNearby,
+  useProjects,
   useSendTransfer,
   useSendingStatus,
   useStopReceiving,
@@ -32,6 +33,10 @@ export function TransferPage() {
   const on = here.data?.enabled ?? false;
   const nearby = useNearby(on);
   const [picked, setPicked] = useState<Picked | null>(null);
+  // the look finds this installation too, at the address the others would use: that is
+  // its card's address, and the rest are the others
+  const self = (nearby.data ?? []).find((p) => p.this_one);
+  const others = (nearby.data ?? []).filter((p) => !p.this_one);
   return (
     <div>
       <PageHead
@@ -42,7 +47,7 @@ export function TransferPage() {
       />
       <p className="muted">
         {tx(
-          "On the receiving computer press Receive here: a code appears for 30 seconds. On the sending computer press that installation's card and type the code. Accounts and sessions do not move; everything goes to the account signed in on the receiving side.",
+          "On the receiving computer press Receive here: a code appears for 3 minutes. On the sending computer press that installation's card and type the code. Accounts and sessions do not move; everything goes to the account signed in on the receiving side.",
         )}
       </p>
       {here.isLoading && <Loading />}
@@ -58,12 +63,14 @@ export function TransferPage() {
               {nearby.isFetching ? (
                 <>
                   <span className="move-spin" aria-hidden="true" />
-                  {tx("Looking around the network…")}
+                  {here.data.networks.length > 0
+                    ? tx("Looking at {nets}…", { nets: here.data.networks.join(", ") })
+                    : tx("Looking around the network…")}
                 </>
               ) : nearby.error ? (
                 describeError(nearby.error)
               ) : (
-                tx("{n} found", { n: String(nearby.data?.length ?? 0) })
+                tx("{n} found", { n: String(others.length) })
               )}
               {!nearby.isFetching && (
                 <>
@@ -73,19 +80,18 @@ export function TransferPage() {
                   </button>
                   {" · "}
                   <button className="linkish" onClick={() => setPicked({ peer: null })}>
-                    {tx("not listed? connect by address")}
+                    {tx("connect by address")}
                   </button>
                 </>
               )}
             </span>
           </h3>
           <div className="mac-grid">
-            <HereCard here={here.data} />
-            {(nearby.data ?? []).map((peer) => (
+            <HereCard here={here.data} seen={self} />
+            {others.map((peer) => (
               <PeerCard key={peer.instance} peer={peer} onPick={() => setPicked({ peer })} />
             ))}
             <ReceiveCard here={here.data} />
-            <SendCard onPick={() => setPicked({ peer: null })} />
           </div>
           <div className="move-pills">
             <Pill title={tx("Sealed end to end")} icon="🔐">
@@ -127,13 +133,15 @@ function Pill({ title, icon, children }: { title: string; icon: string; children
 
 // -- the cards ---------------------------------------------------------------------------
 
-function HereCard({ here }: { here: TransferHere }) {
+const DATABASES: Record<string, string> = { sqlite: "SQLite", postgresql: "PostgreSQL" };
+
+function HereCard({ here, seen }: { here: TransferHere; seen: TransferPeer | undefined }) {
   const tx = useT();
   return (
     <div className="card mac-card" data-online="yes">
       <div className="mac-stage">
         <span className="move-here">{tx("this computer")}</span>
-        <Desktop />
+        <Machine os={here.os} />
         <span className="mac-status">
           <span className="mac-dot" />
           {tx("online")}
@@ -144,13 +152,17 @@ function HereCard({ here }: { here: TransferHere }) {
           {here.name}
         </div>
         <div className="faint small">
-          {[hostOf(here.addresses[0]), tx("{n} projects", { n: String(here.projects) })]
+          {[
+            hostOf(seen?.address ?? here.addresses[0]),
+            tx("{n} projects", { n: String(here.projects) }),
+          ]
             .filter(Boolean)
             .join(" · ")}
         </div>
         <div className="row mac-foot">
           <span className="row" style={{ gap: 6 }}>
             <span className="tag">v{here.version}</span>
+            <span className="tag">{DATABASES[here.database] ?? here.database}</span>
           </span>
         </div>
       </div>
@@ -163,7 +175,7 @@ function PeerCard({ peer, onPick }: { peer: TransferPeer; onPick: () => void }) 
   return (
     <button type="button" className="card mac-card move-peer" data-online="yes" onClick={onPick}>
       <div className="mac-stage">
-        <Desktop />
+        <Machine os={peer.os} />
         <span className="mac-status">
           <span className="mac-dot" />
           {tx("online")}
@@ -173,14 +185,32 @@ function PeerCard({ peer, onPick }: { peer: TransferPeer; onPick: () => void }) 
         <div className="mac-name" title={peer.name}>
           {peer.name}
         </div>
-        <div className="faint small">{hostOf(peer.address)}</div>
+        <div className="faint small">
+          {[
+            hostOf(peer.address),
+            peer.projects == null
+              ? ""
+              : peer.projects === 0
+                ? tx("empty installation")
+                : tx("{n} projects", { n: String(peer.projects) }),
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+        </div>
         <div className="row mac-foot">
-          <span className="row" style={{ gap: 6 }}>
-            <span className={`tag ${peer.compatible ? "" : "move-old"}`}>v{peer.version}</span>
+          <span className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+            <span className={`tag ${peer.compatible ? "" : "move-old"}`}>
+              {peer.legacy ? tx("older version") : `v${peer.version}`}
+            </span>
+            {peer.database && (
+              <span className="tag">{DATABASES[peer.database] ?? peer.database}</span>
+            )}
           </span>
-          <span className={`btn small ${peer.compatible ? "primary" : "ghost"}`}>
-            {peer.compatible ? tx("Move here →") : tx("Update needed")}
-          </span>
+          {peer.compatible ? (
+            <span className="btn small primary">{tx("Move here →")}</span>
+          ) : (
+            <span className="faint small move-update">{tx("Update needed")}</span>
+          )}
         </div>
       </div>
     </button>
@@ -263,8 +293,8 @@ function ReceiveCard({ here }: { here: TransferHere }) {
               />
             </svg>
             <span className="move-ring-num">
-              {Math.max(left, 0)}
-              <small>{tx("sec")}</small>
+              {clock(Math.max(left, 0))}
+              <small>{left >= 60 ? tx("min") : tx("sec")}</small>
             </span>
           </div>
           <CodeChip code={code?.code} />
@@ -307,22 +337,6 @@ function ReceiveCard({ here }: { here: TransferHere }) {
 
 // a new code flashes as it replaces the last: keyed on the code, so the button is drawn
 // afresh and its animation plays again
-// The sending end, always there: the other computer is a card when looking around the
-// network found it, and this when it did not -- a server in Docker opened at localhost
-// often cannot see the network it is on, and the address is then typed instead.
-function SendCard({ onPick }: { onPick: () => void }) {
-  const tx = useT();
-  return (
-    <button type="button" className="card mac-card mac-connect" onClick={onPick}>
-      <span className="mac-plug">
-        <IconSend />
-      </span>
-      <strong>{tx("Send to another computer")}</strong>
-      <span className="faint small">{tx("Type its address and the code on its screen")}</span>
-    </button>
-  );
-}
-
 function CodeChip({ code }: { code: string | undefined }) {
   const tx = useT();
   return (
@@ -354,16 +368,36 @@ function SendModal({
   const [address, setAddress] = useState(peer?.address ?? "");
   const [code, setCode] = useState("");
   const [deleteAfter, setDeleteAfter] = useState(false);
+  // every project unless narrowed; null is "all of them", so one made meanwhile goes too
+  const [chosen, setChosen] = useState<string[] | null>(null);
+  const [checkouts, setCheckouts] = useState(true);
+  const [settings, setSettings] = useState(true);
+  const [attachments, setAttachments] = useState(true);
+  const [installation, setInstallation] = useState(here.admin);
   const [sendingId, setSendingId] = useState<string | null>(null);
   const status = useSendingStatus(sendingId);
   const running =
     sendingId !== null && status.data?.state !== "done" && status.data?.state !== "failed";
-  const name = peer?.name ?? (hostOf(address) || tx("another computer"));
-  const ready = code.replace(/[^0-9a-z]/gi, "").length >= 12 && address.trim().length > 3;
+  const known = peer?.name ?? hostOf(address);
+  const name = known || tx("another computer");
+  const title = known ? tx("Move to {name}", { name }) : tx("Move to another computer");
+  const someProjects = chosen === null || chosen.length > 0;
+  const something = someProjects || settings || (here.admin && installation);
+  const ready =
+    something && code.replace(/[^0-9a-z]/gi, "").length >= 12 && address.trim().length > 3;
 
   const go = () => {
     send.mutate(
-      { address: address.trim(), code: code.trim(), delete_after: deleteAfter },
+      {
+        address: address.trim(),
+        code: code.trim(),
+        delete_after: deleteAfter && someProjects,
+        ...(chosen === null ? {} : { projects: chosen }),
+        checkouts,
+        settings,
+        attachments,
+        installation: here.admin && installation,
+      },
       { onSuccess: (s) => setSendingId(s.id) },
     );
   };
@@ -374,7 +408,7 @@ function SendModal({
         <div className="callout">
           {tx(
             "{name} runs another version of Slipwright (v{v}, this one v{mine}). Their databases differ, so nothing can move yet: update the older one from the corner of its screen, then try again.",
-            { name, v: peer.version, mine: here.version },
+            { name, v: peer.version || "?", mine: here.version },
           )}
         </div>
       </Modal>
@@ -382,7 +416,7 @@ function SendModal({
   }
   return (
     <Modal
-      title={tx("Move to {name}", { name })}
+      title={title}
       onClose={() => !running && onClose()}
       wide
       footer={
@@ -458,7 +492,11 @@ function SendModal({
             </div>
           )}
           <div className="field">
-            <label htmlFor="move-code">{tx("The code on {name}'s screen", { name })}</label>
+            <label htmlFor="move-code">
+              {known
+                ? tx("The code on {name}'s screen", { name })
+                : tx("The code on the receiving screen")}
+            </label>
             <input
               id="move-code"
               type="text"
@@ -473,18 +511,58 @@ function SendModal({
             />
           </div>
           {send.error && <div className="callout error">{describeError(send.error)}</div>}
-          <div className="move-goes">
-            <Goes yes>{tx("Projects and developments, with their history")}</Goes>
-            <Goes yes>{tx("Checkouts, branches and uncommitted work")}</Goes>
-            <Goes yes>{tx("Model, Git and Jira keys")}</Goes>
-            <Goes yes>{tx("Attachments and standards")}</Goes>
-            <Goes yes={here.admin}>{tx("This installation's settings (mail, prices)")}</Goes>
-            <Goes yes={false}>{tx("Accounts and sessions")}</Goes>
+          <div className="field">
+            <label>{tx("Projects")}</label>
+            <ProjectPicker chosen={chosen} onChange={setChosen} />
           </div>
+          <div className="move-goes">
+            <Choice
+              on={someProjects && checkouts}
+              disabled={!someProjects}
+              onChange={setCheckouts}
+              label={tx("Checkouts, branches and uncommitted work")}
+            />
+            <Choice
+              on={settings}
+              onChange={setSettings}
+              label={tx("Settings and keys (models, Git, Jira)")}
+            />
+            <Choice
+              on={someProjects && attachments}
+              disabled={!someProjects}
+              onChange={setAttachments}
+              label={tx("Attachments and standards")}
+            />
+            <Choice
+              on={here.admin && installation}
+              disabled={!here.admin}
+              onChange={setInstallation}
+              label={tx("This installation's settings (mail, prices)")}
+            />
+            <Choice
+              on={false}
+              disabled
+              onChange={() => undefined}
+              label={tx("Accounts and sessions (never moved)")}
+            />
+          </div>
+          {someProjects && !checkouts && (
+            <div className="callout" style={{ marginBottom: 10 }}>
+              {tx(
+                "Without their checkouts the projects are cloned from their remote over there: branches not pushed and work not committed stay here.",
+              )}
+            </div>
+          )}
+          {!something && (
+            <div className="callout error" style={{ marginBottom: 10 }}>
+              {tx("Nothing is chosen to send.")}
+            </div>
+          )}
           <label className="move-delete">
             <input
               type="checkbox"
-              checked={deleteAfter}
+              checked={deleteAfter && someProjects}
+              disabled={!someProjects}
               onChange={(e) => setDeleteAfter(e.target.checked)}
             />
             {tx("Delete them from this computer once they are there")}
@@ -504,11 +582,98 @@ function SendModal({
   );
 }
 
-function Goes({ yes, children }: { yes: boolean; children: string }) {
+function Choice({
+  on,
+  onChange,
+  label,
+  disabled = false,
+}: {
+  on: boolean;
+  onChange: (on: boolean) => void;
+  label: string;
+  disabled?: boolean;
+}) {
   return (
-    <div className={`move-go ${yes ? "" : "no"}`}>
-      <span aria-hidden="true">{yes ? "✓" : "—"}</span>
-      {children}
+    <label className={`move-go ${on ? "" : "no"} ${disabled ? "locked" : ""}`}>
+      <input
+        type="checkbox"
+        checked={on}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+      {label}
+    </label>
+  );
+}
+
+// Which projects go: all of them unless narrowed. A button that says what is chosen,
+// opening a list to tick -- the list closes when anything else on the page is pressed.
+function ProjectPicker({
+  chosen,
+  onChange,
+}: {
+  chosen: string[] | null;
+  onChange: (chosen: string[] | null) => void;
+}) {
+  const tx = useT();
+  const projects = useProjects();
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  const mine = (projects.data ?? []).filter((p) => !p.is_demo);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: MouseEvent) => {
+      if (box.current && !box.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", away);
+    return () => document.removeEventListener("mousedown", away);
+  }, [open]);
+
+  const all = chosen === null;
+  const has = (id: string) => all || chosen.includes(id);
+  const toggle = (id: string) => {
+    const now = all ? mine.map((p) => p.id) : chosen;
+    const next = now.includes(id) ? now.filter((x) => x !== id) : [...now, id];
+    onChange(next.length === mine.length ? null : next);
+  };
+  const label = all
+    ? tx("All ({n})", { n: String(mine.length) })
+    : chosen.length === 0
+      ? tx("None")
+      : mine
+          .filter((p) => chosen.includes(p.id))
+          .map((p) => p.name)
+          .join(", ");
+  return (
+    <div className="move-picker" ref={box}>
+      <button
+        type="button"
+        className="move-picker-button"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <span className="move-picker-label">{label}</span>
+        <span aria-hidden="true">▾</span>
+      </button>
+      {open && (
+        <div className="move-picker-list" role="listbox" aria-multiselectable="true">
+          <label className="move-picker-item all">
+            <input
+              type="checkbox"
+              checked={all}
+              onChange={(e) => onChange(e.target.checked ? null : [])}
+            />
+            {tx("All")}
+          </label>
+          {mine.map((p) => (
+            <label key={p.id} className="move-picker-item">
+              <input type="checkbox" checked={has(p.id)} onChange={() => toggle(p.id)} />
+              {p.name}
+            </label>
+          ))}
+          {mine.length === 0 && <div className="faint small">{tx("No projects yet.")}</div>}
+        </div>
+      )}
     </div>
   );
 }
@@ -611,6 +776,12 @@ function Sum({ n, label }: { n: number; label: string }) {
 
 // -- drawing -----------------------------------------------------------------------------
 
+function clock(seconds: number): string {
+  return seconds >= 60
+    ? `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`
+    : String(seconds);
+}
+
 function hostOf(address: string | undefined): string {
   if (!address) return "";
   try {
@@ -620,9 +791,37 @@ function hostOf(address: string | undefined): string {
   }
 }
 
-// a desktop drawn in the page's own colours, beside the Mac Connect page's MacBook: the
-// same classes, so it lights up and goes dark the same way
-function Desktop() {
+// a computer as the person knows it: a MacBook for a Mac, a monitor with the Windows
+// mark for Windows, a terminal prompt for Linux or a computer that did not say. Drawn in
+// the page's own colours with the Mac Connect page's classes, so it sits right in either
+// theme
+function Machine({ os }: { os: string | null | undefined }) {
+  return os === "macos" ? <MacBook /> : <Desktop windows={os === "windows"} />;
+}
+
+function MacBook() {
+  return (
+    <svg className="macbook" viewBox="0 0 220 132" aria-hidden="true">
+      <defs>
+        <linearGradient id="move-mac-screen" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" className="mac-screen-a" />
+          <stop offset="1" className="mac-screen-b" />
+        </linearGradient>
+      </defs>
+      <rect className="mac-lid" x="34" y="6" width="152" height="104" rx="9" />
+      <rect x="41" y="13" width="138" height="88" rx="3" fill="url(#move-mac-screen)" />
+      <rect className="mac-notch" x="102" y="13" width="16" height="4" rx="2" />
+      <g className="mac-glyph">
+        <path d="M104 50c0-5 4-7 6-7-1-3-4-4-6-4-3 0-4 2-6 2s-3-2-6-2c-3 0-7 3-7 9 0 7 5 14 8 14 2 0 3-1 5-1s3 1 5 1c2 0 4-3 5-5-3-1-4-4-4-7Z" />
+        <path d="M101 37c1-2 3-3 4-3 0 2-1 4-3 5-1 0-2 0-1-2Z" />
+      </g>
+      <path className="mac-base" d="M8 112h204l-6 10c-2 3-5 4-9 4H23c-4 0-7-1-9-4Z" />
+      <rect className="mac-lip" x="94" y="112" width="32" height="4" rx="2" />
+    </svg>
+  );
+}
+
+function Desktop({ windows }: { windows: boolean }) {
   return (
     <svg className="macbook" viewBox="0 0 220 150" aria-hidden="true">
       <defs>
@@ -633,33 +832,21 @@ function Desktop() {
       </defs>
       <rect className="mac-lid" x="20" y="6" width="180" height="110" rx="9" />
       <rect x="28" y="14" width="164" height="94" rx="3" fill="url(#pc-screen)" />
-      <g className="mac-glyph">
-        <rect x="96" y="44" width="13" height="13" rx="1.5" />
-        <rect x="111" y="44" width="13" height="13" rx="1.5" />
-        <rect x="96" y="59" width="13" height="13" rx="1.5" />
-        <rect x="111" y="59" width="13" height="13" rx="1.5" />
-      </g>
+      {windows ? (
+        <g className="mac-glyph">
+          <rect x="96" y="44" width="13" height="13" rx="1.5" />
+          <rect x="111" y="44" width="13" height="13" rx="1.5" />
+          <rect x="96" y="59" width="13" height="13" rx="1.5" />
+          <rect x="111" y="59" width="13" height="13" rx="1.5" />
+        </g>
+      ) : (
+        <g className="move-prompt">
+          <path d="M90 48l12 10-12 10" />
+          <path d="M108 70h22" />
+        </g>
+      )}
       <path className="mac-base" d="M98 116h24l5 22H93z" />
       <rect className="mac-base" x="72" y="136" width="76" height="7" rx="3.5" />
-    </svg>
-  );
-}
-
-function IconSend() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width="28"
-      height="28"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M12 15V3M7 8l5-5 5 5" />
-      <path d="M5 19h14" />
     </svg>
   );
 }

@@ -45,7 +45,7 @@ from slipwright.schemas.transfer import (
 from slipwright.store.migrate import current_revision
 from slipwright.transfer import incoming, nearby, outgoing
 from slipwright.transfer.channel import confirmation
-from slipwright.transfer.rows import Progress
+from slipwright.transfer.rows import PROTOCOL, Progress
 from slipwright.update import running_version
 
 log = logging.getLogger(__name__)
@@ -162,6 +162,9 @@ def here(request: Request, address: str | None = None) -> TransferHere:
         addresses=_addresses(engine, address) if enabled else [],
         projects=len(outgoing.projects_of(engine, scope)),
         admin=scope.admin,
+        database=engine.raw_store.db.dialect,
+        networks=nearby.targets(address, own=nearby.own_address())[0] if enabled else [],
+        os=nearby.machine_os(),
     )
 
 
@@ -188,7 +191,14 @@ def nearby_installations(request: Request, address: str | None = None) -> list[T
             name=str(p.get("name", "")) or str(p["address"]),
             version=str(p.get("version", "")),
             revision=p.get("revision") if isinstance(p.get("revision"), str) else None,
-            compatible=p.get("revision") == mine,
+            compatible=not p.get("legacy")
+            and p.get("revision") == mine
+            and p.get("protocol") == PROTOCOL,
+            database=p.get("database") if isinstance(p.get("database"), str) else None,
+            projects=p.get("projects") if isinstance(p.get("projects"), int) else None,
+            os=p.get("os") if isinstance(p.get("os"), str) else None,
+            this_one=bool(p.get("this_one")),
+            legacy=bool(p.get("legacy")),
         )
         for p in found
     ]
@@ -240,8 +250,19 @@ def send(body: TransferSendRequest, request: Request) -> TransferStatus:
     background; ask ``/transfer/send/{id}`` how it goes. Refused at once (409) while a
     development is running."""
     scope = _scope(request)
+    scope.projects = body.projects
+    scope.checkouts = body.checkouts
+    scope.settings = body.settings
+    scope.attachments = body.attachments
+    scope.installation = body.installation
     engine = _engine(request)
     _on(engine)
+    if (
+        body.projects is not None
+        and not body.projects
+        and not (body.settings or (scope.admin and body.installation))
+    ):
+        raise HTTPException(status_code=422, detail="nothing is chosen to send")
     address = body.address.strip().rstrip("/")
     if not address.startswith(("http://", "https://")):
         address = f"http://{address}"
@@ -300,6 +321,10 @@ def hello(request: Request) -> TransferHello:
         name=nearby.machine_name(),
         version=running_version(),
         revision=_revision(engine),
+        database=engine.raw_store.db.dialect,
+        projects=len([p for p in engine.store.list_projects() if not p.is_demo]),
+        os=nearby.machine_os(),
+        protocol=PROTOCOL,
     )
 
 
@@ -312,6 +337,12 @@ def pair(body: TransferPairRequest, request: Request) -> TransferPaired:
     if engine.store.hit_rate_limit(f"transfer:{caller}", limit=PAIR_LIMIT, window_s=60):
         raise HTTPException(status_code=429, detail="too many attempts; try again in a minute")
     mine = _revision(engine)
+    if body.protocol != PROTOCOL:
+        raise HTTPException(
+            status_code=409,
+            detail="the two machines run different versions of Slipwright; update both to "
+            "the same release first",
+        )
     if body.revision != mine:
         raise HTTPException(
             status_code=409,

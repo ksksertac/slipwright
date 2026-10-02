@@ -2121,14 +2121,27 @@ export const TR: Record<string, string> = {
   // moving the account to another Slipwright on the network
   Move: "Taşıma",
   "Move it": "Taşı",
-  "Send to another computer": "Başka bilgisayara gönder",
-  "Type its address and the code on its screen": "Adresini ve ekranındaki kodu gir",
+  "Looking at {nets}…": "{nets} taranıyor…",
+  "Settings and keys (models, Git, Jira)": "Ayarlar ve anahtarlar (modeller, Git, Jira)",
+  "Accounts and sessions (never moved)": "Kullanıcılar ve oturumlar (taşınmaz)",
+  "Without their checkouts the projects are cloned from their remote over there: branches not pushed and work not committed stay here.":
+    "Checkout'lar olmadan projeler karşıda uzak depodan klonlanır: push edilmemiş branch'ler ve commit edilmemiş iş burada kalır.",
+  "Move to another computer": "Başka bir bilgisayara taşı",
+  "The code on the receiving screen": "Alan ekrandaki kod",
+  min: "dk",
+  "Nothing is chosen to send.": "Gönderilecek bir şey seçilmedi.",
+  "All ({n})": "Tümü ({n})",
+  All: "Tümü",
+  None: "Hiçbiri",
+  "connect by address": "adresle bağlan",
+  "empty installation": "boş kurulum",
+  "older version": "eski sürüm",
   "Not found there? Its address is this computer's IPv4 address (ipconfig), port {port}.":
     "Orada görünmüyor mu? Adresi bu bilgisayarın IPv4 adresi (ipconfig), port {port}.",
   "Move this account to another Slipwright on the same network in one go: projects, developments, settings, model keys and attachments.":
     "Bu hesabı aynı ağdaki başka bir Slipwright'a tek seferde taşıyın: projeler, geliştirmeler, ayarlar, model anahtarları ve ekler.",
-  "On the receiving computer press Receive here: a code appears for 30 seconds. On the sending computer press that installation's card and type the code. Accounts and sessions do not move; everything goes to the account signed in on the receiving side.":
-    "Alacak bilgisayarda Buraya al'a basın: 30 saniyelik bir kod çıkar. Gönderecek bilgisayarda o kurulumun kartına basıp kodu girin. Kullanıcı hesapları ve oturumlar taşınmaz; her şey alan tarafta oturum açmış hesaba geçer.",
+  "On the receiving computer press Receive here: a code appears for 3 minutes. On the sending computer press that installation's card and type the code. Accounts and sessions do not move; everything goes to the account signed in on the receiving side.":
+    "Alacak bilgisayarda Buraya al'a basın: 3 dakikalık bir kod çıkar. Gönderecek bilgisayarda o kurulumun kartına basıp kodu girin. Kullanıcı hesapları ve oturumlar taşınmaz; her şey alan tarafta oturum açmış hesaba geçer.",
   "Moving to another computer is off on this server.":
     "Bu sunucuda başka bilgisayara taşıma kapalı.",
   "Slipwrights on this network": "Ağdaki Slipwright'lar",
@@ -2147,7 +2160,7 @@ export const TR: Record<string, string> = {
     "Yarıda kalan bir taşıma alan tarafta hiçbir iz bırakmaz.",
   "this computer": "bu bilgisayar",
   "{n} projects": "{n} proje",
-  "Move here →": "Buraya taşı →",
+  "Move here →": "Taşı →",
   "Update needed": "Güncelleme gerekli",
   "Receive here": "Buraya al",
   "Make a code, type it on the sending computer": "Kod oluştur, gönderen bilgisayarda gir",

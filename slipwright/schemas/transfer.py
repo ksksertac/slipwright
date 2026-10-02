@@ -19,9 +19,18 @@ class TransferPeer(BaseModel):
     address: str = Field(description="Where it answers, as this server reached it.")
     instance: str = Field(description="Which installation: the same one seen twice is one.")
     name: str
-    version: str
+    version: str = Field(description="Empty for a release from before moving existed.")
     revision: str | None = Field(description="Its database schema; a transfer needs the same.")
     compatible: bool = Field(description="On the same schema as this one, so a transfer works.")
+    database: str | None = Field(default=None, description="sqlite or postgresql.")
+    projects: int | None = Field(default=None, description="How many projects it holds.")
+    os: str | None = Field(default=None, description="macos, windows or linux: how it is drawn.")
+    this_one: bool = Field(
+        default=False, description="This installation, found at an address of its own."
+    )
+    legacy: bool = Field(
+        default=False, description="A Slipwright from before moving existed: update it first."
+    )
 
 
 class TransferHere(BaseModel):
@@ -40,6 +49,9 @@ class TransferHere(BaseModel):
     )
     projects: int = Field(description="This account's projects: what a transfer would send.")
     admin: bool = Field(description="Whether the installation's own settings go too.")
+    database: str = Field(description="sqlite or postgresql.")
+    networks: list[str] = Field(description="What looking around the network looks at.")
+    os: str = Field(description="macos, windows or linux: how its card is drawn.")
 
 
 class TransferHello(BaseModel):
@@ -52,6 +64,10 @@ class TransferHello(BaseModel):
     name: str
     version: str
     revision: str | None
+    database: str
+    projects: int = Field(description="How many projects it holds, the worked example aside.")
+    os: str = Field(description="macos, windows or linux.")
+    protocol: int = Field(description="What a transfer to it must speak.")
 
 
 class TransferCode(BaseModel):
@@ -71,6 +87,19 @@ class TransferSendRequest(BaseModel):
     delete_after: bool = Field(
         default=False, description="Delete the projects here once the receiver has them all."
     )
+    projects: list[str] | None = Field(
+        default=None, description="Which projects; none given is every one of them."
+    )
+    checkouts: bool = Field(
+        default=True,
+        description="Send each checkout whole -- branches and work not committed. Without, "
+        "the receiver clones from the remote and only what was pushed arrives.",
+    )
+    settings: bool = Field(default=True, description="The account's settings and keys.")
+    attachments: bool = Field(default=True, description="Attachments and standards pages.")
+    installation: bool = Field(
+        default=True, description="The installation's settings; an administrator's only."
+    )
 
 
 class TransferPairRequest(BaseModel):
@@ -83,6 +112,7 @@ class TransferPairRequest(BaseModel):
     name: str = Field(default="", max_length=120)
     revision: str | None = Field(default=None, max_length=64)
     version: str = Field(default="", max_length=40)
+    protocol: int = Field(default=1, description="What the sender speaks (rows.PROTOCOL).")
 
 
 class TransferPaired(BaseModel):

@@ -8525,6 +8525,10 @@
             "title": "App",
             "type": "string"
           },
+          "database": {
+            "title": "Database",
+            "type": "string"
+          },
           "instance": {
             "title": "Instance",
             "type": "string"
@@ -8532,6 +8536,21 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "os": {
+            "description": "macos, windows or linux.",
+            "title": "Os",
+            "type": "string"
+          },
+          "projects": {
+            "description": "How many projects it holds, the worked example aside.",
+            "title": "Projects",
+            "type": "integer"
+          },
+          "protocol": {
+            "description": "What a transfer to it must speak.",
+            "title": "Protocol",
+            "type": "integer"
           },
           "revision": {
             "anyOf": [
@@ -8551,8 +8570,12 @@
         },
         "required": [
           "app",
+          "database",
           "instance",
           "name",
+          "os",
+          "projects",
+          "protocol",
           "revision",
           "version"
         ],
@@ -8576,6 +8599,11 @@
             "title": "Admin",
             "type": "boolean"
           },
+          "database": {
+            "description": "sqlite or postgresql.",
+            "title": "Database",
+            "type": "string"
+          },
           "enabled": {
             "description": "Off on a hosted installation (SLIPWRIGHT_TRANSFER).",
             "title": "Enabled",
@@ -8587,6 +8615,19 @@
           },
           "name": {
             "title": "Name",
+            "type": "string"
+          },
+          "networks": {
+            "description": "What looking around the network looks at.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Networks",
+            "type": "array"
+          },
+          "os": {
+            "description": "macos, windows or linux: how its card is drawn.",
+            "title": "Os",
             "type": "string"
           },
           "projects": {
@@ -8613,9 +8654,12 @@
         "required": [
           "addresses",
           "admin",
+          "database",
           "enabled",
           "instance",
           "name",
+          "networks",
+          "os",
           "projects",
           "revision",
           "version"
@@ -8639,6 +8683,12 @@
             "maxLength": 120,
             "title": "Name",
             "type": "string"
+          },
+          "protocol": {
+            "default": 1,
+            "description": "What the sender speaks (rows.PROTOCOL).",
+            "title": "Protocol",
+            "type": "integer"
           },
           "revision": {
             "anyOf": [
@@ -8712,14 +8762,56 @@
             "title": "Compatible",
             "type": "boolean"
           },
+          "database": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "sqlite or postgresql.",
+            "title": "Database"
+          },
           "instance": {
             "description": "Which installation: the same one seen twice is one.",
             "title": "Instance",
             "type": "string"
           },
+          "legacy": {
+            "default": false,
+            "description": "A Slipwright from before moving existed: update it first.",
+            "title": "Legacy",
+            "type": "boolean"
+          },
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "os": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "macos, windows or linux: how it is drawn.",
+            "title": "Os"
+          },
+          "projects": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How many projects it holds.",
+            "title": "Projects"
           },
           "revision": {
             "anyOf": [
@@ -8733,7 +8825,14 @@
             "description": "Its database schema; a transfer needs the same.",
             "title": "Revision"
           },
+          "this_one": {
+            "default": false,
+            "description": "This installation, found at an address of its own.",
+            "title": "This One",
+            "type": "boolean"
+          },
           "version": {
+            "description": "Empty for a release from before moving existed.",
             "title": "Version",
             "type": "string"
           }
@@ -8741,9 +8840,14 @@
         "required": [
           "address",
           "compatible",
+          "database",
           "instance",
+          "legacy",
           "name",
+          "os",
+          "projects",
           "revision",
+          "this_one",
           "version"
         ],
         "title": "TransferPeer",
@@ -8759,6 +8863,18 @@
             "title": "Address",
             "type": "string"
           },
+          "attachments": {
+            "default": true,
+            "description": "Attachments and standards pages.",
+            "title": "Attachments",
+            "type": "boolean"
+          },
+          "checkouts": {
+            "default": true,
+            "description": "Send each checkout whole -- branches and work not committed. Without, the receiver clones from the remote and only what was pushed arrives.",
+            "title": "Checkouts",
+            "type": "boolean"
+          },
           "code": {
             "maxLength": 40,
             "minLength": 10,
@@ -8769,6 +8885,33 @@
             "default": false,
             "description": "Delete the projects here once the receiver has them all.",
             "title": "Delete After",
+            "type": "boolean"
+          },
+          "installation": {
+            "default": true,
+            "description": "The installation's settings; an administrator's only.",
+            "title": "Installation",
+            "type": "boolean"
+          },
+          "projects": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Which projects; none given is every one of them.",
+            "title": "Projects"
+          },
+          "settings": {
+            "default": true,
+            "description": "The account's settings and keys.",
+            "title": "Settings",
             "type": "boolean"
           }
         },

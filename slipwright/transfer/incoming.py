@@ -57,8 +57,9 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
-#: How long a code is shown before the next one replaces it.
-SHOWN_S = 30
+#: How long a code is shown before the next one replaces it: time to walk to the other
+#: computer and type it there.
+SHOWN_S = 180
 #: ...and how long it still works after that: somebody half-way through typing the old
 #: one when it changes is not made to start again.
 GRACE_S = 30
@@ -105,6 +106,8 @@ class Receiving:
     error: str | None = None
     manifest: dict[str, Any] = field(default_factory=dict)
     settings: list[dict[str, Any]] = field(default_factory=list)
+    # the settings' JSON lines as they arrive: in memory, never on disk (see _rows)
+    settings_raw: bytearray = field(default_factory=bytearray)
     progress: R.Progress = field(default_factory=R.Progress)
     summary: dict[str, Any] = field(default_factory=dict)
     touched: float = field(default_factory=time.monotonic)
@@ -173,15 +176,20 @@ class Desk:
         receiving = Receiving(offer.owner, offer.admin, key, sender[:120], staging)
         receiving.progress.finish("pair")
         with self._lock:
-            # a receiver takes one transfer at a time per account: a second sender with a
-            # second code replaces nothing that is already arriving
-            for other in self._incoming.values():
-                if _key(other.owner) == _key(offer.owner) and other.state in (
-                    "receiving",
-                    "importing",
-                ):
+            # one transfer at a time per account. One being written is left to finish; one
+            # still arriving is given up for this one -- the code that opened this was shown
+            # after it, so whoever is at the screen has moved on, and a sender that died
+            # half-way must not hold the door shut until its transfer times out
+            for other in list(self._incoming.values()):
+                if _key(other.owner) != _key(offer.owner):
+                    continue
+                if other.state == "importing":
                     shutil.rmtree(staging, ignore_errors=True)
-                    raise Rejected("another transfer is already arriving here")
+                    raise Rejected("another transfer is being written here; wait for it")
+                if other.state == "receiving":
+                    other.state, other.error = "failed", "replaced by a newer transfer"
+                    shutil.rmtree(other.staging, ignore_errors=True)
+                    log.warning("transfer from %s replaced by a newer one", other.sender)
             self._incoming[receiving.id] = receiving
             # a code that worked ends the showing of codes
             for s in [s for s, o in self._offers.items() if _key(o.owner) == _key(offer.owner)]:
@@ -236,6 +244,12 @@ def accept(engine: Engine, rec: Receiving, sealed: bytes) -> dict[str, Any]:
             return _rows(rec, part)
         if kind == "blob":
             return _blob(rec, part)
+        if kind == "abort":
+            why = str(part.header.get("reason") or "the sender gave up")
+            log.warning("transfer from %s abandoned by its sender: %s", rec.sender, why)
+            rec.state, rec.error = "failed", why
+            shutil.rmtree(rec.staging, ignore_errors=True)
+            return {"ok": True}
         if kind == "finish":
             rec.state = "importing"
             rec.progress.begin("finish")
@@ -256,6 +270,7 @@ def accept(engine: Engine, rec: Receiving, sealed: bytes) -> dict[str, Any]:
 
 
 def _fail(rec: Receiving, why: str) -> None:
+    log.warning("transfer from %s refused: %s", rec.sender, why)
     rec.state, rec.error = "failed", why
     shutil.rmtree(rec.staging, ignore_errors=True)
     raise Rejected(why)
@@ -277,22 +292,25 @@ def _manifest(rec: Receiving, part: Part) -> dict[str, Any]:
 
 
 def _rows(rec: Receiving, part: Part) -> dict[str, Any]:
+    """A run of a table's JSON lines, cut wherever the sender's part was full. Joined
+    as bytes; a row is only read once the whole table is in (``_staged``)."""
     table = part.header.get("table")
     if table not in R.TABLES:
         _fail(rec, f"rows of a table that is not carried: {table!r}")
-    found = json.loads(part.body)
-    if not isinstance(found, list):
-        _fail(rec, "rows that are not a list")
     if table == "settings":
         # never written to disk: these are the account's keys in the clear
-        rec.settings.extend(found)
+        rec.settings_raw += part.body
+        if part.header.get("last"):
+            rec.settings = [
+                json.loads(line) for line in bytes(rec.settings_raw).splitlines() if line.strip()
+            ]
+            rec.settings_raw.clear()
     else:
-        with (rec.staging / f"{table}.jsonl").open("a", encoding="utf-8") as out:
-            for row in found:
-                out.write(json.dumps(row) + "\n")
+        with (rec.staging / f"{table}.jsonl").open("ab") as out:
+            out.write(part.body)
     step = R.STEP_OF[str(table)]
     if step is not None:
-        rec.progress.advance(step, len(found))
+        rec.progress.advance(step, int(part.header.get("rows") or 0))
     return {"ok": True}
 
 
@@ -374,6 +392,31 @@ def _rebuild(rec: Receiving, project_id: str, meta: dict[str, Any], target: Path
         g.set_remote(target, "origin", _without_credentials(origin))
 
 
+def _clone(
+    engine: Engine, owner: str | None, project: Project, meta: dict[str, Any], target: Path
+) -> None:
+    """A project sent without its checkout, cloned from where it is pushed -- on this
+    account's Git token here, as a project created here would be."""
+    url = meta.get("origin") or project.effective_clone_url
+    if not isinstance(url, str) or not url:
+        raise ValueError(f"{project.name} came without a checkout or a remote to clone")
+    url = _without_credentials(url)
+    mine = engine.for_user(owner)
+    source = project.source or mine.default_source()
+    try:
+        g.clone(mine._authenticated(url, source), target)
+    except g.GitError as exc:
+        raise ValueError(
+            f"could not clone {project.name} from {url}: add a token for it under "
+            "Settings -> Sources here, or send it with its checkout"
+        ) from exc
+    g.set_remote(target, "origin", url)
+    head = meta.get("head")
+    if isinstance(head, str) and head.startswith("refs/heads/"):
+        branch = head.removeprefix("refs/heads/")
+        g.run(target, "checkout", "-q", branch, check=False)
+
+
 def _without_credentials(url: str) -> str:
     """A remote with a token written into it is put back without one: the engine
     supplies credentials per push, and a token left in ``.git/config`` is readable by
@@ -410,7 +453,13 @@ def import_transfer(engine: Engine, rec: Receiving) -> dict[str, Any]:
             pid = row["id"]
             target = _free(engine.repos_root / pid)
             made.append(target)
-            _rebuild(rec, pid, manifest["repos"].get(pid, {}), target)
+            meta = manifest["repos"].get(pid, {})
+            if manifest.get("checkouts", True):
+                _rebuild(rec, pid, meta, target)
+            else:
+                _clone(
+                    engine, rec.owner, Project.model_validate_json(row["data_json"]), meta, target
+                )
             repo_of[pid] = target
         for job_id, tree in (manifest.get("trees") or {}).items():
             pid = tree.get("project")

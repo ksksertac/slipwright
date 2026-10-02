@@ -22,6 +22,7 @@ from slipwright.schemas.project import Project
 from slipwright.secrets import generate_key
 from slipwright.store import JobStore
 from slipwright.transfer import channel, incoming, nearby
+from slipwright.transfer.rows import PROTOCOL
 from tests.pipeline import full_engine, full_provider
 
 #: Where the receiving app answers inside the test process.
@@ -319,6 +320,7 @@ def test_different_versions_do_not_move(there: Machine) -> None:
             "message": base64.b64encode(handshake.start()).decode(),
             "revision": "0001_older",
             "version": "0.1.0",
+            "protocol": PROTOCOL,
         },
     )
     assert got.status_code == 409
@@ -338,6 +340,7 @@ def test_a_part_without_the_key_ends_the_transfer(there: Machine) -> None:
             "slot": slot,
             "message": base64.b64encode(handshake.start()).decode(),
             "revision": current_revision(there.store.db),
+            "protocol": PROTOCOL,
         },
     ).json()
     forged = channel.seal(b"k" * 32, paired["session"], 0, channel.Part({"kind": "manifest"}))
@@ -422,13 +425,17 @@ def test_a_container_does_not_offer_its_bridge_address(monkeypatch: pytest.Monke
     assert nearby.own_address() is None
 
 
-def test_looking_around_finds_the_others_and_not_itself() -> None:
+def test_looking_around_finds_the_others_itself_and_the_old_ones() -> None:
     def answer(request: httpx.Request) -> httpx.Response:
-        host = request.url.host
+        host, path = request.url.host, request.url.path
         if host == "192.168.1.30":
             return httpx.Response(200, json={"app": "slipwright", "instance": "me", "name": "me"})
         if host == "192.168.1.40":
             return httpx.Response(200, text="<html>a printer</html>")
+        if host == "192.168.1.50":  # a release from before moving existed
+            if path.endswith("/first-run"):
+                return httpx.Response(200, json={"default_admin": False})
+            return httpx.Response(404, json={"detail": "Not Found"})
         return httpx.Response(
             200, json={"app": "slipwright", "instance": "laptop", "name": "LAPTOP-OFIS"}
         )
@@ -441,12 +448,15 @@ def test_looking_around_finds_the_others_and_not_itself() -> None:
         scan=lambda nets, ports, skip: [
             "http://192.168.1.30:8500",
             "http://192.168.1.40:8500",
+            "http://192.168.1.50:8500",
             "http://192.168.1.24:8500",
             "http://192.168.1.24:8600",  # the same machine by another door
         ],
     )
-    assert [(p["name"], p["address"]) for p in found] == [
-        ("LAPTOP-OFIS", "http://192.168.1.24:8500")
+    assert [(p["name"], p["address"], p.get("this_one"), p.get("legacy")) for p in found] == [
+        ("192.168.1.50", "http://192.168.1.50:8500", None, True),
+        ("LAPTOP-OFIS", "http://192.168.1.24:8500", None, None),
+        ("me", "http://192.168.1.30:8500", True, None),
     ]
 
 
@@ -456,8 +466,10 @@ def test_this_machine_tells_its_card(here: Machine, repo: Path) -> None:
     assert card["enabled"] is True
     assert card["projects"] == 1
     assert "http://192.168.1.11:8500" in card["addresses"]
+    assert card["networks"][0] == "192.168.1.0/24"
     hello = here.client.get("/api/transfer/peer/hello").json()
     assert hello["instance"] == card["instance"]
+    assert hello["projects"] == 1 and hello["database"] == card["database"]
 
 
 def test_a_part_too_large_is_refused_unread(there: Machine) -> None:
@@ -472,9 +484,217 @@ def test_a_part_too_large_is_refused_unread(there: Machine) -> None:
             "slot": slot,
             "message": base64.b64encode(channel.SenderHandshake(secret).start()).decode(),
             "revision": current_revision(there.store.db),
+            "protocol": PROTOCOL,
         },
     ).json()
     got = there.client.post(
         f"/api/transfer/peer/{paired['session']}/part", content=b"x" * (incoming.MAX_PART + 1)
     )
     assert got.status_code == 413
+
+
+# -- what the person chose ------------------------------------------------------------------
+
+
+def test_only_the_chosen_projects_move(
+    linked: tuple[Machine, Machine], repo: Path, tmp_path: Path
+) -> None:
+    here, there = linked
+    other = tmp_path / "other"
+    other.mkdir()
+    _git(other, "init", "-q", "-b", "main")
+    _git(
+        other,
+        "-c",
+        "user.email=t@e.x",
+        "-c",
+        "user.name=T",
+        "commit",
+        "-q",
+        "--allow-empty",
+        "-m",
+        "x",
+    )
+    shop = _project(here, repo)
+    _project(here, other, name="blog")
+    status = _send(here, _code(there), projects=[shop.id])
+    assert status["state"] == "done", status["error"]
+    assert [p.name for p in there.store.list_projects()] == ["shop"]
+
+
+def test_keys_stay_when_they_are_not_chosen(linked: tuple[Machine, Machine], repo: Path) -> None:
+    here, there = linked
+    _project(here, repo)
+    here.store.set_setting("sources.github.token", "ghp_secret", secret=True)
+    here.store.set_setting("mail", {"host": "smtp.example.com"})
+    status = _send(here, _code(there), settings=False, installation=False)
+    assert status["state"] == "done", status["error"]
+    assert there.store.get_setting("sources.github.token") is None
+    assert there.store.get_setting("mail") is None
+    assert len(there.store.list_projects()) == 1
+
+
+def test_without_its_checkout_a_project_is_cloned_from_its_remote(
+    linked: tuple[Machine, Machine], repo: Path, tmp_path: Path
+) -> None:
+    here, there = linked
+    remote = tmp_path / "remote.git"
+    _git(tmp_path, "init", "-q", "--bare", str(remote))
+    _git(repo, "remote", "add", "origin", str(remote))
+    _git(repo, "push", "-q", "origin", "main")
+    _git(repo, "checkout", "-q", "-b", "unpushed")
+    _git(
+        repo,
+        "-c",
+        "user.email=t@e.x",
+        "-c",
+        "user.name=T",
+        "commit",
+        "-q",
+        "--allow-empty",
+        "-m",
+        "local only",
+    )
+    _git(repo, "checkout", "-q", "main")
+    project = _project(here, repo)
+
+    status = _send(here, _code(there), checkouts=False)
+
+    assert status["state"] == "done", status["error"]
+    moved = there.store.get_project(project.id)
+    assert moved.repo_path is not None
+    assert (moved.repo_path / "README.md").is_file()
+    assert "unpushed" not in _git(moved.repo_path, "branch", "--list")
+
+
+def test_without_a_remote_a_project_needs_its_checkout(
+    linked: tuple[Machine, Machine], repo: Path
+) -> None:
+    here, there = linked
+    _project(here, repo)
+    refused = here.client.post(
+        "/api/transfer/send", json={"address": THERE, "code": _code(there), "checkouts": False}
+    )
+    assert refused.status_code == 409
+    assert "no remote" in refused.json()["detail"]
+
+
+# -- what broke on a real account -------------------------------------------------------------
+
+
+def test_a_long_history_and_a_large_file_go_in_many_parts(
+    linked: tuple[Machine, Machine], repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two hundred rows of agent transcripts in one part were once more than a part may be;
+    rows now travel as a stream cut at a size, whatever the rows are."""
+    from slipwright.transfer import rows
+
+    monkeypatch.setattr(rows, "CHUNK", 1000)
+    here, there = linked
+    project = _project(here, repo)
+    job = _at_a_gate_with_work(here, project)
+    big = bytes(range(256)) * 40  # ten kilobytes: ten parts and more
+    here.store.add_attachment(
+        project_id=project.id,
+        owner_id=None,
+        name="screens.pdf",
+        media_type="application/pdf",
+        data=big,
+        text="x" * 5000,
+        pages=3,
+        scope="project",
+    )
+    here.store.set_setting("sources.github.token", "ghp_" + "s" * 3000, secret=True)
+
+    status = _send(here, _code(there))
+
+    assert status["state"] == "done", status["error"]
+    assert len(there.store.get(job.id).history) == len(here.store.get(job.id).history)
+    (moved,) = there.store.list_attachments(project.id)
+    assert there.store.attachment_data(moved.id)[1] == big
+    assert there.store.get_setting("sources.github.token") == "ghp_" + "s" * 3000
+
+
+def test_a_sender_that_fails_half_way_frees_the_receiver(
+    linked: tuple[Machine, Machine], repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from slipwright.transfer import outgoing
+
+    here, there = linked
+    _project(here, repo)
+    real = outgoing._send_checkout
+
+    def broken(*_a: Any, **_k: Any) -> None:
+        raise RuntimeError("the disk went away")
+
+    monkeypatch.setattr(outgoing, "_send_checkout", broken)
+    failed = _send(here, _code(there))
+    assert failed["state"] == "failed"
+    arrived = there.client.get("/api/transfer/incoming").json()
+    assert arrived["state"] == "failed"
+    assert "the disk went away" in arrived["error"]
+
+    monkeypatch.setattr(outgoing, "_send_checkout", real)
+    assert _send(here, _code(there))["state"] == "done"
+
+
+def test_a_receiver_left_waiting_does_not_hold_the_next_transfer(
+    linked: tuple[Machine, Machine], repo: Path
+) -> None:
+    import base64
+
+    from slipwright.store.migrate import current_revision
+    from slipwright.transfer.rows import PROTOCOL
+
+    here, there = linked
+    _project(here, repo)
+    slot, secret = channel.parse_code(_code(there))
+    paired = there.client.post(  # a sender that paired and was never heard from again
+        "/api/transfer/peer/pair",
+        json={
+            "slot": slot,
+            "message": base64.b64encode(channel.SenderHandshake(secret).start()).decode(),
+            "revision": current_revision(there.store.db),
+            "protocol": PROTOCOL,
+        },
+    )
+    assert paired.status_code == 200
+    assert _send(here, _code(there))["state"] == "done"
+
+
+def test_a_receiver_of_another_protocol_is_refused_before_its_code_is_spent(
+    linked: tuple[Machine, Machine], repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from slipwright.transfer import rows
+
+    here, there = linked
+    _project(here, repo)
+    code = _code(there)
+    monkeypatch.setattr(rows, "PROTOCOL", rows.PROTOCOL + 1)  # the sender is newer
+    failed = _send(here, code)
+    assert failed["state"] == "failed"
+    assert "update both computers" in failed["error"]
+    monkeypatch.undo()
+    assert _send(here, code)["state"] == "done"  # the code was never tried
+
+
+def test_a_card_says_what_computer_it_is(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("SLIPWRIGHT_HOST_OS", "macos")
+    assert nearby.machine_os() == "macos"
+    monkeypatch.delenv("SLIPWRIGHT_HOST_OS")
+    monkeypatch.setattr(nearby, "in_container", lambda: True)
+    kernel = tmp_path / "version"
+    for text, expected in (
+        ("Linux version 5.15.153.1-microsoft-standard-WSL2", "windows"),
+        ("Linux version 6.10.14-linuxkit", "macos"),
+        ("Linux version 6.8.0-45-generic (buildd@ubuntu)", "linux"),
+    ):
+        kernel.write_text(text, encoding="utf-8")
+        real = nearby.Path
+
+        def fake(p: str, _k: Path = kernel, _real: Any = real) -> Any:
+            return _k if p == "/proc/version" else _real(p)
+
+        monkeypatch.setattr(nearby, "Path", fake)
+        assert nearby.machine_os() == expected
+        monkeypatch.setattr(nearby, "Path", real)

@@ -116,10 +116,27 @@ def listening(networks: Iterable[str], ports: Iterable[int], skip: set[str]) -> 
 
 
 def hello(address: str, client: httpx.Client) -> dict[str, object] | None:
-    """What a Slipwright at ``address`` says about itself, or None when it is not one."""
+    """What a Slipwright at ``address`` says about itself, or None when it is not one.
+
+    A release from before moving existed has no ``hello``, but is still worth showing --
+    as one to update -- so it is recognised by the login page's public question, which
+    nothing but Slipwright answers."""
     try:
         got = client.get(f"{address}/api/transfer/peer/hello", timeout=HELLO_S)
         found = got.json() if got.status_code == 200 else None
+        if found is None and got.status_code == 404:
+            first = client.get(f"{address}/api/auth/first-run", timeout=HELLO_S)
+            if first.status_code == 200 and "default_admin" in first.json():
+                host = urlsplit(address).hostname or address
+                return {
+                    "app": "slipwright",
+                    "instance": address,
+                    "name": host,
+                    "version": "",
+                    "revision": None,
+                    "legacy": True,
+                    "address": address,
+                }
     except (httpx.HTTPError, ValueError):
         return None
     if not isinstance(found, dict) or found.get("app") != "slipwright":
@@ -134,15 +151,44 @@ def look(
     own: Callable[[], str | None] = own_address,
     scan: Callable[[list[str], set[int], set[str]], list[str]] = listening,
 ) -> list[dict[str, object]]:
-    """Every other Slipwright on the networks ``addresses`` point at."""
+    """Every Slipwright on the networks ``addresses`` point at. This one is among them,
+    marked ``this_one``, when it is found at an address of its own: in Docker that is the
+    only way it learns the address another computer would use."""
     networks, ports = targets(*addresses, own=own())
     found: dict[str, dict[str, object]] = {}
     for address in scan(networks, ports, set()):
         peer = hello(address, client)
-        if peer is None or peer.get("instance") == instance:
-            continue  # not Slipwright, or this one seen through another of its addresses
+        if peer is None:
+            continue
+        if peer.get("instance") == instance:
+            peer["this_one"] = True
+        # one installation seen through two of its doors is one card
         found.setdefault(str(peer.get("instance")), peer)
     return sorted(found.values(), key=lambda p: str(p.get("name", "")).lower())
+
+
+def machine_os() -> str:
+    """What the computer is, for the card another one draws it as: ``macos``, ``windows``
+    or ``linux``. In Docker the container is always Linux, so the kernel it was given
+    says what is underneath: WSL2's on Windows, Docker Desktop's LinuxKit on a Mac.
+    ``SLIPWRIGHT_HOST_OS`` settles it when that guess is wrong."""
+    import os
+    import platform
+
+    told = os.environ.get("SLIPWRIGHT_HOST_OS", "").strip().lower()
+    if told in ("macos", "windows", "linux"):
+        return told
+    if in_container():
+        try:
+            kernel = Path("/proc/version").read_text(encoding="utf-8").lower()
+        except OSError:
+            kernel = ""
+        if "microsoft" in kernel or "wsl" in kernel:
+            return "windows"
+        if "linuxkit" in kernel:
+            return "macos"
+        return "linux"
+    return {"Darwin": "macos", "Windows": "windows"}.get(platform.system(), "linux")
 
 
 def machine_name() -> str:

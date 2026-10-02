@@ -60,6 +60,8 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
+NEWLINE = bytes([10])
+
 #: A development in one of these is not doing anything: it waits for a person, a Mac, or
 #: nothing at all. Anything else is running, and its checkout is changing under us.
 IDLE = (
@@ -90,6 +92,14 @@ class Scope:
     owner: str | None
     admin: bool = False
     everything: bool = False
+    # what the person chose to send. ``projects`` None is all of them; without
+    # ``checkouts`` the receiver clones each project from its remote instead, so only
+    # what was pushed arrives
+    projects: list[str] | None = None
+    checkouts: bool = True
+    settings: bool = True
+    attachments: bool = True
+    installation: bool = True
 
 
 @dataclass
@@ -117,7 +127,11 @@ def projects_of(engine: Engine, scope: Scope) -> list[Project]:
     with engine.raw_store.db.connect() as conn:
         found = [Project.model_validate_json(r[0]) for r in conn.execute(query)]
     # the worked example is every account's own and has no checkout: the receiver has one
-    return [p for p in found if not p.is_demo]
+    found = [p for p in found if not p.is_demo]
+    if scope.projects is not None:
+        chosen = set(scope.projects)
+        found = [p for p in found if p.id in chosen]
+    return found
 
 
 def busy(engine: Engine, project_ids: list[str]) -> list[str]:
@@ -177,6 +191,21 @@ def plan(engine: Engine, scope: Scope) -> Plan:
     tree_paths: dict[str, Path] = {}
     for project in found:
         path = project.repo_path
+        if not scope.checkouts:
+            # cloned over there from where it is pushed: there has to be such a place
+            here = _repo(path) if path is not None and path.is_dir() else {}
+            origin = here.get("origin") or project.effective_clone_url
+            if not origin:
+                raise Refused(
+                    f"{project.name} has no remote to clone from; send it with its checkout"
+                )
+            repos[project.id] = {
+                "head": here.get("head"),
+                "bundle": False,
+                "dirty": False,
+                "origin": origin,
+            }
+            continue
         if path is None or not path.is_dir():
             raise Refused(f"the checkout of {project.name} is missing ({path}); nothing to send")
         repos[project.id] = _repo(path)
@@ -211,15 +240,19 @@ def _rows(
         elif table == "test_runs":
             query = select(test_runs).where(test_runs.c.project_id.in_(project_ids))
         elif table == "attachments":
+            if not scope.attachments:
+                return
             query = select(attachments).where(attachments.c.project_id.in_(project_ids))
         elif table == "standards_pages":
+            if not scope.attachments:
+                return
             query = select(standards_pages).where(
                 standards_pages.c.owner_id == (scope.owner or INSTALLATION)
             )
         elif table == "translations":
             # a cache of agent prose across every account: only an administrator's
             # transfer carries it, since it holds other people's text too
-            if not scope.admin:
+            if not (scope.admin and scope.installation):
                 return
             query = select(translations)
         elif table == "settings":
@@ -254,7 +287,9 @@ def _settings(engine: Engine, scope: Scope) -> Iterator[dict[str, Any]]:
         personal = is_personal(name)
         if personal and row["user_id"] != mine:
             continue  # an installation row of a personal name: pre-account leftovers
-        if not personal and not scope.admin:
+        if personal and not scope.settings:
+            continue
+        if not personal and not (scope.admin and scope.installation):
             continue
         value = row["value_json"]
         if row["encrypted"]:
@@ -301,6 +336,13 @@ class _Line:
         answer: dict[str, Any] = got.json()
         return answer
 
+    def abort(self, why: str) -> None:
+        """Tell the receiver this transfer is over. Best effort: it may be what failed."""
+        try:
+            self.send(Part({"kind": "abort", "reason": why[:500]}))
+        except Exception:  # noqa: BLE001
+            log.info("transfer: the receiver did not take the abort")
+
 
 def pair(
     http: httpx.Client, address: str, code: str, *, name: str, revision: str | None, version: str
@@ -310,6 +352,16 @@ def pair(
         slot, secret = parse_code(code)
     except CodeError as exc:
         raise Refused(str(exc)) from exc
+    try:
+        said = http.get(f"{address}/api/transfer/peer/hello")
+        spoken = said.json().get("protocol") if said.status_code == 200 else None
+    except (httpx.TransportError, ValueError) as exc:
+        raise Refused(f"{address} did not answer: {exc}") from exc
+    if spoken != R.PROTOCOL:
+        raise Refused(
+            f"{address} runs another version of Slipwright; update both computers to the "
+            "same release, then move"
+        )
     handshake = SenderHandshake(secret)
     try:
         got = http.post(
@@ -320,6 +372,7 @@ def pair(
                 "name": name,
                 "revision": revision,
                 "version": version,
+                "protocol": R.PROTOCOL,
             },
         )
     except httpx.TransportError as exc:
@@ -362,71 +415,85 @@ def send(
         version=version,
     )
     progress.finish("pair")
-    for table, step in R.STEP_OF.items():
-        if step is not None:
-            progress.step(step).total += work.counts[table]
-    progress.step("repos").total = len(work.repos)
+    try:
+        for table, step in R.STEP_OF.items():
+            if step is not None:
+                progress.step(step).total += work.counts[table]
+        progress.step("repos").total = len(work.repos)
 
-    line.send(
-        Part(
-            {
-                "kind": "manifest",
-                "name": name,
-                "version": version,
-                "admin": scope.admin,
-                "projects": [{"id": p.id, "name": p.name} for p in work.projects],
-                "repos": work.repos,
-                "trees": work.trees,
-                "counts": work.counts,
-            }
+        line.send(
+            Part(
+                {
+                    "kind": "manifest",
+                    "name": name,
+                    "version": version,
+                    "admin": scope.admin,
+                    "projects": [{"id": p.id, "name": p.name} for p in work.projects],
+                    "repos": work.repos,
+                    "trees": work.trees,
+                    "checkouts": scope.checkouts,
+                    "counts": work.counts,
+                }
+            )
         )
-    )
-    ids = [p.id for p in work.projects]
-    for table in R.TABLES:
-        step = R.STEP_OF[table]
-        batch = R.FILE_BATCH if table == "attachments" else R.BATCH
-        chunk: list[dict[str, Any]] = []
-        for row in _rows(engine, scope, table, ids):
-            chunk.append(R.encode(row))
-            if len(chunk) >= batch:
-                _send_rows(line, table, chunk, progress, step)
-                chunk = []
-        if chunk:
-            _send_rows(line, table, chunk, progress, step)
-    for key in ("projects", "jobs", "settings", "attachments", "standards"):
-        progress.finish(key)
+        ids = [p.id for p in work.projects]
+        for table in R.TABLES:
+            _send_table(line, table, _rows(engine, scope, table, ids), progress)
+        for key in ("projects", "jobs", "settings", "attachments", "standards"):
+            progress.finish(key)
 
-    progress.begin("repos")
-    with tempfile.TemporaryDirectory(prefix="slipwright-move-") as tmp:
-        for project in work.projects:
-            _send_checkout(line, project, work, Path(tmp))
-            progress.advance("repos")
-    progress.finish("repos")
+        progress.begin("repos")
+        with tempfile.TemporaryDirectory(prefix="slipwright-move-") as tmp:
+            for project in work.projects:
+                _send_checkout(line, project, work, Path(tmp))
+                progress.advance("repos")
+        progress.finish("repos")
 
-    progress.begin("finish")
-    answer = line.send(Part({"kind": "finish"}))
-    sending.summary = answer
-    progress.finish("finish")
+        progress.begin("finish")
+        answer = line.send(Part({"kind": "finish"}))
+        sending.summary = answer
+        progress.finish("finish")
 
-    if delete_after:
-        progress.begin("delete", total=len(work.projects))
-        moved = set(answer.get("moved", ids))
-        for project in work.projects:
-            if project.id in moved:
-                try:
-                    engine.delete_project(project.id, purge=True)
-                except Exception as exc:  # noqa: BLE001 - it is safely over there; say so
-                    log.warning("transfer: could not delete %s here: %s", project.name, exc)
-            progress.advance("delete")
-        progress.finish("delete")
+        if delete_after:
+            progress.begin("delete", total=len(work.projects))
+            moved = set(answer.get("moved", ids))
+            for project in work.projects:
+                if project.id in moved:
+                    try:
+                        engine.delete_project(project.id, purge=True)
+                    except Exception as exc:  # noqa: BLE001 - it is safely over there; say so
+                        log.warning("transfer: could not delete %s here: %s", project.name, exc)
+                progress.advance("delete")
+            progress.finish("delete")
+
+    except Exception as exc:
+        # the receiver would otherwise hold the transfer open, and refuse the next one,
+        # until it gave up on its own ten minutes later
+        line.abort(str(exc))
+        raise
 
 
-def _send_rows(
-    line: _Line, table: str, chunk: list[dict[str, Any]], progress: R.Progress, step: str | None
+def _send_table(
+    line: _Line, table: str, found: Iterator[dict[str, Any]], progress: R.Progress
 ) -> None:
-    line.send(Part({"kind": "rows", "table": table}, json.dumps(chunk).encode()))
-    if step is not None:
-        progress.advance(step, len(chunk))
+    """One table as JSON lines, cut into parts of at most ``CHUNK`` bytes wherever the
+    cut falls; the receiver joins them. ``rows`` in a header is how many rows end in that
+    part (its newlines), for the progress both screens show."""
+    step = R.STEP_OF[table]
+
+    def ship(piece: bytes, last: bool) -> None:
+        ended = piece.count(NEWLINE)
+        line.send(Part({"kind": "rows", "table": table, "rows": ended, "last": last}, piece))
+        if step is not None:
+            progress.advance(step, ended)
+
+    buffer = bytearray()
+    for row in found:
+        buffer += json.dumps(R.encode(row)).encode() + NEWLINE
+        while len(buffer) >= R.CHUNK:
+            ship(bytes(buffer[: R.CHUNK]), last=False)
+            del buffer[: R.CHUNK]
+    ship(bytes(buffer), last=True)
 
 
 def _send_checkout(line: _Line, project: Project, work: Plan, tmp: Path) -> None:
@@ -487,6 +554,7 @@ def start(
             send(engine, scope, sending, **kwargs)
             sending.state = "done"
         except Refused as exc:
+            log.warning("transfer to %s refused: %s", sending.target, exc)
             sending.state, sending.error = "failed", str(exc)
         except Exception as exc:  # noqa: BLE001 - a thread has nobody to raise to
             log.exception("transfer to %s failed", sending.target)
