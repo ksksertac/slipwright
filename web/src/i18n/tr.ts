@@ -2259,6 +2259,9 @@ export const TR: Record<string, string> = {
   Goal: "Hedef",
   Evidence: "Kanıt",
   "done by hand": "elle yapıldı",
+  "the phases this one builds on": "bu fazın üzerine kurulduğu fazlar",
+  "after {phases}": "{phases}. fazdan sonra",
+  "needs no other phase": "başka faza bağlı değil",
   partial: "kısmen",
   untouched: "dokunulmadı",
   "Every phase left is finished: approving goes straight to QA.":

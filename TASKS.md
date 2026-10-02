@@ -1621,19 +1621,25 @@ Before anything runs side by side the engine has to know what may. Useful on its
 today's order is the Architect's guess, and a re-plan cannot tell which later phases a
 changed one breaks.
 **Done when**
-- [ ] Each plan phase carries `depends_on`: the phase numbers it builds on. The Architect is
+- [x] Each plan phase carries `depends_on`: the phase numbers it builds on. The Architect is
   told the rules: a phase depends on every phase whose files it changes or reads, on the
   backend contract a front-end uses, and a platform phase on everything it ships; two
-  phases that touch the same file are never independent
-- [ ] The engine checks it: no cycle, no forward reference, and touching the same file
-  without a dependency is refused back to the Architect like any other bad plan
-- [ ] The plan view and the pipeline draw the dependencies; a phase whose dependencies are
-  all done is shown as *ready*
-- [ ] A re-plan keeps the dependencies of kept phases, and a new phase may depend on them
-- [ ] Still run one at a time here, in dependency order: this task changes no behaviour
-  beyond the order, and is what T16.3 stands on
-- [ ] Tests: a plan with a cycle or a shared file is asked again; the order respects the
-  dependencies
+  phases that touch the same file are never independent. Omitted (an older plan) means
+  every earlier phase, which is the order it always ran in
+- [x] The engine checks it (`architect.dependency_problem`): a phase depends only on earlier
+  ones -- so no cycle can exist -- and two phases on one file must be ordered, directly or
+  through others. A plan that breaks either is asked for again, like one that leaves a task
+  out; a person's edit at the gate is refused the same way
+- [x] The pipeline's phase cards say what they come after ("after 2, 3", or "needs no other
+  phase"). *Ready* is T16.3's: it means something only when phases can start together
+- [x] A re-plan keeps the dependencies of kept phases, and a new phase may depend on them
+  (numbered by its place in the whole plan); a platform phase moved last renumbers what
+  depends on the phases around it
+- [x] Still run one at a time here: since a phase depends only on earlier ones, the plan's
+  own order already respects every dependency, and nothing changes but what is checked
+- [x] Tests (`tests/test_phase16_depends.py`): a forward dependency and an unordered shared
+  file are refused and asked again; an older plan stands; moving a phase last keeps what
+  the others depend on
 
 ### T16.3 — Ready phases run side by side
 **Done when**

@@ -76,6 +76,13 @@ You are the Software Architect. Read the repository (`worktree`) and the approve
    `platform`. A platform phase may wait until last for a machine that can build it, so
    nothing may depend on one: put platform phases after everything they use, and never
    make a later phase need what a platform phase wrote.
+   Every phase says what it needs in `depends_on`: the numbers of the earlier phases it
+   builds on -- every phase whose files it changes or reads, the backend phase whose
+   contract a front-end uses, everything a platform phase ships. `[]` when it needs none.
+   Two phases that change the same file are never independent: the later one depends on
+   the earlier. A phase never depends on a later one. Phases that need none of each other
+   may be built side by side, so do not add a dependency that is not real -- and never
+   leave out one that is.
    Every backlog task gets a phase, with no exception: a task that mixes domains or looks
    unnecessary still gets its phase (the closest fit you can write), and the concern goes
    in `summary`. A task too large for one answer may take several consecutive phases, each
@@ -89,10 +96,12 @@ contradict the core rules."""
 
 REPLAN = """
 This is a re-plan from phase {start}: phases 1 to {kept} are built and committed, and stay
-(`kept_phases`). `feedback` says what failed and what to try instead. Return in `phases`
-only the phases from {start} on -- they replace the old ones from there -- and every task
-the kept phases do not implement still needs one. Never repeat a kept phase. If the cause
-is in a kept phase's code, add a phase here that changes it, and say so in `summary`."""
+(`kept_phases`). Number `depends_on` by the place in the whole plan: your first phase is
+phase {start}, and it may depend on kept ones. `feedback` says what failed and what to try
+instead. Return in `phases` only the phases from {start} on -- they replace the old ones
+from there -- and every task the kept phases do not implement still needs one. Never
+repeat a kept phase. If the cause is in a kept phase's code, add a phase here that changes
+it, and say so in `summary`."""
 
 
 def run(
@@ -154,6 +163,45 @@ def kept_phases(job: Job) -> list[dict[str, Any]]:
     return list(phases[: job.data.replan_from])
 
 
+def dependency_problem(phases: Sequence[PlanPhase]) -> str | None:
+    """Why the phases' `depends_on` cannot be built from, or None (T16.2).
+
+    A phase depends only on earlier ones -- so the plan's own order is always one that
+    respects them, and nothing can wait for itself. Two phases that change the same file
+    must be ordered by a dependency: built side by side they would each write it, and
+    one would lose. A phase with no `depends_on` at all (an older plan) needs every
+    earlier phase, which is the order it always ran in."""
+    needs: list[set[int]] = []
+    for number, phase in enumerate(phases, start=1):
+        if phase.depends_on is None:
+            direct = set(range(1, number))
+        else:
+            direct = set(phase.depends_on)
+            ahead = sorted(d for d in direct if not 1 <= d < number)
+            if ahead:
+                return (
+                    f"phase {number} depends on phase {ahead[0]}, which does not come before "
+                    "it: a phase may depend only on earlier ones"
+                )
+        # everything it needs, through what those need
+        closure = set(direct)
+        for d in direct:
+            closure |= needs[d - 1]
+        needs.append(closure)
+    owner: dict[str, int] = {}
+    for number, phase in enumerate(phases, start=1):
+        for name in phase.files:
+            key = name.strip().replace("\\", "/").removeprefix("./")
+            first = owner.get(key)
+            if first is not None and first not in needs[number - 1]:
+                return (
+                    f"phases {first} and {number} both change {name} but phase {number} does "
+                    f"not depend on phase {first}"
+                )
+            owner[key] = number
+    return None
+
+
 def phase_task_map(phases: Sequence[PlanPhase], task_ids: list[str]) -> dict[str, int] | str:
     """Map task id -> 1-based phase number, or a readable reason the plan is invalid.
 
@@ -171,4 +219,11 @@ def phase_task_map(phases: Sequence[PlanPhase], task_ids: list[str]) -> dict[str
     return mapping
 
 
-__all__ = ["INSTRUCTIONS", "accepted_profile", "kept_phases", "phase_task_map", "run"]
+__all__ = [
+    "INSTRUCTIONS",
+    "accepted_profile",
+    "dependency_problem",
+    "kept_phases",
+    "phase_task_map",
+    "run",
+]
