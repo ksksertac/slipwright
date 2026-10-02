@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 from pathlib import Path
 from typing import Any
 
@@ -114,3 +115,34 @@ def test_a_phase_that_needs_the_one_being_built_waits_its_turn(
     assert job.state is JobState.DONE
     assert order == [1, 2, 3]
     assert not any("written alongside" in (t.note or "") for t in job.history)
+
+
+def test_one_account_never_has_more_calls_on_a_provider_than_it_may(
+    store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
+) -> None:
+    provider, order = _scripted(seed, None)
+    busy = {"now": 0, "most": 0}
+    lock = threading.Lock()
+    develop = provider.replies[RoleName.BACKEND]
+
+    def counted(req: Any) -> dict[str, Any]:
+        with lock:
+            busy["now"] += 1
+            busy["most"] = max(busy["most"], busy["now"])
+        time.sleep(0.3)  # long enough for a second call to overlap, if it may
+        try:
+            return develop(req)  # type: ignore[operator, no-any-return]
+        finally:
+            with lock:
+                busy["now"] -= 1
+
+    provider.replies[RoleName.BACKEND] = counted
+    engine = full_engine(store, worktrees_root, seed, provider)
+    engine.max_calls_per_provider = 1
+    project = _project(engine, repo, 3)
+    job = engine.start(engine.create_job("x", project_id=project.id).id)
+    job = _drive(engine, engine.approve(engine.approve(job.id).id))
+
+    assert job.state is JobState.DONE
+    assert busy["most"] == 1  # phase 2 was written ahead, but waited for the one place
+    assert any("written alongside" in (t.note or "") for t in job.history)
