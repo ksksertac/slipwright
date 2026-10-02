@@ -56,6 +56,13 @@ class StepCard(BaseModel):
     by_hand: bool = False  # a phase people finished on the branch while it was paused
     # the phases this one builds on (T16.2); None for a plan that does not say
     depends_on: list[int] | None = None
+    # not started, and everything it builds on is built: it may run beside others
+    ready: bool = False
+    # its answer is being written now, alongside the phase being built (T16.3)
+    ahead: bool = False
+    # the commit that recorded the phase, and where the host shows it (T16.1)
+    commit: str | None = None
+    commit_url: str | None = None
 
 
 class Lane(BaseModel):
@@ -397,12 +404,31 @@ def _phase_cards(job: Job, r: _Reader) -> list[StepCard]:
                 outputs=sorted(set(outputs + gate_logs)),
                 by_hand=str(number) in job.data.phase_outcomes,
                 depends_on=phase.get("depends_on"),
+                ready=status is StepStatus.PENDING
+                and isinstance(needs := phase.get("depends_on"), list)
+                and set(needs) <= set(range(1, job.data.phase_index + 1)),
+                ahead=str(number) in job.data.ahead,
+                commit=job.data.phase_commits.get(str(number)),
+                commit_url=_commit_url(job, job.data.phase_commits.get(str(number))),
             )
         )
         gate = _review_gate(job, r, number)
         if gate is not None:
             cards.append(gate)
     return cards
+
+
+def _commit_url(job: Job, sha: str | None) -> str | None:
+    """Where the host shows a commit, read off the development's pull request: GitHub's
+    `…/owner/repo/pull/7` and Bitbucket's `…/ws/repo/pull-requests/7`. None before there
+    is one, or on a host whose links look like neither."""
+    pr = job.data.pr_url or job.data.draft_pr_url
+    if not sha or not pr:
+        return None
+    for marker, path in (("/pull/", "/commit/"), ("/pull-requests/", "/commits/")):
+        if marker in pr:
+            return pr.split(marker, 1)[0] + path + sha
+    return None
 
 
 def _design_gate(job: Job, r: _Reader) -> StepCard | None:

@@ -1607,7 +1607,8 @@ deployment files. The push is what is missing.
   writes its description at the end and marks it ready for review instead of opening it
 - [x] The commit message names the phase of how many, and the task's Jira key
   (`slipwright: phase 3/10: Soru sırası … [SCRUM-131]`); the DevOps card shows the draft
-- [ ] ~~The pipeline card links the commit~~ -- not done: a card has no place for it yet
+- [x] The pipeline card shows the commit that recorded the phase, linked on the host
+  (`phase_commits`; the link is read off the pull request, GitHub or Bitbucket)
 - [x] The pushes go to the project's own repository, on the development's branch, and
   carry only the project's code. The boxes that change no file (backlog, architecture,
   design, the gates) commit nothing: their record is Slipwright's and Jira's, never the
@@ -1631,7 +1632,7 @@ changed one breaks.
   through others. A plan that breaks either is asked for again, like one that leaves a task
   out; a person's edit at the gate is refused the same way
 - [x] The pipeline's phase cards say what they come after ("after 2, 3", or "needs no other
-  phase"). *Ready* is T16.3's: it means something only when phases can start together
+  phase"), and *ready* when everything they build on is built
 - [x] A re-plan keeps the dependencies of kept phases, and a new phase may depend on them
   (numbered by its place in the whole plan); a platform phase moved last renumbers what
   depends on the phases around it
@@ -1661,7 +1662,8 @@ machine, which every gate and retry is written against, is untouched.
   rounds, parts and reviews are asked in turn, as today
 - [x] A re-plan drops what is being written ahead (what is already on its way finishes and
   is paid for, and nobody reads it); a restarted server writes them again in turn
-- [x] *Right now* shows the phases being written alongside, each with its own clock
+- [x] *Right now* shows the phases being written alongside, each with its own clock, and
+  their pipeline cards say "being written alongside"
 - [x] Tests (`tests/test_phase16_side_by_side.py`): two independent phases are written at
   once (their calls wait at a barrier for each other), a phase that needs both waits; one at
   a time writes nothing ahead; a phase that needs the one being built waits its turn

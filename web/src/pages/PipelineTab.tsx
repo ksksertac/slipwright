@@ -571,6 +571,27 @@ function StepCardView({
             : tx("needs no other phase")}
         </div>
       )}
+      {/* its answer is being written alongside the phase being built (T16.3) */}
+      {step.ahead && <div className="chip work">{tx("being written alongside")}</div>}
+      {!step.ahead && step.ready && <div className="chip idle">{tx("ready")}</div>}
+      {/* the commit that recorded the phase, on the host when there is a link (T16.1) */}
+      {step.commit &&
+        (step.commit_url ? (
+          <a
+            className="chip idle mono"
+            href={step.commit_url}
+            target="_blank"
+            rel="noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            title={tx("the commit that recorded this phase")}
+          >
+            {step.commit.slice(0, 7)}
+          </a>
+        ) : (
+          <div className="chip idle mono" title={tx("the commit that recorded this phase")}>
+            {step.commit.slice(0, 7)}
+          </div>
+        ))}
       <div className="meta">
         <span className={`badge ${STATUS_CLASS[step.status]} plain`}>
           {step.status === "waiting"
