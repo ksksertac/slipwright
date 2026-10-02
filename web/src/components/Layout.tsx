@@ -139,12 +139,11 @@ export function Layout() {
               <IconTicket /> {tx("Jira")}
             </NavLink>
           )}
-          {/* the owner's: a member does not lend the account machines */}
-          {owner && (
-            <NavLink to="/settings/workers" data-nav="workers">
-              <IconMonitor /> {tx("Mobile Builder")}
-            </NavLink>
-          )}
+          {/* everybody's: a member lends machines of their own and sees those (T17.2). For
+              a member the settings above render nothing, so it lands beside Agents */}
+          <NavLink to="/settings/workers" data-nav="workers">
+            <IconMonitor /> {tx("Machines")}
+          </NavLink>
           {/* beside Mac Connect: both are about other machines on this network */}
           {owner && transfer.data?.enabled && (
             <NavLink to="/settings/transfer" data-nav="transfer">

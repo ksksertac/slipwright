@@ -7,6 +7,7 @@ was mid-phase when the previous process died.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 import queue
@@ -493,7 +494,18 @@ def create_app(
 
             app.state.notify_listeners = Listeners(engine)
             threading.Thread(target=app.state.notify_listeners.reconcile, daemon=True).start()
+        # machines on other networks reach the worker API through the relay, while the
+        # Machines page says so (T17.3): the keeper goes into the room and out of it
+        relay: asyncio.Task[None] | None = None
+        app.state.relay = None
+        if resume_on_startup:
+            from slipwright.relay.host import Keeper
+
+            app.state.relay = Keeper(engine.raw_store, app)
+            relay = asyncio.create_task(app.state.relay.run())
         yield
+        if relay is not None:
+            relay.cancel()
         stop.set()
         if app.state.notify_listeners is not None:
             app.state.notify_listeners.stop_all()

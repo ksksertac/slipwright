@@ -439,7 +439,7 @@ def test_a_database_written_before_teams_upgrades_into_one(tmp_path: Path) -> No
             conn.execute(text("ALTER TABLE jobs DROP COLUMN title"))  # (0011: job title)
             conn.execute(text("ALTER TABLE job_history DROP COLUMN detail_size"))  # (0014)
             conn.execute(text("DROP TABLE job_messages"))  # (0013)
-            for table in ("workers", "worker_codes", "worker_tasks"):  # (0012)
+            for table in ("workers", "worker_codes", "worker_tasks", "worker_calls"):  # (0012)
                 conn.execute(text(f"DROP TABLE {table}"))
             # (0009: two-step sign-in)
             for column in ("totp_secret", "totp_enabled_at", "totp_last_step", "totp_recovery"):

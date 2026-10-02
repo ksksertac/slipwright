@@ -1713,49 +1713,50 @@ headless worker and the desktop app all follow it.
 
 ### T17.1 — A machine writes a phase
 **Done when**
-- [ ] A machine says which domains it writes (`write:backend`, `write:web`, …) beside the
+- [x] A machine says which domains it writes (`write:backend`, `write:web`, …) beside the
   platforms it builds. A worker that says none is never given a call: a Mac worker from
   before this phase is untouched
-- [ ] A specialist's call goes to a machine of the job's account when one that writes its
+- [x] A specialist's call goes to a machine of the job's account when one that writes its
   domain is there: the request -- system text, prompt, schema, pictures -- waits in
   `worker_calls` and is claimed by exactly one machine (the claim is a conditional update,
   as builds are)
-- [ ] It is a provider like any other (`providers/machine.py`): the answer comes back as text
+- [x] It is a provider like any other (`providers/machine.py`): the answer comes back as text
   and is parsed and validated by `invoke_role`, so a wrong answer is a retry, never a wrong
   file. Its tokens are counted; its cost is the machine's plan, not the account's bill
-- [ ] Not claimed within 45 s, or claimed and not heard from for 60 s, or failed by the
+- [x] Not claimed within 45 s, or claimed and not heard from for 60 s, or failed by the
   machine: the call is taken back and asked of the account's own model. Nobody waits on a
   laptop that went to sleep
-- [ ] The call carries the repository, branch and commit it was written from, without
+- [x] The call carries the repository, branch and commit it was written from, without
   credentials, so a machine with access may let its model read the code itself
-- [ ] *Right now* and the phase card say which machine is writing it, and what it last said
-- [ ] Tests (`tests/test_phase17_machines.py`): a call claimed once; answered and applied;
+- [x] *Right now* and the Machines page say which machine is writing it, and what it last said
+- [x] Tests (`tests/test_phase17_machines.py`): a call claimed once; answered and applied;
   never claimed / gone quiet / failed falls back; an older worker gets no call; another
   account's machine never sees it
 
 ### T17.2 — Everybody on the account lends machines
 **Done when**
-- [ ] *Mobile Builder* becomes *Machines*: every machine of the account, whose it is, what it
+- [x] *Mobile Builder* becomes *Machines*: every machine of the account, whose it is, what it
   builds and writes, and what it is doing now. The Mac builders are among them
-- [ ] A member makes a connection code too, and the machine is theirs (`lent_by`): they see
+- [x] A member makes a connection code too, and the machine is theirs (`lent_by`): they see
   and remove their own; the owner sees and removes all of them
-- [ ] The machine's work is still its account's alone (`owner_id`), and nothing about who
+- [x] The machine's work is still its account's alone (`owner_id`), and nothing about who
   may approve a gate changes
 
 ### T17.3 — Any network: the relay
 **Done when**
-- [ ] `relay/`: a Cloudflare Worker with one Durable Object per room, at
+- [x] `relay/`: a Cloudflare Worker with one Durable Object per room, at
   `relay.slipwright.app`. It forwards frames between an installation and its machines and
   can read none of them (docs/machines-protocol.md §3)
-- [ ] The server connects out to its room when *Machines → Reach machines on other
+- [x] The server connects out to its room when *Machines → Reach machines on other
   networks* is on (off by default: nothing leaves an installation unasked), and a
   connection code then carries the relay and the room
-- [ ] Every request is sealed end to end (X25519, ChaCha20-Poly1305); the server's key is
+- [x] Every request is sealed end to end (X25519, ChaCha20-Poly1305); the server's key is
   proved to the machine at pairing with a key derived from the code's secret, which the
   server keeps for the code's fifteen minutes beside its hash, so the relay cannot stand in
   the middle. Only `/api/worker/` is reachable through it
-- [ ] `slipwright worker` pairs and works through the relay as it does on a LAN
-- [ ] Tests: a whole pairing, poll, call and answer through an in-memory relay; a tampered
+- [x] `slipwright worker` pairs and works through the relay as it does on a LAN
+- [x] Tests (`tests/test_phase17_relay.py`): a whole pairing, poll, call and answer through a relay of
+  our own; a tampered
   frame, a replayed request and a path outside `/api/worker/` are refused
 
 ### T17.4 — The desktop app

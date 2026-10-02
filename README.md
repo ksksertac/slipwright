@@ -598,6 +598,35 @@ person's decision, never a model's.
 
 </details>
 
+### Your team's computers: Machines
+
+The agents' phases are written by models, and the people on an account usually have
+models of their own: a Claude Code or ChatGPT plan, or a key. **Settings → Machines**
+lends a computer to the account so phases are written there, on that plan, side by side
+with the rest -- the owner's computers and every team member's.
+
+1. Install the **Slipwright Agent** app (`desktop/`, macOS, Windows and Linux) and open it.
+2. **Machines → Connect a machine** makes a code; paste it into the app under
+   *Slipwright team*. A member makes their own; the machine is theirs, and the owner sees
+   it too.
+3. In the app, choose which agents the computer runs -- Backend, Web, Mobile, DevOps --
+   and on which model: Claude Code or Codex as installed and signed in, or an Anthropic
+   or OpenAI key. A GitHub or Bitbucket token lets the model read the repository itself;
+   a Jira token moves the issue to *In Progress* in your own name.
+
+The server still decides everything: a machine's answer is checked like any model's, then
+applied, built, reviewed, committed and pushed here. A computer that sleeps, loses its
+network or runs out of plan costs nothing but the wait -- its phase is written by the
+account's own model instead. What a machine writes is on its own plan, not the account's
+bill.
+
+**Not on the same network?** Turn on **Machines → Reach machines on other networks**. The
+server then keeps a connection open to `relay.slipwright.app`, and codes carry its room
+there instead of an address; a machine anywhere comes in through it, nothing is opened on
+either side, and everything is sealed end to end -- the relay passes it on and can read
+none of it. `SLIPWRIGHT_RELAY` points an installation at a relay of its own (`relay/`), or
+`off` keeps it from ever using one.
+
 ### Mobile apps: the Mobile Builder
 
 An iOS app is built by Xcode, Xcode runs only on macOS, and no container can hold macOS:
@@ -611,7 +640,7 @@ A development with an iOS app builds everything else as usual, then stops at **W
 the Mobile Builder**. Nothing has failed and nothing is spent; when it connects the
 development carries on by itself.
 
-1. **Settings → Mobile Builder → Make a code.** Nothing is asked. The code carries the
+1. **Settings → Machines → Connect a machine.** Nothing is asked. The code carries the
    server's address when it has one; a page open at `localhost` has none to give (Docker
    cannot see the address of the machine it runs on), so its code carries only the port,
    and the Mac looks for the server itself: on the Mac first, then on its own network.
@@ -638,8 +667,9 @@ deleted afterwards, with nothing of the Mac's environment but what a build needs
   gives both a stable address.
 - **The server on the same Mac, in Docker?** Run the worker beside it, outside Docker; it
   finds the server at `localhost` by itself.
-- **The Mac on another network** cannot be found by looking around. Give the installation
-  an address of its own (the base URL under **E-mail**) and every code carries it.
+- **The Mac on another network** cannot be found by looking around. Turn on **Reach
+  machines on other networks** (above), or give the installation an address of its own
+  (the base URL under **E-mail**) and every code carries it.
 
 ## Development
 

@@ -2065,6 +2065,36 @@ export const TR: Record<string, string> = {
   "What you attached": "Eklediğin",
   "Reading the attached files: {usd} over {n} call(s), included above.":
     "Eklenen dosyaları okumak: {n} çağrıda {usd}, yukarıdakilere dahil.",
+  // the machines the people on an account lend it (T17)
+  Machines: "Makineler",
+  "Your team's computers: they write phases on their own model subscriptions, and a Mac builds the mobile apps this server cannot.":
+    "Ekibinin bilgisayarları: fazları kendi model abonelikleriyle yazarlar; bir Mac de bu sunucunun derleyemediği mobil uygulamaları derler.",
+  "Install the Slipwright Agent app on a computer, paste a code from here, and choose which agents it runs and on which model -- its own Claude Code or Codex, or its own key. Phases of those agents are then written there, side by side with the others, and the server checks, builds and commits them as always. A machine that goes away costs nothing: its phase is written here instead.":
+    "Bir bilgisayara Slipwright Agent uygulamasını kur, buradan aldığın kodu yapıştır ve hangi ajanları hangi modelle çalıştıracağını seç: kendi Claude Code'u, Codex'i ya da kendi anahtarı. O ajanların fazları artık orada, diğerleriyle yan yana yazılır; sunucu da her zamanki gibi kontrol eder, derler ve commit'ler. Ortadan kaybolan bir makine hiçbir şeye mal olmaz: fazı burada yazılır.",
+  "Connected machines": "Bağlı makineler",
+  "Connect a machine": "Makine bağla",
+  "Make a code and paste it into the app": "Bir kod oluştur ve uygulamaya yapıştır",
+  "With the Slipwright Agent app": "Slipwright Agent uygulamasıyla",
+  "Open the app, go to Slipwright team and paste this code:":
+    "Uygulamayı aç, Slipwright ekibi sayfasına git ve bu kodu yapıştır:",
+  "Or without the app, in a terminal": "Ya da uygulama olmadan, terminalde",
+  "Install Slipwright (once):": "Slipwright'ı kur (bir kez):",
+  "lent by {name}": "{name} bağladı",
+  "Writing phase {n}": "Faz {n} yazılıyor",
+  "Writing a phase": "Bir faz yazılıyor",
+  "writes {agent}": "{agent} yazar",
+  "builds {platform}": "{platform} derler",
+  "Remove this machine? It stops working for this account.":
+    "Bu makine çıkarılsın mı? Artık bu hesap için çalışmaz.",
+  "on {machine}": "{machine} üzerinde",
+  "a machine": "bir makine",
+  General: "Genel",
+  Docs: "Dokümantasyon",
+  "Reach machines on other networks": "Başka ağlardaki makinelere izin ver",
+  "Machines at home, in another office or on the road connect through {relay}. Everything they send is sealed end to end: the relay passes it on and can read none of it.":
+    "Evdeki, başka ofisteki ya da yoldaki makineler {relay} üzerinden bağlanır. Gönderdikleri her şey uçtan uca şifrelidir: relay yalnızca iletir, hiçbirini okuyamaz.",
+  "Connected to the relay": "Relay'e bağlı",
+  "Connecting to the relay…": "Relay'e bağlanıyor…",
   // the Macs an account lends its developments (T14.5)
   "Mobile Builder": "Mobil Derleyici",
   "Builds the mobile apps this server cannot: iOS with Xcode, Android with Android Studio.":

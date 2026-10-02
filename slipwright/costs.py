@@ -33,6 +33,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from slipwright import prices
+from slipwright.providers.machine import MACHINE
 from slipwright.providers.registry import CHATGPT
 from slipwright.roles.specialists import specialist_for
 from slipwright.schemas.job import Job, JobState
@@ -167,8 +168,11 @@ def on_a_subscription(entry: dict[str, Any]) -> bool:
     A ChatGPT plan is a flat monthly fee, so there is no price to look up and none
     missing: nought is the right answer. Counting it as "unpriced" instead sent somebody
     looking for a price to fill in that does not exist.
+
+    A phase a machine wrote (T17.1) is the same: its owner's own plan or key paid for it,
+    and the account's bill has nothing to add.
     """
-    return str(entry.get("provider") or "") == CHATGPT
+    return str(entry.get("provider") or "") in (CHATGPT, MACHINE)
 
 
 def _add(row: Spend, entry: dict[str, Any], lookup: Lookup) -> None:

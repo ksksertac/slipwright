@@ -7646,3 +7646,69 @@ tr.run-detail td {
   border: 1px dashed var(--line);
   border-radius: var(--radius);
 }
+
+/* Machines (T17): what a machine writes, what it is writing now, and the relay's switch */
+.tag[data-kind="writes"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.mac-doing {
+  color: var(--accent);
+  margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.now-machine {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.relay-card .dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  vertical-align: middle;
+}
+.relay-card .dot.good {
+  background: var(--good);
+}
+.relay-card .dot.warn {
+  background: var(--warn);
+}
+.switch-row input[type="checkbox"] {
+  appearance: none;
+  position: relative;
+  width: 38px;
+  height: 22px;
+  margin: 0;
+  border-radius: 999px;
+  background: var(--line-strong);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.switch-row input[type="checkbox"]::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  transition: left 0.15s;
+}
+.switch-row input[type="checkbox"]:checked {
+  background: var(--accent);
+}
+.switch-row input[type="checkbox"]:checked::after {
+  left: 19px;
+}
+.switch-row input[type="checkbox"]:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.switch-row input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

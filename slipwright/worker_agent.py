@@ -39,6 +39,8 @@ import httpx
 
 from slipwright import workers as pairing
 from slipwright.gates.env import project_env
+from slipwright.relay import crypto
+from slipwright.relay.guest import RelayGuest, RelayTransport, is_relay
 
 log = logging.getLogger(__name__)
 
@@ -48,6 +50,9 @@ HEARTBEAT_S = 20.0
 #: Kept for every build's output, as the server's gate keeps it.
 MAX_OUTPUT = 200_000
 LAUNCH_LABEL = "com.slipwright.worker"
+#: The base URL requests through the relay are written against; it names no host, the
+#: transport carries them to the room.
+RELAYED = "http://relay"
 
 
 class Unpaired(RuntimeError):
@@ -181,6 +186,7 @@ def pair(
     name: str | None = None,
     client: httpx.Client | None = None,
     look_around: Callable[[int], list[str]] | None = None,
+    connect: Any = None,
 ) -> dict[str, str]:
     """Trade a connection code for a token, and keep both with the address that took it.
 
@@ -190,10 +196,12 @@ def pair(
     that port. Only the server that made the code accepts it, so a wrong door costs a
     refusal and nothing else.
     """
-    address, _secret = pairing.unpack(code)  # a bad copy is refused before the network
+    address, secret = pairing.unpack(code)  # a bad copy is refused before the network
     name = name or machine_name()
-    http = client or httpx.Client(timeout=30)
     body = {"code": code, "name": name, "capabilities": detect().capabilities}
+    if is_relay(address):
+        return _pair_through_relay(address, secret, body, connect=connect)
+    http = client or httpx.Client(timeout=30)
     refused: str | None = None
     for candidate in _candidates(address, look_around or nearby_servers):
         try:
@@ -218,6 +226,34 @@ def pair(
         f"no Slipwright server found: tried {address}, this Mac and its network on port "
         f"{port}. Is the Mac on the same network as the server?"
     )
+
+
+def _pair_through_relay(
+    address: str, secret: bytes, body: dict[str, Any], *, connect: Any = None
+) -> dict[str, str]:
+    """Pair through the installation's room on the relay (T17.3). The machine makes a key
+    of its own, asks the server for its key and checks it against the code's secret --
+    the relay cannot -- and then pairs as on a LAN, sealed. Both keys are kept: every
+    request after this is sealed to the one server this machine met."""
+    mine = crypto.new_secret_key()
+    guest = RelayGuest(address, mine, connect=connect)
+    try:
+        server = guest.meet(secret)
+        http = httpx.Client(transport=RelayTransport(guest), base_url=RELAYED, timeout=60)
+        got = http.post("/api/worker/pair", json=body)
+    finally:
+        guest.close()
+    if got.status_code != 200:
+        raise Unpaired(_detail(got))
+    answer = got.json()
+    return {
+        "address": address,
+        "worker_id": answer["worker_id"],
+        "token": answer["token"],
+        "name": str(body["name"]),
+        "secret_key": crypto.b64(mine),
+        "server_key": crypto.b64(server),
+    }
 
 
 def _candidates(address: str, look_around: Callable[[int], list[str]]) -> Iterator[str]:
@@ -290,15 +326,27 @@ class Worker:
         client: httpx.Client | None = None,
         found: Found | None = None,
         name: str | None = None,
+        connect: Any = None,
     ) -> None:
         self.address = config["address"].rstrip("/")
         # asked afresh each start, not read from the pairing: that is how a rename (or a
         # pairing that kept an IP address for a name) reaches the page
         self.name = name or machine_name()
         self.headers = {"Authorization": f"Bearer {config['token']}"}
-        self.http = client or httpx.Client(
-            timeout=httpx.Timeout(60, read=pairing.LIVE.total_seconds())
-        )
+        timeout = httpx.Timeout(60, read=pairing.LIVE.total_seconds())
+        if client is None and is_relay(self.address):
+            # the same requests, sealed and carried through the installation's room
+            guest = RelayGuest(
+                self.address,
+                crypto.unb64(config["secret_key"]),
+                crypto.unb64(config["server_key"]),
+                connect=connect,
+            )
+            client = httpx.Client(
+                transport=RelayTransport(guest), base_url=RELAYED, timeout=timeout
+            )
+            self.address = RELAYED
+        self.http = client or httpx.Client(timeout=timeout)
         self.found = found or detect()
 
     def _url(self, path: str) -> str:

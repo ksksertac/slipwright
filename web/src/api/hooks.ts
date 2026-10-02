@@ -47,6 +47,8 @@ import {
   type SourceRepo,
   type SourceSettings,
   type SourceSettingsIn,
+  type MachineCall,
+  type RelayState,
   type Worker,
   type TransferCode,
   type TransferHere,
@@ -1467,11 +1469,39 @@ export function useWorkers() {
   });
 }
 
+/** The phases machines of this account are writing right now, and what each last said
+ *  (T17.1). Asked only while something could be: a finished development needs none. */
+export function useMachineCalls(enabled = true) {
+  return useQuery({
+    queryKey: [...keys.workers, "calls"],
+    queryFn: () => api.get<MachineCall[]>("/api/workers/calls"),
+    refetchInterval: 4_000,
+    enabled,
+  });
+}
+
 /** A fresh connection code. ``address`` is the server as the Mac should call it: the page's
  *  own address unless the person typed one, because the page may be open at localhost. */
 export function useConnectionCode() {
   return useMutation({
     mutationFn: (address: string) => api.post<ConnectionCode>("/api/workers/code", { address }),
+  });
+}
+
+/** Whether machines on other networks reach this installation through the relay (T17.3). */
+export function useRelay() {
+  return useQuery({
+    queryKey: [...keys.workers, "relay"],
+    queryFn: () => api.get<RelayState>("/api/workers/relay"),
+    refetchInterval: 5_000,
+  });
+}
+
+export function useSetRelay() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (enabled: boolean) => api.put<RelayState>("/api/workers/relay", { enabled }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: keys.workers }),
   });
 }
 

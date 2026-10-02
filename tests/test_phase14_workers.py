@@ -304,7 +304,7 @@ def test_a_database_from_before_workers_upgrades_into_one(tmp_path: Path) -> Non
         with db.begin() as conn:
             conn.execute(text("ALTER TABLE job_history DROP COLUMN detail_size"))  # (0014)
             conn.execute(text("DROP TABLE job_messages"))  # (0013)
-            for table in ("workers", "worker_codes", "worker_tasks"):
+            for table in ("workers", "worker_codes", "worker_tasks", "worker_calls"):
                 conn.execute(text(f"DROP TABLE {table}"))
         command.stamp(_config(db), "0011_job_title")
 

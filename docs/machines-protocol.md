@@ -89,6 +89,10 @@ exactly that happened: stop and drop the answer.
 | 3 | URL text | that URL |
 | 4 | port | `localhost`, or a host near it |
 | **5** | `len(1) host(len) room(16)` | **the relay** at `wss://host`, in that room |
+| 6 | as 5 | the same at `ws://host` -- a relay run for tests or on a LAN |
+
+An address of kind 5 or 6 reads back as `wss://host/v1/rooms/<room hex>`, which is how a
+machine knows to pair through the relay rather than call the server.
 
 then the 10-byte secret and a CRC-8 check byte, unchanged.
 
@@ -114,7 +118,11 @@ wss://relay.slipwright.app/v1/rooms/{room}/guest?peer={peer}
 - Frames are JSON text, at most 1 MiB each:
   - guest → relay `{"to": "host", ...}` arrives at the host as `{"from": "<peer>", ...}`
   - host → relay `{"to": "<peer>", ...}` arrives at that guest as `{"from": "host", ...}`
-  - the relay adds `from`, removes `to`, and touches nothing else
+  - the relay removes `to`, sets `from` -- replacing any `from` the sender wrote, so a
+    guest cannot pose as the host or another peer -- and touches nothing else
+  - a connection replaced by a newer one for the same host or peer is closed with `4000`
+  - a guest stays connected while the host is away and is told `host-offline`, so a server
+    restarting does not disconnect every machine
   - `{"error": "host-offline" | "no-such-peer" | "too-large" | "slow-down"}` from the relay
 - A guest may send 120 frames a minute; the host is not limited.
 - A room nobody has hosted for 30 days is forgotten.
