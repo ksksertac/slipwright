@@ -576,6 +576,23 @@ class ReconcileResult(RoleOutput):
     phases: list[PhaseFinding] = Field(default_factory=list)
 
 
+class AgentAnswer(RoleOutput):
+    """An agent's reply to a person who wrote to it while it worked (``roles/talk.py``)."""
+
+    # an answer is its own account; a second one-paragraph summary would only repeat it
+    summary: str = Field(default="answered", description="Leave as is.")
+    answer: str = Field(
+        min_length=1,
+        description="The reply, written to the person: what you are doing, why, and what "
+        "you know or do not know about what they asked.",
+    )
+    change: str | None = Field(
+        default=None,
+        description="Only when they asked for the work to be done differently: that "
+        "change, restated as one instruction you could act on. Otherwise null.",
+    )
+
+
 RESULT_SCHEMAS: dict[RoleName, type[RoleOutput]] = {
     RoleName.PO: POResult,
     RoleName.ARCHITECT: ArchitectResult,
@@ -595,6 +612,7 @@ def result_schema_for(role: RoleName) -> type[RoleOutput]:
 
 __all__ = [
     "RESULT_SCHEMAS",
+    "AgentAnswer",
     "AnalysisResult",
     "ArchitectResult",
     "BriefDraft",

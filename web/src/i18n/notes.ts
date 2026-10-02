@@ -114,6 +114,26 @@ const RULES: Rule[] = [
     prose: [3],
   },
 
+  {
+    re: /^\w+ phase (\d+)\/(\d+): the build passed; a person wrote about this phase, so it is read before the phase is committed$/,
+    out: "Phase {1}/{2}: the build passed; a person wrote about it, so it is read before the phase is committed",
+  },
+
+  // -- a person writing to the agent on a step (components/AgentTalk.tsx) ----------------
+  {
+    re: /^re-plan asked by (.+?): finishing the call it is on$/,
+    out: "{1} asked for the plan to be made again; finishing the call it is on",
+  },
+  {
+    re: /^re-plan asked: finishing the call it is on$/,
+    out: "The plan is to be made again; finishing the call it is on",
+  },
+  {
+    re: /^re-plan from phase (\d+) by (.+?): ([\s\S]*)$/,
+    out: "Planned again from phase {1}, asked by {2}: {3}",
+  },
+  { re: /^re-plan from phase (\d+): ([\s\S]*)$/, out: "Planned again from phase {1}: {2}" },
+
   // -- the build gate, and what the supervisor said about a failed one --------------------
   { re: /^build gate passed for phase (\d+)\/(\d+)$/, out: "Build gate passed — phase {1}/{2}" },
   { re: /^build gate, phase (\d+)$/, out: "Build gate — phase {1}" },

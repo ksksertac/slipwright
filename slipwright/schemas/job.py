@@ -11,7 +11,7 @@ import time
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -168,6 +168,23 @@ def branch_name(project: str, request: str, job_id: str) -> str:
     return f"{where}/{what}-{tail}" if what else f"{where}/{tail}"
 
 
+#: Where a development can be planned again while it is being built: from an approved
+#: plan to its last phase, running or waiting on something on the way. Not before the
+#: plan -- there is nothing to plan again -- and not after the phases, when what is left
+#: is testing what was built.
+REDIRECTABLE: frozenset[JobState] = frozenset(
+    {
+        JobState.DEVELOPING,
+        JobState.BUILD_GATE,
+        JobState.REVIEW,
+        JobState.AWAITING_DECISION,
+        JobState.AWAITING_REVIEW_APPROVAL,
+        JobState.AWAITING_BUILDER,
+        JobState.AWAITING_DESIGN_APPROVAL,
+    }
+)
+
+
 def new_job_id() -> str:
     return uuid4().hex[:12]
 
@@ -185,7 +202,11 @@ class Transition(BaseModel):
 
 
 class InboxMessage(BaseModel):
-    """A steering message from the human, delivered to the next role invocation."""
+    """A steering message from the human, delivered to the next role invocation.
+
+    Kept in the ``job_messages`` table, not in the job's data: the store fills
+    ``JobData.inbox`` from there when a job is read and adds to it when one is saved,
+    never taking anything away (see ``JobStore.save``)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -194,10 +215,56 @@ class InboxMessage(BaseModel):
     at: datetime = Field(default_factory=utcnow)
     consumed_at: datetime | None = None
     consumed_by: str | None = None
+    # who it is for: an instruction about phase 8 is the mobile specialist's, and the
+    # standards review that runs between two of its calls must not read it and use it up
+    role: str | None = None
+    phase: int | None = Field(default=None, description="The 1-based phase it is about.")
 
     @property
     def pending(self) -> bool:
         return self.consumed_at is None
+
+    def for_call(self, role: str, phase: int | None) -> bool:
+        """Whether a call by ``role`` on ``phase`` is the one this was written for."""
+        if self.role is not None and self.role != role:
+            return False
+        return self.phase is None or phase is None or self.phase == phase
+
+
+MessageKind = Literal["steer", "question", "replan"]
+
+
+class JobMessage(BaseModel):
+    """One thing a person said to a development's agents, and what came back.
+
+    ``status`` reads by kind: a steer is ``pending`` until an agent's call reads it, then
+    ``read``; a question is ``answering``, then ``answered`` or ``failed``; a re-plan is
+    ``pending`` until the run reaches a place it can stop, then ``applied``.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(default_factory=new_job_id)
+    job_id: str
+    kind: MessageKind
+    text: str = Field(min_length=1)
+    by: str | None = None
+    at: datetime = Field(default_factory=utcnow)
+    step: str | None = None
+    phase: int | None = None
+    role: str | None = None
+    reply_to: str | None = None
+    status: str
+    answer: str | None = None
+    change: str | None = Field(
+        default=None,
+        description="What the agent understood the person to want changed, when the "
+        "question was a request. Nothing is changed until the person says so.",
+    )
+    error: str | None = None
+    answered_at: datetime | None = None
+    consumed_at: datetime | None = None
+    consumed_by: str | None = None
 
 
 class JobData(BaseModel):

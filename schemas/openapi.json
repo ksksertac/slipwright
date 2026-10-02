@@ -1888,7 +1888,7 @@
       },
       "InboxMessage": {
         "additionalProperties": false,
-        "description": "A steering message from the human, delivered to the next role invocation.",
+        "description": "A steering message from the human, delivered to the next role invocation.\n\nKept in the ``job_messages`` table, not in the job's data: the store fills\n``JobData.inbox`` from there when a job is read and adds to it when one is saved,\nnever taking anything away (see ``JobStore.save``).",
         "properties": {
           "at": {
             "format": "date-time",
@@ -1922,6 +1922,29 @@
             "title": "Id",
             "type": "string"
           },
+          "phase": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The 1-based phase it is about.",
+            "title": "Phase"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          },
           "text": {
             "minLength": 1,
             "title": "Text",
@@ -1933,6 +1956,8 @@
           "consumed_at",
           "consumed_by",
           "id",
+          "phase",
+          "role",
           "text"
         ],
         "title": "InboxMessage",
@@ -3316,6 +3341,188 @@
           "waiting_platforms"
         ],
         "title": "JobData",
+        "type": "object"
+      },
+      "JobMessage": {
+        "additionalProperties": false,
+        "description": "One thing a person said to a development's agents, and what came back.\n\n``status`` reads by kind: a steer is ``pending`` until an agent's call reads it, then\n``read``; a question is ``answering``, then ``answered`` or ``failed``; a re-plan is\n``pending`` until the run reaches a place it can stop, then ``applied``.",
+        "properties": {
+          "answer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer"
+          },
+          "answered_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answered At"
+          },
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "By"
+          },
+          "change": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What the agent understood the person to want changed, when the question was a request. Nothing is changed until the person says so.",
+            "title": "Change"
+          },
+          "consumed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consumed At"
+          },
+          "consumed_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consumed By"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "steer",
+              "question",
+              "replan"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "phase": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phase"
+          },
+          "reply_to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reply To"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "step": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step"
+          },
+          "text": {
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "answer",
+          "answered_at",
+          "at",
+          "by",
+          "change",
+          "consumed_at",
+          "consumed_by",
+          "error",
+          "id",
+          "job_id",
+          "kind",
+          "phase",
+          "reply_to",
+          "role",
+          "status",
+          "step",
+          "text"
+        ],
+        "title": "JobMessage",
         "type": "object"
       },
       "JobPatch": {
@@ -6153,6 +6360,29 @@
         "title": "ProviderTermsIn",
         "type": "object"
       },
+      "Question": {
+        "description": "Something asked of the agent on one step of a development.",
+        "properties": {
+          "step": {
+            "description": "The step's key on the lane: phase:8, qa:1...",
+            "minLength": 1,
+            "title": "Step",
+            "type": "string"
+          },
+          "text": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "step",
+          "text"
+        ],
+        "title": "Question",
+        "type": "object"
+      },
       "QuotaSettings": {
         "description": "The limits in force. ``0`` means no limit, which is what a local install wants.",
         "properties": {
@@ -6325,6 +6555,34 @@
           "recovery_codes"
         ],
         "title": "RecoveryCodes",
+        "type": "object"
+      },
+      "Redirect": {
+        "description": "Plan the development again from the phase it is on, with this instead.",
+        "properties": {
+          "reply_to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The question it came from.",
+            "title": "Reply To"
+          },
+          "text": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "Redirect",
         "type": "object"
       },
       "Rejection": {
@@ -7357,6 +7615,40 @@
         "title": "StatusChange",
         "type": "object"
       },
+      "Steer": {
+        "description": "An instruction for the agent on one step, read by its next call there.",
+        "properties": {
+          "reply_to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The question it came from.",
+            "title": "Reply To"
+          },
+          "step": {
+            "minLength": 1,
+            "title": "Step",
+            "type": "string"
+          },
+          "text": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "step",
+          "text"
+        ],
+        "title": "Steer",
+        "type": "object"
+      },
       "StepCard": {
         "additionalProperties": false,
         "properties": {
@@ -7640,6 +7932,17 @@
             "title": "Outputs",
             "type": "array"
           },
+          "phase": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phase"
+          },
           "role": {
             "anyOf": [
               {
@@ -7670,6 +7973,17 @@
             "description": "The role's own account, as it wrote it.",
             "title": "Summary",
             "type": "string"
+          },
+          "talk": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Talk"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null on a step with no agent to write to: a gate."
           }
         },
         "required": [
@@ -7683,10 +7997,12 @@
           "key",
           "label",
           "outputs",
+          "phase",
           "role",
           "started_at",
           "status",
-          "summary"
+          "summary",
+          "talk"
         ],
         "title": "StepDetail",
         "type": "object"
@@ -8135,6 +8451,32 @@
           "why_not"
         ],
         "title": "SyncStatus",
+        "type": "object"
+      },
+      "Talk": {
+        "additionalProperties": false,
+        "description": "What a person may say to the agent on a step, as the step stands now.",
+        "properties": {
+          "agent": {
+            "$ref": "#/components/schemas/RoleName"
+          },
+          "replan": {
+            "description": "The development can be planned again from the phase it is on.",
+            "title": "Replan",
+            "type": "boolean"
+          },
+          "steer": {
+            "description": "An instruction for this step would still be read: it is not finished.",
+            "title": "Steer",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "agent",
+          "replan",
+          "steer"
+        ],
+        "title": "Talk",
         "type": "object"
       },
       "TaskResult": {
@@ -11219,6 +11561,56 @@
         "summary": "Approve"
       }
     },
+    "/api/jobs/{job_id}/ask": {
+      "post": {
+        "description": "Ask the agent on a step something. It answers in the background, on the account's\nkeys, and the answer arrives as a ``job.message`` event.",
+        "operationId": "ask_api_jobs__job_id__ask_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Question"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobMessage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ask"
+      }
+    },
     "/api/jobs/{job_id}/backlog": {
       "put": {
         "description": "Edit the proposed backlog while the job awaits its approval.",
@@ -11835,6 +12227,56 @@
         "summary": "Set Profile"
       }
     },
+    "/api/jobs/{job_id}/redirect": {
+      "post": {
+        "description": "Have the plan made again from the phase the development is on, while it is\nbeing built. The phases already built are kept; the new plan is approved at the\narchitecture gate. A running development does it before its next call.",
+        "operationId": "redirect_api_jobs__job_id__redirect_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Redirect"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Redirect"
+      }
+    },
     "/api/jobs/{job_id}/reject": {
       "post": {
         "operationId": "reject_api_jobs__job_id__reject_post",
@@ -12211,6 +12653,56 @@
         "summary": "Skip Tests"
       }
     },
+    "/api/jobs/{job_id}/steer": {
+      "post": {
+        "description": "Tell the agent on a step to do something differently, from its next call.",
+        "operationId": "steer_api_jobs__job_id__steer_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Steer"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Steer"
+      }
+    },
     "/api/jobs/{job_id}/steps/{step_key}": {
       "get": {
         "description": "What one pipeline step produced: the backlog it wrote, the decisions it took,\nthe files it touched, the cases it proposed \u2014 each with when, and with whether it\nreached Jira. ``step_key`` is the key the lane card carries.",
@@ -12298,6 +12790,59 @@
           }
         },
         "summary": "Sync Status"
+      }
+    },
+    "/api/jobs/{job_id}/talk": {
+      "get": {
+        "description": "What was said on one step, both ways: questions and their answers, the\ninstructions sent from them and any re-plan asked for.",
+        "operationId": "get_talk_api_jobs__job_id__talk_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "step",
+            "required": true,
+            "schema": {
+              "title": "Step",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/JobMessage"
+                  },
+                  "title": "Response Get Talk Api Jobs  Job Id  Talk Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Talk"
       }
     },
     "/api/jobs/{job_id}/tests": {

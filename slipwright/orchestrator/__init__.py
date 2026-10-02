@@ -104,6 +104,18 @@ LEGAL_TRANSITIONS[JobState.BUILD_GATE] = (
     JobState.ARCHITECTURE,
     JobState.DONE,  # tests re-run by hand on a finished development, and green
 )
+# a person may have the plan made again from the phase a development is on while it is
+# being built (``Engine.redirect``): from anywhere between the approved plan and its last
+# phase, working or waiting on the way
+for _state in (
+    JobState.DEVELOPING,
+    JobState.REVIEW,
+    JobState.AWAITING_REVIEW_APPROVAL,
+    JobState.AWAITING_BUILDER,
+    JobState.AWAITING_DESIGN_APPROVAL,
+):
+    if JobState.ARCHITECTURE not in LEGAL_TRANSITIONS[_state]:
+        LEGAL_TRANSITIONS[_state] = (*LEGAL_TRANSITIONS[_state], JobState.ARCHITECTURE)
 
 
 # A development somebody wants to work on by hand is paused rather than stopped: from

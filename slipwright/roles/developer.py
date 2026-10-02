@@ -55,7 +55,9 @@ files, complete contents) and set `phase_complete` to false — you will be call
 for the rest. If `continuation` is present, the files listed in `files_so_far` are
 already written from your earlier parts (do not repeat them unless they must change);
 continue with the next files and set `phase_complete` to true only when the phase's goal
-is fully met."""
+is fully met. If `continuation.new_instruction` is present, a person wrote to you while
+you were writing the files so far: `messages_from_human` has what they said. Change what
+is already written where it no longer follows it, then carry on."""
 
 CUT_FILES = """
 A file listed in `files_cut` was too large to be sent whole: you see only its start. Never

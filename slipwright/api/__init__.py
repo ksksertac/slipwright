@@ -55,6 +55,7 @@ from slipwright.engine import (
     InvalidEdit,
     JobIsRunning,
     NotAwaitingApproval,
+    NothingToAsk,
     ProjectCloneError,
     PullConflict,
     RemoteMoved,
@@ -68,7 +69,14 @@ from slipwright.providers import ProviderUnavailableError
 from slipwright.quota import QuotaExceeded, warn_if_unprotected
 from slipwright.schemas.attachment import Attachment
 from slipwright.schemas.brief import BriefEdit, ProjectBrief
-from slipwright.schemas.job import TITLE_MAX, Job, JobResult, JobState, Transition
+from slipwright.schemas.job import (
+    TITLE_MAX,
+    Job,
+    JobMessage,
+    JobResult,
+    JobState,
+    Transition,
+)
 from slipwright.schemas.profile import Profile, RoleName
 from slipwright.schemas.project import (
     Language,
@@ -296,6 +304,28 @@ class Message(BaseModel):
     text: str = Field(min_length=1)
 
 
+class Question(BaseModel):
+    """Something asked of the agent on one step of a development."""
+
+    step: str = Field(min_length=1, description="The step's key on the lane: phase:8, qa:1...")
+    text: str = Field(min_length=1, max_length=4000)
+
+
+class Steer(BaseModel):
+    """An instruction for the agent on one step, read by its next call there."""
+
+    step: str = Field(min_length=1)
+    text: str = Field(min_length=1, max_length=4000)
+    reply_to: str | None = Field(default=None, description="The question it came from.")
+
+
+class Redirect(BaseModel):
+    """Plan the development again from the phase it is on, with this instead."""
+
+    text: str = Field(min_length=1, max_length=4000)
+    reply_to: str | None = Field(default=None, description="The question it came from.")
+
+
 class TestCaseIn(BaseModel):
     name: str = Field(min_length=1)
     description: str = Field(min_length=1)
@@ -433,6 +463,8 @@ def create_app(
         if resume_on_startup:
             threading.Thread(target=engine.ensure_standards_indexed, daemon=True).start()
         if resume_on_startup:
+            # an answer being written when the last process stopped will not be written now
+            engine.raw_store.fail_unanswered("the server restarted before the agent answered")
             thread = threading.Thread(target=_resume_all, args=(engine,), daemon=True)
             thread.start()
             app.state.resume_thread = thread
@@ -1607,10 +1639,102 @@ def create_app(
 
     @api.post("/jobs/{job_id}/message", response_model=Job)
     def message(job_id: str, body: Message, request: Request) -> Job:
-        require_owner(request)
+        owner = require_owner(request)
         eng = engine_for(request)
         _may_act(request, _get(eng, job_id, request))
-        return eng.message(job_id, body.text)
+        return eng.message(job_id, body.text, by=owner.username)
+
+    # -- writing to the agent on a step --------------------------------------------------
+
+    def _may_ask(request: Request, job: Job, step: str) -> RoleName:
+        """Who may write to the agent on a step: the owner, or the member who holds that
+        agent. Asking costs a call on the account's keys, so it is the same people who
+        may act for that agent at its gate -- not anybody on the team."""
+        _refuse_if_demo(request, job)
+        try:
+            card = engine_for(request).talk_card(job, step)
+        except NothingToAsk as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        assert card.role is not None
+        user = getattr(request.state, "user", None)
+        if user is not None and user.is_member and card.role not in _my_agents(request):
+            raise HTTPException(
+                status_code=403, detail=f"this step belongs to the {card.role.value} agent"
+            )
+        return card.role
+
+    @api.get("/jobs/{job_id}/talk", response_model=list[JobMessage])
+    def get_talk(job_id: str, step: str, request: Request) -> list[JobMessage]:
+        """What was said on one step, both ways: questions and their answers, the
+        instructions sent from them and any re-plan asked for."""
+        eng = engine_for(request)
+        job = _get(eng, job_id, request)
+        messages: list[JobMessage] = eng.talk(job.id, step)
+        return messages
+
+    @api.post("/jobs/{job_id}/ask", response_model=JobMessage, status_code=202)
+    def ask(
+        job_id: str, body: Question, request: Request, background: BackgroundTasks
+    ) -> JobMessage:
+        """Ask the agent on a step something. It answers in the background, on the account's
+        keys, and the answer arrives as a ``job.message`` event."""
+        eng = engine_for(request)
+        job = _get(eng, job_id, request)
+        _may_ask(request, job, body.step)
+        user = getattr(request.state, "user", None)
+        try:
+            asked: JobMessage = eng.ask(
+                job.id, body.step, body.text, by=user.username if user else None
+            )
+        except EmptyApproval as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        background.add_task(_answer, eng, asked.id)
+        return asked
+
+    @api.post("/jobs/{job_id}/steer", response_model=Job)
+    def steer(job_id: str, body: Steer, request: Request) -> Job:
+        """Tell the agent on a step to do something differently, from its next call."""
+        owner = require_owner(request)
+        eng = engine_for(request)
+        job = _get(eng, job_id, request)
+        _may_ask(request, job, body.step)
+        try:
+            return eng.steer(
+                job.id, body.step, body.text, by=owner.username, reply_to=body.reply_to
+            )
+        except NotAwaitingApproval as exc:
+            raise HTTPException(
+                status_code=409,
+                detail="this step is finished: nothing will read an instruction for it; "
+                "have the plan made again instead",
+            ) from exc
+        except EmptyApproval as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    @api.post("/jobs/{job_id}/redirect", response_model=Job)
+    def redirect(job_id: str, body: Redirect, request: Request, background: BackgroundTasks) -> Job:
+        """Have the plan made again from the phase the development is on, while it is
+        being built. The phases already built are kept; the new plan is approved at the
+        architecture gate. A running development does it before its next call."""
+        owner = require_owner(request)
+        eng = engine_for(request)
+        job = _get(eng, job_id, request)
+        _refuse_if_demo(request, job)
+        try:
+            job = eng.redirect(
+                job.id, body.text, by=owner.username, reply_to=body.reply_to, run=False
+            )
+        except NotAwaitingApproval as exc:
+            raise HTTPException(
+                status_code=409,
+                detail="only a development between its plan and its last phase can be "
+                "planned again from where it is",
+            ) from exc
+        except EmptyApproval as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        if job.state is JobState.ARCHITECTURE:  # done here, not by a run that is busy
+            background.add_task(_resume, eng, job.id)
+        return job
 
     # -- live events ---------------------------------------------------------------------
 
@@ -1789,6 +1913,17 @@ def _resume(engine: Engine, job_id: str) -> None:
         engine.resume(job_id)
     except Exception:  # noqa: BLE001 - a background thread has nobody to raise to
         log.exception("job %s: background run failed", job_id)
+
+
+def _answer(engine: Engine, message_id: str) -> None:
+    try:
+        engine.answer(message_id)
+    except Exception as exc:  # noqa: BLE001 - a background thread has nobody to raise to
+        log.exception("message %s: answering failed", message_id)
+        # a question left "answering" would say so forever; it says why there is no answer
+        engine.raw_store.answer_message(
+            message_id, answer=None, error=f"{type(exc).__name__}: {exc}"
+        )
 
 
 def _execute_test_run(engine: Engine, run_id: str) -> None:

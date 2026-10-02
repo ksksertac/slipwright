@@ -24,7 +24,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from slipwright.board import TaskStatus, breakdown_of, plan_is_active, task_status
 from slipwright.pipeline import StepCard, StepStatus, lane_for
-from slipwright.schemas.job import Job, JobState
+from slipwright.schemas.job import REDIRECTABLE, Job, JobState
 from slipwright.schemas.profile import RoleName
 
 
@@ -70,6 +70,20 @@ class StepGroup(BaseModel):
     items: list[StepItem] = Field(default_factory=list)
 
 
+class Talk(BaseModel):
+    """What a person may say to the agent on a step, as the step stands now."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    agent: RoleName
+    steer: bool = Field(
+        description="An instruction for this step would still be read: it is not finished."
+    )
+    replan: bool = Field(
+        description="The development can be planned again from the phase it is on."
+    )
+
+
 class StepDetail(BaseModel):
     """One step of one development, with everything it produced."""
 
@@ -89,6 +103,10 @@ class StepDetail(BaseModel):
     summary: str = Field(default="", description="The role's own account, as it wrote it.")
     groups: list[StepGroup] = Field(default_factory=list)
     outputs: list[int] = Field(default_factory=list, description="History indexes, as on the card.")
+    phase: int | None = None
+    talk: Talk | None = Field(
+        default=None, description="Null on a step with no agent to write to: a gate."
+    )
 
 
 _TASK_TO_ITEM = {
@@ -931,6 +949,18 @@ def step_detail(job: Job, key: str) -> StepDetail | None:
         summary=_summary_of(job, card),
         groups=[g for g in groups_for(job, card) if g.items or g.empty],
         outputs=card.outputs,
+        phase=card.phase,
+        talk=_talk(job, card),
+    )
+
+
+def _talk(job: Job, card: StepCard) -> Talk | None:
+    if card.role is None or card.gate:
+        return None
+    return Talk(
+        agent=card.role,
+        steer=not job.is_terminal and card.status not in (StepStatus.DONE, StepStatus.SKIPPED),
+        replan=job.state in REDIRECTABLE and bool(job.data.plan),
     )
 
 
@@ -940,6 +970,7 @@ __all__ = [
     "StepDetail",
     "StepGroup",
     "StepItem",
+    "Talk",
     "groups_for",
     "step_detail",
 ]

@@ -65,6 +65,7 @@ import {
   type StandardsHit,
   type Translations,
   type StepDetail,
+  type JobMessage,
   type StandardsRule,
   type StandardsSettingsIn,
   type StandardsStatus,
@@ -107,6 +108,7 @@ export const keys = {
   job: (id: string) => ["jobs", id] as const,
   transition: (id: string, index: number) => ["jobs", id, "history", index] as const,
   step: (id: string, key: string) => ["jobs", id, "steps", key] as const,
+  talk: (id: string, key: string) => ["jobs", id, "talk", key] as const,
   design: (id: string) => ["jobs", id, "design"] as const,
   jobResult: (id: string) => ["jobs", id, "result"] as const,
   workList: (id: string) => ["jobs", id, "worklist"] as const,
@@ -584,6 +586,53 @@ export function useUndoAutoApproval(jobId: string) {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: keys.job(jobId) });
       void qc.invalidateQueries({ queryKey: keys.overview });
+    },
+  });
+}
+
+/** What was said to the agent on one step, both ways. Under the job's key, so every
+ *  event about the job -- an answer arriving included -- refreshes it. */
+export function useTalk(jobId: string, stepKey: string) {
+  return useQuery({
+    queryKey: keys.talk(jobId, stepKey),
+    queryFn: () =>
+      api.get<JobMessage[]>(`/api/jobs/${jobId}/talk?step=${encodeURIComponent(stepKey)}`),
+  });
+}
+
+/** Ask the agent on a step something; the answer is written in the background. */
+export function useAsk(jobId: string, stepKey: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (text: string) =>
+      api.post<JobMessage>(`/api/jobs/${jobId}/ask`, { step: stepKey, text }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.talk(jobId, stepKey) }),
+  });
+}
+
+/** Tell the agent on a step to do something differently, from its next call. */
+export function useSteer(jobId: string, stepKey: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ text, replyTo }: { text: string; replyTo?: string | null }) =>
+      api.post<Job>(`/api/jobs/${jobId}/steer`, {
+        step: stepKey,
+        text,
+        reply_to: replyTo ?? null,
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.job(jobId) }),
+  });
+}
+
+/** Have the plan made again from the phase the development is on. */
+export function useRedirect(jobId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ text, replyTo }: { text: string; replyTo?: string | null }) =>
+      api.post<Job>(`/api/jobs/${jobId}/redirect`, { text, reply_to: replyTo ?? null }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.job(jobId) });
+      void qc.invalidateQueries({ queryKey: keys.projects });
     },
   });
 }

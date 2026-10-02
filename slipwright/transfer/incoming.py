@@ -38,6 +38,7 @@ from slipwright.schemas.project import Project
 from slipwright.store.schema import (
     attachments,
     job_history,
+    job_messages,
     jobs,
     project_briefs,
     projects,
@@ -551,6 +552,10 @@ def _write(
                     insert(job_history).values({k: v for k, v in row.items() if k != "seq"})
                 )
                 counts["job_history"] += 1
+        for row in _staged(rec, "job_messages"):
+            if row["job_id"] in moved_jobs:
+                conn.execute(insert(job_messages).values(row))
+                counts["job_messages"] += 1
         for row in _staged(rec, "test_runs"):
             if row["project_id"] in kept and row["id"] not in have_runs:
                 conn.execute(insert(test_runs).values(row))

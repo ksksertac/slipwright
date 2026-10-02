@@ -437,6 +437,7 @@ def test_a_database_written_before_teams_upgrades_into_one(tmp_path: Path) -> No
                 conn.execute(text(f"DROP TABLE {later}"))
             conn.execute(text("DROP TABLE attachments"))  # (0010: attachments)
             conn.execute(text("ALTER TABLE jobs DROP COLUMN title"))  # (0011: job title)
+            conn.execute(text("DROP TABLE job_messages"))  # (0013)
             for table in ("workers", "worker_codes", "worker_tasks"):  # (0012)
                 conn.execute(text(f"DROP TABLE {table}"))
             # (0009: two-step sign-in)
@@ -463,3 +464,34 @@ def test_a_database_written_before_teams_upgrades_into_one(tmp_path: Path) -> No
         assert rows == [("Ada", None)]
     finally:
         db.dispose()
+
+
+def test_a_member_writes_to_their_own_agent_and_steers_nothing(
+    team: tuple[TestClient, TestClient, str],
+) -> None:
+    """Asking the agent on a step spends a call on the account's keys: the owner may, and
+    the member who holds that agent. Telling an agent what to do, or having the plan made
+    again, is steering the work -- the owner's, as every other way of moving it is."""
+    owner, member, job_id = team
+    asked = member.post(f"/api/jobs/{job_id}/ask", json={"step": "architecture", "text": "why?"})
+    assert asked.status_code == 202, asked.text
+    said = member.get(f"/api/jobs/{job_id}/talk", params={"step": "architecture"}).json()
+    assert [m["text"] for m in said] == ["why?"]
+    assert said[0]["status"] in ("answered", "failed")  # answered in the background
+
+    assert (
+        member.post(f"/api/jobs/{job_id}/ask", json={"step": "backlog", "text": "x"}).status_code
+        == 403
+    )
+    assert (
+        member.post(
+            f"/api/jobs/{job_id}/steer", json={"step": "architecture", "text": "x"}
+        ).status_code
+        == 403
+    )
+    assert member.post(f"/api/jobs/{job_id}/redirect", json={"text": "x"}).status_code == 403
+    # a gate is a person's step: there is no agent on it to write to
+    gate = owner.post(f"/api/jobs/{job_id}/ask", json={"step": "architecture_gate", "text": "x"})
+    assert gate.status_code == 404
+    # the plan is still at its gate, so there is nothing built to plan again from
+    assert owner.post(f"/api/jobs/{job_id}/redirect", json={"text": "x"}).status_code == 409

@@ -88,6 +88,46 @@ job_history = Table(
     Index("job_history_job_id", "job_id", "seq"),
 )
 
+# What a person said to a development's agents, and what came back. Three kinds share it:
+#
+# * ``steer`` -- an instruction for the agent's next call. It used to live in the job's
+#   own ``data_json`` (``inbox``), which the run loop writes whole: a message sent while a
+#   phase was being built was overwritten by the loop's next save of the copy it had read
+#   before the message existed. A row of its own cannot be overwritten by anybody's copy.
+# * ``question`` -- asked of the agent on a step and answered beside the run, not by it:
+#   ``answer`` is the agent's reply, ``change`` what it understood the person to want
+#   changed when the question was really a request.
+# * ``replan`` -- the plan is to be made again from the phase it was on, with ``text``.
+#
+# ``phase`` is the 1-based phase a message is about and ``role`` the agent it is for; a
+# steer with neither reaches whichever agent is called next, as the inbox always did.
+# What answering cost is kept on the row until the run folds it into the job's spend
+# (``billed``): the answer is written while the run owns the job's row.
+job_messages = Table(
+    "job_messages",
+    metadata,
+    Column("id", String(64), primary_key=True),
+    Column("job_id", String(64), ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False),
+    Column("kind", String(16), nullable=False),
+    Column("text", Text, nullable=False),
+    Column("by", Text),
+    Column("at", Text, nullable=False),
+    Column("step", String(64)),
+    Column("phase", Integer),
+    Column("role", String(32)),
+    Column("reply_to", String(64)),
+    Column("status", String(16), nullable=False),
+    Column("answer", Text),
+    Column("change", Text),
+    Column("error", Text),
+    Column("answered_at", Text),
+    Column("consumed_at", Text),
+    Column("consumed_by", String(32)),
+    Column("cost_json", Text),
+    Column("billed", Integer, nullable=False, server_default="0"),
+    Index("job_messages_job", "job_id", "at"),
+)
+
 test_runs = Table(
     "test_runs",
     metadata,
