@@ -172,7 +172,7 @@ def test_developer_runs_one_phase_per_invocation_and_records_diffs(
         capture_output=True,
         text=True,
     ).stdout.splitlines()
-    assert log[0] == "slipwright: phase 1: first"
+    assert log[0] == "slipwright: phase 1/2: first"  # the phase, of how many (T16.1)
     assert (job.worktree_path / "OK").read_text(encoding="utf-8") == "yes\n"
 
 

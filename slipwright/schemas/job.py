@@ -463,6 +463,12 @@ class JobData(BaseModel):
         "alone. The deployment may be done by hand, or not wanted at all.",
     )
     pr_url: str | None = None
+    draft_pr_url: str | None = Field(
+        default=None,
+        description="The pull request opened as a draft at the first push (T16.1), so the "
+        "work can be followed on the host as it is built. `pr_url` is set when DevOps "
+        "finishes it; until then everything that waits for a pull request still waits.",
+    )
     ci_attempts: int = Field(default=0, ge=0)
     inbox: list[InboxMessage] = Field(default_factory=list)
     jira_keys: dict[str, str] = Field(
