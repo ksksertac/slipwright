@@ -62,6 +62,7 @@ from slipwright.notify.core import (
     settle_prompts,
 )
 from slipwright.orchestrator import IllegalTransitionError, Orchestrator
+from slipwright.pipeline import StepCard, StepStatus, lane_for
 from slipwright.providers import ModelProvider, ProviderUnavailableError
 from slipwright.providers.codex import Logins
 from slipwright.providers.evren import EvrenProvider, Terms
@@ -88,6 +89,7 @@ from slipwright.roles import (
     reconcile,
     review,
     supervisor,
+    talk,
 )
 from slipwright.roles.common import (
     EditMismatch,
@@ -96,6 +98,7 @@ from slipwright.roles.common import (
     require_worktree,
 )
 from slipwright.roles.results import (
+    AgentAnswer,
     AnalysisResult,
     ArchitectResult,
     Breakdown,
@@ -126,11 +129,13 @@ from slipwright.schemas.brief import (
 )
 from slipwright.schemas.job import (
     APPROVAL_STATES,
+    REDIRECTABLE,
     TITLE_MAX,
     ChangedFile,
     Commit,
     Job,
     JobData,
+    JobMessage,
     JobResult,
     JobState,
     branch_name,
@@ -165,7 +170,8 @@ from slipwright.standards.index import (
     corpus_fingerprint,
 )
 from slipwright.standards.retrieval import Retrieval, core_text, retrieve
-from slipwright.store import ANY_OWNER, JobInProgress, JobStore, ProjectNotFound
+from slipwright.steps import step_detail
+from slipwright.store import ANY_OWNER, JobInProgress, JobNotFound, JobStore, ProjectNotFound
 from slipwright.store.scoped import ScopedStore
 from slipwright.support import SupportDesk
 from slipwright.teams import Letter, Teams, builder_letter, failed_letter
@@ -342,11 +348,22 @@ class _Stopped(Exception):
 @dataclass(frozen=True)
 class _Halt:
     """What somebody asked of a development that was running at the time: to stop for
-    good, or to pause -- and whether to push the branch once it has."""
+    good, to pause -- and whether to push the branch once it has -- or to plan again from
+    the phase it is on (``message`` is the request, in ``job_messages``)."""
 
-    kind: Literal["cancel", "pause"]
+    kind: Literal["cancel", "pause", "redirect"]
     by: str | None = None
     push: bool = False
+    message: str | None = None
+
+
+class NothingToAsk(ValueError):
+    """The step written to has no agent on it: a gate, or a step the lane does not have."""
+
+
+#: How many earlier answers on the same step an agent is shown when asked again: enough
+#: for "and why that?" to make sense, not a transcript.
+ANSWERS_REMEMBERED = 6
 
 
 class CannotSync(ValueError):
@@ -2146,13 +2163,328 @@ class Engine:
     def resume_all(self) -> list[Job]:
         return [self.resume(job.id) for job in self.store.list()]
 
-    def message(self, job_id: str, text: str) -> Job:
-        """Queue a steering message; the next role invocation will see it."""
-        from slipwright.schemas.job import InboxMessage
+    def message(
+        self,
+        job_id: str,
+        text: str,
+        *,
+        by: str | None = None,
+        step: str | None = None,
+        phase: int | None = None,
+        role: str | None = None,
+        reply_to: str | None = None,
+    ) -> Job:
+        """Queue a steering message; the next role invocation will see it -- the next one
+        by ``role`` on ``phase`` when they are given.
 
+        Written as a row of its own and nothing else: saving the job from here would put
+        the request's copy of it over whatever the run has written since it was read."""
         job = self.store.get(job_id)
-        job.data.inbox.append(InboxMessage(text=text))
-        return self.store.save(job)
+        self.store.add_message(
+            JobMessage(
+                job_id=job.id,
+                kind="steer",
+                text=text,
+                by=by,
+                step=step,
+                phase=phase,
+                role=role,
+                reply_to=reply_to,
+                status="pending",
+            )
+        )
+        self.events.emit(
+            "job.message", project_id=job.project_id, job_id=job.id, owner_id=job.owner_id
+        )
+        return self.store.get(job.id)
+
+    # -- talking to the agents on a step -----------------------------------------------------
+
+    def talk_card(self, job: Job, step: str) -> StepCard:
+        """The step a person is writing about, when it has an agent to answer them. A
+        gate is a person's step and the demo has nobody behind it."""
+        card = next((c for c in lane_for(job).steps if c.key == step), None)
+        if card is None or card.role is None or card.gate:
+            raise NothingToAsk(f"step {step!r} has no agent to write to")
+        return card
+
+    def talk(self, job_id: str, step: str) -> list[JobMessage]:
+        """What was said on one step, both ways, oldest first."""
+        return self.store.list_messages(job_id, step=step)
+
+    def ask(self, job_id: str, step: str, text: str, *, by: str | None = None) -> JobMessage:
+        """Write a question to the agent on ``step``. The answer is written by ``answer``,
+        which the caller runs in the background: a model call is minutes, not a request."""
+        job = self.store.get(job_id)
+        card = self.talk_card(job, step)
+        text = text.strip()
+        if not text:
+            raise EmptyApproval("write what you want to ask")
+        assert card.role is not None
+        message = self.store.add_message(
+            JobMessage(
+                job_id=job.id,
+                kind="question",
+                text=text,
+                by=by,
+                step=card.key,
+                phase=card.phase,
+                role=card.role.value,
+                status="answering",
+            )
+        )
+        self._told(job)
+        return message
+
+    def answer(self, message_id: str) -> JobMessage | None:
+        """Ask the agent the question and write down what it says.
+
+        A side call: it takes nothing from the run, holds no lock while the model thinks,
+        and writes only its own row -- the job's row belongs to the run, which may be in the
+        middle of a phase. What it cost is added to the job's spend by whoever holds the job
+        next (``_bill_answers``), at once when nobody does."""
+        message = self.store.get_message(message_id)
+        if message is None or message.kind != "question" or message.status != "answering":
+            return message
+        job = self.store.get(message.job_id)
+        role = RoleName(message.role or RoleName.ARCHITECT.value)
+        refused = self._answer_refused(job)
+        if refused is not None:
+            answered = self.store.answer_message(message.id, answer=None, error=refused)
+            self._told(job)
+            return answered
+        detail = step_detail(job, message.step or "")
+        earlier = [
+            {"question": m.text, "answer": m.answer or ""}
+            for m in self.store.list_messages(job.id, step=message.step, kinds=["question"])
+            if m.status == "answered" and m.id != message.id
+        ][-ANSWERS_REMEMBERED:]
+        started = utcnow().isoformat()
+        result = talk.run(
+            job,
+            job.profile or self.seed_for(job),
+            role=role,
+            step=talk.step_record(detail) if detail else {"name": message.step},
+            question=message.text,
+            earlier=earlier,
+            phase=message.phase,
+            work_in_progress=self._work_in_progress(job, message.phase),
+            provider=self.provider_for(job.owner_id),
+            timeout_s=self.timeout_s,
+        )
+        cost = self._answer_cost(job, role, result, message.phase, started)
+        if result.ok and isinstance(result.output, AgentAnswer):
+            change = (result.output.change or "").strip() or None
+            answered = self.store.answer_message(
+                message.id, answer=result.output.answer.strip(), change=change, cost=cost
+            )
+        else:
+            why = result.error.message if result.error else "the agent gave no answer"
+            answered = self.store.answer_message(
+                message.id, answer=None, error=why, cost=cost if result.usage else None
+            )
+        lock = self._locks[job.id]
+        if lock.acquire(blocking=False):
+            try:
+                # nothing is running it: the spend goes on the job now. A transition between
+                # the read and the save refuses the save; the next call bills it instead
+                with contextlib.suppress(ValueError, JobNotFound):
+                    self._bill_answers(self.store.get(job.id))
+            finally:
+                lock.release()
+        self._told(job)
+        return answered
+
+    def steer(
+        self,
+        job_id: str,
+        step: str,
+        text: str,
+        *,
+        by: str | None = None,
+        reply_to: str | None = None,
+    ) -> Job:
+        """An instruction for the agent on ``step``, read by its next call on that step.
+
+        Only for a step still to finish: what a finished phase is told is never read, and
+        saying "sent" for that would be a promise nothing keeps. A finished step is changed
+        by planning again from where the development is (``redirect``)."""
+        job = self.store.get(job_id)
+        card = self.talk_card(job, step)
+        if job.is_terminal or card.status in (StepStatus.DONE, StepStatus.SKIPPED):
+            raise NotAwaitingApproval(job)
+        text = text.strip()
+        if not text:
+            raise EmptyApproval("write the instruction")
+        assert card.role is not None
+        return self.message(
+            job.id,
+            text,
+            by=by,
+            step=card.key,
+            phase=card.phase,
+            role=card.role.value,
+            reply_to=reply_to,
+        )
+
+    def redirect(
+        self,
+        job_id: str,
+        note: str,
+        *,
+        by: str | None = None,
+        reply_to: str | None = None,
+        run: bool = True,
+    ) -> Job:
+        """Plan the development again from the phase it is on, with what a person wants
+        instead -- while it is being built, not only once it has failed.
+
+        The phases already built stay built: the Architect is handed them as kept and
+        replaces the rest (``_replan_from``), and the new plan is approved at the
+        architecture gate like any other. A call that is in flight is not thrown away --
+        the model is answering and that answer is paid for -- so a running development
+        re-plans before its next call."""
+        job = self.store.get(job_id)
+        if job.state not in REDIRECTABLE or not job.data.plan:
+            raise NotAwaitingApproval(job)
+        note = note.strip()
+        if not note:
+            raise EmptyApproval("say what the plan should do instead")
+        message = self.store.add_message(
+            JobMessage(
+                job_id=job.id,
+                kind="replan",
+                text=note,
+                by=by,
+                reply_to=reply_to,
+                phase=job.data.phase_index + 1,
+                step=f"phase:{job.data.phase_index + 1}",
+                status="pending",
+            )
+        )
+        lock = self._locks[job.id]
+        if lock.acquire(blocking=False):
+            try:
+                job = self._replan_now(self.store.get(job.id), message, by=by)
+            finally:
+                lock.release()
+            self._told(job)
+            return self._run(job) if run else job
+        current = self._stopping.get(job.id)
+        if current is not None and current.kind == "cancel":
+            # stopping for good outranks it; the request is kept, and says it was not acted on
+            self.store.set_message_status(message.id, "dropped")
+            self._told(job)
+            return self.store.get(job.id)
+        self._supersede(job.id, _Halt("redirect", by=by, message=message.id))
+        self.store.update_state(
+            job.id,
+            job.state,
+            note=f"re-plan asked{_by(by)}: finishing the call it is on",
+        )
+        self._told(job)
+        return self.store.get(job.id)
+
+    def _replan_now(self, job: Job, message: JobMessage, *, by: str | None) -> Job:
+        """Send the plan back to the Architect from the phase the development is on."""
+        if job.state not in REDIRECTABLE:
+            # it moved on while the call finished -- to QA, say, with every phase built.
+            # There is no phase left to plan; the request is kept as one not acted on
+            self.store.set_message_status(message.id, "dropped")
+            return job
+        phases = self._phases(job)
+        index = min(job.data.phase_index, len(phases))
+        parts = [
+            f"A person asked for the plan to change while phase {index + 1} of "
+            f"{len(phases)} was being built. What they want instead: {message.text}",
+        ]
+        if index:
+            parts.append(f"Phases 1-{index} are built and committed; they are kept as they are.")
+        if job.state in (JobState.DEVELOPING, JobState.BUILD_GATE):
+            parts.append(
+                f"Phase {index + 1} is partly written in the checkout and not committed: "
+                "plan from what is there, keeping what still serves the new plan."
+            )
+        job.data.resume_state = None
+        job = self._replan_from(
+            job,
+            index,
+            "\n\n".join(parts),
+            note=f"re-plan from phase {index + 1}{_by(by)}: {message.text}",
+        )
+        self.store.set_message_status(message.id, "applied")
+        return job
+
+    def _told(self, job: Job) -> None:
+        self.events.emit(
+            "job.message", project_id=job.project_id, job_id=job.id, owner_id=job.owner_id
+        )
+
+    def _answer_refused(self, job: Job) -> str | None:
+        """Why a question is not put to the model. The calls and tokens the development
+        may spend bound an answer too -- it is spent on the same keys. Its running time
+        does not: asking about a development is not running it."""
+        budget = self.budget_for(job)
+        if budget.max_invocations is not None and job.data.invocations >= budget.max_invocations:
+            return f"{job.data.invocations} model calls (limit {budget.max_invocations})"
+        if budget.max_tokens is not None and job.data.tokens_used >= budget.max_tokens:
+            return f"{job.data.tokens_used} tokens used (limit {budget.max_tokens})"
+        return None
+
+    def _work_in_progress(self, job: Job, phase: int | None) -> str | None:
+        """What the phase a question is about has written so far, when it is the one being
+        built now. A finished phase is a commit and its record already lists its files."""
+        worktree = job.worktree_path
+        base = job.data.phase_base_commit
+        if (
+            phase is None
+            or base is None
+            or worktree is None
+            or not worktree.exists()
+            or job.state not in (JobState.DEVELOPING, JobState.BUILD_GATE)
+            or phase != job.data.phase_index + 1
+        ):
+            return None
+        try:
+            return g.work_in_progress(worktree, base) or None
+        except (OSError, g.GitError):
+            return None
+
+    def _answer_cost(
+        self,
+        job: Job,
+        role: RoleName,
+        result: RoleResult,
+        phase: int | None,
+        started: str,
+    ) -> dict[str, Any]:
+        """The call log entry for an answer, as ``_account`` writes one for a step."""
+        usage = result.usage
+        price = self.price_of(result.provider, result.model)
+        cost = (
+            price.cost(usage.input_tokens or 0, usage.output_tokens or 0)
+            if price and usage
+            else None
+        )
+        return {
+            "role": role.value,
+            "model": result.model,
+            "state": job.state.value,
+            "phase": phase,
+            "attempts": 1,
+            "prompt_chars": result.prompt_chars,
+            "provider": result.provider,
+            "input_tokens": usage.input_tokens if usage else None,
+            "output_tokens": usage.output_tokens if usage else None,
+            "cost_usd": round(cost, 6) if cost is not None else None,
+            "ok": result.ok,
+            "error": result.error.kind.value if result.error else None,
+            "unreported_attempts": None,
+            "started_at": started,
+            "summary": "answered a question",
+            "output": None,
+            "at": utcnow().isoformat(),
+        }
 
     # -- the supervisor at the gates (T9.8) --------------------------------------------------
 
@@ -2345,7 +2677,7 @@ class Engine:
                 lock.release()
             return self._notify_outcome(job)
         # stopping for good outranks a pause asked for a moment earlier
-        self._stopping[job.id] = _Halt("cancel", by=by)
+        self._supersede(job.id, _Halt("cancel", by=by))
         self.store.update_state(job.id, job.state, note=f"{note}: finishing the call it is on")
         return self.store.get(job.id)
 
@@ -2377,7 +2709,7 @@ class Engine:
                 lock.release()
             return job
         if self._stopping.get(job.id, halt).kind != "cancel":
-            self._stopping[job.id] = halt
+            self._supersede(job.id, halt)
         self.store.update_state(
             job.id,
             job.state,
@@ -3352,43 +3684,95 @@ class Engine:
                 job.data.waiting_platforms = []
                 job.data.builder_resume = None
                 job = self.store.save(job)
-            while job.state in WORKING_STATES:
+            # a re-plan asked for while it ran is not a stop: the development goes on, to
+            # the Architect, so the loop is entered again after one
+            while True:
+                while job.state in WORKING_STATES:
+                    halt = self._stopping.pop(job.id, None)
+                    if halt is not None and halt.kind == "redirect":
+                        job = self._redirected(job, halt)
+                        continue
+                    if halt is not None:
+                        return self._halt(job, halt, "nothing further was started")
+                    handler = self.handlers.get(job.state)
+                    if handler is None:
+                        log.warning("no handler for state %s; job %s left as is", job.state, job.id)
+                        return job
+                    before = job.state
+                    try:
+                        job = handler(job)
+                    except _Stopped:
+                        halt = self._stopping.pop(job.id, None) or _Halt("cancel")
+                        if halt.kind == "redirect":
+                            job = self._redirected(self.store.get(job.id), halt)
+                            continue
+                        return self._halt(
+                            self.store.get(job.id), halt, "its next call was not made"
+                        )
+                    except Exception as exc:  # noqa: BLE001 - a crashed phase fails the job
+                        log.exception("job %s: %s phase crashed", job.id, before.value)
+                        job = self._fail(
+                            job,
+                            f"{before.value} crashed: {type(exc).__name__}: {exc}",
+                            detail=traceback.format_exc(),
+                        )
+                        return self._notify_outcome(self._jira_reconcile(job))
+                    if job.state is before:  # a handler must always move the job
+                        raise RuntimeError(
+                            f"handler for {before.value} did not change job {job.id}"
+                        )
+                    job = self._jira_reconcile(job)
+                    if job.state in APPROVAL_STATES:
+                        job = self._supervise(job)  # may approve: then the loop goes on
+                        job = self._notify_team(job)
                 halt = self._stopping.pop(job.id, None)
-                if halt is not None:
-                    return self._halt(job, halt, "nothing further was started")
-                handler = self.handlers.get(job.state)
-                if handler is None:
-                    log.warning("no handler for state %s; job %s left as is", job.state, job.id)
-                    return job
-                before = job.state
-                try:
-                    job = handler(job)
-                except _Stopped:
-                    halt = self._stopping.pop(job.id, None) or _Halt("cancel")
-                    return self._halt(self.store.get(job.id), halt, "its next call was not made")
-                except Exception as exc:  # noqa: BLE001 - a crashed phase fails the job
-                    log.exception("job %s: %s phase crashed", job.id, before.value)
-                    job = self._fail(
-                        job,
-                        f"{before.value} crashed: {type(exc).__name__}: {exc}",
-                        detail=traceback.format_exc(),
-                    )
-                    return self._notify_outcome(self._jira_reconcile(job))
-                if job.state is before:  # a handler must always move the job
-                    raise RuntimeError(f"handler for {before.value} did not change job {job.id}")
-                job = self._jira_reconcile(job)
-                if job.state in APPROVAL_STATES:
-                    job = self._supervise(job)  # may approve, in which case the loop goes on
-                    job = self._notify_team(job)
-            halt = self._stopping.pop(job.id, None)
-            if halt is not None and not job.is_terminal:
-                # the step it was stopped in ended at a gate: it was told to stop, so it
-                # does not sit there waiting for somebody to approve its next spend
-                job = self._halt(job, halt, "nothing further was started")
+                if halt is not None and not job.is_terminal:
+                    if halt.kind == "redirect":
+                        # the step it was on ended at a gate -- a decision, a review
+                        job = self._redirected(job, halt)
+                        if job.state in WORKING_STATES:
+                            continue
+                    else:
+                        # the step it was stopped in ended at a gate: it was told to stop, so
+                        # it does not sit there waiting for somebody to approve its next spend
+                        job = self._halt(job, halt, "nothing further was started")
+                break
+            # what questions answered while it ran cost, now that nothing else is writing
+            with contextlib.suppress(ValueError, JobNotFound):
+                self._bill_answers(self.store.get(job.id))
             job = self._notify_outcome(job)
         # outside the job's lock: reading the code it wrote is a model call, and a job
         # that has finished must not look busy while it happens
         self._learn_from(job)
+        return job
+
+    def _steered(self, job: Job, role: RoleName, phase: int) -> bool:
+        """Whether somebody wrote to ``role`` about ``phase`` and it has not read it yet.
+
+        Only what was written to that agent counts. A message for whoever runs next -- the
+        old steering box -- is read by whoever does; holding a green phase back for it
+        would spend a specialist call on a note that may not be about the code at all."""
+        return any(
+            m.pending and m.role == role.value and m.phase in (None, phase)
+            for m in self.store.inbox(job.id)
+        )
+
+    def _supersede(self, job_id: str, halt: _Halt) -> None:
+        """Ask the running development for ``halt``. A re-plan it was asked for earlier and
+        has not reached yet is dropped, and says so: a stop, a pause or a newer re-plan
+        means it will never be carried out."""
+        earlier = self._stopping.get(job_id)
+        if earlier is not None and earlier.kind == "redirect" and earlier.message:
+            self.store.set_message_status(earlier.message, "dropped")
+        self._stopping[job_id] = halt
+
+    def _redirected(self, job: Job, halt: _Halt) -> Job:
+        """Carry out a re-plan asked for while the development was running."""
+        message = self.store.get_message(halt.message) if halt.message else None
+        if message is None:
+            return job
+        job = self._replan_now(job, message, by=halt.by)
+        self._told(job)
         return job
 
     def _halt(self, job: Job, halt: _Halt, why: str) -> Job:
@@ -3804,8 +4188,18 @@ class Engine:
         Messages pending at call time were injected into the role's context by
         ``base_context``; afterwards they are marked consumed and the fact is recorded in
         the job's history, so a message is delivered exactly once.
+
+        The inbox is read again here rather than trusted from ``job``: the copy a step
+        holds was read when the step began, and a phase takes hours. Only the messages
+        written for this call are put in front of it -- an instruction about phase 8 is
+        the mobile specialist's, not the standards review's that runs between its calls.
+        The others stay pending in the table; ``save`` never takes one away.
         """
-        pending = job.pending_messages
+        self._bill_answers(job)
+        fresh = self.store.inbox(job.id)
+        phase_now = self._phase_number(job)
+        pending = [m for m in fresh if m.pending and m.for_call(role.value, phase_now)]
+        job.data.inbox = [m for m in fresh if not m.pending] + pending
         project = self._project_of(job)
         profile = kw.get("profile") or kw.get("seed") or job.profile or self.seed_for(job)
         if project is not None and "jira" not in kw:
@@ -3873,7 +4267,8 @@ class Engine:
                 self.store.save(job)
         if result.ok and result.output is not None and project is not None:
             self._apply_jira_actions(job, role, profile, project, result.output.jira_actions)
-        if pending:
+        # a call that failed did not read anything: what was said waits for the next one
+        if pending and result.ok:
             now = utcnow()
             for message in pending:
                 message.consumed_at = now
@@ -3886,6 +4281,7 @@ class Engine:
                 detail="\n\n".join(f"[{m.id}] {m.text}" for m in pending),
             )
             job.history = self.store.get(job.id).history
+        job.data.inbox = self.store.inbox(job.id)
         return result
 
     def _call_with_retries(
@@ -4096,6 +4492,28 @@ class Engine:
             }
         )
         self.store.save(job)
+
+    def _bill_answers(self, job: Job) -> None:
+        """Add the questions answered on this job since the last call to its spend.
+
+        An answer is written beside the run, not by it, so it cannot touch the job's row
+        while the run owns it: the run would save over it with the copy it holds. What it
+        cost waits on the message instead, and is added here -- by the run before its next
+        call, or by the answer itself when nothing was running. The phase's own budget of
+        calls is left alone: being asked about the work is not an attempt at it."""
+        owed = self.store.unbilled_answers(job.id)
+        if not owed:
+            return
+        for _, entry in owed:
+            job.data.invocations += int(entry.get("attempts") or 1)
+            job.data.tokens_used += int(entry.get("input_tokens") or 0) + int(
+                entry.get("output_tokens") or 0
+            )
+            if entry.get("cost_usd") is not None:
+                job.data.cost_usd = round(job.data.cost_usd + float(entry["cost_usd"]), 6)
+            job.data.invocation_log.append(entry)
+        self.store.save(job)
+        self.store.mark_billed([message_id for message_id, _ in owed])
 
     @staticmethod
     def _profile(job: Job) -> Profile:
@@ -4521,7 +4939,13 @@ class Engine:
         touched_all: list[str] = []
         summaries: list[str] = []
         continuation: dict[str, Any] | None = None
-        for part in range(1, self.max_phase_parts + 1):
+        # a person who writes to the specialist while it is answering is read by the next
+        # part; when that answer was going to be the last, there is one part more for it
+        allowed = self.max_phase_parts
+        steered = False
+        part = 0
+        while part < allowed:
+            part += 1
             result = self._invoke(
                 role,
                 developer.run,
@@ -4550,7 +4974,7 @@ class Engine:
             except EditMismatch as exc:
                 # nothing of the answer was written: the specialist is asked again with
                 # the file's real lines, as one more part of the same phase (T15.4)
-                if part == self.max_phase_parts:
+                if part == allowed:
                     return self._fail(
                         job, f"{role.value}'s changes could not be applied", detail=str(exc)
                     )
@@ -4570,7 +4994,14 @@ class Engine:
                 continue
             touched_all.extend(t for t in touched if t not in touched_all)
             summaries.append(result.output.summary)
-            if result.output.phase_complete or part == self.max_phase_parts:
+            last = result.output.phase_complete or part == allowed
+            late = last and not steered and self._steered(job, role, index + 1)
+            if late:
+                # it said it was done, but somebody wrote while it was writing: the phase
+                # is not committed past what they said -- one more part reads it
+                steered = True
+                allowed = max(allowed, part + 1)
+            elif last:
                 break
             g.stage_all(worktree)
             self.store.update_state(
@@ -4588,6 +5019,8 @@ class Engine:
                 "files_so_far": list(touched_all),
                 "summary_so_far": " ".join(summaries),
             }
+            if late:
+                continuation["new_instruction"] = True
         g.stage_all(worktree)
         diff = g.staged_diff(worktree)
         if before_fix is not None and diff == before_fix:
@@ -4802,6 +5235,24 @@ class Engine:
                 return self.orchestrator.transition(
                     job, JobState.DONE, note="tests re-run by hand: passed", detail=gate.tail
                 )
+            if index < len(phases):
+                writer = specialist_for(phases[index].get("domain"))
+                if self._steered(job, writer, index + 1):
+                    # green, but somebody wrote to the specialist about this phase while it
+                    # was being built and tested: what they said is read before the phase is
+                    # committed and the development moves past it. Not a fix attempt -- the
+                    # build did not fail
+                    self.store.save(job)
+                    return self.orchestrator.transition(
+                        job,
+                        JobState.DEVELOPING,
+                        note=(
+                            f"{writer.value} phase {index + 1}/{len(phases)}: the build "
+                            "passed; a person wrote about this phase, so it is read before "
+                            "the phase is committed"
+                        ),
+                        detail=gate.tail,
+                    )
             worktree = require_worktree(job)
             g.stage_all(worktree)
             goal = phases[index].get("goal", "") if index < len(phases) else ""

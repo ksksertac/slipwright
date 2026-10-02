@@ -34,6 +34,7 @@ from slipwright.store.migrate import current_revision
 from slipwright.store.schema import (
     attachments,
     job_history,
+    job_messages,
     jobs,
     project_briefs,
     projects,
@@ -237,6 +238,10 @@ def _rows(
             mine = select(jobs.c.id).where(jobs.c.project_id.in_(project_ids))
             query = select(job_history).where(job_history.c.job_id.in_(mine))
             query = query.order_by(job_history.c.seq)
+        elif table == "job_messages":
+            mine = select(jobs.c.id).where(jobs.c.project_id.in_(project_ids))
+            query = select(job_messages).where(job_messages.c.job_id.in_(mine))
+            query = query.order_by(job_messages.c.at, job_messages.c.id)
         elif table == "test_runs":
             query = select(test_runs).where(test_runs.c.project_id.in_(project_ids))
         elif table == "attachments":

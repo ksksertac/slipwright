@@ -139,6 +139,7 @@ def test_developments_from_before_names_are_given_one_when_the_database_upgrades
         with db.begin() as conn:
             conn.execute(text("ALTER TABLE jobs DROP COLUMN title"))
             # and what the revisions after it add, since those replay on top
+            conn.execute(text("DROP TABLE job_messages"))  # (0013)
             for table in ("workers", "worker_codes", "worker_tasks"):  # (0012)
                 conn.execute(text(f"DROP TABLE {table}"))
             conn.execute(

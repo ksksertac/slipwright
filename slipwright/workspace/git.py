@@ -134,6 +134,23 @@ def diff(repo: Path, base: str, head: str = "HEAD") -> str:
     return _capped(repo, text, [base, head])
 
 
+def work_in_progress(repo: Path, base: str, limit: int = 12_000) -> str:
+    """What the checkout holds against ``base`` right now, read for somebody asking about
+    it while the run is still writing there.
+
+    Read without touching the index. A plain ``git diff`` refreshes the index's stat
+    information and takes ``index.lock`` to do it; the run's own ``git add`` a moment
+    later would then fail on a lock it never took, and a question would have broken the
+    phase it was asked about."""
+    quiet = ("--no-optional-locks", "diff", "--no-color")
+    stat = run(repo, *quiet, "--stat=200", base, *_not_ours(), check=False).stdout
+    text = run(repo, *quiet, base, *_not_ours(), check=False).stdout
+    if len(stat) + len(text) <= limit:
+        return f"{stat}\n{text}".strip()
+    room = max(limit - len(stat), limit // 2)
+    return f"{stat}\n{text[:room]}\n(... cut here)".strip()
+
+
 def changed_files(repo: Path, base: str, head: str = "HEAD") -> str:
     """Which files changed between two commits and by how many lines, every path whole:
     what a role that describes a change needs, without the change itself."""

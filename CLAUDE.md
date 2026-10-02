@@ -243,6 +243,17 @@ behaviour deliberately changed, rewrite it to state the new rule -- do not weake
   push after every phase is paid for. A pull with phases left goes through `reconcile`
   and its gate, and only an unbroken run of phases finished by hand is passed over.
   `_stopping` carries both orders to a running loop; a cancel outranks a pause.
+- **What a person says to an agent lives in `job_messages`, never in `data_json`.** The
+  run saves the job whole from the copy it read when its step began, and a steering
+  message kept in `data.inbox` was saved over by it. The store now reads the inbox from the
+  table and a `save` only *adds* to it. An answer to a question (`roles/talk.py`) is a side
+  call: it holds no lock, writes only its own row, and its cost waits there until whoever
+  holds the job next folds it in (`_bill_answers`). Anything that writes to a job while it
+  may be running wants the same shape.
+- **A re-plan asked while a phase runs is a halt that carries on** (`_Halt("redirect")`):
+  the run stops before its next call and goes to the Architect with the built phases kept
+  (`_replan_from`), instead of ending. A stop or a pause that overtakes it marks it
+  `dropped`, so the person is never left with a request that says "pending" forever.
 - **Positional assertions rot.** A test that asserted on `provider_settings()[2]` broke
   the day a vendor was added. Look things up by name.
 

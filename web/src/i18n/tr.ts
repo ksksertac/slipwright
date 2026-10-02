@@ -2263,4 +2263,40 @@ export const TR: Record<string, string> = {
   "needs approval of work done by hand": "elle yapılanların onayını bekliyor",
   "Architect: work done by hand": "Mimar: elle yapılanlar",
   "Work done by hand approval": "Elle yapılanların onayı",
+
+  // writing to the agent on a step (components/AgentTalk.tsx)
+  "Write to the agent": "Agenta yaz",
+  "Ask {agent} about this step and read its answer. When you want it done differently, tell it, or have the plan made again from here.":
+    "{agent} ajanına bu adımla ilgili soru sor ve cevabını oku. Farklı yapılmasını istiyorsan ona söyle ya da planı buradan yeniden yaptır.",
+  "e.g. why is the Bluetooth module written by hand?": "ör. Bluetooth modülü neden elle yazılıyor?",
+  Ask: "Sor",
+  "Send as an instruction": "Talimat olarak gönder",
+  "read by {agent}'s next call on this step": "{agent} bu adımdaki bir sonraki çağrısında okur",
+  "This step's agent is somebody else's on the team.": "Bu adımın ajanı ekipte başka birine ait.",
+  "Thinking…": "Düşünüyor…",
+  "No answer: {why}": "Cevap yok: {why}",
+  "Plan to be made again": "Plan yeniden yapılacak",
+  Instruction: "Talimat",
+  "read by {agent} {ago}": "{agent} okudu, {ago}",
+  "waiting for the agent's next call": "ajanın bir sonraki çağrısını bekliyor",
+  "sent to the Architect": "Mimara gönderildi",
+  "not acted on: the development was stopped or moved on":
+    "uygulanmadı: geliştirme durduruldu ya da ilerledi",
+  "after the call it is on": "sürdürdüğü çağrı bitince",
+  "The agent heard a change": "Ajan bir değişiklik isteği anladı",
+  "the agent reads it on its next call on this step":
+    "ajan bunu bu adımdaki bir sonraki çağrısında okur",
+  "Do it in this step": "Bu adımda uygula",
+  "the Architect plans the phases still to build again; what is built stays, and you approve the new plan":
+    "Mimar henüz yapılmamış fazları yeniden planlar; yapılanlar kalır, yeni planı sen onaylarsın",
+  "Plan it again from here": "Planı buradan yeniden yaptır",
+  "Phase {1}/{2}: the build passed; a person wrote about it, so it is read before the phase is committed":
+    "Faz {1}/{2}: build geçti; bu faz için yazılan mesaj, faz commit edilmeden önce okunuyor",
+  "{1} asked for the plan to be made again; finishing the call it is on":
+    "{1} planın yeniden yapılmasını istedi; sürdürdüğü çağrı bitiriliyor",
+  "The plan is to be made again; finishing the call it is on":
+    "Plan yeniden yapılacak; sürdürdüğü çağrı bitiriliyor",
+  "Planned again from phase {1}, asked by {2}: {3}":
+    "Faz {1}'den itibaren yeniden planlandı, {2} istedi: {3}",
+  "Planned again from phase {1}: {2}": "Faz {1}'den itibaren yeniden planlandı: {2}",
 };

@@ -7518,3 +7518,83 @@ tr.run-detail td {
     animation: none;
   }
 }
+
+/* Writing to the agent on a step (components/AgentTalk.tsx): the person's words on the
+   right, the agent's on the left, and what came of them -- an instruction, a re-plan --
+   underneath, so a thread reads top to bottom as it happened. */
+.agent-talk textarea {
+  width: 100%;
+  resize: vertical;
+}
+.talk-thread {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.talk-turn {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.talk-bubble {
+  max-width: 92%;
+  padding: 8px 11px;
+  border-radius: var(--radius-ctl);
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.talk-bubble.mine {
+  align-self: flex-end;
+  background: var(--surface-3);
+}
+.talk-bubble.agent {
+  align-self: flex-start;
+}
+.talk-bubble.waiting {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-3);
+}
+.talk-bubble.failed {
+  border-color: var(--bad-soft);
+  color: var(--bad-text);
+}
+.talk-who {
+  font-size: 11px;
+  color: var(--text-3);
+  margin-bottom: 2px;
+}
+.talk-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--text);
+}
+.talk-change,
+.talk-followed {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 11px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-sm);
+}
+.talk-followed {
+  list-style: none;
+  border-style: solid;
+  background: var(--surface-2);
+}
+.talk-followed.replan {
+  border-color: var(--warn-soft);
+}
+.talk-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}

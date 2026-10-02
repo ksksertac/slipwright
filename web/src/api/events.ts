@@ -59,6 +59,7 @@ export function useLiveEvents(projectId?: string, onNotice?: (text: string) => v
       for (const type of [
         "job.state",
         "job.data",
+        "job.message",
         "test_run.state",
         "activity",
         "project",

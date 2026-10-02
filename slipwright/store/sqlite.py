@@ -33,6 +33,7 @@ from slipwright.store.attachments import AttachmentStoreMixin
 from slipwright.store.chat import ChatStoreMixin
 from slipwright.store.db import Database, one, rows
 from slipwright.store.members import MemberStoreMixin
+from slipwright.store.messages import MessageStoreMixin
 from slipwright.store.migrate import migrate
 from slipwright.store.pages import PageStoreMixin
 from slipwright.store.prices import PriceStoreMixin
@@ -110,6 +111,7 @@ class JobStore(
     ChatStoreMixin,
     AttachmentStoreMixin,
     WorkerStoreMixin,
+    MessageStoreMixin,
 ):
     """One store per database. Safe to share across threads within a process.
 
@@ -172,7 +174,10 @@ class JobStore(
                     .order_by(job_history.c.seq)
                 )
             )
-        return self._row_to_job(row, history)
+            inbox = self._read_inbox(conn, job_id)
+        job = self._row_to_job(row, history)
+        job.data.inbox = inbox
+        return job
 
     def list(self, project_id: str | None = None, owner_id: str | None = ANY_OWNER) -> list[Job]:
         query = select(jobs.c.id).order_by(jobs.c.created_at, jobs.c.id)
@@ -495,6 +500,7 @@ class JobStore(
             )
             for t in job.history:
                 self._insert_transition(conn, job.id, t)
+            self._merge_inbox(conn, job.id, job.data.inbox)
         self.events.emit(
             "job.state",
             project_id=job.project_id,
@@ -576,6 +582,8 @@ class JobStore(
                     updated_at=utcnow().isoformat(),
                 )
             )
+            # added to, never replaced: this copy may be older than a message sent since
+            self._merge_inbox(conn, job.id, job.data.inbox)
         self.events.emit(
             "job.data", project_id=job.project_id, job_id=job.id, owner_id=job.owner_id
         )

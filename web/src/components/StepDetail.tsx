@@ -10,6 +10,7 @@
 import { useState } from "react";
 import type { StepBadge, StepDetail, StepGroup, StepItem } from "../api/client";
 import { useStepDetail } from "../api/hooks";
+import { AgentTalk } from "./AgentTalk";
 import { Detail } from "./Detail";
 import { IconCheck, IconChevron } from "./icons";
 import { Loading, timeAgo } from "./ui";
@@ -39,12 +40,19 @@ export function StepDetailView({ jobId, stepKey }: { jobId: string; stepKey: str
   if (detail.isLoading) return <Loading rows={3} />;
   if (!detail.data) return null;
   const step = detail.data;
+  // writing to the agent sits under what the step was asked to do -- the thing a question
+  // is usually about -- or at the top of the lists on a step that has no such group
+  const talkAt = step.groups.findIndex((g) => g.key === "assignment") + 1;
   return (
     <div className="step-detail">
       <StepNow step={step} />
       <StepTimes step={step} />
       {step.summary && <StepSummary text={step.summary} />}
-      {step.groups.map((group) => (
+      {step.groups.slice(0, talkAt).map((group) => (
+        <Group key={group.key} group={group} />
+      ))}
+      {step.talk && <AgentTalk jobId={jobId} stepKey={step.key} talk={step.talk} />}
+      {step.groups.slice(talkAt).map((group) => (
         <Group key={group.key} group={group} />
       ))}
     </div>
