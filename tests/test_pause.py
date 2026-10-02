@@ -307,6 +307,28 @@ def test_every_phase_finished_by_hand_goes_straight_to_qa(
     assert _developer_calls(provider) == asked
 
 
+def test_a_restart_while_the_architect_reads_carries_on_reading(
+    hosted: Engine,
+    provider: ScriptedProvider,
+    repo: Path,
+    store: JobStore,
+    worktrees_root: Path,
+    seed: Profile,
+) -> None:
+    bare = _with_origin(repo)
+    job = _paused_in_phase_one(hosted, provider, repo, push=True)
+    _somebody_works_on(bare, job.branch, {"HAND": "x\n"})
+    _reads(provider, ["done", "untouched", "untouched"])
+    hosted.handlers.pop(JobState.RECONCILE)  # the process "dies" as the reading starts
+    job = hosted.carry_on(job.id, pull=True)
+    assert job.state is JobState.RECONCILE
+
+    after = full_engine(store, worktrees_root, seed, provider, git_host=GhHost(token=None))
+    job = after.resume(job.id)
+    assert job.state is JobState.AWAITING_RECONCILE_APPROVAL
+    assert (job.data.reconcile or {})["resume_phase"] == 2
+
+
 def test_a_pull_with_nothing_new_carries_on_as_it_was(
     hosted: Engine, provider: ScriptedProvider, repo: Path
 ) -> None:
