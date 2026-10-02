@@ -20,6 +20,7 @@ import socket
 import sys
 from collections.abc import Callable, Iterable
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from urllib.parse import urlsplit
 
 import httpx
@@ -28,6 +29,10 @@ import httpx
 DEFAULT_PORT = 8500
 #: How many networks one look covers; each is 254 connects.
 MAX_NETWORKS = 3
+#: Looked at when nothing says which network this is -- a page opened at ``localhost``
+#: on a server in Docker, which cannot see the network of the machine it runs on. These
+#: are what home and office routers hand out; a guess, but one that is usually right.
+USUAL_NETWORKS = ("192.168.1.0/24", "192.168.0.0/24", "10.0.0.0/24")
 CONNECT_S = 0.4
 HELLO_S = 2.0
 
@@ -42,9 +47,17 @@ def _private_v4(host: str | None) -> ipaddress.IPv4Address | None:
     return ip
 
 
+def in_container() -> bool:
+    """Whether this runs in Docker, where its own address is the bridge's: 172.17.0.2
+    says nothing about the network outside, and nobody there can reach it."""
+    return Path("/.dockerenv").exists()
+
+
 def own_address() -> str | None:
     """This machine's address on its network: the one a packet out would leave from. A
-    UDP socket that is only connected sends nothing."""
+    UDP socket that is only connected sends nothing. None in a container (see above)."""
+    if in_container():
+        return None
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
             probe.connect(("192.0.2.1", 9))  # TEST-NET: never routed anywhere real
@@ -73,6 +86,8 @@ def targets(*addresses: str | None, own: str | None = None) -> tuple[list[str], 
         net = str(ipaddress.ip_network(f"{own}/24", strict=False))
         if net not in networks:
             networks.append(net)
+    if not networks:
+        networks.extend(USUAL_NETWORKS)
     return networks[:MAX_NETWORKS], ports
 
 

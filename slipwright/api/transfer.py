@@ -113,7 +113,8 @@ def _page_port(address: str | None) -> int:
 
 def _addresses(engine: Engine, page: str | None) -> list[str]:
     """Where another machine might reach this one: the page's own address when it is a
-    network one, the one a Mac was last given, then this machine's outbound address."""
+    network one, the one a Mac was last given, then this machine's outbound address --
+    never a container's, which nobody outside it can reach (``nearby.own_address``)."""
     found: list[str] = []
     kept = engine.store.get_setting(ADDRESS_SETTING)
     for candidate in (page, kept if isinstance(kept, str) else None):
