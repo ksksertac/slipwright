@@ -2101,6 +2101,8 @@ export const TR: Record<string, string> = {
   "{n} tokens received": "{n} token alındı",
   "This development so far": "Bu geliştirmenin şimdiye kadarki toplamı",
   "This phase": "Bu faz",
+  "Written alongside: these phases need nothing still being built, so their answers are being written now and are ready when their turn comes.":
+    "Yanında yazılanlar: bu fazlar henüz yapılmakta olan hiçbir şeye bağlı değil, bu yüzden cevapları şimdi yazılıyor ve sıraları geldiğinde hazır olacak.",
   "Answer…": "Cevapla…",
   "This phase spent its budget. Say what to do next; it is sent to the developer.":
     "Bu faz bütçesini doldurdu. Sırada ne yapılacağını yaz; geliştiriciye gönderilir.",

@@ -71,9 +71,38 @@ export function NowFeed({ job }: { job: Job }) {
     return `${phaseName(tx, s.phase, total)}${goal ? ` · ${say(goal)}` : ""}`;
   };
 
+  // the phases whose answers are written alongside this one (T16.3), in phase order
+  const ahead = hasFinished(job.state)
+    ? []
+    : Object.entries((job.data.ahead ?? {}) as Record<string, { role: string; started_at: string }>)
+        .map(([n, a]) => ({ phase: Number(n), role: a.role, started_at: a.started_at }))
+        .sort((a, b) => a.phase - b.phase);
+
   return (
     <div className="now">
       <NowHead job={job} inflight={inflight} calls={calls} />
+      {ahead.length > 0 && (
+        <section className="now-ahead">
+          <div className="faint small">
+            {tx(
+              "Written alongside: these phases need nothing still being built, so their answers are being written now and are ready when their turn comes.",
+            )}
+          </div>
+          <ol className="now-feed">
+            {ahead.map((a) => (
+              <Waiting
+                key={a.phase}
+                call={a}
+                label={`${phaseName(tx, a.phase, total)}${
+                  plan?.phases?.[a.phase - 1]?.goal
+                    ? ` · ${say(plan.phases[a.phase - 1]!.goal)}`
+                    : ""
+                }`}
+              />
+            ))}
+          </ol>
+        </section>
+      )}
       <div className="now-sections">
         {[...sections].reverse().map((s, i) => (
           <details key={`${s.key}-${i}`} className="now-section" open={i === 0}>
@@ -178,7 +207,7 @@ function NowHead({ job, inflight, calls }: { job: Job; inflight: InFlight | null
 }
 
 /** The call in the air: who, on what, and a clock that keeps going until it lands. */
-function Waiting({ call }: { call: InFlight }) {
+function Waiting({ call, label }: { call: InFlight; label?: string }) {
   const tx = useT();
   const seconds = useSecondsSince(call.started_at);
   return (
@@ -193,7 +222,7 @@ function Waiting({ call }: { call: InFlight }) {
         <span className="now-time mono small">{clock(seconds)}</span>
       </div>
       <div className="now-writing">
-        <span>{tx("Waiting for the answer")}</span>
+        <span>{label ?? tx("Waiting for the answer")}</span>
         <span className="now-dots" aria-hidden="true">
           <i />
           <i />
