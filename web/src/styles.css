@@ -7635,3 +7635,14 @@ tr.run-detail td {
   margin: 6px 0 0;
   font-style: italic;
 }
+
+/* the phases whose answers are written alongside the one being built (T16.3) */
+.now-ahead {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+}

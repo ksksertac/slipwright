@@ -767,6 +767,20 @@
             ],
             "title": "Max Invocations"
           },
+          "max_parallel_phases": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": 3,
+            "description": "How many phases' answers are written at once (T16.3): the phase being built and the ready ones after it that need nothing it does. 1 or None writes one at a time, as before.",
+            "title": "Max Parallel Phases"
+          },
           "max_phase_calls": {
             "anyOf": [
               {
@@ -2721,6 +2735,15 @@
         "additionalProperties": true,
         "description": "Working state that phases read and write. Persisted with the job, never in history.\n\nUnknown keys are kept rather than refused: a job written by a newer build must still\nload in an older one \u2014 a rollback, or a second process on the same database \u2014 and the\nfields that build added must survive the round trip instead of being dropped or\nbringing the server down.",
         "properties": {
+          "ahead": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "description": "Phases whose answer is being written ahead of their turn (T16.3), by number: who writes it and since when. What is shown; the answers themselves are held by the running server, and one that restarts writes them again in turn.",
+            "title": "Ahead",
+            "type": "object"
+          },
           "auto_approvals": {
             "default": 0,
             "description": "Gates the supervisor approved.",
@@ -3291,6 +3314,7 @@
           }
         },
         "required": [
+          "ahead",
           "auto_approvals",
           "backlog",
           "base_commit",

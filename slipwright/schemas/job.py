@@ -390,6 +390,12 @@ class JobData(BaseModel):
     resume_state: str | None = Field(
         default=None, description="Where the job continues after the decision gate."
     )
+    ahead: dict[str, dict[str, Any]] = Field(
+        default_factory=dict,
+        description="Phases whose answer is being written ahead of their turn (T16.3), by "
+        "number: who writes it and since when. What is shown; the answers themselves are "
+        "held by the running server, and one that restarts writes them again in turn.",
+    )
     replan_from: int | None = Field(
         default=None,
         description="While the plan is being made again from a phase on: that phase's index "

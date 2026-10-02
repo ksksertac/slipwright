@@ -1642,29 +1642,33 @@ changed one breaks.
   the others depend on
 
 ### T16.3 — Ready phases run side by side
+Built differently from the first draft below, and smaller. A phase's time is the model
+writing its answer -- minutes to most of an hour -- while its build gate takes seconds.
+So that is what runs side by side, and the rest stays as it is: each phase is applied,
+built, reviewed, committed and pushed in its turn, in plan order, on the one branch. No
+second checkout, no merge, no conflict to resolve -- and the engine's one-state-per-job
+machine, which every gate and retry is written against, is untouched.
 **Done when**
-- [ ] Phases whose dependencies are done start together, each in a worktree of its own on
-  a branch of its own (`<job branch>-p<N>`) cut from the job branch as it stands -- jobs and
-  phases never share a checkout
-- [ ] At most N at once per development (project setting, default 3) and per model
-  provider (its rate limit); the rest wait their turn as *ready*
-- [ ] Each runs the phase as today: its own build gate, standards review, fix rounds and
-  phase budget. A phase that stops (budget, a failed gate, a Mac it waits for) stops only
-  itself; the others carry on, and the development waits for a person only when nothing
-  else can run
-- [ ] A finished phase is merged into the job branch in plan order, the build gate runs
-  once more on the merged branch, and the branch is pushed (T16.1). A merge conflict goes
-  to the specialist of the later phase with the conflict shown, then to the person at a
-  gate if it stays
-- [ ] A re-plan while phases run lets the running ones finish their call and keeps every
-  phase already merged
-- [ ] What the job keeps for one phase today becomes per phase: the call in flight, the
-  build attempts, the last build output, the review rounds and the phase budget
-- [ ] The pipeline shows the running phases side by side with their own state; *Right now*
-  shows every call in flight; Jira moves each task on its own
-- [ ] Tests: two independent phases run at once (a scripted provider with a barrier), a
-  dependent one waits for both, a conflict reaches the later phase's specialist and then
-  the gate, a stopped phase does not stop its neighbour
+- [x] When a phase starts, the phases after it that need nothing still to be built (their
+  `depends_on` all committed, T16.2) start writing their answers on threads, from a copy
+  of the job set on them: *written alongside*. Two phases on one file are always ordered,
+  so an answer written ahead touches nothing another one does
+- [x] At most N at once per development, the phase being built included (project budget
+  `max_parallel_phases`, default 3; 1 writes one at a time, as before). A phase waiting for
+  a Mac or a design approval is not written ahead
+- [x] A phase's turn takes its answer when it is ready, instead of asking; the call is
+  counted against that phase's budget. One that failed is asked in turn, as always. Fix
+  rounds, parts and reviews are asked in turn, as today
+- [x] A re-plan drops what is being written ahead (what is already on its way finishes and
+  is paid for, and nobody reads it); a restarted server writes them again in turn
+- [x] *Right now* shows the phases being written alongside, each with its own clock
+- [x] Tests (`tests/test_phase16_side_by_side.py`): two independent phases are written at
+  once (their calls wait at a barrier for each other), a phase that needs both waits; one at
+  a time writes nothing ahead; a phase that needs the one being built waits its turn
+- [ ] ~~Worktrees and branches per phase, merged in plan order~~ -- not built: the answer is
+  what takes the time, and running gates side by side would have meant per-phase state for
+  every gate, retry and budget in the engine, for seconds
+- [ ] ~~Per-provider rate limits~~ -- the per-development cap is the only one so far
 
 > What to expect: parallelism pays across domains -- a backend phase beside a web phase
 > beside a mobile one. The Android app's ten phases all changed `App.tsx` and its screens,
@@ -1674,7 +1678,7 @@ changed one breaks.
 ### Order
 T16.1 first: small, and every later step is safer once the work is on the remote.
 T16.2 next: it changes only the order, and makes T16.3's question answerable. T16.3 last,
-in two pull requests -- the per-phase state of the job first, then the scheduler.
+as answers written alongside (see its note).
 
 ---
 
