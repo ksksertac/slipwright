@@ -167,6 +167,30 @@ def look(
     return sorted(found.values(), key=lambda p: str(p.get("name", "")).lower())
 
 
+def machine_os() -> str:
+    """What the computer is, for the card another one draws it as: ``macos``, ``windows``
+    or ``linux``. In Docker the container is always Linux, so the kernel it was given
+    says what is underneath: WSL2's on Windows, Docker Desktop's LinuxKit on a Mac.
+    ``SLIPWRIGHT_HOST_OS`` settles it when that guess is wrong."""
+    import os
+    import platform
+
+    told = os.environ.get("SLIPWRIGHT_HOST_OS", "").strip().lower()
+    if told in ("macos", "windows", "linux"):
+        return told
+    if in_container():
+        try:
+            kernel = Path("/proc/version").read_text(encoding="utf-8").lower()
+        except OSError:
+            kernel = ""
+        if "microsoft" in kernel or "wsl" in kernel:
+            return "windows"
+        if "linuxkit" in kernel:
+            return "macos"
+        return "linux"
+    return {"Darwin": "macos", "Windows": "windows"}.get(platform.system(), "linux")
+
+
 def machine_name() -> str:
     """What this installation is called on another's screen. A container's host name is
     its id, which says nothing to anybody; ``SLIPWRIGHT_NAME`` is asked first for that."""

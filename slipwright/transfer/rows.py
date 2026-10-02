@@ -25,12 +25,14 @@ TABLES = (
     "settings",
 )
 
-#: Rows per part. An attachment is a file of up to fifty megabytes, so those go a few
-#: at a time; everything else is small.
-BATCH = 200
-FILE_BATCH = 4
-#: The largest piece of a checkout in one part.
-CHUNK = 8 * 1024 * 1024
+#: What the two sides speak. A sender asks the receiver's ``hello`` first and goes no
+#: further on a different number: version 1 sent rows as JSON lists, two hundred at a
+#: time, and two hundred rows of agent transcripts were more than a part may be.
+PROTOCOL = 2
+#: The largest piece of anything in one part: a run of rows, a slice of a checkout. Rows
+#: are a stream of JSON lines cut at this size, wherever the cut falls, so neither a long
+#: history nor a fifty-megabyte attachment is ever more than one part can carry.
+CHUNK = 4 * 1024 * 1024
 
 #: Settings that describe the machine rather than the account, so are never carried: the
 #: address a Mac was told to call, and bookkeeping the receiver keeps for itself.
@@ -116,10 +118,9 @@ class Progress:
 
 
 __all__ = [
-    "BATCH",
     "CHUNK",
-    "FILE_BATCH",
     "MACHINE_SETTINGS",
+    "PROTOCOL",
     "STEPS",
     "STEP_OF",
     "TABLES",
