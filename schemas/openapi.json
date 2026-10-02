@@ -7686,6 +7686,20 @@
             ],
             "title": "Confidence"
           },
+          "depends_on": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Depends On"
+          },
           "domain": {
             "anyOf": [
               {
@@ -7842,6 +7856,7 @@
           "auto_approved",
           "by_hand",
           "confidence",
+          "depends_on",
           "domain",
           "editable",
           "elapsed_s",

@@ -426,6 +426,18 @@ def _clip(text: object, limit: int) -> str | None:
     return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
 
 
+def _plan_problem(
+    kept: list[PlanPhase], new: list[PlanPhase], task_ids: list[str]
+) -> dict[str, int] | str:
+    """The task map of a plan the Architect wrote, or why it cannot be built from: a task
+    with no phase, or phases whose `depends_on` cannot be followed (T16.2)."""
+    phases = [*kept, *new]
+    mapping = architect.phase_task_map(phases, task_ids)
+    if isinstance(mapping, str):
+        return mapping
+    return architect.dependency_problem(phases) or mapping
+
+
 class Engine:
     def __init__(
         self,
@@ -2155,6 +2167,9 @@ class Engine:
         mapping = architect.phase_task_map(phases, [t.id for t in breakdown.tasks()])
         if isinstance(mapping, str):
             raise InvalidEdit(f"plan does not match the backlog: {mapping}")
+        order = architect.dependency_problem(phases)
+        if order is not None:
+            raise InvalidEdit(order)
         for task in breakdown.tasks():
             task.phase = mapping[task.id]
         decisions = plan.get("decisions", current.get("decisions", []))
@@ -4763,7 +4778,7 @@ class Engine:
         breakdown = Breakdown.model_validate(job.data.backlog)
         task_ids = [t.id for t in breakdown.tasks()]
         kept = [PlanPhase.model_validate(p) for p in architect.kept_phases(job)]
-        mapping = architect.phase_task_map([*kept, *result.output.phases], task_ids)
+        mapping = _plan_problem(kept, result.output.phases, task_ids)
         if isinstance(mapping, str):
             # a plan that skips a task is usually the Architect obeying "say so in summary"
             # too literally: it flags a large task and leaves it out. Failing outright threw
@@ -4785,13 +4800,14 @@ class Engine:
                 attachments=self.attachments_for(job, whole=False),
                 problem=(
                     f"{mapping}. Every backlog task needs a phase whose `task_id` is the "
-                    f"task's id; the tasks are: {listing}"
+                    f"task's id, and every phase lists in `depends_on` the earlier phases it "
+                    f"builds on; the tasks are: {listing}"
                 ),
             )
             if not result.ok:
                 return self._invocation_failed(job, result)
             assert isinstance(result.output, ArchitectResult)
-            mapping = architect.phase_task_map([*kept, *result.output.phases], task_ids)
+            mapping = _plan_problem(kept, result.output.phases, task_ids)
             if isinstance(mapping, str):
                 return self._fail(
                     job,
@@ -5151,7 +5167,16 @@ class Engine:
         later = [p for p in rest if not self._phase_buildable(job, p)]
         if not ready or rest == ready + later:
             return job
-        plan["phases"] = phases[:index] + ready + later
+        moved = phases[:index] + ready + later
+        # a phase's number is where it stands, so the numbers it depends on move with it
+        number = {id(p): i for i, p in enumerate(moved, start=1)}
+        before = {i: id(p) for i, p in enumerate(phases, start=1)}
+        plan["phases"] = [
+            p
+            if p.get("depends_on") is None
+            else {**p, "depends_on": sorted(number[before[d]] for d in p["depends_on"])}
+            for p in moved
+        ]
         if plan.get("breakdown"):
             breakdown = Breakdown.model_validate(plan["breakdown"])
             mapping = architect.phase_task_map(

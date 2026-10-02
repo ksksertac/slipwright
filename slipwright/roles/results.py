@@ -97,7 +97,14 @@ class PlanPhase(BaseModel):
     goal: str = Field(min_length=1)
     files: list[str] = Field(default_factory=list, description="Files expected to change.")
     task_id: str | None = Field(
-        default=None, description="The backlog task this phase implements (one phase per task)."
+        default=None,
+        description="The backlog task this phase implements (a large one may take several).",
+    )
+    depends_on: list[int] | None = Field(
+        default=None,
+        description="The numbers of the earlier phases this one builds on: whose files it "
+        "changes or reads, whose contract it uses. [] when it needs none. Omitted (an "
+        "older plan) means every earlier phase.",
     )
     domain: Literal["backend", "web", "mobile", "infra", "docs", "general"] = Field(
         default="general",
