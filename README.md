@@ -300,10 +300,19 @@ Every merge to `main` is a release: it publishes `ghcr.io/ksksertac/slipwright:l
 (`:0.2.1`, then `:0.2.2`, …), and a `:0.2` that follows the newest of them.
 
 ```sh
-docker run -d --name slipwright -p 8500:8500 \
+docker run -d --name slipwright --restart unless-stopped -p 8500:8500 \
     -v slipwright-state:/data -v slipwright-work:/work \
-    ghcr.io/ksksertac/slipwright:latest                 # http://localhost:8500
+    -v /var/run/docker.sock:/var/run/docker.sock --group-add 0 \
+    ghcr.io/ksksertac/slipwright:latest
 ```
+
+Then open http://localhost:8500.
+
+The Docker socket is what lets the page install a new release by itself (below). Access
+to the socket is access to the host, which is fine on your own machine. On a server
+other people sign up to, leave out the `-v /var/run/docker.sock...` line and update by
+hand. `--group-add` is the socket's group on the host: `0` on Docker Desktop, `stat -c %g
+/var/run/docker.sock` on Linux.
 
 Open the page and sign in: a server with nobody on it yet makes an account for you,
 `admin` / `admin`, and the login page says so. Change the password under **Settings →
@@ -313,34 +322,28 @@ Keep `/data` and `/work` as **two separate volumes**. `/data` holds the key that
 every stored credential, and a development's own commands must not be able to reach it
 from a checkout.
 
-**Updating keeps your work.** Everything lives in the two volumes, not in the container,
-so pull the new image and start a new container on the same volumes:
+**Updating keeps your work.** Everything lives in the two volumes, not in the container.
+When a newer release is out, an **Install version …** button appears under the version
+in the sidebar's corner, for whoever is using the screen. It pulls the release, copies a
+SQLite database aside, makes the container again on the same volumes, ports and
+settings, and puts the old one back if the new one never becomes healthy. The database
+is migrated at start, and developments that were running carry on.
+
+A container started without the socket cannot do that, and the button shows what to run
+instead -- the same steps by hand, which also give the new container the socket:
 
 ```sh
 docker pull ghcr.io/ksksertac/slipwright:latest
-docker stop slipwright && docker rm slipwright       # the container, not the volumes
-docker run -d --name slipwright -p 8500:8500 \
+docker stop slipwright && docker rm slipwright
+docker run -d --name slipwright --restart unless-stopped -p 8500:8500 \
     -v slipwright-state:/data -v slipwright-work:/work \
+    -v /var/run/docker.sock:/var/run/docker.sock --group-add 0 \
     ghcr.io/ksksertac/slipwright:latest
 ```
 
-The database is migrated at start, and developments that were running carry on. Never
-`docker volume rm` or `docker compose down -v` an installation you want to keep.
-
-**Or from the page.** When a newer release is out, an **Install version …** button appears
-under the version in the sidebar's corner, for whoever is using the screen. Give the
-container the Docker socket and the button does the above by itself -- pulls the release,
-copies a SQLite database aside, makes the container again on the same volumes, ports and
-settings, and puts the old one back if the new one never becomes healthy:
-
-```sh
-docker run -d --name slipwright -p 8500:8500     -v slipwright-state:/data -v slipwright-work:/work     -v /var/run/docker.sock:/var/run/docker.sock --group-add 0     ghcr.io/ksksertac/slipwright:latest
-```
-
-`--group-add` is the socket's group on the host (`0` on Docker Desktop; `stat -c %g
-/var/run/docker.sock` on Linux). Access to the socket is access to the host, so give it
-only to a server you trust with that. Without it the button says what to run instead.
-Every merge to `main` is a release, numbered one patch up from the last.
+`docker rm` removes the container, not the volumes. Never `docker volume rm` or `docker
+compose down -v` an installation you want to keep. Every merge to `main` is a release,
+numbered one patch up from the last.
 
 </details>
 
@@ -350,10 +353,14 @@ Every merge to `main` is a release, numbered one patch up from the last.
 One image holds everything: the API, the web UI, `git`, `gh`, `uv`/Python and Node for
 the projects it works on. There is no separate database or queue to run.
 
+`.env` is optional: API keys, a stable `SLIPWRIGHT_SECRET_KEY`.
+
 ```sh
-cp .env.example .env                    # optional: API keys, a stable SLIPWRIGHT_SECRET_KEY
-docker compose up --build -d            # http://localhost:8500; sign in as admin / admin
+cp .env.example .env
+docker compose up --build -d
 ```
+
+Then open http://localhost:8500 and sign in as `admin` / `admin`.
 
 To update: `git pull && docker compose up --build -d`. The volumes, and everything in them,
 stay.
@@ -373,12 +380,16 @@ stay.
 <details>
 <summary><b>From source</b></summary>
 
+The Python side, then the web UI (built into `slipwright/api/static/`), then the server:
+
 ```sh
-uv sync                                  # Python side
-cd web && npm install && npm run build   # web UI -> slipwright/api/static/
+uv sync
+cd web && npm install && npm run build
 cd ..
-uv run slipwright serve                  # http://127.0.0.1:8500; sign in as admin / admin
+uv run slipwright serve
 ```
+
+Then open http://127.0.0.1:8500 and sign in as `admin` / `admin`.
 
 </details>
 
@@ -435,8 +446,9 @@ one; pass it as `--token` or `SLIPWRIGHT_TOKEN`.
 uv run slipwright project new demo --github octocat/demo --jira DEM
 uv run slipwright project list
 uv run slipwright new <project-id> "add a /health endpoint"
-uv run slipwright status                # or: slipwright status <job-id>
-uv run slipwright approve <job-id>      # leave the current gate
+uv run slipwright status
+uv run slipwright status <job-id>
+uv run slipwright approve <job-id>
 uv run slipwright reject <job-id> "use poetry, not pip"
 uv run slipwright message <job-id> "keep the public API unchanged"
 ```
@@ -478,17 +490,20 @@ Settings come from the environment (or `serve` flags):
 SQLite is the default and needs nothing. To keep everything in PostgreSQL instead, add
 this to `.env`:
 
-```sh
+```ini
 SLIPWRIGHT_DATABASE_URL=postgresql+psycopg://slipwright:slipwright@postgres/slipwright
 COMPOSE_PROFILES=postgres       # so a plain `docker compose up` starts the database too
 ```
 
-Then, if the installation already has people and projects in its SQLite file:
+Then, if the installation already has people and projects in its SQLite file,
+
+start it, copy the SQLite file into PostgreSQL, and restart so in-flight work is picked
+up from the copy:
 
 ```sh
 docker compose up --build -d
-docker compose exec slipwright slipwright db copy   # SQLite file -> PostgreSQL
-docker compose restart slipwright                   # pick up in-flight work from the copy
+docker compose exec slipwright slipwright db copy
+docker compose restart slipwright
 ```
 
 `db copy` refuses a database that already has accounts, so running it twice does no harm.
@@ -610,10 +625,13 @@ deleted afterwards, with nothing of the Mac's environment but what a build needs
 
 ## Development
 
+The whole suite on SQLite, lint and types, the API schema (after changing API models or
+routes), then the web client and UI:
+
 ```sh
-uv run pytest                            # the whole suite, on SQLite
-uv run ruff check . && uv run mypy       # lint and types
-uv run python scripts/export_schema.py   # after changing API models or routes
+uv run pytest
+uv run ruff check . && uv run mypy
+uv run python scripts/export_schema.py
 cd web && npm run gen:api && npm run lint && npm run build
 ```
 
