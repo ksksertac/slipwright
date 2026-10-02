@@ -246,8 +246,19 @@ def send(body: TransferSendRequest, request: Request) -> TransferStatus:
     background; ask ``/transfer/send/{id}`` how it goes. Refused at once (409) while a
     development is running."""
     scope = _scope(request)
+    scope.projects = body.projects
+    scope.checkouts = body.checkouts
+    scope.settings = body.settings
+    scope.attachments = body.attachments
+    scope.installation = body.installation
     engine = _engine(request)
     _on(engine)
+    if (
+        body.projects is not None
+        and not body.projects
+        and not (body.settings or (scope.admin and body.installation))
+    ):
+        raise HTTPException(status_code=422, detail="nothing is chosen to send")
     address = body.address.strip().rstrip("/")
     if not address.startswith(("http://", "https://")):
         address = f"http://{address}"

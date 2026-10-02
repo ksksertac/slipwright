@@ -90,6 +90,14 @@ class Scope:
     owner: str | None
     admin: bool = False
     everything: bool = False
+    # what the person chose to send. ``projects`` None is all of them; without
+    # ``checkouts`` the receiver clones each project from its remote instead, so only
+    # what was pushed arrives
+    projects: list[str] | None = None
+    checkouts: bool = True
+    settings: bool = True
+    attachments: bool = True
+    installation: bool = True
 
 
 @dataclass
@@ -117,7 +125,11 @@ def projects_of(engine: Engine, scope: Scope) -> list[Project]:
     with engine.raw_store.db.connect() as conn:
         found = [Project.model_validate_json(r[0]) for r in conn.execute(query)]
     # the worked example is every account's own and has no checkout: the receiver has one
-    return [p for p in found if not p.is_demo]
+    found = [p for p in found if not p.is_demo]
+    if scope.projects is not None:
+        chosen = set(scope.projects)
+        found = [p for p in found if p.id in chosen]
+    return found
 
 
 def busy(engine: Engine, project_ids: list[str]) -> list[str]:
@@ -177,6 +189,21 @@ def plan(engine: Engine, scope: Scope) -> Plan:
     tree_paths: dict[str, Path] = {}
     for project in found:
         path = project.repo_path
+        if not scope.checkouts:
+            # cloned over there from where it is pushed: there has to be such a place
+            here = _repo(path) if path is not None and path.is_dir() else {}
+            origin = here.get("origin") or project.effective_clone_url
+            if not origin:
+                raise Refused(
+                    f"{project.name} has no remote to clone from; send it with its checkout"
+                )
+            repos[project.id] = {
+                "head": here.get("head"),
+                "bundle": False,
+                "dirty": False,
+                "origin": origin,
+            }
+            continue
         if path is None or not path.is_dir():
             raise Refused(f"the checkout of {project.name} is missing ({path}); nothing to send")
         repos[project.id] = _repo(path)
@@ -211,15 +238,19 @@ def _rows(
         elif table == "test_runs":
             query = select(test_runs).where(test_runs.c.project_id.in_(project_ids))
         elif table == "attachments":
+            if not scope.attachments:
+                return
             query = select(attachments).where(attachments.c.project_id.in_(project_ids))
         elif table == "standards_pages":
+            if not scope.attachments:
+                return
             query = select(standards_pages).where(
                 standards_pages.c.owner_id == (scope.owner or INSTALLATION)
             )
         elif table == "translations":
             # a cache of agent prose across every account: only an administrator's
             # transfer carries it, since it holds other people's text too
-            if not scope.admin:
+            if not (scope.admin and scope.installation):
                 return
             query = select(translations)
         elif table == "settings":
@@ -254,7 +285,9 @@ def _settings(engine: Engine, scope: Scope) -> Iterator[dict[str, Any]]:
         personal = is_personal(name)
         if personal and row["user_id"] != mine:
             continue  # an installation row of a personal name: pre-account leftovers
-        if not personal and not scope.admin:
+        if personal and not scope.settings:
+            continue
+        if not personal and not (scope.admin and scope.installation):
             continue
         value = row["value_json"]
         if row["encrypted"]:
@@ -377,6 +410,7 @@ def send(
                 "projects": [{"id": p.id, "name": p.name} for p in work.projects],
                 "repos": work.repos,
                 "trees": work.trees,
+                "checkouts": scope.checkouts,
                 "counts": work.counts,
             }
         )

@@ -14,6 +14,7 @@ import {
 import {
   useIncomingTransfer,
   useNearby,
+  useProjects,
   useSendTransfer,
   useSendingStatus,
   useStopReceiving,
@@ -367,16 +368,36 @@ function SendModal({
   const [address, setAddress] = useState(peer?.address ?? "");
   const [code, setCode] = useState("");
   const [deleteAfter, setDeleteAfter] = useState(false);
+  // every project unless narrowed; null is "all of them", so one made meanwhile goes too
+  const [chosen, setChosen] = useState<string[] | null>(null);
+  const [checkouts, setCheckouts] = useState(true);
+  const [settings, setSettings] = useState(true);
+  const [attachments, setAttachments] = useState(true);
+  const [installation, setInstallation] = useState(here.admin);
   const [sendingId, setSendingId] = useState<string | null>(null);
   const status = useSendingStatus(sendingId);
   const running =
     sendingId !== null && status.data?.state !== "done" && status.data?.state !== "failed";
-  const name = peer?.name ?? (hostOf(address) || tx("another computer"));
-  const ready = code.replace(/[^0-9a-z]/gi, "").length >= 12 && address.trim().length > 3;
+  const known = peer?.name ?? hostOf(address);
+  const name = known || tx("another computer");
+  const title = known ? tx("Move to {name}", { name }) : tx("Move to another computer");
+  const someProjects = chosen === null || chosen.length > 0;
+  const something = someProjects || settings || (here.admin && installation);
+  const ready =
+    something && code.replace(/[^0-9a-z]/gi, "").length >= 12 && address.trim().length > 3;
 
   const go = () => {
     send.mutate(
-      { address: address.trim(), code: code.trim(), delete_after: deleteAfter },
+      {
+        address: address.trim(),
+        code: code.trim(),
+        delete_after: deleteAfter && someProjects,
+        ...(chosen === null ? {} : { projects: chosen }),
+        checkouts,
+        settings,
+        attachments,
+        installation: here.admin && installation,
+      },
       { onSuccess: (s) => setSendingId(s.id) },
     );
   };
@@ -395,7 +416,7 @@ function SendModal({
   }
   return (
     <Modal
-      title={tx("Move to {name}", { name })}
+      title={title}
       onClose={() => !running && onClose()}
       wide
       footer={
@@ -471,7 +492,11 @@ function SendModal({
             </div>
           )}
           <div className="field">
-            <label htmlFor="move-code">{tx("The code on {name}'s screen", { name })}</label>
+            <label htmlFor="move-code">
+              {known
+                ? tx("The code on {name}'s screen", { name })
+                : tx("The code on the receiving screen")}
+            </label>
             <input
               id="move-code"
               type="text"
@@ -486,18 +511,58 @@ function SendModal({
             />
           </div>
           {send.error && <div className="callout error">{describeError(send.error)}</div>}
-          <div className="move-goes">
-            <Goes yes>{tx("Projects and developments, with their history")}</Goes>
-            <Goes yes>{tx("Checkouts, branches and uncommitted work")}</Goes>
-            <Goes yes>{tx("Model, Git and Jira keys")}</Goes>
-            <Goes yes>{tx("Attachments and standards")}</Goes>
-            <Goes yes={here.admin}>{tx("This installation's settings (mail, prices)")}</Goes>
-            <Goes yes={false}>{tx("Accounts and sessions")}</Goes>
+          <div className="field">
+            <label>{tx("Projects")}</label>
+            <ProjectPicker chosen={chosen} onChange={setChosen} />
           </div>
+          <div className="move-goes">
+            <Choice
+              on={someProjects && checkouts}
+              disabled={!someProjects}
+              onChange={setCheckouts}
+              label={tx("Checkouts, branches and uncommitted work")}
+            />
+            <Choice
+              on={settings}
+              onChange={setSettings}
+              label={tx("Settings and keys (models, Git, Jira)")}
+            />
+            <Choice
+              on={someProjects && attachments}
+              disabled={!someProjects}
+              onChange={setAttachments}
+              label={tx("Attachments and standards")}
+            />
+            <Choice
+              on={here.admin && installation}
+              disabled={!here.admin}
+              onChange={setInstallation}
+              label={tx("This installation's settings (mail, prices)")}
+            />
+            <Choice
+              on={false}
+              disabled
+              onChange={() => undefined}
+              label={tx("Accounts and sessions (never moved)")}
+            />
+          </div>
+          {someProjects && !checkouts && (
+            <div className="callout" style={{ marginBottom: 10 }}>
+              {tx(
+                "Without their checkouts the projects are cloned from their remote over there: branches not pushed and work not committed stay here.",
+              )}
+            </div>
+          )}
+          {!something && (
+            <div className="callout error" style={{ marginBottom: 10 }}>
+              {tx("Nothing is chosen to send.")}
+            </div>
+          )}
           <label className="move-delete">
             <input
               type="checkbox"
-              checked={deleteAfter}
+              checked={deleteAfter && someProjects}
+              disabled={!someProjects}
               onChange={(e) => setDeleteAfter(e.target.checked)}
             />
             {tx("Delete them from this computer once they are there")}
@@ -517,11 +582,98 @@ function SendModal({
   );
 }
 
-function Goes({ yes, children }: { yes: boolean; children: string }) {
+function Choice({
+  on,
+  onChange,
+  label,
+  disabled = false,
+}: {
+  on: boolean;
+  onChange: (on: boolean) => void;
+  label: string;
+  disabled?: boolean;
+}) {
   return (
-    <div className={`move-go ${yes ? "" : "no"}`}>
-      <span aria-hidden="true">{yes ? "✓" : "—"}</span>
-      {children}
+    <label className={`move-go ${on ? "" : "no"} ${disabled ? "locked" : ""}`}>
+      <input
+        type="checkbox"
+        checked={on}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+      {label}
+    </label>
+  );
+}
+
+// Which projects go: all of them unless narrowed. A button that says what is chosen,
+// opening a list to tick -- the list closes when anything else on the page is pressed.
+function ProjectPicker({
+  chosen,
+  onChange,
+}: {
+  chosen: string[] | null;
+  onChange: (chosen: string[] | null) => void;
+}) {
+  const tx = useT();
+  const projects = useProjects();
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  const mine = (projects.data ?? []).filter((p) => !p.is_demo);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: MouseEvent) => {
+      if (box.current && !box.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", away);
+    return () => document.removeEventListener("mousedown", away);
+  }, [open]);
+
+  const all = chosen === null;
+  const has = (id: string) => all || chosen.includes(id);
+  const toggle = (id: string) => {
+    const now = all ? mine.map((p) => p.id) : chosen;
+    const next = now.includes(id) ? now.filter((x) => x !== id) : [...now, id];
+    onChange(next.length === mine.length ? null : next);
+  };
+  const label = all
+    ? tx("All ({n})", { n: String(mine.length) })
+    : chosen.length === 0
+      ? tx("None")
+      : mine
+          .filter((p) => chosen.includes(p.id))
+          .map((p) => p.name)
+          .join(", ");
+  return (
+    <div className="move-picker" ref={box}>
+      <button
+        type="button"
+        className="move-picker-button"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <span className="move-picker-label">{label}</span>
+        <span aria-hidden="true">▾</span>
+      </button>
+      {open && (
+        <div className="move-picker-list" role="listbox" aria-multiselectable="true">
+          <label className="move-picker-item all">
+            <input
+              type="checkbox"
+              checked={all}
+              onChange={(e) => onChange(e.target.checked ? null : [])}
+            />
+            {tx("All")}
+          </label>
+          {mine.map((p) => (
+            <label key={p.id} className="move-picker-item">
+              <input type="checkbox" checked={has(p.id)} onChange={() => toggle(p.id)} />
+              {p.name}
+            </label>
+          ))}
+          {mine.length === 0 && <div className="faint small">{tx("No projects yet.")}</div>}
+        </div>
+      )}
     </div>
   );
 }

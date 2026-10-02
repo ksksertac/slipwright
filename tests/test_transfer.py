@@ -487,3 +487,89 @@ def test_a_part_too_large_is_refused_unread(there: Machine) -> None:
         f"/api/transfer/peer/{paired['session']}/part", content=b"x" * (incoming.MAX_PART + 1)
     )
     assert got.status_code == 413
+
+
+# -- what the person chose ------------------------------------------------------------------
+
+
+def test_only_the_chosen_projects_move(
+    linked: tuple[Machine, Machine], repo: Path, tmp_path: Path
+) -> None:
+    here, there = linked
+    other = tmp_path / "other"
+    other.mkdir()
+    _git(other, "init", "-q", "-b", "main")
+    _git(
+        other,
+        "-c",
+        "user.email=t@e.x",
+        "-c",
+        "user.name=T",
+        "commit",
+        "-q",
+        "--allow-empty",
+        "-m",
+        "x",
+    )
+    shop = _project(here, repo)
+    _project(here, other, name="blog")
+    status = _send(here, _code(there), projects=[shop.id])
+    assert status["state"] == "done", status["error"]
+    assert [p.name for p in there.store.list_projects()] == ["shop"]
+
+
+def test_keys_stay_when_they_are_not_chosen(linked: tuple[Machine, Machine], repo: Path) -> None:
+    here, there = linked
+    _project(here, repo)
+    here.store.set_setting("sources.github.token", "ghp_secret", secret=True)
+    here.store.set_setting("mail", {"host": "smtp.example.com"})
+    status = _send(here, _code(there), settings=False, installation=False)
+    assert status["state"] == "done", status["error"]
+    assert there.store.get_setting("sources.github.token") is None
+    assert there.store.get_setting("mail") is None
+    assert len(there.store.list_projects()) == 1
+
+
+def test_without_its_checkout_a_project_is_cloned_from_its_remote(
+    linked: tuple[Machine, Machine], repo: Path, tmp_path: Path
+) -> None:
+    here, there = linked
+    remote = tmp_path / "remote.git"
+    _git(tmp_path, "init", "-q", "--bare", str(remote))
+    _git(repo, "remote", "add", "origin", str(remote))
+    _git(repo, "push", "-q", "origin", "main")
+    _git(repo, "checkout", "-q", "-b", "unpushed")
+    _git(
+        repo,
+        "-c",
+        "user.email=t@e.x",
+        "-c",
+        "user.name=T",
+        "commit",
+        "-q",
+        "--allow-empty",
+        "-m",
+        "local only",
+    )
+    _git(repo, "checkout", "-q", "main")
+    project = _project(here, repo)
+
+    status = _send(here, _code(there), checkouts=False)
+
+    assert status["state"] == "done", status["error"]
+    moved = there.store.get_project(project.id)
+    assert moved.repo_path is not None
+    assert (moved.repo_path / "README.md").is_file()
+    assert "unpushed" not in _git(moved.repo_path, "branch", "--list")
+
+
+def test_without_a_remote_a_project_needs_its_checkout(
+    linked: tuple[Machine, Machine], repo: Path
+) -> None:
+    here, there = linked
+    _project(here, repo)
+    refused = here.client.post(
+        "/api/transfer/send", json={"address": THERE, "code": _code(there), "checkouts": False}
+    )
+    assert refused.status_code == 409
+    assert "no remote" in refused.json()["detail"]
