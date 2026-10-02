@@ -422,13 +422,17 @@ def test_a_container_does_not_offer_its_bridge_address(monkeypatch: pytest.Monke
     assert nearby.own_address() is None
 
 
-def test_looking_around_finds_the_others_and_not_itself() -> None:
+def test_looking_around_finds_the_others_itself_and_the_old_ones() -> None:
     def answer(request: httpx.Request) -> httpx.Response:
-        host = request.url.host
+        host, path = request.url.host, request.url.path
         if host == "192.168.1.30":
             return httpx.Response(200, json={"app": "slipwright", "instance": "me", "name": "me"})
         if host == "192.168.1.40":
             return httpx.Response(200, text="<html>a printer</html>")
+        if host == "192.168.1.50":  # a release from before moving existed
+            if path.endswith("/first-run"):
+                return httpx.Response(200, json={"default_admin": False})
+            return httpx.Response(404, json={"detail": "Not Found"})
         return httpx.Response(
             200, json={"app": "slipwright", "instance": "laptop", "name": "LAPTOP-OFIS"}
         )
@@ -441,12 +445,15 @@ def test_looking_around_finds_the_others_and_not_itself() -> None:
         scan=lambda nets, ports, skip: [
             "http://192.168.1.30:8500",
             "http://192.168.1.40:8500",
+            "http://192.168.1.50:8500",
             "http://192.168.1.24:8500",
             "http://192.168.1.24:8600",  # the same machine by another door
         ],
     )
-    assert [(p["name"], p["address"]) for p in found] == [
-        ("LAPTOP-OFIS", "http://192.168.1.24:8500")
+    assert [(p["name"], p["address"], p.get("this_one"), p.get("legacy")) for p in found] == [
+        ("192.168.1.50", "http://192.168.1.50:8500", None, True),
+        ("LAPTOP-OFIS", "http://192.168.1.24:8500", None, None),
+        ("me", "http://192.168.1.30:8500", True, None),
     ]
 
 
@@ -456,8 +463,10 @@ def test_this_machine_tells_its_card(here: Machine, repo: Path) -> None:
     assert card["enabled"] is True
     assert card["projects"] == 1
     assert "http://192.168.1.11:8500" in card["addresses"]
+    assert card["networks"][0] == "192.168.1.0/24"
     hello = here.client.get("/api/transfer/peer/hello").json()
     assert hello["instance"] == card["instance"]
+    assert hello["projects"] == 1 and hello["database"] == card["database"]
 
 
 def test_a_part_too_large_is_refused_unread(there: Machine) -> None:

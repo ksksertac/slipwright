@@ -8415,6 +8415,10 @@
             "title": "App",
             "type": "string"
           },
+          "database": {
+            "title": "Database",
+            "type": "string"
+          },
           "instance": {
             "title": "Instance",
             "type": "string"
@@ -8422,6 +8426,11 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "projects": {
+            "description": "How many projects it holds, the worked example aside.",
+            "title": "Projects",
+            "type": "integer"
           },
           "revision": {
             "anyOf": [
@@ -8441,8 +8450,10 @@
         },
         "required": [
           "app",
+          "database",
           "instance",
           "name",
+          "projects",
           "revision",
           "version"
         ],
@@ -8466,6 +8477,11 @@
             "title": "Admin",
             "type": "boolean"
           },
+          "database": {
+            "description": "sqlite or postgresql.",
+            "title": "Database",
+            "type": "string"
+          },
           "enabled": {
             "description": "Off on a hosted installation (SLIPWRIGHT_TRANSFER).",
             "title": "Enabled",
@@ -8478,6 +8494,14 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "networks": {
+            "description": "What looking around the network looks at.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Networks",
+            "type": "array"
           },
           "projects": {
             "description": "This account's projects: what a transfer would send.",
@@ -8503,9 +8527,11 @@
         "required": [
           "addresses",
           "admin",
+          "database",
           "enabled",
           "instance",
           "name",
+          "networks",
           "projects",
           "revision",
           "version"
@@ -8602,14 +8628,44 @@
             "title": "Compatible",
             "type": "boolean"
           },
+          "database": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "sqlite or postgresql.",
+            "title": "Database"
+          },
           "instance": {
             "description": "Which installation: the same one seen twice is one.",
             "title": "Instance",
             "type": "string"
           },
+          "legacy": {
+            "default": false,
+            "description": "A Slipwright from before moving existed: update it first.",
+            "title": "Legacy",
+            "type": "boolean"
+          },
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "projects": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How many projects it holds.",
+            "title": "Projects"
           },
           "revision": {
             "anyOf": [
@@ -8623,7 +8679,14 @@
             "description": "Its database schema; a transfer needs the same.",
             "title": "Revision"
           },
+          "this_one": {
+            "default": false,
+            "description": "This installation, found at an address of its own.",
+            "title": "This One",
+            "type": "boolean"
+          },
           "version": {
+            "description": "Empty for a release from before moving existed.",
             "title": "Version",
             "type": "string"
           }
@@ -8631,9 +8694,13 @@
         "required": [
           "address",
           "compatible",
+          "database",
           "instance",
+          "legacy",
           "name",
+          "projects",
           "revision",
+          "this_one",
           "version"
         ],
         "title": "TransferPeer",

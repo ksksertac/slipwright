@@ -32,6 +32,10 @@ export function TransferPage() {
   const on = here.data?.enabled ?? false;
   const nearby = useNearby(on);
   const [picked, setPicked] = useState<Picked | null>(null);
+  // the look finds this installation too, at the address the others would use: that is
+  // its card's address, and the rest are the others
+  const self = (nearby.data ?? []).find((p) => p.this_one);
+  const others = (nearby.data ?? []).filter((p) => !p.this_one);
   return (
     <div>
       <PageHead
@@ -58,12 +62,14 @@ export function TransferPage() {
               {nearby.isFetching ? (
                 <>
                   <span className="move-spin" aria-hidden="true" />
-                  {tx("Looking around the network…")}
+                  {here.data.networks.length > 0
+                    ? tx("Looking at {nets}…", { nets: here.data.networks.join(", ") })
+                    : tx("Looking around the network…")}
                 </>
               ) : nearby.error ? (
                 describeError(nearby.error)
               ) : (
-                tx("{n} found", { n: String(nearby.data?.length ?? 0) })
+                tx("{n} found", { n: String(others.length) })
               )}
               {!nearby.isFetching && (
                 <>
@@ -73,19 +79,18 @@ export function TransferPage() {
                   </button>
                   {" · "}
                   <button className="linkish" onClick={() => setPicked({ peer: null })}>
-                    {tx("not listed? connect by address")}
+                    {tx("connect by address")}
                   </button>
                 </>
               )}
             </span>
           </h3>
           <div className="mac-grid">
-            <HereCard here={here.data} />
-            {(nearby.data ?? []).map((peer) => (
+            <HereCard here={here.data} seen={self} />
+            {others.map((peer) => (
               <PeerCard key={peer.instance} peer={peer} onPick={() => setPicked({ peer })} />
             ))}
             <ReceiveCard here={here.data} />
-            <SendCard onPick={() => setPicked({ peer: null })} />
           </div>
           <div className="move-pills">
             <Pill title={tx("Sealed end to end")} icon="🔐">
@@ -127,7 +132,9 @@ function Pill({ title, icon, children }: { title: string; icon: string; children
 
 // -- the cards ---------------------------------------------------------------------------
 
-function HereCard({ here }: { here: TransferHere }) {
+const DATABASES: Record<string, string> = { sqlite: "SQLite", postgresql: "PostgreSQL" };
+
+function HereCard({ here, seen }: { here: TransferHere; seen: TransferPeer | undefined }) {
   const tx = useT();
   return (
     <div className="card mac-card" data-online="yes">
@@ -144,13 +151,17 @@ function HereCard({ here }: { here: TransferHere }) {
           {here.name}
         </div>
         <div className="faint small">
-          {[hostOf(here.addresses[0]), tx("{n} projects", { n: String(here.projects) })]
+          {[
+            hostOf(seen?.address ?? here.addresses[0]),
+            tx("{n} projects", { n: String(here.projects) }),
+          ]
             .filter(Boolean)
             .join(" · ")}
         </div>
         <div className="row mac-foot">
           <span className="row" style={{ gap: 6 }}>
             <span className="tag">v{here.version}</span>
+            <span className="tag">{DATABASES[here.database] ?? here.database}</span>
           </span>
         </div>
       </div>
@@ -173,14 +184,32 @@ function PeerCard({ peer, onPick }: { peer: TransferPeer; onPick: () => void }) 
         <div className="mac-name" title={peer.name}>
           {peer.name}
         </div>
-        <div className="faint small">{hostOf(peer.address)}</div>
+        <div className="faint small">
+          {[
+            hostOf(peer.address),
+            peer.projects == null
+              ? ""
+              : peer.projects === 0
+                ? tx("empty installation")
+                : tx("{n} projects", { n: String(peer.projects) }),
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+        </div>
         <div className="row mac-foot">
-          <span className="row" style={{ gap: 6 }}>
-            <span className={`tag ${peer.compatible ? "" : "move-old"}`}>v{peer.version}</span>
+          <span className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+            <span className={`tag ${peer.compatible ? "" : "move-old"}`}>
+              {peer.legacy ? tx("older version") : `v${peer.version}`}
+            </span>
+            {peer.database && (
+              <span className="tag">{DATABASES[peer.database] ?? peer.database}</span>
+            )}
           </span>
-          <span className={`btn small ${peer.compatible ? "primary" : "ghost"}`}>
-            {peer.compatible ? tx("Move here →") : tx("Update needed")}
-          </span>
+          {peer.compatible ? (
+            <span className="btn small primary">{tx("Move here →")}</span>
+          ) : (
+            <span className="faint small move-update">{tx("Update needed")}</span>
+          )}
         </div>
       </div>
     </button>
@@ -307,22 +336,6 @@ function ReceiveCard({ here }: { here: TransferHere }) {
 
 // a new code flashes as it replaces the last: keyed on the code, so the button is drawn
 // afresh and its animation plays again
-// The sending end, always there: the other computer is a card when looking around the
-// network found it, and this when it did not -- a server in Docker opened at localhost
-// often cannot see the network it is on, and the address is then typed instead.
-function SendCard({ onPick }: { onPick: () => void }) {
-  const tx = useT();
-  return (
-    <button type="button" className="card mac-card mac-connect" onClick={onPick}>
-      <span className="mac-plug">
-        <IconSend />
-      </span>
-      <strong>{tx("Send to another computer")}</strong>
-      <span className="faint small">{tx("Type its address and the code on its screen")}</span>
-    </button>
-  );
-}
-
 function CodeChip({ code }: { code: string | undefined }) {
   const tx = useT();
   return (
@@ -374,7 +387,7 @@ function SendModal({
         <div className="callout">
           {tx(
             "{name} runs another version of Slipwright (v{v}, this one v{mine}). Their databases differ, so nothing can move yet: update the older one from the corner of its screen, then try again.",
-            { name, v: peer.version, mine: here.version },
+            { name, v: peer.version || "?", mine: here.version },
           )}
         </div>
       </Modal>
@@ -641,25 +654,6 @@ function Desktop() {
       </g>
       <path className="mac-base" d="M98 116h24l5 22H93z" />
       <rect className="mac-base" x="72" y="136" width="76" height="7" rx="3.5" />
-    </svg>
-  );
-}
-
-function IconSend() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width="28"
-      height="28"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M12 15V3M7 8l5-5 5 5" />
-      <path d="M5 19h14" />
     </svg>
   );
 }
