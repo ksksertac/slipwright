@@ -3056,6 +3056,15 @@
             "title": "Output Hashes",
             "type": "object"
           },
+          "parked": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "description": "Phases set aside after spending their budget while others could go on (by their number now): their uncommitted work as a patch, their counters, and why. Restored, and asked about, when their turn comes again.",
+            "title": "Parked",
+            "type": "object"
+          },
           "pause": {
             "anyOf": [
               {
@@ -3357,6 +3366,7 @@
           "last_build_output",
           "notified",
           "output_hashes",
+          "parked",
           "pause",
           "phase_base_commit",
           "phase_calls",
@@ -7820,6 +7830,11 @@
             "title": "Outputs",
             "type": "array"
           },
+          "parked": {
+            "default": false,
+            "title": "Parked",
+            "type": "boolean"
+          },
           "pending": {
             "anyOf": [
               {
@@ -7933,6 +7948,7 @@
           "key",
           "label",
           "outputs",
+          "parked",
           "pending",
           "phase",
           "platform",

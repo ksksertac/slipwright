@@ -2265,6 +2265,9 @@ export const TR: Record<string, string> = {
   "after {phases}": "{phases}. fazdan sonra",
   "needs no other phase": "başka faza bağlı değil",
   "being written alongside": "yanında yazılıyor",
+  "waits: out of budget": "bekliyor: bütçesi doldu",
+  "it spent its budget; the phases that need nothing of it go on first, and you are asked about it when its turn comes":
+    "bütçesini doldurdu; ona bağlı olmayan fazlar önce devam ediyor, sırası gelince sana sorulacak",
   "the commit that recorded this phase": "bu fazı kaydeden commit",
   partial: "kısmen",
   untouched: "dokunulmadı",

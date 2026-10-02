@@ -1670,6 +1670,12 @@ machine, which every gate and retry is written against, is untouched.
 - [ ] ~~Worktrees and branches per phase, merged in plan order~~ -- not built: the answer is
   what takes the time, and running gates side by side would have meant per-phase state for
   every gate, retry and budget in the engine, for seconds
+- [x] A phase that spends its budget no longer stops the development while others could
+  go on: it is set aside -- its uncommitted work kept as a patch with its counters, the
+  checkout back at the last commit -- and moves, with every phase that needs it, behind the
+  ones that need nothing of it. When its turn comes again its work is put back and the
+  person is asked then, with QA's recommendation; the card says it waits. A failed build
+  gate still stops the development: three attempts are its own limit, not the budget
 - [x] Model calls one account runs at once on one provider are capped across all its
   developments (`SLIPWRIGHT_MAX_CALLS_PER_PROVIDER`, default 4, 0 = none): a call
   waits for a place, and a development told to stop stops waiting

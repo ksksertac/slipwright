@@ -4184,7 +4184,7 @@ class Engine:
             return None
         return f"phase {phase} took {spent} model calls (limit {limit})"
 
-    def _phase_budget_stop(self, job: Job, why: str) -> Job:
+    def _phase_budget_stop(self, job: Job, why: str, *, park: bool = True) -> Job:
         """Stop at the decision gate with a recommendation, and wait for words.
 
         QA reads what the phase went through and says what to do; the person accepts that
@@ -4192,6 +4192,10 @@ class Engine:
         instruction for the next attempt, on a fresh budget. A plain "continue" is not
         offered: it would spend another budget the same way.
         """
+        if park:
+            parked = self._park(job, why)
+            if parked is not None:
+                return parked
         phases = self._phases(job)
         index = job.data.phase_index
         phase = phases[index] if index < len(phases) else {}
@@ -5026,6 +5030,9 @@ class Engine:
         index = job.data.phase_index
         if index >= len(phases):
             return self._fail(job, f"no plan phase {index + 1} to develop")
+        asked = self._unpark(job)  # a phase set aside earlier: its turn, and the question
+        if asked is not None:
+            return asked
         if not self._phase_buildable(job, phases[index]):
             # checked before the screens: a phase that cannot be built yet should not keep
             # the ones that can waiting on a design approval
@@ -5327,25 +5334,12 @@ class Engine:
             future.cancel()
         job.data.ahead = {}
 
-    def _put_unbuildable_last(self, job: Job) -> Job:
-        """Move the phases nothing here can build behind the ones it can.
-
-        Safe because nothing depends on a platform phase -- the Architect is told so -- and
-        stable, so each group keeps its own order: an iOS phase that builds on another iOS
-        phase still comes after it. Only phases not started yet move, so every number the
-        history already speaks of stays true; the breakdown's numbers follow the plan, or
-        the board would mark the wrong tasks done.
-        """
+    def _reorder(self, job: Job, moved: list[dict[str, Any]]) -> None:
+        """Put the plan's phases in a new order (the same dicts, rearranged). A phase's number
+        is where it stands, so the numbers it depends on move with it, and the breakdown's
+        too -- or the board would mark the wrong tasks done. Only phases not started move."""
         plan = dict(job.data.plan or {})
         phases: list[dict[str, Any]] = list(plan.get("phases", []))
-        index = job.data.phase_index
-        rest = phases[index:]
-        ready = [p for p in rest if self._phase_buildable(job, p)]
-        later = [p for p in rest if not self._phase_buildable(job, p)]
-        if not ready or rest == ready + later:
-            return job
-        moved = phases[:index] + ready + later
-        # a phase's number is where it stands, so the numbers it depends on move with it
         number = {id(p): i for i, p in enumerate(moved, start=1)}
         before = {i: id(p) for i, p in enumerate(phases, start=1)}
         plan["phases"] = [
@@ -5365,6 +5359,123 @@ class Engine:
                     task.phase = mapping[task.id]
                 plan["breakdown"] = breakdown.model_dump(mode="json")
         job.data.plan = plan
+
+    # -- a phase that spent its budget waits while the others go on -----------------------
+
+    def _park(self, job: Job, why: str) -> Job | None:
+        """Set the phase that spent its budget aside and go on with the ones that need
+        nothing of it; None when there are none, and the person is asked now.
+
+        A stuck phase used to stop the whole development, though the phases after it that
+        did not need it could have been built meanwhile. Its uncommitted work is kept as a
+        patch with its counters, the checkout goes back to the last commit, and the phase --
+        with every phase that needs it -- moves behind the ones that do not. When its turn
+        comes again it is put back as it was, and the person is asked then, once nothing
+        else can run.
+        """
+        phases = self._phases(job)
+        index = job.data.phase_index
+        number = index + 1
+        # what needs this phase, directly or through others; a phase that does not say
+        # needs every earlier one
+        needs_it = {number}
+        for n in range(number + 1, len(phases) + 1):
+            deps = phases[n - 1].get("depends_on")
+            if deps is None or needs_it & set(deps):
+                needs_it.add(n)
+        free = [n for n in range(number + 1, len(phases) + 1) if n not in needs_it]
+        if not free:
+            return None
+        worktree = require_worktree(job)
+        g.stage_all(worktree)
+        patch = g.run(worktree, "diff", "--cached", "--binary").stdout
+        g.run(worktree, "reset", "-q", "--hard", "HEAD")
+        held = {
+            "why": why,
+            "patch": patch,
+            "build_attempts": job.data.build_attempts,
+            "last_build_output": job.data.last_build_output,
+            "qa_diagnosis": job.data.qa_diagnosis,
+            "review_violations": job.data.review_violations,
+            "review_rounds": job.data.review_rounds,
+            "phase_calls": job.data.phase_calls,
+        }
+        order = [phases[n - 1] for n in free] + [phases[n - 1] for n in sorted(needs_it)]
+        self._drop_ahead(job)
+        # a phase set aside earlier moves too: its record follows it to its new number
+        moving = {
+            id(phases[n - 1]): job.data.parked.pop(str(n))
+            for n in list(range(number, len(phases) + 1))
+            if str(n) in job.data.parked
+        }
+        self._reorder(job, phases[:index] + order)
+        new_phases = self._phases(job)
+        for i, p in enumerate(new_phases, start=1):
+            record = moving.get(id(p))
+            if record is not None:
+                job.data.parked[str(i)] = record
+        job.data.parked[str(index + len(free) + 1)] = held
+        job.data.build_attempts = 0
+        job.data.last_build_output = None
+        job.data.qa_diagnosis = None
+        job.data.review_violations = []
+        job.data.review_rounds = 0
+        job.data.phase_calls = 0
+        job.data.phase_calls_for = None
+        self.store.save(job)
+        goes = ", ".join(str(n) for n in range(number, number + len(free)))
+        note = (
+            f"phase {number} spent its budget and waits: phase(s) {goes} need nothing of it "
+            "and go on first; you are asked about it when its turn comes again"
+        )
+        if job.state is not JobState.DEVELOPING:
+            # stopped at its gate's triage: the next phase is written, not built
+            return self.orchestrator.transition(job, JobState.DEVELOPING, note=note, detail=why)
+        self._record_gate_note(job, note, why)
+        # still developing, so the next phase is written now: the run loop wants every
+        # step to move the development on, and this one has not moved yet
+        return self._develop(self.store.get(job.id))
+
+    def _unpark(self, job: Job) -> Job | None:
+        """The phase set aside, back as it was when its turn comes; None when it was not
+        one. Then the person is asked, as it would have been asked when it stopped."""
+        held = job.data.parked.pop(str(job.data.phase_index + 1), None)
+        if held is None:
+            return None
+        worktree = require_worktree(job)
+        if held.get("patch"):
+            try:
+                g.run(worktree, "apply", "--index", "--binary", "-", stdin=str(held["patch"]))
+            except g.GitError as exc:
+                self._record_gate_note(job, "its work in progress could not be put back", str(exc))
+        job.data.build_attempts = int(held.get("build_attempts") or 0)
+        job.data.last_build_output = held.get("last_build_output")
+        job.data.qa_diagnosis = held.get("qa_diagnosis")
+        job.data.review_violations = list(held.get("review_violations") or [])
+        job.data.review_rounds = int(held.get("review_rounds") or 0)
+        job.data.phase_calls = int(held.get("phase_calls") or 0)
+        job.data.phase_calls_for = job.data.phase_index + 1
+        self.store.save(job)
+        return self._phase_budget_stop(job, str(held.get("why") or ""), park=False)
+
+    def _put_unbuildable_last(self, job: Job) -> Job:
+        """Move the phases nothing here can build behind the ones it can.
+
+        Safe because nothing depends on a platform phase -- the Architect is told so -- and
+        stable, so each group keeps its own order: an iOS phase that builds on another iOS
+        phase still comes after it. Only phases not started yet move, so every number the
+        history already speaks of stays true; the breakdown's numbers follow the plan, or
+        the board would mark the wrong tasks done.
+        """
+        plan = dict(job.data.plan or {})
+        phases: list[dict[str, Any]] = list(plan.get("phases", []))
+        index = job.data.phase_index
+        rest = phases[index:]
+        ready = [p for p in rest if self._phase_buildable(job, p)]
+        later = [p for p in rest if not self._phase_buildable(job, p)]
+        if not ready or rest == ready + later:
+            return job
+        self._reorder(job, phases[:index] + ready + later)
         job = self.store.save(job)
         names = ", ".join(sorted({str(p["platform"]) for p in later}))
         self._record_gate_note(

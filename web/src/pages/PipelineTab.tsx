@@ -573,6 +573,16 @@ function StepCardView({
       )}
       {/* its answer is being written alongside the phase being built (T16.3) */}
       {step.ahead && <div className="chip work">{tx("being written alongside")}</div>}
+      {step.parked && (
+        <div
+          className="chip bad"
+          title={tx(
+            "it spent its budget; the phases that need nothing of it go on first, and you are asked about it when its turn comes",
+          )}
+        >
+          {tx("waits: out of budget")}
+        </div>
+      )}
       {!step.ahead && step.ready && <div className="chip idle">{tx("ready")}</div>}
       {/* the commit that recorded the phase, on the host when there is a link (T16.1) */}
       {step.commit &&
