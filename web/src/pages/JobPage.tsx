@@ -17,7 +17,12 @@ import {
 import { api } from "../api/client";
 import { ActivityRow } from "../components/ActivityRow";
 import { JobFiles } from "../components/Attachments";
-import { BreakdownTree, type BreakdownShape, type PlanShape } from "../components/Breakdown";
+import {
+  BreakdownTree,
+  planWidth,
+  type BreakdownShape,
+  type PlanShape,
+} from "../components/Breakdown";
 import { AgentIcon, DomainBadge, ROLE_LABEL } from "../components/agents";
 import { Crumbs } from "../components/Crumbs";
 import { DesignGate } from "../components/DesignGate";
@@ -539,6 +544,7 @@ function ArchitectureGate({ job }: { job: Job }) {
         </>
       )}
       <h3>{tx("Phases")}</h3>
+      {plan.phases.length > 1 && <PlanWidth plan={plan} />}
       <BreakdownTree plan={plan} projectId={job.project_id} jobId={job.id} />
       {job.profile && (
         <>
@@ -546,6 +552,27 @@ function ArchitectureGate({ job }: { job: Job }) {
           <ProfileGate job={job} profile={job.profile} />
         </>
       )}
+    </div>
+  );
+}
+
+/** How many phases the plan lets run at once, and in how many steps. One long chain is
+ *  worth seeing before it is approved: it runs one phase at a time however it is built. */
+function PlanWidth({ plan }: { plan: PlanShape }) {
+  const tx = useT();
+  const { steps, widest } = planWidth(plan);
+  const chain = widest <= 1;
+  return (
+    <div className={`callout ${chain ? "notice" : ""} small`} style={{ marginBottom: 8 }}>
+      {chain
+        ? tx(
+            "Every phase needs the one before it: they run one at a time. Phases that need none of each other are written side by side.",
+          )
+        : tx("Up to {n} phases run at once; the plan takes {steps} steps instead of {all}.", {
+            n: widest,
+            steps,
+            all: plan.phases.length,
+          })}
     </div>
   );
 }

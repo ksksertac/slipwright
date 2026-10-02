@@ -2264,6 +2264,10 @@ export const TR: Record<string, string> = {
   "the phases this one builds on": "bu fazın üzerine kurulduğu fazlar",
   "after {phases}": "{phases}. fazdan sonra",
   "needs no other phase": "başka faza bağlı değil",
+  "Every phase needs the one before it: they run one at a time. Phases that need none of each other are written side by side.":
+    "Her faz bir öncekine bağlı: tek tek çalışacaklar. Birbirine bağlı olmayan fazlar yan yana yazılır.",
+  "Up to {n} phases run at once; the plan takes {steps} steps instead of {all}.":
+    "Aynı anda en fazla {n} faz çalışır; plan {all} yerine {steps} adımda biter.",
   "being written alongside": "yanında yazılıyor",
   "waits: out of budget": "bekliyor: bütçesi doldu",
   "it spent its budget; the phases that need nothing of it go on first, and you are asked about it when its turn comes":

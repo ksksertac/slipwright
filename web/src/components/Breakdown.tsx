@@ -29,8 +29,31 @@ export interface PlanShape {
   /** One entry per part of the product: which language and framework (T11.5). */
   stack?: StackChoice[];
   decisions?: string[];
-  phases: { goal: string; files?: string[]; domain?: string; task_id?: string | null }[];
+  phases: {
+    goal: string;
+    files?: string[];
+    domain?: string;
+    task_id?: string | null;
+    depends_on?: number[] | null;
+  }[];
   breakdown?: BreakdownShape;
+}
+
+/**
+ * How a plan runs, read off its `depends_on` (T16.2): the steps it takes when every phase
+ * that can start does, and the most phases at any one of them. A phase that does not say
+ * what it needs waits for every earlier one, as it always did. Shown before the plan is
+ * approved, so a plan that is one long chain is seen to be one.
+ */
+export function planWidth(plan: PlanShape): { steps: number; widest: number } {
+  const step: number[] = [];
+  plan.phases.forEach((p, i) => {
+    const needs = p.depends_on ?? Array.from({ length: i }, (_, k) => k + 1);
+    step.push(1 + Math.max(0, ...needs.map((d) => step[d - 1] ?? 0)));
+  });
+  const counts = new Map<number, number>();
+  for (const s of step) counts.set(s, (counts.get(s) ?? 0) + 1);
+  return { steps: counts.size, widest: Math.max(0, ...counts.values()) };
 }
 
 export function BreakdownTree({
