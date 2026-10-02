@@ -31,6 +31,8 @@ export function pendingApproval(job: Job): string | null {
       return "decision";
     case "awaiting_deploy_approval":
       return "deployment";
+    case "awaiting_reconcile_approval":
+      return "work done by hand";
     case "awaiting_test_approval":
       return job.data.qa_stage === 1 ? "test cases" : "written tests";
     default:
@@ -49,10 +51,11 @@ export function failureOf(job: Job) {
 /** What a failed development can be offered: carry on from where it stopped, or -- when the
  * plan itself is what failed -- have it planned a different way, which is where a note
  * belongs. */
-/** Stopping a development, wherever it is. Not a failure and not a step: the answer to
- *  "this is not worth what it is spending", which can be true mid-phase or at a gate
- *  nobody is going to answer. Whatever call is in flight finishes -- it is already paid
- *  for -- and nothing further starts. The owner's, like retry and replan. */
+/** Ending a development for good, wherever it is. Not a failure and not a step: the
+ *  answer to "this is not worth what it is spending", which can be true mid-phase or at a
+ *  gate nobody is going to answer. Whatever call is in flight finishes -- it is already
+ *  paid for -- and nothing further starts. The owner's, like retry and replan. "Stop" is
+ *  the pause now (components/Pause.tsx), which keeps the development's place. */
 export function StopAction({
   job,
   compact = false,
@@ -79,7 +82,7 @@ export function StopAction({
           onClick={() => stop.mutate(undefined, { onSettled: () => setSure(false) })}
         >
           <IconStop />
-          {stop.isPending ? tx("Stopping…") : tx("Yes, stop it")}
+          {stop.isPending ? tx("Ending…") : tx("Yes, end it")}
         </button>
         <button type="button" className="lane-btn" onClick={() => setSure(false)}>
           {tx("Cancel")}
@@ -91,10 +94,10 @@ export function StopAction({
         type="button"
         className="lane-btn lane-stop"
         onClick={() => setSure(true)}
-        title={tx("stop this development; what it has built stays")}
+        title={tx("end this development for good; what it has built stays")}
       >
         <IconStop />
-        {tx("Stop")}
+        {tx("End")}
       </button>
     );
   }
@@ -103,9 +106,9 @@ export function StopAction({
       <button
         className={`btn ghost ${compact ? "tiny" : "small"}`}
         onClick={() => setSure(true)}
-        title={tx("stop this development; what it has built stays")}
+        title={tx("end this development for good; what it has built stays")}
       >
-        {tx("Stop")}
+        {tx("End")}
       </button>
     );
   }
@@ -116,7 +119,7 @@ export function StopAction({
         disabled={stop.isPending}
         onClick={() => stop.mutate(undefined, { onSettled: () => setSure(false) })}
       >
-        {stop.isPending ? tx("Stopping…") : tx("Yes, stop it")}
+        {stop.isPending ? tx("Ending…") : tx("Yes, end it")}
       </button>
       <button className={`btn ${compact ? "tiny" : "small"}`} onClick={() => setSure(false)}>
         {tx("Cancel")}

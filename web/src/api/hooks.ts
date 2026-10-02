@@ -56,6 +56,7 @@ import {
   type Overview,
   type WorkList,
   type Profile,
+  type SyncStatus,
   type Pipeline,
   type PlanEdit,
   type Project,
@@ -622,6 +623,45 @@ export function useCancelJob(jobId: string) {
       void qc.invalidateQueries({ queryKey: keys.projects });
       void qc.invalidateQueries({ queryKey: keys.overview });
     },
+  });
+}
+
+/** Pause a development so people can work on its branch by hand; with ``push`` the
+ *  branch goes to the host as it stands. It keeps its place and waits for a carry-on. */
+export function usePauseJob(jobId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (push: boolean) => api.post<Job>(`/api/jobs/${jobId}/pause`, { push }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.job(jobId) });
+      void qc.invalidateQueries({ queryKey: keys.projects });
+      void qc.invalidateQueries({ queryKey: keys.overview });
+    },
+  });
+}
+
+/** Carry a paused development on; with ``pull`` what was pushed meanwhile is merged first
+ *  and read against the plan. */
+export function useCarryOn(jobId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (pull: boolean) => api.post<Job>(`/api/jobs/${jobId}/carry-on`, { pull }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.job(jobId) });
+      void qc.invalidateQueries({ queryKey: keys.projects });
+      void qc.invalidateQueries({ queryKey: keys.overview });
+    },
+  });
+}
+
+/** Whether the branch can be pushed, and whether somebody pushed to it since -- asked of
+ *  the host only while a dialog that needs it is open. */
+export function useSyncStatus(jobId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: [...keys.job(jobId), "sync"],
+    queryFn: () => api.get<SyncStatus>(`/api/jobs/${jobId}/sync`),
+    enabled,
+    staleTime: 0,
   });
 }
 

@@ -48,6 +48,16 @@ class NoRemote(GitHostError):
 class GitHost(Protocol):
     def push(self, worktree: Path, branch: str) -> None: ...
 
+    def remote_head(self, worktree: Path, branch: str) -> str | None:
+        """The commit ``branch`` points at on the host, or None when it is not there.
+        Asks; brings nothing into the checkout."""
+        ...
+
+    def fetch(self, worktree: Path, branch: str) -> str | None:
+        """Bring ``branch`` from the host into ``refs/remotes/origin/<branch>`` and return
+        the commit it points at, or None when the host has no such branch."""
+        ...
+
     def open_pr(self, worktree: Path, branch: str, title: str, body: str) -> str: ...
 
     def ci_status(self, worktree: Path, branch: str, pr_url: str) -> CiStatus: ...
@@ -111,6 +121,41 @@ class GhHost:
             )
         except g.GitError as exc:
             raise GitHostError(f"push failed: {exc.stderr}") from exc
+
+    def remote_head(self, worktree: Path, branch: str) -> str | None:
+        if not g.has_remote(worktree, self.remote):
+            raise NoRemote(f"the checkout has no remote named {self.remote!r}")
+        try:
+            out = g.run(
+                worktree,
+                *self._credentials(),
+                "ls-remote",
+                "--heads",
+                self.remote,
+                f"refs/heads/{branch}",
+                env=self._env(),
+            ).stdout
+        except g.GitError as exc:
+            raise GitHostError(f"could not read the branch: {exc.stderr}") from exc
+        return out.split()[0] if out.strip() else None
+
+    def fetch(self, worktree: Path, branch: str) -> str | None:
+        if self.remote_head(worktree, branch) is None:
+            return None
+        tracking = f"refs/remotes/{self.remote}/{branch}"
+        try:
+            g.run(
+                worktree,
+                *self._credentials(),
+                "fetch",
+                "-q",
+                self.remote,
+                f"+refs/heads/{branch}:{tracking}",
+                env=self._env(),
+            )
+        except g.GitError as exc:
+            raise GitHostError(f"pull failed: {exc.stderr}") from exc
+        return g.run(worktree, "rev-parse", tracking).stdout.strip()
 
     def open_pr(self, worktree: Path, branch: str, title: str, body: str) -> str:
         existing = self._gh(worktree, "pr", "view", branch, "--json", "url", check=False)

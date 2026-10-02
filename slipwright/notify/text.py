@@ -21,6 +21,7 @@ GATE_NAME: dict[str, dict[JobState, str]] = {
         JobState.AWAITING_REVIEW_APPROVAL: "standart incelemesi",
         JobState.AWAITING_DECISION: "karar",
         JobState.AWAITING_DEPLOY_APPROVAL: "dağıtım",
+        JobState.AWAITING_RECONCILE_APPROVAL: "elle yapılanlar",
     },
     "en": {
         JobState.AWAITING_BACKLOG_APPROVAL: "backlog",
@@ -29,6 +30,7 @@ GATE_NAME: dict[str, dict[JobState, str]] = {
         JobState.AWAITING_REVIEW_APPROVAL: "standards review",
         JobState.AWAITING_DECISION: "decision",
         JobState.AWAITING_DEPLOY_APPROVAL: "deployment",
+        JobState.AWAITING_RECONCILE_APPROVAL: "work done by hand",
     },
 }
 

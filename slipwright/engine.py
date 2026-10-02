@@ -24,9 +24,10 @@ import time
 import traceback
 from collections import defaultdict
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 import httpx
 from pydantic import ValidationError
@@ -84,6 +85,7 @@ from slipwright.roles import (
     po,
     qa,
     reader,
+    reconcile,
     review,
     supervisor,
 )
@@ -106,6 +108,7 @@ from slipwright.roles.results import (
     POResult,
     QAResult,
     Recommendation,
+    ReconcileResult,
     StackChoice,
     SupervisorResult,
     unbuilt_platforms,
@@ -183,6 +186,25 @@ WORKING_STATES: frozenset[JobState] = frozenset(
         JobState.REVIEW,
         JobState.QA,
         JobState.DEVOPS,
+        JobState.RECONCILE,
+    }
+)
+
+#: Where a development is between an approved plan and its last phase built: pulling in
+#: what people pushed here can change which phases are left, so it is read against the
+#: plan before anything carries on. Before the plan there are no phases to pass over;
+#: after the last one there is nothing left to build.
+BUILDING_STATES: frozenset[JobState] = frozenset(
+    {
+        JobState.DESIGN,
+        JobState.AWAITING_DESIGN_APPROVAL,
+        JobState.DEVELOPING,
+        JobState.BUILD_GATE,
+        JobState.REVIEW,
+        JobState.AWAITING_REVIEW_APPROVAL,
+        JobState.AWAITING_BUILDER,
+        JobState.RECONCILE,
+        JobState.AWAITING_RECONCILE_APPROVAL,
     }
 )
 
@@ -201,6 +223,9 @@ APPROVAL_EDGES: dict[JobState, tuple[JobState, JobState]] = {
     # the deployment proposal: approved, DevOps writes the scripts; rejected, it proposes
     # again with the feedback
     JobState.AWAITING_DEPLOY_APPROVAL: (JobState.DEVOPS, JobState.DEVOPS),
+    # what people did by hand: approved, the first phase they did not finish is built (or
+    # QA starts, when they finished them all); rejected, the Architect reads it again
+    JobState.AWAITING_RECONCILE_APPROVAL: (JobState.DEVELOPING, JobState.RECONCILE),
 }
 
 
@@ -227,6 +252,10 @@ def approval_edges(job: Job) -> tuple[JobState, JobState] | None:
     if job.state is JobState.AWAITING_DECISION:
         back = JobState(job.data.resume_state or JobState.DEVELOPING.value)
         return (back, back)
+    if edges is not None and job.state is JobState.AWAITING_RECONCILE_APPROVAL:
+        resume = int((job.data.reconcile or {}).get("resume_phase", 1)) - 1
+        if resume >= len((job.data.plan or {}).get("phases", [])):
+            return (JobState.QA, edges[1])
     return edges
 
 
@@ -301,9 +330,41 @@ class JobIsRunning(ValueError):
         self.job = job
 
 
+def _by(who: str | None) -> str:
+    return f" by {who}" if who else ""
+
+
 class _Stopped(Exception):
-    """Somebody stopped the development while a step was still running it; raised before
-    the step's next model call, caught by the run loop."""
+    """Somebody stopped or paused the development while a step was still running it;
+    raised before the step's next model call, caught by the run loop."""
+
+
+@dataclass(frozen=True)
+class _Halt:
+    """What somebody asked of a development that was running at the time: to stop for
+    good, or to pause -- and whether to push the branch once it has."""
+
+    kind: Literal["cancel", "pause"]
+    by: str | None = None
+    push: bool = False
+
+
+class CannotSync(ValueError):
+    """The branch cannot be pushed or pulled: no checkout yet, no remote, no token, or
+    nothing there. The message is for the person who asked."""
+
+
+class RemoteMoved(ValueError):
+    """Commits were pushed to the branch while it was paused, and carrying on without
+    them would build beside them -- and the next push would be refused, or worse."""
+
+
+class PullConflict(ValueError):
+    """What was pushed and what the development had not pushed touch the same lines."""
+
+    def __init__(self, files: list[str]) -> None:
+        super().__init__("the pull conflicts in: " + ", ".join(files))
+        self.files = files
 
 
 class BuilderLost(Exception):
@@ -450,12 +511,14 @@ class Engine:
             JobState.REVIEW: self._review,
             JobState.QA: self._qa,
             JobState.DEVOPS: self._devops,
+            JobState.RECONCILE: self._reconcile,
         }
         self._locks: defaultdict[str, threading.Lock] = defaultdict(threading.Lock)
-        #: Developments somebody has asked to stop. A running one cannot be interrupted
-        #: mid-call -- the model is already answering and the answer is already paid for
-        #: -- so the run loop reads this between steps and stops before the next one.
-        self._cancelled: set[str] = set()
+        #: Developments somebody has asked to stop or pause. A running one cannot be
+        #: interrupted mid-call -- the model is already answering and the answer is
+        #: already paid for -- so the run loop reads this between steps and stops before
+        #: the next one.
+        self._stopping: dict[str, _Halt] = {}
         # one analysis or intake round at a time per project (T11.2)
         self._brief_locks: defaultdict[str, threading.Lock] = defaultdict(threading.Lock)
         # one test run at a time per checkout, so runs never trample each other's files
@@ -1787,6 +1850,8 @@ class Engine:
                 raise EmptyApproval("there are no deployment scripts to approve; or reject")
             job.data.devops_stage = 2
             note = f"approved {len(scripts)} deployment script(s) for {plan.get('target')}"
+        if job.state is JobState.AWAITING_RECONCILE_APPROVAL:
+            note = self._accept_reconcile(job)
         if by:
             note = f"{note} by {by}"
         if job.state is JobState.AWAITING_DECISION:
@@ -2224,6 +2289,10 @@ class Engine:
         job = self.store.get(job_id)
         if job.state in WORKING_STATES:
             raise JobIsRunning(job)
+        if job.state is JobState.PAUSED:
+            # the pause can reach every state, a re-run's included; going there from here
+            # would skip the check that nobody pushed meanwhile -- carry it on instead
+            raise IllegalTransitionError(job.state, targets[step])
         if job.worktree_path is None:
             raise ValueError("this development has no worktree to run anything in")
         back = targets[step]
@@ -2267,14 +2336,366 @@ class Engine:
         lock = self._locks[job.id]
         if lock.acquire(blocking=False):
             try:
-                self._cancelled.discard(job.id)
+                self._stopping.pop(job.id, None)
                 job = self.orchestrator.transition(job, JobState.CANCELLED, note=note)
             finally:
                 lock.release()
             return self._notify_outcome(job)
-        self._cancelled.add(job.id)
+        # stopping for good outranks a pause asked for a moment earlier
+        self._stopping[job.id] = _Halt("cancel", by=by)
         self.store.update_state(job.id, job.state, note=f"{note}: finishing the call it is on")
         return self.store.get(job.id)
+
+    # -- pausing to work by hand -------------------------------------------------------------
+
+    def pause(self, job_id: str, *, push: bool = False, by: str | None = None) -> Job:
+        """Stop a development so people can work on its branch, and keep its place.
+
+        Unlike ``cancel`` it is not over: it waits in ``paused``, holding where it was --
+        the state, the phase, the commit -- until the same person says carry on. With
+        ``push`` the branch goes to the host as it stands, half-written phase and all, so
+        there is something to check out and work on.
+
+        Like a stop, it cannot interrupt a call in flight: a running development pauses
+        before its next call, and the push happens then.
+        """
+        job = self.store.get(job_id)
+        if job.is_terminal or job.state in (JobState.PAUSED, JobState.CREATED):
+            raise NotAwaitingApproval(job)
+        if push:
+            self._pushable(job)  # refused now, not after the call it is on has finished
+        halt = _Halt("pause", by=by, push=push)
+        lock = self._locks[job.id]
+        if lock.acquire(blocking=False):
+            try:
+                self._stopping.pop(job.id, None)
+                job = self._enter_pause(job, halt)
+            finally:
+                lock.release()
+            return job
+        if self._stopping.get(job.id, halt).kind != "cancel":
+            self._stopping[job.id] = halt
+        self.store.update_state(
+            job.id,
+            job.state,
+            note=f"pausing{_by(by)}: finishing the call it is on"
+            + ("; the branch is pushed then" if push else ""),
+        )
+        return self.store.get(job.id)
+
+    def carry_on(
+        self, job_id: str, *, pull: bool = False, by: str | None = None, run: bool = True
+    ) -> Job:
+        """Carry a paused development on from where it was paused.
+
+        Without ``pull`` it goes back to exactly that place, as if it had never stopped --
+        but not when somebody pushed to its branch meanwhile (``RemoteMoved``): building
+        beside commits it has never seen would have its next push refused at the end, or
+        undo them. With ``pull`` those commits are merged in first and, while there are
+        phases left to build, the Architect reads what they did (``reconcile``) so that
+        a phase somebody finished is not built a second time.
+        """
+        job = self.store.get(job_id)
+        if job.state is not JobState.PAUSED:
+            raise NotAwaitingApproval(job)
+        pause = dict(job.data.pause or {})
+        back = JobState(pause.get("from_state") or JobState.DEVELOPING.value)
+        with self._locks[job.id]:
+            job = self.store.get(job_id)
+            if job.state is not JobState.PAUSED:  # pressed twice
+                raise NotAwaitingApproval(job)
+            brought = self._pull_paused(job) if pull else 0
+            if not brought:
+                if not pull:
+                    self._refuse_if_moved(job)
+                self._unwind_pause_commit(job)
+            pause = dict(job.data.pause or {})
+            pause["resumed_at"] = utcnow().isoformat()
+            job.data.pause = pause
+            self.store.save(job)
+            if brought and self._building(job, back):
+                job.data.reconcile = None
+                job.data.feedback = None
+                job.data.output_hashes = {}
+                self.store.save(job)
+                job = self.orchestrator.transition(
+                    job,
+                    JobState.RECONCILE,
+                    note=f"carried on{_by(by)}: pulled {brought} commit(s) pushed while it "
+                    "was paused; the Architect reads what they did",
+                )
+            else:
+                pulled = f": pulled {brought} commit(s)" if brought else ""
+                if pull and not brought:
+                    pulled = ": nothing new had been pushed"
+                job = self.orchestrator.transition(job, back, note=f"carried on{_by(by)}{pulled}")
+        return self._run(job) if run else job
+
+    def sync_status(self, job_id: str) -> dict[str, Any]:
+        """What the pause and carry-on dialogs can offer, asked of the host as they open:
+        whether the branch can be pushed, and whether somebody pushed to it since the
+        development last did. ``moved`` is None when the host could not be asked."""
+        job = self.store.get(job_id)
+        status: dict[str, Any] = {"can_push": True, "why_not": None, "moved": None}
+        try:
+            self._pushable(job)
+        except CannotSync as exc:
+            return {**status, "can_push": False, "why_not": str(exc)}
+        worktree = require_worktree(job)
+        try:
+            head = self._host_of(job).remote_head(worktree, job.branch)
+        except (SourceError, GitHostError):
+            return status
+        status["moved"] = head is not None and not self._have(worktree, head)
+        return status
+
+    def _pushable(self, job: Job) -> None:
+        if job.worktree_path is None or not job.worktree_path.exists():
+            raise CannotSync("nothing has been written yet: there is no branch to push")
+        if not g.has_remote(job.worktree_path):
+            raise CannotSync(
+                "the project's checkout has no remote: set its repository to push the branch"
+            )
+
+    @staticmethod
+    def _have(worktree: Path, commit: str) -> bool:
+        """Whether ``commit`` is already part of this branch -- what it pushed itself, or
+        anything before it."""
+        return g.known(worktree, commit) and g.contains(worktree, commit, "HEAD")
+
+    def _enter_pause(self, job: Job, halt: _Halt) -> Job:
+        worktree = job.worktree_path
+        head = g.head_commit(worktree) if worktree is not None and worktree.exists() else None
+        job.data.pause = {
+            "from_state": job.state.value,
+            "phase_index": job.data.phase_index,
+            "at": utcnow().isoformat(),
+            "by": halt.by,
+            "head": head,
+            "pushed": None,
+            "wip": None,
+            "push_error": None,
+        }
+        self.store.save(job)
+        job = self.orchestrator.transition(job, JobState.PAUSED, note=f"paused{_by(halt.by)}")
+        return self._push_paused(job) if halt.push else job
+
+    def _pause_commit_message(self, job: Job) -> str:
+        phases = self._phases(job)
+        if not phases:
+            return "slipwright: paused (work in progress)"
+        number = min(job.data.phase_index + 1, len(phases))
+        return f"slipwright: paused in phase {number}/{len(phases)} (work in progress)"
+
+    def _push_paused(self, job: Job) -> Job:
+        """Push the paused branch as it stands. What a phase had written but not yet
+        committed -- a phase is committed only once its build passes -- is committed so it
+        goes too: people pick up from what there is, not from the last green phase. The
+        commit is taken back out when it carries on without a pull, so the phase is built
+        and committed as it would have been."""
+        pause = dict(job.data.pause or {})
+        try:
+            self._pushable(job)
+            worktree = require_worktree(job)
+            g.stage_all(worktree)
+            if g.commit(worktree, self._pause_commit_message(job)):
+                pause["wip"] = g.head_commit(worktree)
+            self._host_of(job).push(worktree, job.branch)
+            pause["pushed"] = g.head_commit(worktree)
+            note = f"pushed {job.branch} so it can be worked on by hand"
+        except (CannotSync, SourceError, GitHostError) as exc:
+            pause["push_error"] = str(exc)
+            note = f"paused, but the branch was not pushed: {exc}"
+        job.data.pause = pause
+        self.store.save(job)
+        self.store.update_state(job.id, JobState.PAUSED, note=note)
+        return self.store.get(job.id)
+
+    def _unwind_pause_commit(self, job: Job) -> None:
+        """Take the work-in-progress commit made for the push back out of the branch,
+        leaving its changes staged: the phase carries on exactly as it was and is
+        committed whole when its build passes. Only when nothing has been built on it."""
+        pause = job.data.pause or {}
+        wip, head = pause.get("wip"), pause.get("head")
+        worktree = job.worktree_path
+        if not wip or not head or worktree is None or g.head_commit(worktree) != wip:
+            return
+        g.reset_soft(worktree, head)
+        job.data.pause = {**pause, "wip": None}
+        self.store.save(job)
+
+    def _refuse_if_moved(self, job: Job) -> None:
+        worktree = job.worktree_path
+        if worktree is None or not worktree.exists() or not g.has_remote(worktree):
+            return
+        try:
+            head = self._host_of(job).remote_head(worktree, job.branch)
+        except (SourceError, GitHostError):
+            return  # the host cannot be asked; that is no reason to keep it paused
+        if head is not None and not self._have(worktree, head):
+            raise RemoteMoved(
+                f"somebody pushed to {job.branch} while it was paused: carry on with a pull"
+            )
+
+    def _pull_paused(self, job: Job) -> int:
+        """Merge what was pushed to the branch while it was paused. Returns how many
+        commits that brought, 0 when nobody pushed anything new; raises ``CannotSync``
+        and ``PullConflict`` with the checkout left as it was."""
+        try:
+            self._pushable(job)
+        except CannotSync as exc:
+            raise CannotSync(str(exc).replace("push", "pull")) from exc
+        worktree = require_worktree(job)
+        try:
+            remote = self._host_of(job).fetch(worktree, job.branch)
+        except (SourceError, GitHostError) as exc:
+            raise CannotSync(str(exc)) from exc
+        if remote is None:
+            raise CannotSync(f"{job.branch} is not on the host: there is nothing to pull")
+        if self._have(worktree, remote):
+            return 0
+        pause = dict(job.data.pause or {})
+        before = g.head_commit(worktree)
+        # what the paused phase had written and nobody pushed goes in as a commit of its
+        # own, so the merge has two sides to put together rather than a dirty checkout
+        g.stage_all(worktree)
+        committed = g.commit(worktree, self._pause_commit_message(job))
+        brought = len(g.commits(worktree, "HEAD", remote))
+        conflicts = g.merge(worktree, f"refs/remotes/origin/{job.branch}")
+        if conflicts:
+            if committed:
+                g.reset_soft(worktree, before)
+            raise PullConflict(conflicts)
+        base = pause.get("head") or before
+        pause["wip"] = None
+        pause["pulled"] = {"from": base, "to": g.head_commit(worktree), "commits": brought}
+        job.data.pause = pause
+        self.store.save(job)
+        return brought
+
+    def _building(self, job: Job, back: JobState) -> bool:
+        """Whether it was paused with phases still to build, which is when what was
+        pulled can change where it carries on."""
+        if back is JobState.AWAITING_DECISION:
+            back = JobState(job.data.resume_state or JobState.DEVELOPING.value)
+        start = int((job.data.pause or {}).get("phase_index", job.data.phase_index))
+        return back in BUILDING_STATES and start < len(self._phases(job))
+
+    def _accept_reconcile(self, job: Job) -> str:
+        """Apply the reading a person approved: the phases finished by hand are recorded
+        as theirs and passed over, and the phase it carries on with starts afresh -- its
+        specialist told what the people did, so it builds on that rather than over it."""
+        from slipwright.schemas.job import InboxMessage
+
+        found = job.data.reconcile or {}
+        phases = self._phases(job)
+        resume = min(int(found.get("resume_phase", 1)) - 1, len(phases))
+        for outcome in found.get("phases", []):
+            if int(outcome["phase"]) - 1 < resume:
+                job.data.phase_outcomes[str(outcome["phase"])] = {
+                    "by": "hand",
+                    "evidence": outcome.get("evidence", ""),
+                }
+        job.data.phase_index = resume
+        job.data.build_attempts = 0
+        job.data.last_build_output = None
+        job.data.review_rounds = 0
+        job.data.review_violations = []
+        job.data.qa_gate_fixes = 0
+        job.data.qa_diagnosis = None
+        job.data.phase_calls = 0
+        job.data.phase_base_commit = None
+        if resume < len(phases):
+            current: dict[str, Any] = next(
+                (o for o in found.get("phases", []) if int(o["phase"]) == resume + 1), {}
+            )
+            told = "People worked on this branch by hand while it was paused. " + str(
+                found.get("summary", "")
+            )
+            if current.get("status") == "partial":
+                told += (
+                    f" Phase {resume + 1} is partly written already ({current.get('evidence')}):"
+                    " finish it on what is there rather than writing it again."
+                )
+            job.data.inbox.append(InboxMessage(text=told.strip()))
+        skipped = sorted(int(n) for n in job.data.phase_outcomes)
+        if not skipped:
+            return "approved: nothing was finished by hand"
+        return f"approved: phase(s) {', '.join(map(str, skipped))} finished by hand"
+
+    def _reconcile(self, job: Job) -> Job:
+        """The Architect reads what people pushed while it was paused, phase by phase."""
+        pause = job.data.pause or {}
+        phases = self._phases(job)
+        start = min(int(pause.get("phase_index", job.data.phase_index)), len(phases))
+        worktree = require_worktree(job)
+        base = (pause.get("pulled") or {}).get("from") or pause.get("head")
+        if base is None:
+            return self._fail(job, "reconcile: the commit it was paused on is not known")
+
+        def outline(index: int) -> dict[str, Any]:
+            phase = phases[index]
+            return {
+                "number": index + 1,
+                "goal": phase.get("goal", ""),
+                "domain": phase.get("domain"),
+                "files": phase.get("files", []),
+            }
+
+        result = self._invoke(
+            RoleName.ARCHITECT,
+            reconcile.run,
+            job,
+            profile=job.profile or self.seed_for(job),
+            finished=[outline(i) for i in range(start)],
+            remaining=[outline(i) for i in range(start, len(phases))],
+            commits=g.commits(worktree, base),
+            diff=g.diff(worktree, base),
+            jira=None,
+            standards=None,
+        )
+        if not result.ok:
+            return self._invocation_failed(job, result)
+        assert isinstance(result.output, ReconcileResult)
+        found = {f.number: f for f in result.output.phases}
+        outcomes: list[dict[str, Any]] = []
+        for index in range(start, len(phases)):
+            finding = found.get(index + 1)
+            outcomes.append(
+                {
+                    "phase": index + 1,
+                    "goal": phases[index].get("goal", ""),
+                    # a phase the answer left out was not shown to be done
+                    "status": finding.status if finding else "untouched",
+                    "evidence": finding.evidence if finding else "",
+                }
+            )
+        # Only an unbroken run of finished phases is passed over. A phase somebody finished
+        # after one they did not is built again over what is there: the phase before it may
+        # yet change what it needs, and its specialist writes little when little is missing.
+        resume = start
+        while resume < len(phases) and outcomes[resume - start]["status"] == "done":
+            resume += 1
+        job.data.reconcile = {
+            "from_phase": start + 1,
+            "resume_phase": resume + 1,
+            "phases": outcomes,
+            "summary": result.output.summary,
+            "commits": (pause.get("pulled") or {}).get("commits", 0),
+        }
+        self.store.save(job)
+        skipped = resume - start
+        if resume >= len(phases):
+            where = "every phase left is finished; QA is next"
+        else:
+            where = f"carries on with phase {resume + 1}/{len(phases)}"
+        return self.orchestrator.transition(
+            job,
+            JobState.AWAITING_RECONCILE_APPROVAL,
+            note=f"the Architect read what was pushed: {skipped} phase(s) finished by hand; "
+            f"{where}",
+            detail=json.dumps(job.data.reconcile, indent=2, ensure_ascii=False),
+        )
 
     def retry(self, job_id: str, *, run: bool = True, feedback: str | None = None) -> Job:
         """Continue a failed job from the step it failed in. Counters that made it give up
@@ -2928,12 +3349,9 @@ class Engine:
                 job.data.builder_resume = None
                 job = self.store.save(job)
             while job.state in WORKING_STATES:
-                if job.id in self._cancelled:
-                    self._cancelled.discard(job.id)
-                    job = self.orchestrator.transition(
-                        job, JobState.CANCELLED, note="stopped: nothing further was started"
-                    )
-                    return self._notify_outcome(job)
+                halt = self._stopping.pop(job.id, None)
+                if halt is not None:
+                    return self._halt(job, halt, "nothing further was started")
                 handler = self.handlers.get(job.state)
                 if handler is None:
                     log.warning("no handler for state %s; job %s left as is", job.state, job.id)
@@ -2942,13 +3360,8 @@ class Engine:
                 try:
                     job = handler(job)
                 except _Stopped:
-                    self._cancelled.discard(job.id)
-                    job = self.orchestrator.transition(
-                        self.store.get(job.id),
-                        JobState.CANCELLED,
-                        note="stopped: its next call was not made",
-                    )
-                    return self._notify_outcome(job)
+                    halt = self._stopping.pop(job.id, None) or _Halt("cancel")
+                    return self._halt(self.store.get(job.id), halt, "its next call was not made")
                 except Exception as exc:  # noqa: BLE001 - a crashed phase fails the job
                     log.exception("job %s: %s phase crashed", job.id, before.value)
                     job = self._fail(
@@ -2963,19 +3376,23 @@ class Engine:
                 if job.state in APPROVAL_STATES:
                     job = self._supervise(job)  # may approve, in which case the loop goes on
                     job = self._notify_team(job)
-            if job.id in self._cancelled:
-                self._cancelled.discard(job.id)
-                if not job.is_terminal:
-                    # the step it was stopped in ended at a gate: it was told to stop, so
-                    # it does not sit there waiting for somebody to approve its next spend
-                    job = self.orchestrator.transition(
-                        job, JobState.CANCELLED, note="stopped: nothing further was started"
-                    )
+            halt = self._stopping.pop(job.id, None)
+            if halt is not None and not job.is_terminal:
+                # the step it was stopped in ended at a gate: it was told to stop, so it
+                # does not sit there waiting for somebody to approve its next spend
+                job = self._halt(job, halt, "nothing further was started")
             job = self._notify_outcome(job)
         # outside the job's lock: reading the code it wrote is a model call, and a job
         # that has finished must not look busy while it happens
         self._learn_from(job)
         return job
+
+    def _halt(self, job: Job, halt: _Halt, why: str) -> Job:
+        """Carry out a stop or a pause asked for while the development was running."""
+        if halt.kind == "pause":
+            return self._enter_pause(job, halt)
+        job = self.orchestrator.transition(job, JobState.CANCELLED, note=f"stopped: {why}")
+        return self._notify_outcome(job)
 
     def _learn_from(self, job: Job) -> None:
         """Read what a finished development built, so the next one knows the project.
@@ -3449,7 +3866,7 @@ class Engine:
             # is asked again, and a call that timed out is asked again after it. Looking for
             # a stop only between steps let a development that had been told to stop go on
             # spending for as long as its step did -- every new call is a place to stop
-            if job.id in self._cancelled:
+            if job.id in self._stopping:
                 raise _Stopped
             attempt += 1
             result = run(job, provider=provider, timeout_s=self.timeout_s, **kw)

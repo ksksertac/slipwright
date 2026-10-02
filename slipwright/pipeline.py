@@ -28,6 +28,7 @@ class StepStatus(StrEnum):
     FAILED = "failed"
     WAITING = "waiting"  # for the human
     SKIPPED = "skipped"  # deliberately passed over; it will not run
+    PAUSED = "paused"  # where it was when somebody paused it; it carries on from here
 
 
 class StepCard(BaseModel):
@@ -52,6 +53,7 @@ class StepCard(BaseModel):
     confidence: float | None = None
     risk: str | None = None
     auto_approved: bool = False  # this gate was approved by the supervisor
+    by_hand: bool = False  # a phase people finished on the branch while it was paused
 
 
 class Lane(BaseModel):
@@ -391,6 +393,7 @@ def _phase_cards(job: Job, r: _Reader) -> list[StepCard]:
                 finished_at=end,
                 elapsed_s=_elapsed(start, end, r.now),
                 outputs=sorted(set(outputs + gate_logs)),
+                by_hand=str(number) in job.data.phase_outcomes,
             )
         )
         gate = _review_gate(job, r, number)
@@ -526,6 +529,33 @@ def _insert_builder_gate(job: Job, r: _Reader, steps: list[StepCard]) -> None:
     steps.insert(keys.index(anchor) if anchor in keys else len(steps), card)
 
 
+def _insert_reconcile_cards(job: Job, r: _Reader, steps: list[StepCard]) -> None:
+    """The Architect reading what people pushed while it was paused, and the approval of
+    that reading -- before the phase it was paused in, which is where it took effect."""
+    if not r.visits(JobState.RECONCILE, r.whole):
+        return
+    cards = [
+        r.stage(
+            key="reconcile",
+            label="Architect: work done by hand",
+            state=JobState.RECONCILE,
+            role=RoleName.ARCHITECT,
+            output_into=JobState.AWAITING_RECONCILE_APPROVAL,
+        ),
+        r.gate(
+            key="reconcile_gate",
+            label="Work done by hand approval",
+            state=JobState.AWAITING_RECONCILE_APPROVAL,
+            pending="work done by hand",
+            editable=False,
+        ),
+    ]
+    keys = [c.key for c in steps]
+    anchor = f"phase:{(job.data.reconcile or {}).get('from_phase') or 1}"
+    at = keys.index(anchor) if anchor in keys else keys.index("qa:1")
+    steps[at:at] = cards
+
+
 def _annotate_supervision(job: Job, steps: list[StepCard]) -> None:
     """Put the supervisor's view on the gate it concerns: a recommendation chip while the
     gate waits, an "approved by supervisor" mark once it acted."""
@@ -547,6 +577,24 @@ def _annotate_supervision(job: Job, steps: list[StepCard]) -> None:
 
 
 def lane_for(job: Job) -> Lane:
+    pause = job.data.pause or {}
+    if job.state is JobState.PAUSED and pause.get("from_state"):
+        # drawn as it stood when it was paused, with the step it was on marked as paused
+        # rather than running: the lane then says where it carries on from
+        lane = lane_for(job.model_copy(update={"state": JobState(pause["from_state"])}))
+        for card in lane.steps:
+            if card.status in (StepStatus.RUNNING, StepStatus.WAITING):
+                card.status = StepStatus.PAUSED
+                card.pending = None
+        return lane.model_copy(
+            update={
+                "state": JobState.PAUSED,
+                "pending_approval": None,
+                "running_key": None,
+                "running_label": None,
+                "running_role": None,
+            }
+        )
     r = _Reader(job)
     stage1, stage2 = r.qa_spans()
     in_stage1 = job.data.qa_stage == 1
@@ -669,6 +717,7 @@ def lane_for(job: Job) -> Lane:
     ]
     _insert_decision_gate(job, r, steps)
     _insert_builder_gate(job, r, steps)
+    _insert_reconcile_cards(job, r, steps)
     _annotate_supervision(job, steps)
     # the state badge says what kind of work is happening ("build gate"); this says whose
     running = next((c for c in steps if c.status is StepStatus.RUNNING), None)

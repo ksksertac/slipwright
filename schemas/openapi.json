@@ -809,6 +809,18 @@
         "title": "BudgetSettings",
         "type": "object"
       },
+      "CarryOn": {
+        "description": "Carry a paused development on; ``pull`` merges what was pushed meanwhile first.",
+        "properties": {
+          "pull": {
+            "default": false,
+            "title": "Pull",
+            "type": "boolean"
+          }
+        },
+        "title": "CarryOn",
+        "type": "object"
+      },
       "ChangedFile": {
         "additionalProperties": false,
         "description": "One file of the branch's diff against the commit it started from.",
@@ -2984,6 +2996,19 @@
             "title": "Output Hashes",
             "type": "object"
           },
+          "pause": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "While paused, and after: where it stopped (from_state, phase_index), the commit it stopped on (head), who paused it and when, and -- when the branch was pushed so people could work on it -- the commit pushed (pushed), whether unfinished work was committed to get it there (wip), and why a push failed (push_error).",
+            "title": "Pause"
+          },
           "phase_base_commit": {
             "anyOf": [
               {
@@ -3021,6 +3046,15 @@
             "minimum": 0.0,
             "title": "Phase Index",
             "type": "integer"
+          },
+          "phase_outcomes": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "description": "Phase number (1-based, as a string) -> how it was finished, for the phases somebody finished by hand: {by: 'hand', evidence}. Agent-built phases are not listed; the history already says how they went.",
+            "title": "Phase Outcomes",
+            "type": "object"
           },
           "plan": {
             "anyOf": [
@@ -3089,6 +3123,19 @@
             ],
             "description": "What QA proposes at a phase-budget stop, for the person to accept as written or rewrite.",
             "title": "Recommendation"
+          },
+          "reconcile": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The Architect's reading of what people pushed while the development was paused: per remaining phase done, partial or untouched, and the phase it carries on from. Approved at its own gate before anything is passed over.",
+            "title": "Reconcile"
           },
           "reject_rounds": {
             "default": 0,
@@ -3216,10 +3263,12 @@
           "last_build_output",
           "notified",
           "output_hashes",
+          "pause",
           "phase_base_commit",
           "phase_calls",
           "phase_calls_for",
           "phase_index",
+          "phase_outcomes",
           "plan",
           "plan_gate",
           "pr_url",
@@ -3227,6 +3276,7 @@
           "qa_gate_fixes",
           "qa_stage",
           "recommendation",
+          "reconcile",
           "reject_rounds",
           "rerun_only",
           "resume_state",
@@ -3525,6 +3575,9 @@
           "awaiting_deploy_approval",
           "awaiting_decision",
           "awaiting_builder",
+          "paused",
+          "reconcile",
+          "awaiting_reconcile_approval",
           "done",
           "cancelled",
           "failed"
@@ -4945,6 +4998,18 @@
           "worker_id"
         ],
         "title": "Paired",
+        "type": "object"
+      },
+      "Pause": {
+        "description": "Pause a development to work on its branch by hand; ``push`` sends the branch to the\nhost as it stands, so there is something to check out.",
+        "properties": {
+          "push": {
+            "default": false,
+            "title": "Push",
+            "type": "boolean"
+          }
+        },
+        "title": "Pause",
         "type": "object"
       },
       "Permission": {
@@ -7274,6 +7339,11 @@
             "title": "Auto Approved",
             "type": "boolean"
           },
+          "by_hand": {
+            "default": false,
+            "title": "By Hand",
+            "type": "boolean"
+          },
           "confidence": {
             "anyOf": [
               {
@@ -7439,6 +7509,7 @@
         },
         "required": [
           "auto_approved",
+          "by_hand",
           "confidence",
           "domain",
           "editable",
@@ -7713,7 +7784,8 @@
           "done",
           "failed",
           "waiting",
-          "skipped"
+          "skipped",
+          "paused"
         ],
         "title": "StepStatus",
         "type": "string"
@@ -7999,6 +8071,44 @@
           "status"
         ],
         "title": "SupportStatusIn",
+        "type": "object"
+      },
+      "SyncStatus": {
+        "description": "What the pause and carry-on dialogs can offer, read from the host as they open.",
+        "properties": {
+          "can_push": {
+            "title": "Can Push",
+            "type": "boolean"
+          },
+          "moved": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Moved"
+          },
+          "why_not": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Why Not"
+          }
+        },
+        "required": [
+          "can_push",
+          "moved",
+          "why_not"
+        ],
+        "title": "SyncStatus",
         "type": "object"
       },
       "TaskResult": {
@@ -11030,6 +11140,63 @@
         "summary": "Cancel"
       }
     },
+    "/api/jobs/{job_id}/carry-on": {
+      "post": {
+        "description": "Carry a paused development on from where it was paused, with what was pushed to\nits branch meanwhile or without it. 409 when it is not paused, when commits were\npushed and no pull was asked for, or when the pull cannot be made.",
+        "operationId": "carry_on_api_jobs__job_id__carry_on_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/CarryOn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Carry On"
+      }
+    },
     "/api/jobs/{job_id}/deploy": {
       "put": {
         "description": "Edit the deployment proposal while the job waits at the deployment gate.",
@@ -11340,6 +11507,63 @@
           }
         },
         "summary": "Message"
+      }
+    },
+    "/api/jobs/{job_id}/pause": {
+      "post": {
+        "description": "Pause a development so people can work on its branch; it keeps its place.\n409 when it has ended or is already paused, or when it cannot be pushed.",
+        "operationId": "pause_api_jobs__job_id__pause_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/Pause"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pause"
       }
     },
     "/api/jobs/{job_id}/plan": {
@@ -11815,6 +12039,46 @@
           }
         },
         "summary": "Get Step Detail"
+      }
+    },
+    "/api/jobs/{job_id}/sync": {
+      "get": {
+        "description": "Whether the branch can be pushed, and whether somebody pushed to it since.",
+        "operationId": "sync_status_api_jobs__job_id__sync_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sync Status"
       }
     },
     "/api/jobs/{job_id}/tests": {

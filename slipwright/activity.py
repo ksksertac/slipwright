@@ -236,6 +236,8 @@ def pending_approval(job: Job) -> str | None:
         return "test cases" if job.data.qa_stage == 1 else "written tests"
     if job.state is JobState.AWAITING_DEPLOY_APPROVAL:
         return "deployment"
+    if job.state is JobState.AWAITING_RECONCILE_APPROVAL:
+        return "work done by hand"
     return None
 
 

@@ -3616,6 +3616,11 @@ table.mini .num {
   background: var(--surface-2);
   opacity: 0.72;
 }
+/* where a paused development carries on from: marked, but not asking anybody anything */
+.step-card.paused {
+  border-left-color: var(--accent);
+  border-left-style: dashed;
+}
 .step-card .who {
   display: flex;
   align-items: center;

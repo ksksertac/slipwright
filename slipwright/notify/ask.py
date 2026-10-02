@@ -486,7 +486,9 @@ def gather(notifier: Notifier, user_id: str, question: Question) -> dict[str, An
             "running": [
                 _how_it_is_going(j, by_project.get(j.project_id or "", ""))
                 for j in jobs
-                if not j.is_terminal and j.state not in APPROVAL_STATES
+                if not j.is_terminal
+                and j.state not in APPROVAL_STATES
+                and j.state is not JobState.PAUSED
             ]
         }
 
@@ -558,7 +560,11 @@ def _totals(jobs: list[Job]) -> dict[str, int]:
         "stopped": sum(1 for j in jobs if j.state is JobState.FAILED),
         "waiting_for_you": sum(1 for j in jobs if j.state in APPROVAL_STATES),
         "being_worked_on": sum(
-            1 for j in jobs if not j.is_terminal and j.state not in APPROVAL_STATES
+            1
+            for j in jobs
+            if not j.is_terminal
+            and j.state not in APPROVAL_STATES
+            and j.state is not JobState.PAUSED
         ),
         "shown_below": min(len(jobs), SHOWN),
     }

@@ -156,6 +156,14 @@ class GitHubHost:
         with self._quiet_about_the_token():
             self._gh.push(worktree, branch)
 
+    def remote_head(self, worktree: Path, branch: str) -> str | None:
+        with self._quiet_about_the_token():
+            return self._gh.remote_head(worktree, branch)
+
+    def fetch(self, worktree: Path, branch: str) -> str | None:
+        with self._quiet_about_the_token():
+            return self._gh.fetch(worktree, branch)
+
     def open_pr(self, worktree: Path, branch: str, title: str, body: str) -> str:
         with self._quiet_about_the_token():
             return self._gh.open_pr(worktree, branch, title, body)

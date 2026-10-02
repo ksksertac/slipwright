@@ -31,6 +31,7 @@ ASIDES: tuple[tuple[str, str], ...] = (
     ("deploy_write", "Write the deployment files that were approved"),
     ("gate_triage", "was the failing test itself wrong"),
     ("reading", "Read the file in `file`"),
+    ("reconcile", "that had not been built yet"),
 )
 
 

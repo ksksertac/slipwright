@@ -42,6 +42,13 @@ class JobState(StrEnum):
     # what is left is mobile phases nothing here can build (T14.2): not a gate -- nobody
     # approves it -- it opens by itself when a machine that can build them connects
     AWAITING_BUILDER = "awaiting_builder"
+    # somebody paused it to work on the branch by hand: not over, and nothing runs it until
+    # the same person says carry on -- with what was pushed meanwhile, or without
+    PAUSED = "paused"
+    # what people did on the branch while it was paused, read by the Architect against the
+    # plan, and the person's yes before the phases they finished are passed over
+    RECONCILE = "reconcile"
+    AWAITING_RECONCILE_APPROVAL = "awaiting_reconcile_approval"
     DONE = "done"
     # somebody stopped it: not a failure, and not something to retry into
     CANCELLED = "cancelled"
@@ -56,6 +63,7 @@ APPROVAL_STATES: frozenset[JobState] = frozenset(
         JobState.AWAITING_REVIEW_APPROVAL,
         JobState.AWAITING_TEST_APPROVAL,
         JobState.AWAITING_DEPLOY_APPROVAL,
+        JobState.AWAITING_RECONCILE_APPROVAL,
         JobState.AWAITING_DECISION,
     }
 )
@@ -400,6 +408,26 @@ class JobData(BaseModel):
     )
     jira_queue: list[dict[str, Any]] = Field(
         default_factory=list, description="Agent Jira actions waiting for Jira to come back."
+    )
+    # -- pausing to work by hand --
+    pause: dict[str, Any] | None = Field(
+        default=None,
+        description="While paused, and after: where it stopped (from_state, phase_index), "
+        "the commit it stopped on (head), who paused it and when, and -- when the branch was "
+        "pushed so people could work on it -- the commit pushed (pushed), whether unfinished "
+        "work was committed to get it there (wip), and why a push failed (push_error).",
+    )
+    reconcile: dict[str, Any] | None = Field(
+        default=None,
+        description="The Architect's reading of what people pushed while the development "
+        "was paused: per remaining phase done, partial or untouched, and the phase it carries "
+        "on from. Approved at its own gate before anything is passed over.",
+    )
+    phase_outcomes: dict[str, dict[str, Any]] = Field(
+        default_factory=dict,
+        description="Phase number (1-based, as a string) -> how it was finished, for the "
+        "phases somebody finished by hand: {by: 'hand', evidence}. Agent-built phases are "
+        "not listed; the history already says how they went.",
     )
 
 

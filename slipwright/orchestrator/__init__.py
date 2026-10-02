@@ -57,6 +57,15 @@ LEGAL_TRANSITIONS: dict[JobState, tuple[JobState, ...]] = {
     # DevOps runs in two stages like QA: the deployment proposal is approved first
     JobState.DEVOPS: (JobState.AWAITING_DEPLOY_APPROVAL, JobState.DONE, JobState.FAILED),
     JobState.AWAITING_DEPLOY_APPROVAL: (JobState.DEVOPS,),
+    # what people pushed while it was paused, read against the plan; approved, it carries
+    # on with the first phase they did not finish -- or with QA when they finished them all
+    JobState.RECONCILE: (JobState.AWAITING_RECONCILE_APPROVAL, JobState.FAILED),
+    JobState.AWAITING_RECONCILE_APPROVAL: (
+        JobState.DEVELOPING,
+        JobState.QA,
+        JobState.RECONCILE,
+    ),
+    JobState.PAUSED: (),  # filled in below: back to wherever it was paused
     JobState.DONE: (),
     JobState.FAILED: (),
     JobState.CANCELLED: (),
@@ -72,6 +81,7 @@ _WORKING = (
     JobState.REVIEW,
     JobState.QA,
     JobState.DEVOPS,
+    JobState.RECONCILE,
 )
 for _state in _WORKING:
     LEGAL_TRANSITIONS[_state] = (*LEGAL_TRANSITIONS[_state], JobState.AWAITING_DECISION)
@@ -94,6 +104,20 @@ LEGAL_TRANSITIONS[JobState.BUILD_GATE] = (
     JobState.ARCHITECTURE,
     JobState.DONE,  # tests re-run by hand on a finished development, and green
 )
+
+
+# A development somebody wants to work on by hand is paused rather than stopped: from
+# anywhere it is moving or waiting, and back to exactly there -- or, after a pull, to
+# reading what was pushed. It is not offered from ``created``: nothing has started, so
+# there is nothing to come back to.
+_PAUSABLE = [
+    _s
+    for _s in LEGAL_TRANSITIONS
+    if _s not in TERMINAL_STATES and _s not in (JobState.PAUSED, JobState.CREATED)
+]
+for _state in _PAUSABLE:
+    LEGAL_TRANSITIONS[_state] = (*LEGAL_TRANSITIONS[_state], JobState.PAUSED)
+LEGAL_TRANSITIONS[JobState.PAUSED] = (*_PAUSABLE, JobState.CANCELLED)
 
 
 class IllegalTransitionError(ValueError):

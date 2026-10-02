@@ -236,6 +236,13 @@ behaviour deliberately changed, rewrite it to state the new rule -- do not weake
   Since every merge is a release, that is every merge. The number an image reports is
   `SLIPWRIGHT_VERSION`, written into it by CI -- `pyproject.toml`'s is only a source
   checkout's, because CI cannot commit a bump to a protected `main`.
+- **Stop is a pause; End is for good.** `pause` keeps the development's place in
+  `data.pause` and waits in `paused`, which is neither working nor terminal, so
+  `_resume_all` leaves it alone. `carry_on` without a pull refuses when somebody pushed to
+  the branch meanwhile (`RemoteMoved`): building beside unseen commits ends in a refused
+  push after every phase is paid for. A pull with phases left goes through `reconcile`
+  and its gate, and only an unbroken run of phases finished by hand is passed over.
+  `_stopping` carries both orders to a running loop; a cancel outranks a pause.
 - **Positional assertions rot.** A test that asserted on `provider_settings()[2]` broke
   the day a vendor was added. Look things up by name.
 
@@ -253,6 +260,7 @@ development stops for a person at each of these, and `_may_act` guards every one
 | test cases | what QA proposes to test | owner, or QA's member |
 | written tests | the tests themselves, once green | owner, or QA's member |
 | deployment | where and how it is deployed | owner |
+| work done by hand | the Architect's reading of what people pushed while it was paused | owner, or the Architect's member |
 
 A stopped development has three ways out and they are different: **retry** (the same step
 again), **replan** (back to the backlog with a note about what to try instead) and
