@@ -106,7 +106,9 @@ export const keys = {
   attachments: (id: string, jobId?: string) =>
     ["projects", id, "attachments", jobId ?? "project"] as const,
   job: (id: string) => ["jobs", id] as const,
-  transition: (id: string, index: number) => ["jobs", id, "history", index] as const,
+  // not under ["jobs", id]: an entry is never rewritten, and every event about the job
+  // would otherwise fetch each one that is open again
+  transition: (id: string, index: number) => ["history", id, index] as const,
   step: (id: string, key: string) => ["jobs", id, "steps", key] as const,
   talk: (id: string, key: string) => ["jobs", id, "talk", key] as const,
   design: (id: string) => ["jobs", id, "design"] as const,
@@ -494,6 +496,7 @@ export function useTransition(jobId: string, index: number | null) {
     queryKey: keys.transition(jobId, index ?? -1),
     queryFn: () => api.get<Transition>(`/api/jobs/${jobId}/history/${index}`),
     enabled: index !== null,
+    staleTime: Infinity,
   });
 }
 

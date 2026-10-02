@@ -9520,6 +9520,18 @@
             "description": "Long-form record for this step: a diff, a build log, ...",
             "title": "Detail"
           },
+          "detail_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How long `detail` is, in characters. A job read without its details (the lists, and the page that follows a development) carries this and not `detail`: GET /jobs/{id}/history/{index} is the entry with it.",
+            "title": "Detail Size"
+          },
           "from_state": {
             "$ref": "#/components/schemas/JobState"
           },
@@ -9541,6 +9553,7 @@
         "required": [
           "at",
           "detail",
+          "detail_size",
           "from_state",
           "note",
           "to_state"
@@ -11348,6 +11361,7 @@
     },
     "/api/jobs": {
       "get": {
+        "description": "Every development, each history entry without its detail (its size instead).",
         "operationId": "list_jobs_api_jobs_get",
         "responses": {
           "200": {
@@ -11515,6 +11529,7 @@
         "summary": "Delete Job"
       },
       "get": {
+        "description": "A development, each history entry without its detail (its size instead): the\npage asks for this every time something happens to it, and the diffs and logs are\nmost of its bytes. One entry with its detail is ``/history/{index}``.",
         "operationId": "get_job_api_jobs__job_id__get",
         "parameters": [
           {

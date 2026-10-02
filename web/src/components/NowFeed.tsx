@@ -16,7 +16,8 @@ import {
   type Section,
 } from "./nowSections";
 import { phaseName, STAGE_LABEL } from "./stages";
-import { formatTime, hasFinished, StateBadge, timeAgo } from "./ui";
+import { hasDetail, useEntryDetail } from "./EntryDetail";
+import { formatTime, hasFinished, Loading, StateBadge, timeAgo } from "./ui";
 
 /** The call being waited on, written before the answer exists (``JobData.inflight``). */
 interface InFlight {
@@ -121,7 +122,7 @@ export function NowFeed({ job }: { job: Job }) {
                   e.kind === "call" ? (
                     <CallItem key={`c${j}`} call={e.call} />
                   ) : (
-                    <NoteItem key={`n${j}`} t={e.t} />
+                    <NoteItem key={`n${j}`} job={job} t={e.t} />
                   ),
                 )}
             </ol>
@@ -291,9 +292,11 @@ function CallItem({ call }: { call: Call }) {
   );
 }
 
-function NoteItem({ t }: { t: Transition }) {
+function NoteItem({ job, t }: { job: Job; t: Transition }) {
   const tx = useT();
   const say = useSay();
+  const [open, setOpen] = useState(false);
+  const detail = useEntryDetail(job, t, open);
   return (
     <li className="now-item note">
       <div className="now-item-head">
@@ -304,10 +307,14 @@ function NoteItem({ t }: { t: Transition }) {
           {timeAgo(t.at)}
         </span>
       </div>
-      {t.detail && (
-        <details className="now-output">
+      {hasDetail(t) && (
+        <details className="now-output" onToggle={(e) => setOpen(e.currentTarget.open)}>
           <summary>{tx("Details")}</summary>
-          <pre>{t.detail.length > 4000 ? `${t.detail.slice(0, 4000)}…` : t.detail}</pre>
+          {detail.loading ? (
+            <Loading rows={1} />
+          ) : (
+            <pre>{detail.text.length > 4000 ? `${detail.text.slice(0, 4000)}…` : detail.text}</pre>
+          )}
         </details>
       )}
     </li>

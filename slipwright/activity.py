@@ -453,7 +453,7 @@ def job_activity(job: Job) -> list[ActivityItem]:
                 kind=kind,
                 role=role,
                 title=t.note or f"{t.from_state.value} -> {t.to_state.value}",
-                has_detail=bool(t.detail),
+                has_detail=t.has_detail,
             )
         )
     return items
