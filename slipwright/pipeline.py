@@ -60,6 +60,8 @@ class StepCard(BaseModel):
     ready: bool = False
     # its answer is being written now, alongside the phase being built (T16.3)
     ahead: bool = False
+    # it spent its budget and waits aside while the phases that need nothing of it go on
+    parked: bool = False
     # the commit that recorded the phase, and where the host shows it (T16.1)
     commit: str | None = None
     commit_url: str | None = None
@@ -408,6 +410,7 @@ def _phase_cards(job: Job, r: _Reader) -> list[StepCard]:
                 and isinstance(needs := phase.get("depends_on"), list)
                 and set(needs) <= set(range(1, job.data.phase_index + 1)),
                 ahead=str(number) in job.data.ahead,
+                parked=str(number) in job.data.parked,
                 commit=job.data.phase_commits.get(str(number)),
                 commit_url=_commit_url(job, job.data.phase_commits.get(str(number))),
             )

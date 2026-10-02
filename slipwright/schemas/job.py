@@ -390,6 +390,12 @@ class JobData(BaseModel):
     resume_state: str | None = Field(
         default=None, description="Where the job continues after the decision gate."
     )
+    parked: dict[str, dict[str, Any]] = Field(
+        default_factory=dict,
+        description="Phases set aside after spending their budget while others could go on "
+        "(by their number now): their uncommitted work as a patch, their counters, and why. "
+        "Restored, and asked about, when their turn comes again.",
+    )
     ahead: dict[str, dict[str, Any]] = Field(
         default_factory=dict,
         description="Phases whose answer is being written ahead of their turn (T16.3), by "
