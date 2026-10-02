@@ -1692,6 +1692,97 @@ as answers written alongside (see its note).
 
 ---
 
+## Phase 17 — Machines: the team's own computers write phases
+
+A development's phases are written by models, and a model call is where the time and the
+money go. The people on an account have computers, and on them subscriptions of their own
+-- Claude Code, Codex -- that a server cannot use and should not hold. Phase 14 paired a Mac
+to *build*; this phase lets any computer of anybody on the account *write*, on its own
+plan, from any network.
+
+The shape follows from what T16.3 already does. A phase's answer is written ahead, on a
+thread, and applied in turn on the one branch. A machine is simply somewhere else that
+answer can be written: the server sends the prompt it would have sent its own model, the
+machine's model answers, and the server parses, applies, builds, reviews, commits and
+pushes exactly as before. No second checkout, no merge, no gate that runs anywhere but the
+server, and a machine that vanishes costs nothing but the wait -- the call falls back to
+the server's own model.
+
+The wire protocol is written down once, in `docs/machines-protocol.md`; the server, the
+headless worker and the desktop app all follow it.
+
+### T17.1 — A machine writes a phase
+**Done when**
+- [ ] A machine says which domains it writes (`write:backend`, `write:web`, …) beside the
+  platforms it builds. A worker that says none is never given a call: a Mac worker from
+  before this phase is untouched
+- [ ] A specialist's call goes to a machine of the job's account when one that writes its
+  domain is there: the request -- system text, prompt, schema, pictures -- waits in
+  `worker_calls` and is claimed by exactly one machine (the claim is a conditional update,
+  as builds are)
+- [ ] It is a provider like any other (`providers/machine.py`): the answer comes back as text
+  and is parsed and validated by `invoke_role`, so a wrong answer is a retry, never a wrong
+  file. Its tokens are counted; its cost is the machine's plan, not the account's bill
+- [ ] Not claimed within 45 s, or claimed and not heard from for 60 s, or failed by the
+  machine: the call is taken back and asked of the account's own model. Nobody waits on a
+  laptop that went to sleep
+- [ ] The call carries the repository, branch and commit it was written from, without
+  credentials, so a machine with access may let its model read the code itself
+- [ ] *Right now* and the phase card say which machine is writing it, and what it last said
+- [ ] Tests (`tests/test_phase17_machines.py`): a call claimed once; answered and applied;
+  never claimed / gone quiet / failed falls back; an older worker gets no call; another
+  account's machine never sees it
+
+### T17.2 — Everybody on the account lends machines
+**Done when**
+- [ ] *Mobile Builder* becomes *Machines*: every machine of the account, whose it is, what it
+  builds and writes, and what it is doing now. The Mac builders are among them
+- [ ] A member makes a connection code too, and the machine is theirs (`lent_by`): they see
+  and remove their own; the owner sees and removes all of them
+- [ ] The machine's work is still its account's alone (`owner_id`), and nothing about who
+  may approve a gate changes
+
+### T17.3 — Any network: the relay
+**Done when**
+- [ ] `relay/`: a Cloudflare Worker with one Durable Object per room, at
+  `relay.slipwright.app`. It forwards frames between an installation and its machines and
+  can read none of them (docs/machines-protocol.md §3)
+- [ ] The server connects out to its room when *Machines → Reach machines on other
+  networks* is on (off by default: nothing leaves an installation unasked), and a
+  connection code then carries the relay and the room
+- [ ] Every request is sealed end to end (X25519, ChaCha20-Poly1305); the server's key is
+  proved to the machine at pairing with a key derived from the code's secret, which the
+  server keeps for the code's fifteen minutes beside its hash, so the relay cannot stand in
+  the middle. Only `/api/worker/` is reachable through it
+- [ ] `slipwright worker` pairs and works through the relay as it does on a LAN
+- [ ] Tests: a whole pairing, poll, call and answer through an in-memory relay; a tampered
+  frame, a replayed request and a path outside `/api/worker/` are refused
+
+### T17.4 — The desktop app
+**Done when**
+- [ ] `desktop/`: an Electron app for macOS, Windows and Linux, in Slipwright's own colours
+  and mark. The left side is the machine's agents -- Backend, Web, Mobile, DevOps -- each
+  with what it is doing; then history, the connections (the team, models, source, Jira)
+  and settings
+- [ ] It pairs with a code, LAN or relay, and speaks the worker API itself (TypeScript; no
+  Python on the machine)
+- [ ] Models: Claude Code and Codex as installed and signed in, or an Anthropic / OpenAI key.
+  Which agent uses which is chosen per machine. Keys stay on the machine (`safeStorage`)
+- [ ] Source: a GitHub / Bitbucket token, used to check out the call's commit read-only so
+  the model can read the repository
+- [ ] Jira: site, e-mail and token; a phase taken moves its issue to *In Progress* under the
+  person's own name
+- [ ] Builds what this machine can (Xcode, Android SDK), as `slipwright worker` does
+- [ ] Pause, start at login, not on battery; packaged with electron-builder
+
+### Order
+T17.1 and T17.2 on the server first: a machine on the same network writes phases. T17.3
+then takes it past the router, and T17.4 puts it in front of somebody who will never open
+a terminal. The relay and the app are separate directories with nothing of the server in
+them, so they are built beside the server work, against the protocol document.
+
+---
+
 ## Phase 10 — Proposed (not started)
 
 ### T10.1 — Parallel phases per domain
