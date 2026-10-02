@@ -2121,8 +2121,10 @@ export const TR: Record<string, string> = {
   // moving the account to another Slipwright on the network
   Move: "Taşıma",
   "Move it": "Taşı",
-  "Send to another computer": "Başka bilgisayara gönder",
-  "Type its address and the code on its screen": "Adresini ve ekranındaki kodu gir",
+  "Looking at {nets}…": "{nets} taranıyor…",
+  "connect by address": "adresle bağlan",
+  "empty installation": "boş kurulum",
+  "older version": "eski sürüm",
   "Not found there? Its address is this computer's IPv4 address (ipconfig), port {port}.":
     "Orada görünmüyor mu? Adresi bu bilgisayarın IPv4 adresi (ipconfig), port {port}.",
   "Move this account to another Slipwright on the same network in one go: projects, developments, settings, model keys and attachments.":
@@ -2147,7 +2149,7 @@ export const TR: Record<string, string> = {
     "Yarıda kalan bir taşıma alan tarafta hiçbir iz bırakmaz.",
   "this computer": "bu bilgisayar",
   "{n} projects": "{n} proje",
-  "Move here →": "Buraya taşı →",
+  "Move here →": "Taşı →",
   "Update needed": "Güncelleme gerekli",
   "Receive here": "Buraya al",
   "Make a code, type it on the sending computer": "Kod oluştur, gönderen bilgisayarda gir",

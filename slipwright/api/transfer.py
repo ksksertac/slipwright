@@ -162,6 +162,8 @@ def here(request: Request, address: str | None = None) -> TransferHere:
         addresses=_addresses(engine, address) if enabled else [],
         projects=len(outgoing.projects_of(engine, scope)),
         admin=scope.admin,
+        database=engine.raw_store.db.dialect,
+        networks=nearby.targets(address, own=nearby.own_address())[0] if enabled else [],
     )
 
 
@@ -188,7 +190,11 @@ def nearby_installations(request: Request, address: str | None = None) -> list[T
             name=str(p.get("name", "")) or str(p["address"]),
             version=str(p.get("version", "")),
             revision=p.get("revision") if isinstance(p.get("revision"), str) else None,
-            compatible=p.get("revision") == mine,
+            compatible=not p.get("legacy") and p.get("revision") == mine,
+            database=p.get("database") if isinstance(p.get("database"), str) else None,
+            projects=p.get("projects") if isinstance(p.get("projects"), int) else None,
+            this_one=bool(p.get("this_one")),
+            legacy=bool(p.get("legacy")),
         )
         for p in found
     ]
@@ -300,6 +306,8 @@ def hello(request: Request) -> TransferHello:
         name=nearby.machine_name(),
         version=running_version(),
         revision=_revision(engine),
+        database=engine.raw_store.db.dialect,
+        projects=len([p for p in engine.store.list_projects() if not p.is_demo]),
     )
 
 

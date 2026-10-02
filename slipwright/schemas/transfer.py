@@ -19,9 +19,17 @@ class TransferPeer(BaseModel):
     address: str = Field(description="Where it answers, as this server reached it.")
     instance: str = Field(description="Which installation: the same one seen twice is one.")
     name: str
-    version: str
+    version: str = Field(description="Empty for a release from before moving existed.")
     revision: str | None = Field(description="Its database schema; a transfer needs the same.")
     compatible: bool = Field(description="On the same schema as this one, so a transfer works.")
+    database: str | None = Field(default=None, description="sqlite or postgresql.")
+    projects: int | None = Field(default=None, description="How many projects it holds.")
+    this_one: bool = Field(
+        default=False, description="This installation, found at an address of its own."
+    )
+    legacy: bool = Field(
+        default=False, description="A Slipwright from before moving existed: update it first."
+    )
 
 
 class TransferHere(BaseModel):
@@ -40,6 +48,8 @@ class TransferHere(BaseModel):
     )
     projects: int = Field(description="This account's projects: what a transfer would send.")
     admin: bool = Field(description="Whether the installation's own settings go too.")
+    database: str = Field(description="sqlite or postgresql.")
+    networks: list[str] = Field(description="What looking around the network looks at.")
 
 
 class TransferHello(BaseModel):
@@ -52,6 +62,8 @@ class TransferHello(BaseModel):
     name: str
     version: str
     revision: str | None
+    database: str
+    projects: int = Field(description="How many projects it holds, the worked example aside.")
 
 
 class TransferCode(BaseModel):
