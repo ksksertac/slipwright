@@ -1606,10 +1606,10 @@ deployment files. The push is what is missing.
   and marks it ready for review instead of opening it
 - [ ] The commit message names the phase, its task and its Jira key
   (`phase 3/10: Soru sırası … [SCRUM-131]`); the pipeline card links the commit
-- [ ] The boxes that change no file (backlog, architecture, design, the gates) commit
-  nothing: their record is the job and Jira. An opt-in project setting writes the approved
-  backlog, plan and screens under `docs/slipwright/` with the first phase, for teams that
-  want them in the repository
+- [ ] The pushes go to the project's own repository, on the development's branch, and
+  carry only the project's code. The boxes that change no file (backlog, architecture,
+  design, the gates) commit nothing: their record is Slipwright's and Jira's, never the
+  project's repository
 - [ ] Tests: a three-phase development pushes three times before DevOps, the draft PR
   exists after phase 1, a push refused by the host leaves a note and the next one succeeds
 
