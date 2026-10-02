@@ -1,0 +1,26 @@
+# The Slipwright relay. See README.md; the contract is docs/machines-protocol.md §3.
+name = "slipwright-relay"
+main = "src/index.ts"
+# Not newer than the workerd that @cloudflare/vitest-pool-workers ships, or the tests
+# cannot start the Worker they are testing.
+compatibility_date = "2026-08-20"
+
+# The address the connection codes carry. Needs the slipwright.app zone in this account;
+# someone running their own relay drops this line or puts their own host in it.
+routes = [{ pattern = "relay.slipwright.app", custom_domain = true }]
+# One address: the one in the codes. Without a route of your own, set this to true.
+workers_dev = false
+
+# Nothing it carries is worth logging, and a frame's contents are sealed anyway; requests
+# are still counted by Cloudflare's own metrics.
+[observability]
+enabled = false
+
+[[durable_objects.bindings]]
+name = "ROOMS"
+class_name = "Room"
+
+# SQLite-backed objects are the ones the free plan allows.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Room"]
