@@ -14,10 +14,17 @@ when it is over.
 
 Everything that arrives is somebody else's: it is rewritten to belong to whoever showed
 the code. Users, sessions and memberships never come at all (``rows.py``).
+
+A project that is already here -- moved once before, and worked on since on the other
+side -- is replaced by what arrived: the sender's is the copy somebody is carrying on with.
+Never one that belongs to another account here, never under a development running here,
+and never over a development that was only ever started here: that would be work lost
+without anybody having been asked, so the transfer stops and says which.
 """
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import re
@@ -33,7 +40,8 @@ from urllib.parse import urlsplit, urlunsplit
 
 from sqlalchemy import and_, delete, insert, select
 
-from slipwright.schemas.job import new_job_id, utcnow
+from slipwright.providers import codex
+from slipwright.schemas.job import APPROVAL_STATES, TERMINAL_STATES, JobState, new_job_id, utcnow
 from slipwright.schemas.project import Project
 from slipwright.store.schema import (
     attachments,
@@ -72,6 +80,19 @@ MAX_PART = R.CHUNK + 1024 * 1024
 #: Transfers from here kept for the page to ask about.
 SENDINGS_KEPT = 20
 _BLOB = re.compile(r"^(repo|tree)/([A-Za-z0-9_-]{1,64})\.(bundle|tar\.gz)$")
+#: A ChatGPT sign-in is a small JSON file; anything far larger is not one.
+MAX_SIGN_IN = 256 * 1024
+#: A development in one of these is not running: replacing its project here takes
+#: nothing out from under a model call (the sender's own rule, ``outgoing.IDLE``).
+IDLE = (
+    APPROVAL_STATES
+    | TERMINAL_STATES
+    | {
+        JobState.AWAITING_BUILDER,
+        JobState.CREATED,
+        JobState.PAUSED,
+    }
+)
 
 
 class Rejected(ValueError):
@@ -109,6 +130,8 @@ class Receiving:
     settings: list[dict[str, Any]] = field(default_factory=list)
     # the settings' JSON lines as they arrive: in memory, never on disk (see _rows)
     settings_raw: bytearray = field(default_factory=bytearray)
+    # the ChatGPT sign-in (Codex's auth.json), held like the settings: never staged
+    sign_in: bytes | None = None
     progress: R.Progress = field(default_factory=R.Progress)
     summary: dict[str, Any] = field(default_factory=dict)
     touched: float = field(default_factory=time.monotonic)
@@ -238,13 +261,18 @@ def accept(engine: Engine, rec: Receiving, sealed: bytes) -> dict[str, Any]:
         rec.touched = time.monotonic()
         kind = part.header.get("kind")
         if kind == "manifest":
-            return _manifest(rec, part)
+            return _manifest(engine, rec, part)
         if not rec.manifest:
             _fail(rec, "a part before the manifest")
         if kind == "rows":
             return _rows(rec, part)
         if kind == "blob":
             return _blob(rec, part)
+        if kind == "sign_in":
+            if len(part.body) > MAX_SIGN_IN:
+                _fail(rec, "a sign-in larger than any sign-in is")
+            rec.sign_in = bytes(part.body)
+            return {"ok": True}
         if kind == "abort":
             why = str(part.header.get("reason") or "the sender gave up")
             log.warning("transfer from %s abandoned by its sender: %s", rec.sender, why)
@@ -277,13 +305,22 @@ def _fail(rec: Receiving, why: str) -> None:
     raise Rejected(why)
 
 
-def _manifest(rec: Receiving, part: Part) -> dict[str, Any]:
+def _manifest(engine: Engine, rec: Receiving, part: Part) -> dict[str, Any]:
     if rec.manifest:
         _fail(rec, "a second manifest")
     header = part.header
     counts = header.get("counts") or {}
     if not isinstance(counts, dict) or not isinstance(header.get("repos"), dict):
         _fail(rec, "a manifest without its lists")
+    # asked now, before the sender spends minutes on checkouts that could not be written;
+    # asked again when they are, since this computer can move on in between
+    sent_jobs = header.get("jobs")
+    if isinstance(sent_jobs, dict):
+        problem = _cannot_replace(
+            engine, rec, {str(k): {str(j) for j in v} for k, v in sent_jobs.items()}
+        )
+        if problem:
+            _fail(rec, problem)
     rec.manifest = header
     for table, step in R.STEP_OF.items():
         if step is not None:
@@ -428,22 +465,93 @@ def _without_credentials(url: str) -> str:
     return url
 
 
+def _replaceable(engine: Engine, rec: Receiving, project_ids: list[str]) -> list[str]:
+    """Which of these projects are here already, as this account's: they are replaced.
+    One that is another account's here is not ours to touch and is left as it was."""
+    if not project_ids:
+        return []
+    with engine.raw_store.db.connect() as conn:
+        found = conn.execute(
+            select(projects.c.id, projects.c.owner_id).where(projects.c.id.in_(project_ids))
+        ).all()
+    return [pid for pid, owner in found if _key(owner) == _key(rec.owner)]
+
+
+def _cannot_replace(engine: Engine, rec: Receiving, sent_jobs: dict[str, set[str]]) -> str | None:
+    """Why the projects already here cannot be replaced by the ones arriving, or None.
+
+    A development running here would have its checkout pulled from under a model call.
+    One that only exists here -- started after the last move -- would be deleted with
+    nobody having said so. Both stop the transfer, by name, before anything is written."""
+    running: list[str] = []
+    only_here: list[str] = []
+    for pid in _replaceable(engine, rec, list(sent_jobs)):
+        for job in engine.raw_store.list(pid):
+            if job.state not in IDLE:
+                running.append(job.title)
+            elif job.id not in sent_jobs[pid]:
+                only_here.append(job.title)
+    if running:
+        return (
+            f"{', '.join(running[:3])} is running on this computer; stop it or let it reach "
+            "a gate here, then move again"
+        )
+    if only_here:
+        return (
+            f"{', '.join(only_here[:3])} was started on this computer and the sender does not "
+            "have it; moving would delete it. Delete it here, or move it to the sender first"
+        )
+    return None
+
+
+def _jobs_sent(rec: Receiving) -> dict[str, set[str]]:
+    sent: dict[str, set[str]] = {}
+    for row in _staged(rec, "jobs"):
+        sent.setdefault(str(row["project_id"]), set()).add(str(row["id"]))
+    for row in _staged(rec, "projects"):
+        sent.setdefault(str(row["id"]), set())
+    return sent
+
+
 def import_transfer(engine: Engine, rec: Receiving) -> dict[str, Any]:
     """Write what arrived: checkouts, then every row in one transaction. All or nothing."""
     db = engine.raw_store.db
     manifest = rec.manifest
 
+    problem = _cannot_replace(engine, rec, _jobs_sent(rec))
+    if problem:
+        raise ValueError(problem)
+    project_rows = _staged(rec, "projects")
+    replacing = set(_replaceable(engine, rec, [str(r["id"]) for r in project_rows]))
+    # what of the copy here goes once the new one is written: read now, removed after
+    old = {
+        pid: (engine.raw_store.get_project(pid), engine.raw_store.list(pid)) for pid in replacing
+    }
+    files_sent = bool(rec.manifest.get("attachments", True))
+
     with db.connect() as conn:
         have_projects = {r[0] for r in conn.execute(select(projects.c.id))}
-        have_jobs = {r[0] for r in conn.execute(select(jobs.c.id))}
-        have_runs = {r[0] for r in conn.execute(select(test_runs.c.id))}
-        have_files = {r[0] for r in conn.execute(select(attachments.c.id))}
+        # the rows of a project being replaced are deleted before the new ones go in, so
+        # they do not count as already here
+        going = list(replacing)
+        have_jobs = {
+            r[0] for r in conn.execute(select(jobs.c.id).where(jobs.c.project_id.notin_(going)))
+        }
+        have_runs = {
+            r[0]
+            for r in conn.execute(
+                select(test_runs.c.id).where(test_runs.c.project_id.notin_(going))
+            )
+        }
+        files = select(attachments.c.id)
+        if files_sent:
+            files = files.where(attachments.c.project_id.notin_(going))
+        have_files = {r[0] for r in conn.execute(files)}
 
-    project_rows = _staged(rec, "projects")
-    # a project that is already here -- moved once before -- is left as it is, and
-    # everything of it with it: two copies of one project would share its branches
-    skipped = [r["id"] for r in project_rows if r["id"] in have_projects]
-    moving = [r for r in project_rows if r["id"] not in have_projects]
+    # a project that is another account's here is left as it is, and everything of it
+    # with it: two copies of one project would share its branches
+    skipped = [r["id"] for r in project_rows if r["id"] in have_projects - replacing]
+    moving = [r for r in project_rows if r["id"] not in have_projects or r["id"] in replacing]
     kept = {r["id"] for r in moving}
 
     made: list[Path] = []
@@ -476,19 +584,73 @@ def import_transfer(engine: Engine, rec: Receiving) -> dict[str, Any]:
             tree_of[job_id] = path
 
         counts = _write(
-            engine, rec, moving, kept, repo_of, tree_of, have_jobs, have_runs, have_files
+            engine,
+            rec,
+            moving,
+            kept,
+            repo_of,
+            tree_of,
+            have_jobs,
+            have_runs,
+            have_files,
+            replacing=replacing,
+            files_sent=files_sent,
         )
     except Exception:
         for path in reversed(made):
             if path.exists():
                 rmtree(path)
         raise
+    # the rows are the new copy's now; what the old one had on disk goes
+    for project, gone in old.values():
+        _clear_old(engine, project, gone)
+    named = {str(p.get("id")): str(p.get("name")) for p in manifest.get("projects", [])}
     return {
         "moved": sorted(kept),
         "skipped": skipped,
+        "replaced": [named.get(pid, pid) for pid in sorted(replacing)],
         "counts": counts,
         "projects": [p["name"] for p in manifest.get("projects", []) if p.get("id") in kept],
+        "chatgpt": _sign_in(engine, rec),
     }
+
+
+def _clear_old(engine: Engine, project: Project, gone: list[Any]) -> None:
+    """The worktrees, branches and checkout of the copy that was replaced. Best effort:
+    the new copy is written and works; something left on the disk is only space."""
+    for job in gone:
+        if job.worktree_path is None and job.port is None:
+            continue
+        try:
+            engine.workspace.destroy(job)
+        except Exception as exc:  # noqa: BLE001 - one bad worktree must not stop the rest
+            log.warning("transfer: replacing %s: job %s: %s", project.name, job.id, exc)
+    try:
+        engine._remove_our_checkout(project)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("transfer: replacing %s: its old checkout: %s", project.name, exc)
+
+
+def _sign_in(engine: Engine, rec: Receiving) -> str | None:
+    """Put the ChatGPT sign-in that arrived where this account's Codex reads it.
+
+    Only into an empty place: a sign-in already here is somebody's choice on this
+    computer, perhaps another ChatGPT account, and is kept. Only where the feature is on
+    -- a hosted server has it off and is never handed one. ``moved``, ``kept`` or None
+    when none came or it could not be put anywhere."""
+    if rec.sign_in is None:
+        return None
+    home = engine.for_user(rec.owner).codex_home()
+    if home is None:
+        return None
+    if codex.signed_in(home):
+        return "kept"
+    home.mkdir(parents=True, exist_ok=True)
+    target = home / "auth.json"
+    target.write_bytes(rec.sign_in)
+    with contextlib.suppress(OSError):
+        target.chmod(0o600)  # a session token; nobody else on the machine reads it
+    return "moved"
 
 
 def _write(
@@ -501,11 +663,23 @@ def _write(
     have_jobs: set[str],
     have_runs: set[str],
     have_files: set[str],
+    *,
+    replacing: set[str] | frozenset[str] = frozenset(),
+    files_sent: bool = True,
 ) -> dict[str, int]:
     store = engine.raw_store
     owner = rec.owner
     counts = {table: 0 for table in R.TABLES}
     with store.db.begin() as conn:
+        if replacing:
+            going = list(replacing)
+            # the history and the messages of its developments go with them (cascade)
+            conn.execute(delete(test_runs).where(test_runs.c.project_id.in_(going)))
+            if files_sent:
+                conn.execute(delete(attachments).where(attachments.c.project_id.in_(going)))
+            conn.execute(delete(jobs).where(jobs.c.project_id.in_(going)))
+            conn.execute(delete(project_briefs).where(project_briefs.c.project_id.in_(going)))
+            conn.execute(delete(projects).where(projects.c.id.in_(going)))
         for row in moving:
             project = Project.model_validate_json(row["data_json"])
             project = project.model_copy(

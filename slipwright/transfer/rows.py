@@ -30,7 +30,9 @@ TABLES = (
 #: further on a different number: version 1 sent rows as JSON lists, two hundred at a
 #: time, and two hundred rows of agent transcripts were more than a part may be.
 #: Version 3 carries what people said to a development's agents (``job_messages``).
-PROTOCOL = 3
+#: Version 4 replaces a project the receiver already has, and carries the ChatGPT
+#: sign-in: an older receiver would skip the first and refuse the second.
+PROTOCOL = 4
 #: The largest piece of anything in one part: a run of rows, a slice of a checkout. Rows
 #: are a stream of JSON lines cut at this size, wherever the cut falls, so neither a long
 #: history nor a fifty-megabyte attachment is ever more than one part can carry.

@@ -212,7 +212,12 @@ behaviour deliberately changed, rewrite it to state the new rule -- do not weake
   like the Mac's door: `pair` is the key exchange and every part after it must open with
   that key. Settings arrive decrypted inside the channel and are sealed again with the
   receiver's key -- so they are held in memory, never staged to disk. A new table that
-  belongs to a project must be added to `TABLES`, or a move silently leaves it behind.
+  belongs to a project must be added to `TABLES`, or a move silently leaves it behind --
+  and deleted in `_write` when a project is replaced. A project the receiver already has
+  (its own account's) is replaced by the copy sent; `_cannot_replace` refuses when that
+  would take a running development or delete one only the receiver has. The ChatGPT
+  sign-in is Codex's `auth.json`, not a setting: it travels as its own part, in memory,
+  and is written only where the receiver has none.
 - **A lost Mac is not a red build.** `BuilderLost` sends the job back to waiting with
   `builder_resume=build_gate`: the phase is written, only its build is owed, and no attempt
   is spent. Charging it as a failure would fail developments because a laptop went to sleep.

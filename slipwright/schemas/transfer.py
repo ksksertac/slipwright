@@ -144,7 +144,17 @@ class TransferStatus(BaseModel):
     error: str | None = None
     steps: list[TransferStep]
     moved: list[str] = Field(default_factory=list, description="Names of the projects moved.")
-    skipped: int = Field(default=0, description="Projects the receiver already had.")
+    skipped: int = Field(
+        default=0, description="Projects the receiver had as another account's, left alone."
+    )
+    replaced: list[str] = Field(
+        default_factory=list,
+        description="Projects the receiver already had, replaced by the copy sent.",
+    )
+    chatgpt: Literal["moved", "kept"] | None = Field(
+        default=None,
+        description="The ChatGPT sign-in: moved there, or one already there was kept.",
+    )
     counts: dict[str, int] = Field(default_factory=dict, description="Rows written, per table.")
 
 

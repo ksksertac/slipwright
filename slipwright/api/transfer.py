@@ -140,6 +140,8 @@ def _summary(summary: dict[str, Any]) -> dict[str, Any]:
     return {
         "moved": [str(n) for n in summary.get("projects", [])],
         "skipped": len(summary.get("skipped", [])),
+        "replaced": [str(n) for n in summary.get("replaced", [])],
+        "chatgpt": summary.get("chatgpt"),
         "counts": {str(k): int(v) for k, v in (summary.get("counts") or {}).items()},
     }
 

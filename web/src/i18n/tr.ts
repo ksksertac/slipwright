@@ -2210,13 +2210,19 @@ export const TR: Record<string, string> = {
   "{names} {verb}.": "{names} {verb}.",
   "arrived here": "buraya geldi",
   "are there now": "artık orada",
-  "Nothing new: everything was already there.": "Yeni bir şey yok: hepsi zaten oradaydı.",
+  "Nothing was moved.": "Hiçbir şey taşınmadı.",
+  "{names}: the copy on the receiving computer was replaced with the latest.":
+    "{names}: alan bilgisayardaki kopya en son hâliyle değiştirildi.",
+  "{n} project(s) belong to another account on the receiving computer and were left as they were.":
+    "{n} proje alan bilgisayarda başka bir hesaba ait; olduğu gibi bırakıldı.",
+  "The ChatGPT sign-in went too: agents on a ChatGPT plan carry on without signing in again.":
+    "ChatGPT girişi de taşındı: ChatGPT aboneliğindeki ajanlar yeniden giriş yapmadan devam eder.",
+  "The receiving computer already had a ChatGPT sign-in; it was kept.":
+    "Alan bilgisayarda zaten bir ChatGPT girişi vardı; o korundu.",
   projects: "proje",
   developments: "geliştirme",
   settings: "ayar",
   attachments: "ek",
-  "{n} project(s) were already there and were left as they were.":
-    "{n} proje zaten oradaydı ve olduğu gibi bırakıldı.",
   "Go to projects": "Projelere git",
   "The transfer failed.": "Taşıma başarısız oldu.",
   "Nothing was changed on either computer.": "İki bilgisayarda da hiçbir şey değişmedi.",

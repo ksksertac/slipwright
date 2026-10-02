@@ -533,8 +533,17 @@ Everything the account has goes, all at once or not at all: projects, developmen
 whatever gate they stopped at, their history, attachments, briefs, standards pages, and
 settings with the model keys and Git and Jira tokens -- sealed again with the receiving
 installation's own key. Every checkout goes as the repository itself, with its branches,
-pushed or not, and the work not yet committed. An administrator's move also carries the
-installation's settings (mail, prices) to an installation whose administrator received it.
+pushed or not, and the work not yet committed. A ChatGPT sign-in goes with the settings,
+so agents on a ChatGPT plan carry on without signing in again; one the receiver already
+has is kept. An administrator's move also carries the installation's settings (mail,
+prices) to an installation whose administrator received it.
+
+Moved there once and worked on further here? Move it again: a project the receiver
+already has is replaced with the copy sent -- its checkout, developments and history.
+The move stops instead, and says which, when the receiver has a development of that
+project running, or one started there that the sender does not have, since replacing the
+project would delete it. A project that is another account's on the receiver is left
+alone.
 
 People do not move. Accounts, sessions, sign-in and team memberships stay where they are;
 on arrival everything belongs to whoever showed the code. A connected Mac is paired again.
