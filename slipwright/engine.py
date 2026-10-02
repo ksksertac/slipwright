@@ -246,7 +246,7 @@ def approval_edges(job: Job) -> tuple[JobState, JobState] | None:
     if (
         edges is not None
         and job.state is JobState.AWAITING_ARCHITECTURE_APPROVAL
-        and designer.needed(job)
+        and designer.needs_drawing(job)
     ):
         return (JobState.DESIGN, edges[1])
     if job.state is JobState.AWAITING_DECISION:
@@ -1852,6 +1852,8 @@ class Engine:
             note = f"approved {len(scripts)} deployment script(s) for {plan.get('target')}"
         if job.state is JobState.AWAITING_RECONCILE_APPROVAL:
             note = self._accept_reconcile(job)
+        if job.state is JobState.AWAITING_ARCHITECTURE_APPROVAL:
+            job.data.replan_from = None  # the re-plan is accepted; it is the plan now
         if by:
             note = f"{note} by {by}"
         if job.state is JobState.AWAITING_DECISION:
@@ -1955,6 +1957,7 @@ class Engine:
                 job.data.build_attempts = 0
                 job.data.decision_kind = None
                 job.data.recommendation = None
+                job.data.recommendation_route = None
         self.store.save(job)
         job = self.orchestrator.transition(job, edges[1], note=f"rejected: {feedback}")
         return self._run(job) if run else job
@@ -2101,7 +2104,7 @@ class Engine:
             "phases": [p.model_dump(mode="json") for p in phases],
             "breakdown": breakdown.model_dump(mode="json"),
         }
-        job.data.phase_index = 0
+        job.data.phase_index = job.data.replan_from or 0
         return self.store.save(job)
 
     def set_test_cases(self, job_id: str, cases: list[dict[str, Any]]) -> Job:
@@ -2781,6 +2784,7 @@ class Engine:
         if detail:
             parts.append(detail)
         job.data.feedback = "\n\n".join(parts)
+        job.data.replan_from = None  # back to the backlog: everything is planned again
         job.data.phase_index = 0
         job.data.build_attempts = 0
         job.data.review_rounds = 0
@@ -3623,6 +3627,59 @@ class Engine:
             job, JobState.AWAITING_DECISION, note=note, detail=detail
         )
 
+    # -- a re-plan from where it failed ------------------------------------------------------
+
+    def _replan_from(
+        self, job: Job, index: int, why: str, *, note: str, detail: str | None = None
+    ) -> Job:
+        """Send the plan back to the Architect from phase ``index`` on, keeping the ones
+        before it.
+
+        A supervisor's re-plan used to start the development over: the Architect wrote all
+        eight phases again, the Designer drew every screen again, and phases one to seven,
+        built and committed, were built a second time -- to fix phase eight. The phases
+        before the failing one are kept; the Architect replaces the rest, and may add a
+        phase that changes kept code when that is where the cause is.
+        """
+        job.data.replan_from = index
+        job.data.phase_index = index
+        job.data.feedback = why
+        job.data.build_attempts = 0
+        job.data.qa_gate_fixes = 0
+        job.data.qa_diagnosis = None
+        job.data.last_build_output = None
+        job.data.review_violations = []
+        job.data.review_rounds = 0
+        job.data.phase_calls = 0
+        job.data.decision_kind = None
+        job.data.recommendation = None
+        job.data.recommendation_route = None
+        self.store.save(job)
+        return self.orchestrator.transition(job, JobState.ARCHITECTURE, note=note, detail=detail)
+
+    def replan_phase(
+        self, job_id: str, note: str, *, by: str | None = None, run: bool = True
+    ) -> Job:
+        """At a phase-budget stop: have this phase planned again, with the person's words.
+
+        "Split it in three" is the Architect's to do, not the developer's: sent to the
+        developer it was read as one more try of the same phase."""
+        job = self.store.get(job_id)
+        if job.state is not JobState.AWAITING_DECISION or job.data.decision_kind != "phase_budget":
+            raise NotAwaitingApproval(job)
+        if not note.strip():
+            raise EmptyApproval("say what the new plan for this phase should do")
+        index = job.data.phase_index
+        job.data.resume_state = None
+        job = self._replan_from(
+            job,
+            index,
+            f"phase {index + 1} spent its budget of model calls without getting through. "
+            f"What to plan instead, from a person: {note.strip()}",
+            note=f"re-plan from phase {index + 1}" + (f" by {by}" if by else "") + f": {note}",
+        )
+        return self._run(job) if run else job
+
     # -- one budget for a phase (T15.5) -------------------------------------------------------
 
     @staticmethod
@@ -3676,11 +3733,14 @@ class Engine:
             attempts=attempts,
             over_phase_budget=True,
         )
+        route: str | None = None
         if result.ok and isinstance(result.output, Recommendation):
             recommendation = result.output.recommendation
+            route = result.output.route
         job = self.store.get(job.id)
         job.data.decision_kind = "phase_budget"
         job.data.recommendation = recommendation
+        job.data.recommendation_route = route
         job = self._ask_human(
             job,
             f"{why}; QA recommends what to do next -- write the instruction for the next try",
@@ -4234,7 +4294,8 @@ class Engine:
         assert isinstance(result.output, ArchitectResult)
         breakdown = Breakdown.model_validate(job.data.backlog)
         task_ids = [t.id for t in breakdown.tasks()]
-        mapping = architect.phase_task_map(result.output.phases, task_ids)
+        kept = [PlanPhase.model_validate(p) for p in architect.kept_phases(job)]
+        mapping = architect.phase_task_map([*kept, *result.output.phases], task_ids)
         if isinstance(mapping, str):
             # a plan that skips a task is usually the Architect obeying "say so in summary"
             # too literally: it flags a large task and leaves it out. Failing outright threw
@@ -4255,14 +4316,14 @@ class Engine:
                 seed=seed,
                 attachments=self.attachments_for(job, whole=False),
                 problem=(
-                    f"{mapping}. Every backlog task needs exactly one phase whose `task_id` "
-                    f"is the task's id; the tasks are: {listing}"
+                    f"{mapping}. Every backlog task needs a phase whose `task_id` is the "
+                    f"task's id; the tasks are: {listing}"
                 ),
             )
             if not result.ok:
                 return self._invocation_failed(job, result)
             assert isinstance(result.output, ArchitectResult)
-            mapping = architect.phase_task_map(result.output.phases, task_ids)
+            mapping = architect.phase_task_map([*kept, *result.output.phases], task_ids)
             if isinstance(mapping, str):
                 return self._fail(
                     job,
@@ -4273,14 +4334,16 @@ class Engine:
         for task in breakdown.tasks():
             task.phase = mapping[task.id]
         job.profile = architect.accepted_profile(result.output, seed)
+        phases = [*kept, *result.output.phases]
         job.data.plan = {
             "summary": result.output.summary,
             "stack": [s.model_dump(mode="json") for s in result.output.stack],
             "decisions": result.output.decisions,
-            "phases": [p.model_dump(mode="json") for p in result.output.phases],
+            "phases": [p.model_dump(mode="json") for p in phases],
             "breakdown": breakdown.model_dump(mode="json"),
         }
-        job.data.phase_index = 0
+        # a re-plan resumes where it started: what is built stays built
+        job.data.phase_index = len(kept)
         job.data.build_attempts = 0
         job.data.last_build_output = None
         self.store.save(job)
@@ -4288,15 +4351,18 @@ class Engine:
         detail = json.dumps(
             {"profile": job.profile.model_dump(mode="json"), **job.data.plan}, indent=2
         )
-        if job.data.plan_gate == "combined":
+        if job.data.plan_gate == "combined" and not (kept and job.data.test_cases):
             job = self._propose_test_cases_early(job)
+        ready = (
+            f"architect: re-planned from phase {len(kept) + 1} — {len(kept)} kept, "
+            f"{len(result.output.phases)} new"
+            if job.data.replan_from is not None
+            else f"architect: plan ready — {len(phases)} phases"
+        )
         return self.orchestrator.transition(
             job,
             JobState.AWAITING_ARCHITECTURE_APPROVAL,
-            note=(
-                f"architect: plan ready — {len(result.output.phases)} phases, "
-                f"{len(result.output.decisions)} decisions"
-            ),
+            note=f"{ready}, {len(result.output.decisions)} decisions",
             detail=detail,
         )
 
@@ -4343,6 +4409,15 @@ class Engine:
                 job,
                 JobState.DEVELOPING,
                 note="designer: the screens already match this plan",
+            )
+        if job.data.design and not sent_back and not designer.unscreened(job):
+            # a re-plan with the same tasks: their screens still stand, approvals and all
+            job.data.design = {**job.data.design, "plan_fingerprint": fingerprint}
+            self.store.save(job)
+            return self.orchestrator.transition(
+                job,
+                JobState.DEVELOPING,
+                note="designer: every task still to build has its screens already",
             )
         profile = self._profile(job)
         result = self._invoke(
@@ -4766,19 +4841,12 @@ class Engine:
         )
         choice, reason = self._failed_gate_choice(job, index, gate.for_model, repeated=repeated)
         if choice == "replan":
-            job.data.feedback = (
-                f"phase {index + 1} failed the build gate {job.data.build_attempts} time(s); "
-                f"the supervisor asked for a re-plan: {reason}\n\n{gate.tail[-2000:]}"
-            )
-            job.data.phase_index = 0
-            job.data.build_attempts = 0
-            job.data.qa_gate_fixes = 0
-            job.data.qa_diagnosis = None
-            self.store.save(job)
-            return self.orchestrator.transition(
+            return self._replan_from(
                 job,
-                JobState.ARCHITECTURE,
-                note=f"{note}; supervisor: re-plan ({reason})",
+                index,
+                f"phase {index + 1} failed the build gate {job.data.build_attempts} time(s); "
+                f"the supervisor asked for a re-plan: {reason}\n\n{gate.tail[-2000:]}",
+                note=f"{note}; supervisor: re-plan from phase {index + 1} ({reason})",
                 detail=gate.tail,
             )
         if choice == "ask_human":

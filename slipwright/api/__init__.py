@@ -1551,6 +1551,26 @@ def create_app(
         background.add_task(_resume, eng, job.id)
         return job
 
+    @api.post("/jobs/{job_id}/replan-phase", response_model=Job)
+    def replan_phase(
+        job_id: str, body: Replan, request: Request, background: BackgroundTasks
+    ) -> Job:
+        """At a phase-budget stop: have the Architect plan this phase again, keeping the
+        phases already built. The owner's, like every re-plan."""
+        user = require_owner(request)
+        eng = engine_for(request)
+        _refuse_if_demo(request, _get(eng, job_id, request))
+        try:
+            job = eng.replan_phase(job_id, body.note, by=user.username, run=False)
+        except NotAwaitingApproval as exc:
+            raise HTTPException(
+                status_code=409, detail="only a phase that spent its budget is planned again here"
+            ) from exc
+        except EmptyApproval as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        background.add_task(_resume, eng, job.id)
+        return job
+
     @api.post("/jobs/{job_id}/rerun", response_model=Job)
     def rerun(job_id: str, body: Rerun, request: Request, background: BackgroundTasks) -> Job:
         """Run the tests, or the DevOps step, again on a development that has stopped."""

@@ -164,6 +164,28 @@ def needed(job: Job) -> bool:
     return bool(ui_phases(job))
 
 
+def unscreened(job: Job) -> list[str]:
+    """The tasks of the UI phases still to build that no screen was drawn for.
+
+    A re-planned development has a new plan but mostly the same tasks, and its screens
+    were drawn and approved for those tasks: drawing all of them again took ten minutes
+    and asked for every approval again. Only a task with no screen at all needs one."""
+    screens = (job.data.design or {}).get("screens") or []
+    if any(s.get("task_id") is None for s in screens):
+        return []  # a screen for no task in particular serves every one
+    drawn = {s.get("task_id") for s in screens}
+    start = job.data.phase_index
+    tasks = [p["task_id"] for p in ui_phases(job) if p["number"] > start]
+    return [t for t in dict.fromkeys(tasks) if t not in drawn]
+
+
+def needs_drawing(job: Job) -> bool:
+    """Whether the Designer has anything to do: screens, and none drawn for some task."""
+    if not needed(job):
+        return False
+    return not (job.data.design or {}).get("screens") or bool(unscreened(job))
+
+
 def for_phase(job: Job, phase: dict[str, Any]) -> dict[str, Any] | None:
     """The part of the design a specialist needs for one phase: the screens of its own
     platform that belong to the phase's task, plus the principles that hold everywhere.

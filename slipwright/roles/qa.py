@@ -167,7 +167,10 @@ reads your `recommendation` first. Say in one to three plain sentences what to d
 the phase into smaller ones (and where), change the approach (and to what), relax a check
 that is wrong for this project, or drop a part that cannot be done here (and why). Be
 concrete and name files or errors where it helps; do not repeat the history back. Put the
-reason in `summary`. Write no code and change no files."""
+reason in `summary`. Write no code and change no files. Set `route`: `architect` when the
+answer is a different plan -- split the phase, reorder phases, undo what an earlier phase
+chose -- since only the Architect changes the plan; `developer` when the same phase can
+get through with a better instruction."""
 
 
 def recommend(

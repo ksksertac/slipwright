@@ -2105,10 +2105,20 @@ export const TR: Record<string, string> = {
   "This phase spent its budget. Say what to do next; it is sent to the developer.":
     "Bu faz bütçesini doldurdu. Sırada ne yapılacağını yaz; geliştiriciye gönderilir.",
   "QA recommends": "QA'nın önerisi",
+  "Send to the developer": "Geliştiriciye gönder",
+  "Plan this phase again": "Bu fazı yeniden planlat",
+  "the same phase is tried again, with this as the instruction":
+    "aynı faz bu talimatla yeniden denenir",
+  "the Architect plans this phase again -- it may split it -- and the phases already built stay":
+    "Mimar bu fazı yeniden planlar -- bölebilir de -- ve biten fazlar olduğu gibi kalır",
+  "This phase spent its budget. Say what to do next: the developer tries the phase again with it, or the Architect plans the phase again.":
+    "Bu faz bütçesini doldurdu. Sırada ne yapılacağını yaz: geliştirici fazı bununla yeniden dener ya da Mimar fazı yeniden planlar.",
+  "(a new plan for this phase)": "(bu faz için yeni bir plan)",
+  "what should happen next?": "sırada ne olmalı?",
   "what should the developer do next?": "geliştirici sırada ne yapmalı?",
   "Send QA's recommendation": "QA'nın önerisini gönder",
-  "The phase spent its budget of model calls without getting through. Nothing more is spent until you answer: what you write goes to the developer as the instruction for the next try, on a fresh budget.":
-    "Faz, model çağrısı bütçesini doldurdu ama geçemedi. Sen cevap verene kadar hiçbir şey harcanmıyor: yazdığın, bir sonraki denemede geliştiriciye talimat olarak gider ve bütçe sıfırlanır.",
+  "The phase spent its budget of model calls without getting through. Nothing more is spent until you answer: what you write goes to the developer as the instruction for the next try, or to the Architect to plan this phase again -- either way on a fresh budget, and the phases already built stay.":
+    "Faz, model çağrısı bütçesini doldurdu ama geçemedi. Sen cevap verene kadar hiçbir şey harcanmıyor: yazdığın ya bir sonraki denemede geliştiriciye talimat olarak gider ya da bu fazı yeniden planlaması için Mimar'a -- iki durumda da bütçe sıfırlanır ve biten fazlar olduğu gibi kalır.",
   "Model calls per phase": "Faz başına model çağrısı",
   "A phase that reaches its own limit stops instead, with QA's recommendation, and waits for you to say what to do.":
     "Kendi sınırına ulaşan bir faz ise başarısız olmaz; QA'nın önerisiyle durur ve ne yapılacağını söylemeni bekler.",
