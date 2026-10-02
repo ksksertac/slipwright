@@ -9294,6 +9294,22 @@
         "additionalProperties": false,
         "description": "A transfer under way, from either end.",
         "properties": {
+          "chatgpt": {
+            "anyOf": [
+              {
+                "enum": [
+                  "moved",
+                  "kept"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The ChatGPT sign-in: moved there, or one already there was kept.",
+            "title": "Chatgpt"
+          },
           "counts": {
             "additionalProperties": {
               "type": "integer"
@@ -9338,9 +9354,17 @@
             "title": "Peer",
             "type": "string"
           },
+          "replaced": {
+            "description": "Projects the receiver already had, replaced by the copy sent.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Replaced",
+            "type": "array"
+          },
           "skipped": {
             "default": 0,
-            "description": "Projects the receiver already had.",
+            "description": "Projects the receiver had as another account's, left alone.",
             "title": "Skipped",
             "type": "integer"
           },
@@ -9364,12 +9388,14 @@
           }
         },
         "required": [
+          "chatgpt",
           "counts",
           "direction",
           "error",
           "id",
           "moved",
           "peer",
+          "replaced",
           "skipped",
           "state",
           "steps"

@@ -703,7 +703,7 @@ function Progress({ status, receiving = false }: { status: TransferStatus; recei
                 names: status.moved.join(", "),
                 verb: receiving ? tx("arrived here") : tx("are there now"),
               })
-            : tx("Nothing new: everything was already there.")}
+            : tx("Nothing was moved.")}
         </p>
         <div className="move-sum">
           <Sum n={c.projects ?? 0} label={tx("projects")} />
@@ -711,11 +711,33 @@ function Progress({ status, receiving = false }: { status: TransferStatus; recei
           <Sum n={c.settings ?? 0} label={tx("settings")} />
           <Sum n={c.attachments ?? 0} label={tx("attachments")} />
         </div>
+        {/* a project the receiver already had is replaced by the copy sent: the sender's
+            is the one somebody carried on with */}
+        {status.replaced.length > 0 && (
+          <div className="callout">
+            {tx("{names}: the copy on the receiving computer was replaced with the latest.", {
+              names: status.replaced.join(", "),
+            })}
+          </div>
+        )}
         {status.skipped > 0 && (
           <div className="callout">
-            {tx("{n} project(s) were already there and were left as they were.", {
-              n: String(status.skipped),
-            })}
+            {tx(
+              "{n} project(s) belong to another account on the receiving computer and were left as they were.",
+              { n: String(status.skipped) },
+            )}
+          </div>
+        )}
+        {status.chatgpt === "moved" && (
+          <div className="callout ok">
+            {tx(
+              "The ChatGPT sign-in went too: agents on a ChatGPT plan carry on without signing in again.",
+            )}
+          </div>
+        )}
+        {status.chatgpt === "kept" && (
+          <div className="callout">
+            {tx("The receiving computer already had a ChatGPT sign-in; it was kept.")}
           </div>
         )}
         {receiving && (

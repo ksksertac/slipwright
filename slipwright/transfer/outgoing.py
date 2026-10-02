@@ -311,6 +311,25 @@ def _settings(engine: Engine, scope: Scope) -> Iterator[dict[str, Any]]:
         }
 
 
+def _sign_in(engine: Engine, scope: Scope) -> bytes | None:
+    """The account's ChatGPT sign-in, when its settings are sent and it has one.
+
+    It is a file Codex keeps (``auth.json``), not a setting, so it was left behind: the
+    agents that ran on a ChatGPT plan here stopped on the other side with "not signed in".
+    OpenAI documents carrying this file to another machine as a way to sign Codex in
+    there. Inside the transfer it is protected by the channel, like the model keys."""
+    if not scope.settings:
+        return None
+    home = engine.for_user(scope.owner).codex_home()
+    if home is None:
+        return None
+    path = home / "auth.json"
+    try:
+        return path.read_bytes() if path.is_file() else None
+    except OSError:
+        return None
+
+
 # -- sending ------------------------------------------------------------------------------
 
 
@@ -437,6 +456,12 @@ def send(
                     "repos": work.repos,
                     "trees": work.trees,
                     "checkouts": scope.checkouts,
+                    "attachments": scope.attachments,
+                    # which developments each project has: the receiver keeps a project of
+                    # its own copy only if none of its developments would be lost
+                    "jobs": {
+                        p.id: [job.id for job in engine.store.list(p.id)] for p in work.projects
+                    },
                     "counts": work.counts,
                 }
             )
@@ -444,6 +469,9 @@ def send(
         ids = [p.id for p in work.projects]
         for table in R.TABLES:
             _send_table(line, table, _rows(engine, scope, table, ids), progress)
+        sign_in = _sign_in(engine, scope)
+        if sign_in is not None:
+            line.send(Part({"kind": "sign_in"}, sign_in))
         for key in ("projects", "jobs", "settings", "attachments", "standards"):
             progress.finish(key)
 

@@ -183,14 +183,152 @@ def test_the_receiving_screen_follows_the_transfer(
     assert all(step["state"] == "done" for step in arrived["steps"])
 
 
-def test_moved_again_a_project_is_not_doubled(linked: tuple[Machine, Machine], repo: Path) -> None:
+def test_moved_again_the_senders_latest_replaces_the_copy_there(
+    linked: tuple[Machine, Machine], repo: Path
+) -> None:
+    """Moved once, worked on further here, moved again: the copy there is the one
+    somebody stopped working on, so it is replaced -- not left as it was, and not
+    doubled."""
+    here, there = linked
+    project = _project(here, repo)
+    job = _at_a_gate_with_work(here, project)
+    assert _send(here, _code(there))["state"] == "done"
+    first = there.store.get_project(project.id)
+    old_tree = there.store.get(job.id).worktree_path
+    assert first.repo_path is not None and old_tree is not None
+
+    # the work goes on here: the gate is answered, and the checkout gains a commit
+    here.engine.approve(job.id)
+    (repo / "later.md").write_bytes(b"written after the first move\n")
+    _git(repo, "add", "later.md")
+    _git(repo, "commit", "-q", "-m", "later")
+
+    again = _send(here, _code(there))
+
+    assert again["state"] == "done", again["error"]
+    assert again["replaced"] == ["shop"] and again["skipped"] == 0
+    assert [p.id for p in there.store.list_projects()] == [project.id]
+    latest = there.store.get_project(project.id)
+    assert latest.repo_path is not None
+    # read as text: a checkout on Windows may write it back with its own line endings
+    assert (latest.repo_path / "later.md").read_text().strip() == "written after the first move"
+    arrived = there.store.get(job.id)
+    assert arrived.state is here.store.get(job.id).state
+    assert len(arrived.history) == len(here.store.get(job.id).history)
+    # what the copy it replaced had on the disk is gone
+    assert not first.repo_path.exists()
+    assert not old_tree.exists()
+
+
+def test_a_development_started_there_stops_the_move_over_it(
+    linked: tuple[Machine, Machine], repo: Path
+) -> None:
+    """Replacing the copy there would delete a development nobody here has ever seen."""
+    here, there = linked
+    project = _project(here, repo)
+    assert _send(here, _code(there))["state"] == "done"
+    theirs = there.engine.create_job("a list of orders", project_id=project.id)
+
+    refused = _send(here, _code(there))
+
+    assert refused["state"] == "failed"
+    assert "started on this computer" in refused["error"]
+    assert theirs.title in refused["error"]
+    assert there.store.get(theirs.id).request == "a list of orders"
+
+
+def test_a_development_running_there_stops_the_move_over_it(
+    linked: tuple[Machine, Machine], repo: Path
+) -> None:
+    here, there = linked
+    project = _project(here, repo)
+    job = _at_a_gate_with_work(here, project)
+    assert _send(here, _code(there))["state"] == "done"
+    there.store.update_state(job.id, JobState.DEVELOPING, note="running there")
+
+    refused = _send(here, _code(there))
+
+    assert refused["state"] == "failed"
+    assert "running on this computer" in refused["error"]
+    assert there.store.get(job.id).state is JobState.DEVELOPING
+
+
+def test_a_project_of_another_account_there_is_left_alone(
+    linked: tuple[Machine, Machine], repo: Path
+) -> None:
+    here, there = linked
+    project = _project(here, repo)
+    there.store.create_project(
+        Project(id=project.id, name="somebody's", repo_path=repo, owner_id="someone-else")
+    )
+
+    status = _send(here, _code(there))
+
+    assert status["state"] == "done", status["error"]
+    assert status["moved"] == [] and status["skipped"] == 1 and status["replaced"] == []
+    assert there.store.get_project(project.id).name == "somebody's"
+
+
+# -- the ChatGPT sign-in -----------------------------------------------------------------
+
+
+def _codex(machine: Machine) -> Path:
+    machine.engine.codex_root = machine.root / "codex"
+    home = machine.engine.codex_home()
+    assert home is not None
+    return home
+
+
+def test_the_chatgpt_sign_in_goes_with_the_settings(
+    linked: tuple[Machine, Machine], repo: Path
+) -> None:
+    """Agents on a ChatGPT plan stopped on the other side with "not signed in": the
+    sign-in is a file Codex keeps, not a setting, and was left behind."""
     here, there = linked
     _project(here, repo)
-    assert _send(here, _code(there))["state"] == "done"
-    again = _send(here, _code(there))
-    assert again["state"] == "done"
-    assert again["moved"] == [] and again["skipped"] == 1
-    assert len(there.store.list_projects()) == 1
+    mine, theirs = _codex(here), _codex(there)
+    mine.mkdir(parents=True)
+    (mine / "auth.json").write_bytes(b'{"tokens": {"refresh_token": "rt"}}')
+
+    status = _send(here, _code(there))
+
+    assert status["state"] == "done", status["error"]
+    assert status["chatgpt"] == "moved"
+    assert (theirs / "auth.json").read_bytes() == b'{"tokens": {"refresh_token": "rt"}}'
+    assert (mine / "auth.json").is_file()  # nothing is taken from the sender
+
+
+def test_a_chatgpt_sign_in_already_there_is_kept(
+    linked: tuple[Machine, Machine], repo: Path
+) -> None:
+    here, there = linked
+    _project(here, repo)
+    mine, theirs = _codex(here), _codex(there)
+    mine.mkdir(parents=True)
+    theirs.mkdir(parents=True)
+    (mine / "auth.json").write_bytes(b'{"who": "sender"}')
+    (theirs / "auth.json").write_bytes(b'{"who": "receiver"}')
+
+    status = _send(here, _code(there))
+
+    assert status["chatgpt"] == "kept"
+    assert (theirs / "auth.json").read_bytes() == b'{"who": "receiver"}'
+
+
+def test_the_chatgpt_sign_in_stays_when_settings_are_not_sent(
+    linked: tuple[Machine, Machine], repo: Path
+) -> None:
+    here, there = linked
+    _project(here, repo)
+    mine, theirs = _codex(here), _codex(there)
+    mine.mkdir(parents=True)
+    (mine / "auth.json").write_bytes(b"{}")
+
+    status = _send(here, _code(there), settings=False)
+
+    assert status["state"] == "done", status["error"]
+    assert status["chatgpt"] is None
+    assert not (theirs / "auth.json").exists()
 
 
 def test_deleting_after_removes_it_here_once_it_is_there(
