@@ -78,7 +78,8 @@ slipwright/
                       plan, falling back to the account's model when nobody answers
   relay/              machines on other networks: the server's room (host.py), a machine's
                       way in (guest.py), the seal (crypto.py). The Cloudflare relay itself
-                      is the top-level relay/, the desktop app desktop/, and both follow
+                      is the top-level relay/; the desktop app and slipwright-agent live in
+                      their own repository, ksksertac/slipwright-agent; all
                       docs/machines-protocol.md
   transfer/           an account moved to another installation on the network: a code
                       that is a SPAKE2 password (channel.py), the sender (outgoing.py),

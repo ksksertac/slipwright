@@ -401,3 +401,16 @@ def test_a_member_lends_a_machine_and_answers_only_for_their_own(
         account = store.find_by_email("owner@acme.com")
         assert account is not None
         assert {w.owner_id for w in store.list_workers(account.id)} == {account.id}
+
+
+def test_an_app_too_old_for_the_server_is_told_to_update_and_keeps_its_pairing(
+    fallback: TestClient,
+) -> None:
+    token = _pair(fallback, ["write:backend"])
+    auth = {"Authorization": f"Bearer {token}"}
+    old = fallback.post("/api/worker/heartbeat", headers={**auth, "x-slipwright-protocol": "0"})
+    assert old.status_code == 426 and "update the app" in old.json()["detail"]
+    # saying nothing is the first version: the headless worker, and apps from before
+    assert fallback.post("/api/worker/heartbeat", headers=auth).status_code == 204
+    said = fallback.post("/api/worker/heartbeat", headers={**auth, "x-slipwright-protocol": "1"})
+    assert said.status_code == 204

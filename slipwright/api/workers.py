@@ -50,6 +50,13 @@ log = logging.getLogger(__name__)
 
 router = APIRouter(tags=["workers"])
 
+#: The worker protocol this server speaks (docs/machines-protocol.md), and the oldest a
+#: machine may still speak. The desktop app is released apart now: one that is too old is
+#: told so plainly (426), not left to fail on a field it never sends.
+PROTOCOL = 1
+OLDEST_PROTOCOL = 1
+PROTOCOL_HEADER = "x-slipwright-protocol"
+
 #: The longest a poll waits for a build before answering "nothing" (the worker asks again).
 LONG_POLL_S = 25.0
 #: How often a waiting poll looks for a build.
@@ -276,8 +283,22 @@ def revoke_worker(worker_id: str, request: Request) -> None:
 # -- the worker's side --------------------------------------------------------------------
 
 
+def _speaks(request: Request) -> None:
+    """426 for a machine whose protocol this server no longer speaks. Saying nothing is
+    version 1: `slipwright worker` and the apps from before the header."""
+    said = request.headers.get(PROTOCOL_HEADER, "").strip()
+    version = int(said) if said.isdigit() else 1
+    if version < OLDEST_PROTOCOL:
+        raise HTTPException(
+            status_code=426,
+            detail=f"this Slipwright needs a newer Slipwright Agent (protocol {OLDEST_PROTOCOL} "
+            f"or later; this one speaks {version}): update the app",
+        )
+
+
 def _worker(request: Request) -> Worker:
     """The worker a request's token belongs to, or 401. Checked before anything is read."""
+    _speaks(request)
     header = request.headers.get("authorization", "")
     scheme, _, token = header.partition(" ")
     if scheme.lower() != "bearer" or not token.startswith("swk_"):
@@ -292,6 +313,7 @@ def _worker(request: Request) -> Worker:
 def pair(body: PairRequest, request: Request) -> Paired:
     """Trade a connection code for a worker token. The code is spent whether it worked
     or not, so it cannot be tried twice."""
+    _speaks(request)
     try:
         _address, secret = pairing.unpack(body.code)
     except pairing.CodeError as exc:

@@ -20,6 +20,16 @@ import { ErrorBox, Loading, PageHead, timeAgo } from "../../components/ui";
 import { useT } from "../../i18n";
 
 const NAMES: Record<string, string> = { ios: "iOS", android: "Android" };
+// The app has a repository and releases of its own, under names that never change
+// (its electron-builder.yml), so these always fetch the newest one
+const RELEASES = "https://github.com/ksksertac/slipwright-agent/releases/latest";
+const DOWNLOADS: [string, string][] = [
+  ["Windows", `${RELEASES}/download/Slipwright-Agent-Setup.exe`],
+  ["macOS (Apple Silicon)", `${RELEASES}/download/Slipwright-Agent-mac-arm64.dmg`],
+  ["macOS (Intel)", `${RELEASES}/download/Slipwright-Agent-mac-x64.dmg`],
+  ["Linux", `${RELEASES}/download/Slipwright-Agent.AppImage`],
+  ["Server (no window)", `${RELEASES}/download/slipwright-agent.cjs`],
+];
 // what a machine writes, as the agents are called everywhere else
 const WRITES: Record<string, string> = {
   backend: "Backend",
@@ -209,6 +219,14 @@ function CodeSteps({ code }: { code: ConnectionCode }) {
     <div className="stack" style={{ marginTop: 12 }}>
       <div>
         <strong>{tx("With the Slipwright Agent app")}</strong>
+        <div className="row small" style={{ gap: 10, flexWrap: "wrap", margin: "4px 0 8px" }}>
+          <span className="muted">{tx("Download:")}</span>
+          {DOWNLOADS.map(([label, href]) => (
+            <a key={label} href={href} target="_blank" rel="noreferrer">
+              {tx(label)}
+            </a>
+          ))}
+        </div>
         <div className="muted small">
           {tx("Open the app, go to Slipwright team and paste this code:")}
         </div>

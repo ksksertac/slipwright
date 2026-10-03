@@ -245,7 +245,7 @@ class RelayTransport(httpx.BaseTransport):
         headers = {
             k: v
             for k, v in request.headers.items()
-            if k.lower() in ("authorization", "content-type")
+            if k.lower() in ("authorization", "content-type", "x-slipwright-protocol")
         }
         status, got_headers, content = self.guest.request(
             request.method,
