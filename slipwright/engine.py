@@ -4913,6 +4913,13 @@ class Engine:
             "phases": [p.model_dump(mode="json") for p in phases],
             "breakdown": breakdown.model_dump(mode="json"),
         }
+        # how many of its phases were built before it: the pipeline reads their history,
+        # and only what came after the plan for the rest -- a phase 2 of an earlier plan
+        # passing its gate says nothing about this plan's phase 2
+        job.data.plan["kept"] = len(kept)
+        job.data.phase_commits = {
+            n: sha for n, sha in job.data.phase_commits.items() if int(n) <= len(kept)
+        }
         # a re-plan resumes where it started: what is built stays built
         job.data.phase_index = len(kept)
         job.data.build_attempts = 0
