@@ -165,6 +165,80 @@ can be `off`, `advisory` or `blocking`.
 The standards are edited in the app, either for all projects or per project, and every
 edit is linted, reindexed and committed.
 
+### Phases written side by side
+
+<img src="docs/screenshots/plan-side-by-side.png" alt="The plan at its approval gate: each phase with what it needs, and a summary saying up to 2 phases run at once, so the plan takes 2 steps instead of 3" />
+
+The Architect says what each phase **needs** (`depends_on`), and the plan gate shows it
+before you approve: which phases need no other, which come after which, and how wide the
+plan really is ("up to 2 phases run at once; the plan takes 2 steps instead of 3").
+
+While one phase is being built, the phases that are ready have their answers **written
+alongside** it, up to `max_parallel_phases` at once (3 by default, per project). Each is
+still built, checked and committed one at a time, so the branch never holds half of two
+things. A cap per provider key (`SLIPWRIGHT_MAX_CALLS_PER_PROVIDER`, 4) keeps the
+side-by-side calls from turning into rate-limit errors.
+
+### Every step on your repository
+
+<img src="docs/screenshots/pipeline-phases.png" alt="A finished development's building stage: each phase card says what it came after and links to its commit" />
+
+Every green phase is committed **and pushed** at once, and the first push opens a **draft
+pull request**, so the work can be followed on GitHub or Bitbucket while it is still being
+made. The commit message carries the Jira key. In the pipeline, each phase card says
+whether it is ready, being written alongside, or waiting for a phase before it, and links
+to its own commit.
+
+### A phase that gets stuck stops, and asks
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+**A budget per phase.** Building, fixing, triage and review of one phase share one budget
+of model calls (`max_phase_calls`, 8 by default, per project). A phase that runs out does
+not go on spending: QA reads what was tried and recommends what to do next.
+
+</td>
+<td width="50%" valign="top">
+
+**Your answer, in words.** You choose **Send to the developer** or **Plan this phase
+again**, and write what should be different. The recommendation is there to start from;
+what you write is what the next attempt is told.
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
+**The others go on.** A phase out of budget is set aside with its work kept, and the
+phases that do not need it carry on being built. You are asked when its turn comes again
+and nothing else can run.
+
+</td>
+<td width="50%" valign="top">
+
+**Re-plans keep what is built.** Planning again starts from the phase that failed: the
+phases already built and committed stay, one task may be split across several new phases,
+and the Designer does not draw again the screens it already drew.
+
+</td>
+</tr>
+</table>
+
+### Only what each step needs
+
+Every prompt is trimmed to what that step can use, because tokens are what a development
+costs:
+
+- the context goes as **compact JSON**, not indented;
+- a red build sends **the errors**, not the last 20,000 characters of its log;
+- a developer sees the other phases by their **heading**, and only its own in full;
+- the file tree lists **the code first**, and a folder of images as one line with a count;
+- a large file is changed with **edits** to the parts that move, not written out again;
+- dependencies (`node_modules`, `.venv`, `build`...) are never committed, and lock files
+  are left out of every diff a role is shown.
+
 ### Any model, per agent
 
 <img src="docs/screenshots/models.png" alt="Settings, Models: a card per provider with its key, base URL, default model and output limit" />
@@ -485,6 +559,8 @@ Settings come from the environment (or `serve` flags):
 | `SLIPWRIGHT_DEFAULT_ADMIN` | `1` | `0` stops an empty server making `admin` / `admin`. Set it on anything reachable from the internet |
 | `SLIPWRIGHT_RUNNER` | `local` | `docker` runs every build and test command in a throwaway container |
 | `SLIPWRIGHT_QUOTA_MAX_*` | `0` (off) | per-account limits on running developments, projects and disk |
+| `SLIPWRIGHT_MAX_CALLS_PER_PROVIDER` | `4` | model calls at once on one provider key, across developments; `0` is no limit |
+| `SLIPWRIGHT_MODEL_TIMEOUT_S` | `1800` | how long one model call may take |
 | `SLIPWRIGHT_DEMO_PROJECT` | on | the worked example a new account starts with |
 | `SLIPWRIGHT_CHATGPT_SUBSCRIPTION` | on locally, off when hosted | offer **ChatGPT subscription (Codex)** under Settings → Models |
 | `SLIPWRIGHT_UPDATE_IMAGE` | `ghcr.io/ksksertac/slipwright` | where newer releases are looked for; `off` stops asking |
