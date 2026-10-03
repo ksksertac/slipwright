@@ -6154,6 +6154,46 @@ class Engine:
             return self._invocation_failed(job, result)
         assert isinstance(result.output, DeployPlan)
         plan = result.output
+        # A path DevOps may not write is refused here, before anybody approves it. It was
+        # only caught at the write, after the yes: the development failed there, and a
+        # retry wrote the same approved plan into the same refusal every time.
+        source = self._source_of(job)
+        stray = devops.outside((s.path for s in plan.scripts), source)
+        if stray:
+            self.store.update_state(
+                job.id,
+                job.state,
+                note=f"devops: proposed files it may not write ({', '.join(stray)}); asking again",
+                detail=plan.summary,
+            )
+            job.history = self.store.get(job.id).history
+            job.data.output_hashes = {}  # the refusal changes the input: not a loop
+            self.store.save(job)
+            result = self._invoke(
+                RoleName.DEVOPS,
+                devops.plan_deploy,
+                job,
+                profile=profile,
+                existing=existing,
+                source=source,
+                problem=(
+                    f"`scripts` named {', '.join(stray)}, which DevOps may not write. Every "
+                    f"path must be under `{devops.DEPLOY_FOLDER}/` or be the pipeline file; "
+                    f"the project's own README.md is the Architect's, not yours"
+                ),
+            )
+            if not result.ok:
+                return self._invocation_failed(job, result)
+            assert isinstance(result.output, DeployPlan)
+            plan = result.output
+            stray = devops.outside((s.path for s in plan.scripts), source)
+            if stray:
+                # twice is a model that will not be told; the rest of its plan is still
+                # good, so the paths go and the person is shown that they went
+                plan.scripts = [s for s in plan.scripts if s.path not in stray]
+                plan.notes.append(
+                    f"Left out, because DevOps may not write them: {', '.join(stray)}"
+                )
         job.data.deploy = plan.model_dump(mode="json")
         job.data.feedback = None
         self.store.save(job)
@@ -6177,15 +6217,35 @@ class Engine:
     def _write_deployment(self, job: Job) -> Job | None:
         """Stage two, first half: write the approved scripts into ``deployment/``.
 
-        Returns the failed job, or None when the branch is ready for its pull request.
-        Paths are confined to the deployment folder and to the one file this project's
-        host runs its pipeline from: DevOps is opening a pull request, not editing the
-        product. Anything else is a failure rather than a silent trim, because a script
-        that was approved and quietly dropped is worse than one that never ran.
+        Returns the job to stop on (failed, or back at the deployment gate), or None when
+        the branch is ready for its pull request. Paths are confined to the deployment
+        folder and to the one file this project's host runs its pipeline from: DevOps is
+        opening a pull request, not editing the product. Anything else is a failure rather
+        than a silent trim, because a script that was approved and quietly dropped is worse
+        than one that never ran.
         """
         plan = job.data.deploy or {}
         if job.data.deploy_written or job.data.deploy_skipped or not plan.get("scripts"):
             return None
+        stray = devops.outside(
+            (str(s.get("path", "")) for s in plan["scripts"]), self._source_of(job)
+        )
+        if stray:
+            # approved before the proposal was checked: writing it can only be refused, so
+            # every retry failed in the same place. It goes back to be proposed again.
+            job.data.devops_stage = 1
+            job.data.feedback = (
+                f"The approved plan names {', '.join(stray)}, which DevOps may not write. "
+                f"Propose it again with every file under {devops.DEPLOY_FOLDER}/ or the "
+                f"pipeline file."
+            )
+            self.store.save(job)
+            self.store.update_state(
+                job.id,
+                job.state,
+                note=f"devops: the approved plan names {', '.join(stray)}; proposing again",
+            )
+            return self._deploy_gate(self.store.get(job.id))
         profile = self._profile(job)
         worktree = require_worktree(job)
         # An approved plan of seven files does not always fit in one answer. The phases
@@ -6195,7 +6255,8 @@ class Engine:
         summaries: list[str] = []
         continuation: dict[str, Any] | None = None
         prefix = f"{devops.DEPLOY_FOLDER}/"
-        pipeline = devops.ci_path(self._source_of(job))
+        source = self._source_of(job)
+        pipeline = devops.ci_path(source)
         for part in range(1, self.max_phase_parts + 1):
             result = self._invoke(
                 RoleName.DEVOPS,
@@ -6209,11 +6270,7 @@ class Engine:
             if not result.ok:
                 return self._invocation_failed(job, result)
             assert isinstance(result.output, DeveloperResult)
-            stray = [
-                c.path
-                for c in result.output.changes
-                if not c.path.startswith(prefix) and not (pipeline and c.path.startswith(pipeline))
-            ]
+            stray = devops.outside((c.path for c in result.output.changes), source)
             if stray:
                 allowed = f"{prefix} or {pipeline}" if pipeline else prefix
                 return self._fail(

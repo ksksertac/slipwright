@@ -10,6 +10,8 @@ the deterministic draft below into a title and body a reviewer would want to rea
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+from pathlib import Path
 from typing import Any
 
 from slipwright.invoke import RoleResult, invoke_role
@@ -48,8 +50,46 @@ CI_FILES: dict[str, str] = {
 
 
 def ci_path(source: str) -> str:
-    """The pipeline file this project's host runs, or "" for a host with no convention."""
+    """Where this project's host runs its pipeline from -- a file, or for GitHub the
+    folder of workflows -- or "" for a host with no convention. This is what DevOps is
+    *allowed* to write; :func:`pipeline_file` is the one file it is *told* to write."""
     return CI_FILES.get(source, "")
+
+
+def pipeline_file(source: str, worktree: Path | None = None) -> str:
+    """The one pipeline file DevOps writes, named as a file.
+
+    GitHub's convention is a folder, and DevOps used to be handed the folder under the
+    name ``pipeline_file``. A model told to write "the file" at a folder fills the gap
+    itself -- it announced that the path "is changed to ci.yml in the real configuration",
+    which no configuration does. A repository that already has a workflow keeps it
+    (``ci.yml`` first); one that has none gets ``ci.yml``.
+    """
+    where = ci_path(source)
+    if not where.endswith("/"):
+        return where
+    if worktree is not None and (worktree / where).is_dir():
+        found = sorted(
+            p.name for p in (worktree / where).iterdir() if p.suffix in (".yml", ".yaml")
+        )
+        for name in ("ci.yml", "ci.yaml", *found):
+            if name in found:
+                return where + name
+    return where + "ci.yml"
+
+
+def outside(paths: Iterable[str], source: str) -> list[str]:
+    """The paths DevOps may not write: anything not under the deployment folder or the
+    host's pipeline. The project's own README is among them -- it describes the product,
+    and a deployment README lives at ``deployment/README.md``."""
+    pipeline = ci_path(source)
+    prefix = f"{DEPLOY_FOLDER}/"
+    return sorted(
+        path
+        for path in paths
+        if not path.removeprefix("./").startswith(prefix)
+        and not (pipeline and path.removeprefix("./").startswith(pipeline))
+    )
 
 
 PLAN_INSTRUCTIONS = """\
@@ -70,7 +110,10 @@ request waits on, so a green run must mean the project really builds.
 
 `services` names the target's services this will use. `scripts` is the list of files you
 will write, each with its path under `{folder}/` -- except the pipeline, which goes at
-`{ci}` -- and one line saying what it does. Prefer the target's own declarative format
+`{ci}` -- and one line saying what it does. Nothing else in the repository is yours to
+write: not the project's own `README.md`, not its source, not another configuration file.
+A README for whoever deploys this goes at `{folder}/README.md`, and the engine sends a plan
+naming any other path straight back. Prefer the target's own declarative format
 (CloudFormation or Terraform for AWS, Bicep or Terraform for Azure) with one shell script
 to run it.
 
@@ -91,13 +134,14 @@ WRITE_INSTRUCTIONS = """\
 Write the deployment files that were approved in `deploy`, exactly those paths and
 nothing else, each as full file contents. Everything lives under `deployment/` except the
 build pipeline, which goes at `pipeline_file`: its host looks nowhere else for it, and
-the engine refuses any other path. They must work as they stand: no placeholders
-a person cannot fill in, every parameter named and documented, secrets read from the
-target's secret store or the environment and never written into a file. Take the build,
-test and run commands from `project`, and the region, service names and sizing from the
-approved plan. Include the README the plan names, written for someone deploying this for
-the first time: what to install, what to set, what to run, in order. If a file in
-`existing` is already right, return it unchanged rather than inventing a second one."""
+the engine refuses any other path -- the project's own `README.md` included. They must
+work as they stand: no placeholders a person cannot fill in, every parameter named and
+documented, secrets read from the target's secret store or the environment and never
+written into a file. Take the build, test and run commands from `project`, and the
+region, service names and sizing from the approved plan. Include the README the plan
+names, at `deployment/README.md`, written for someone deploying this for the first time:
+what to install, what to set, what to run, in order. If a file in `existing` is already
+right, return it unchanged rather than inventing a second one."""
 
 
 def plan_deploy(
@@ -110,12 +154,23 @@ def plan_deploy(
     jira: dict[str, Any] | None = None,
     standards: dict[str, Any] | None = None,
     source: str = "github",
+    problem: str | None = None,
 ) -> RoleResult:
-    """Stage one: propose how this project is deployed, for a person to approve."""
-    pipeline = ci_path(source) or DEPLOY_FOLDER + "/"
+    """Stage one: propose how this project is deployed, for a person to approve.
+
+    ``problem`` is set when the last proposal named a path DevOps may not write; the
+    engine asks once more rather than putting a plan in front of a person that cannot be
+    carried out once they approve it."""
+    pipeline = pipeline_file(source, job.worktree_path) or DEPLOY_FOLDER + "/"
+    instructions = PLAN_INSTRUCTIONS.format(folder=DEPLOY_FOLDER, ci=pipeline)
+    if problem:
+        instructions += (
+            "\nYour previous proposal was refused (`previous_answer_problem`); answer again "
+            "with the whole proposal and fix exactly that."
+        )
     context = base_context(
         job,
-        instructions=PLAN_INSTRUCTIONS.format(folder=DEPLOY_FOLDER, ci=pipeline),
+        instructions=instructions,
         feedback=job.data.feedback,
         jira=jira,
         standards=standards,
@@ -126,6 +181,8 @@ def plan_deploy(
     context["pipeline_file"] = pipeline
     context["existing"] = sorted(existing or {})
     context["previous_proposal"] = job.data.deploy
+    if problem:
+        context["previous_answer_problem"] = problem
     kwargs = {} if timeout_s is None else {"timeout_s": timeout_s}
     return invoke_role(
         RoleName.DEVOPS, profile, context, provider=provider, output_schema_cls=DeployPlan, **kwargs
@@ -165,7 +222,7 @@ def write_deployment(
     context["plan"] = plan_outline(job.data.plan)
     context["project"] = project_facts(profile)
     context["deployment_folder"] = DEPLOY_FOLDER
-    context["pipeline_file"] = ci_path(source) or DEPLOY_FOLDER + "/"
+    context["pipeline_file"] = pipeline_file(source, job.worktree_path) or DEPLOY_FOLDER + "/"
     context["existing"] = existing or {}
     kwargs = {} if timeout_s is None else {"timeout_s": timeout_s}
     return invoke_role(
@@ -237,7 +294,10 @@ __all__ = [
     "INSTRUCTIONS",
     "PLAN_INSTRUCTIONS",
     "WRITE_INSTRUCTIONS",
+    "ci_path",
     "draft_description",
+    "outside",
+    "pipeline_file",
     "plan_deploy",
     "run",
     "write_deployment",

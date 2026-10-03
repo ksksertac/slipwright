@@ -311,7 +311,8 @@ def test_the_pipeline_path_follows_the_projects_own_host(
     assert ci_path("bitbucket") == "bitbucket-pipelines.yml"
     assert ci_path("whatever") == ""
 
-    provider = _provider(seed, {**AWS_PLAN, "scripts": [{"path": "x", "purpose": "build"}]})
+    plan = {**AWS_PLAN, "scripts": [{"path": "bitbucket-pipelines.yml", "purpose": "build"}]}
+    provider = _provider(seed, plan)
     provider.discovery["deploy_write"] = {
         "summary": "the wrong host's file",
         "changes": [{"path": ".github/workflows/ci.yml", "content": "name: ci\n"}],
@@ -342,6 +343,84 @@ def test_deployment_files_outside_the_folder_fail_the_job(
 
     assert job.state is JobState.FAILED
     assert "wrote outside deployment/" in (job.history[-1].note or "")
+
+
+def test_devops_is_told_the_pipeline_file_by_name(seeded: Engine, repo: Path) -> None:
+    """GitHub's convention is a folder; DevOps is handed a file.
+
+    Handed the folder as ``pipeline_file``, a model announced that the path "is changed to
+    ci.yml in the real configuration" -- no configuration does that -- and planned around
+    it. A repository that already has a workflow keeps the one it has.
+    """
+    from slipwright.roles.devops import pipeline_file
+
+    _to_deploy_gate(seeded, repo)
+    asked = next(r for r in seeded.provider.requests if "propose how this project" in r.prompt)
+    assert ".github/workflows/ci.yml" in asked.prompt
+
+    assert pipeline_file("github", repo) == ".github/workflows/ci.yml"
+    (repo / ".github" / "workflows").mkdir(parents=True)
+    (repo / ".github" / "workflows" / "build.yaml").write_text("name: b\n", encoding="utf-8")
+    assert pipeline_file("github", repo) == ".github/workflows/build.yaml"
+    assert pipeline_file("bitbucket", repo) == "bitbucket-pipelines.yml"
+
+
+ROOT_README = {
+    **AWS_PLAN,
+    "scripts": [*AWS_PLAN["scripts"], {"path": "README.md", "purpose": "the project readme"}],
+}
+
+
+def test_a_proposal_naming_the_projects_readme_is_sent_back_before_the_gate(
+    store: JobStore, worktrees_root: Path, seed: Profile, repo: Path
+) -> None:
+    """A path DevOps may not write was caught only at the write, after the person had
+    approved it -- and every retry wrote the same approved plan into the same refusal."""
+    provider = _provider(seed)
+    provider.discovery["deploy_write"] = WRITTEN
+    provider.discovery["deploy"] = lambda r: (
+        AWS_PLAN if "previous_answer_problem" in r.prompt else ROOT_README
+    )
+    engine = full_engine(store, worktrees_root, seed, provider)
+    job = _to_deploy_gate(engine, repo)
+
+    assert job.state is JobState.AWAITING_DEPLOY_APPROVAL
+    assert "README.md" not in [s["path"] for s in job.data.deploy["scripts"]]
+    assert any("may not write (README.md)" in (t.note or "") for t in job.history)
+    assert engine.approve(job.id).state is JobState.DONE
+
+
+def test_a_proposal_that_keeps_naming_it_reaches_the_gate_without_it(
+    store: JobStore, worktrees_root: Path, seed: Profile, repo: Path
+) -> None:
+    engine = full_engine(store, worktrees_root, seed, _provider(seed, ROOT_README))
+    job = _to_deploy_gate(engine, repo)
+
+    assert job.state is JobState.AWAITING_DEPLOY_APPROVAL
+    assert [s["path"] for s in job.data.deploy["scripts"]] == [
+        "deployment/main.tf",
+        "deployment/deploy.sh",
+        "deployment/README.md",
+    ]
+    assert any("README.md" in n for n in job.data.deploy["notes"])  # the person sees it went
+
+
+def test_an_approved_plan_naming_a_file_devops_may_not_write_is_proposed_again(
+    store: JobStore, seeded: Engine, repo: Path
+) -> None:
+    """A plan approved before proposals were checked would fail at the write on every
+    retry; it goes back to DevOps instead, told why."""
+    job = _to_deploy_gate(seeded, repo)
+    job.data.deploy["scripts"].append({"path": "README.md", "purpose": "the project readme"})
+    store.save(job)
+
+    job = seeded.approve(job.id)
+
+    assert job.state is JobState.AWAITING_DEPLOY_APPROVAL
+    assert job.worktree_path is not None
+    assert not (job.worktree_path / DEPLOY_FOLDER).exists()  # nothing written from it
+    again = [r for r in seeded.provider.requests if "propose how this project" in r.prompt][-1]
+    assert "The approved plan names README.md" in again.prompt
 
 
 def test_the_pull_request_mentions_the_deployment(seeded: Engine, repo: Path) -> None:
