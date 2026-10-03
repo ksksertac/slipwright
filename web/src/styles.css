@@ -7932,22 +7932,22 @@ tr.run-detail td {
 .room-badge.mac {
   color: #ffb547;
   border-color: rgba(255, 181, 71, 0.55);
-  background: rgba(255, 181, 71, 0.1);
+  background: #2b2929; /* 10% of the ink over the card: opaque, so contrast is measured on it */
 }
 .room-badge.azure-vm {
   color: #6cb6ff;
   border-color: rgba(108, 182, 255, 0.55);
-  background: rgba(108, 182, 255, 0.1);
+  background: #1b2a3c;
 }
 .room-badge.gcp {
   color: #5fd38d;
   border-color: rgba(95, 211, 141, 0.55);
-  background: rgba(95, 211, 141, 0.1);
+  background: #1a2d30;
 }
 .room-badge.server {
   color: #a5b4fc;
   border-color: rgba(165, 180, 252, 0.5);
-  background: rgba(165, 180, 252, 0.1);
+  background: #21293b;
   text-transform: none;
 }
 .room-state {

@@ -64,7 +64,7 @@ function useHolder(): string | null {
       listeners.add(l);
       return () => listeners.delete(l);
     },
-    () => holders[holders.length - 1] ?? null,
+    () => holders.at(-1) ?? null,
   );
 }
 
@@ -76,7 +76,7 @@ export function useBuildRoomOpener(): (() => void) | null {
 
 /** Wraps an opened lane's detail: decides when the room is shown and gives the stage head
  * a way to open it by hand. */
-export function BuildRoomHost({ lane, children }: { lane: Lane; children: ReactNode }) {
+export function BuildRoomHost({ lane, children }: Readonly<{ lane: Lane; children: ReactNode }>) {
   const live = LIVE.has(lane.state);
   // closed by hand: stays closed until the next time the phases carry on after a person's
   // turn -- otherwise the two-second poll would throw it back open at once
@@ -119,7 +119,7 @@ export function BuildRoomHost({ lane, children }: { lane: Lane; children: ReactN
 
 // -- the window ---------------------------------------------------------------------------
 
-function BuildRoomWindow({ lane, onClose }: { lane: Lane; onClose: () => void }) {
+function BuildRoomWindow({ lane, onClose }: Readonly<{ lane: Lane; onClose: () => void }>) {
   const tx = useT();
   const room = useBuildRoom(lane.job_id, true);
   useEffect(() => {
@@ -153,7 +153,7 @@ function BuildRoomWindow({ lane, onClose }: { lane: Lane; onClose: () => void })
 
 type Path = { key: string; d: string; active: boolean };
 
-function RoomBody({ room, title }: { room: Room; title: string }) {
+function RoomBody({ room, title }: Readonly<{ room: Room; title: string }>) {
   const tx = useT();
   const frame = useRef<HTMLDivElement>(null);
   const hub = useRef<HTMLDivElement>(null);
@@ -166,7 +166,7 @@ function RoomBody({ room, title }: { room: Room; title: string }) {
     ...room.machines.filter((m) => m.phase != null).map((m) => m.id),
     ...(serverWriting ? ["server"] : []),
   ]);
-  const activeKey = [...active].sort().join(",");
+  const activeKey = [...active].sort((a, b) => a.localeCompare(b)).join(",");
 
   // the dashed lines from each machine to Slipwright, and the one on to the branch: drawn
   // from where the cards actually are, again whenever the window or the cards resize
@@ -220,6 +220,19 @@ function RoomBody({ room, title }: { room: Room; title: string }) {
 
   const numbers = room.phases.map((p) => p.number);
   const done = room.phases.filter((p) => p.status === "done").length;
+  let turn: ReactNode;
+  if (room.in_turn != null) {
+    turn = (
+      <>
+        {tx("Phase {n}", { n: room.in_turn })}
+        <span className="room-step"> · {stepLabel(tx, room.step)}</span>
+      </>
+    );
+  } else if (done === room.phases.length && done > 0) {
+    turn = tx("all {n} committed", { n: done });
+  } else {
+    turn = tx("{done} of {total} committed", { done, total: room.phases.length });
+  }
 
   return (
     <div className="room-frame" ref={frame}>
@@ -251,7 +264,7 @@ function RoomBody({ room, title }: { room: Room; title: string }) {
             {numbers.length > 0 && (
               <>
                 {" · "}
-                {tx("phases {a}–{b}", { a: numbers[0]!, b: numbers[numbers.length - 1]! })}
+                {tx("phases {a}–{b}", { a: numbers[0]!, b: numbers.at(-1)! })}
               </>
             )}
           </div>
@@ -274,18 +287,7 @@ function RoomBody({ room, title }: { room: Room; title: string }) {
             })}
           </div>
           <div className="room-label">{tx("In its turn")}</div>
-          <div className="room-turn">
-            {room.in_turn != null ? (
-              <>
-                {tx("Phase {n}", { n: room.in_turn })}
-                <span className="room-step"> · {stepLabel(tx, room.step)}</span>
-              </>
-            ) : done === room.phases.length && done > 0 ? (
-              tx("all {n} committed", { n: done })
-            ) : (
-              tx("{done} of {total} committed", { done, total: room.phases.length })
-            )}
-          </div>
+          <div className="room-turn">{turn}</div>
           {room.pr_url && (
             <a className="room-pr-chip" href={room.pr_url} target="_blank" rel="noreferrer">
               {tx("pull request opened")}
@@ -361,28 +363,34 @@ function badgeOf(m: RoomMachine): { text: string; tone: string } {
   return { text: "PC", tone: "plain" };
 }
 
-function MachineCard({ machine: m }: { machine: RoomMachine }) {
+/** The pill on a machine's card. */
+function machineStatus(tx: T, m: RoomMachine): string {
+  if (m.phase != null) return tx("phase {n}", { n: m.phase });
+  if (m.elsewhere) return tx("busy");
+  return m.online ? tx("idle") : tx("offline");
+}
+
+/** The line at the foot of a machine's card: what it last said, else what it is at. */
+function machineDoing(tx: T, m: RoomMachine): string {
+  if (m.doing) return m.doing;
+  if (m.phase != null) return tx("writing phase {n}", { n: m.phase });
+  if (m.elsewhere) return tx("writing another development");
+  return m.online ? tx("asking for a phase it can do …") : tx("not connected");
+}
+
+/** What the machine is -- size, system, what writes on it -- else what it can do. */
+function machineLine(m: RoomMachine): string {
+  const what = [m.about?.size, m.about?.os, ...(m.about?.writers ?? [])].filter(Boolean);
+  if (what.length > 0) return what.join(" · ");
+  return m.writes.join(" · ") || m.builds.join(" · ");
+}
+
+function MachineCard({ machine: m }: Readonly<{ machine: RoomMachine }>) {
   const tx = useT();
   const badge = badgeOf(m);
-  const what = [m.about?.size, m.about?.os, ...(m.about?.writers ?? [])].filter(Boolean);
-  const line = what.length > 0 ? what.join(" · ") : m.writes.join(" · ") || m.builds.join(" · ");
-  const status =
-    m.phase != null
-      ? tx("phase {n}", { n: m.phase })
-      : m.elsewhere
-        ? tx("busy")
-        : m.online
-          ? tx("idle")
-          : tx("offline");
-  const doing =
-    m.doing ??
-    (m.phase != null
-      ? tx("writing phase {n}", { n: m.phase })
-      : m.elsewhere
-        ? tx("writing another development")
-        : m.online
-          ? tx("asking for a phase it can do …")
-          : tx("not connected"));
+  const line = machineLine(m);
+  const status = machineStatus(tx, m);
+  const doing = machineDoing(tx, m);
   return (
     <article
       data-room-key={m.id}
@@ -399,7 +407,7 @@ function MachineCard({ machine: m }: { machine: RoomMachine }) {
   );
 }
 
-function ServerCard({ room }: { room: Room }) {
+function ServerCard({ room }: Readonly<{ room: Room }>) {
   const tx = useT();
   const writing = room.server.writing;
   return (
@@ -425,46 +433,56 @@ function ServerCard({ room }: { room: Room }) {
 
 // -- the right: the branch ---------------------------------------------------------------
 
-function PhaseRow({ phase: p, room }: { phase: RoomPhase; room: Room }) {
+type Tone = "done" | "failed" | "turn" | "writing" | "parked" | "pending";
+
+function toneOf(p: RoomPhase, turn: boolean): Tone {
+  if (p.status === "done") return "done";
+  if (p.status === "failed") return "failed";
+  if (turn) return "turn";
+  if (p.writing) return "writing";
+  return p.parked ? "parked" : "pending";
+}
+
+/** The line under a finished phase: its commit, linked where the host shows it. */
+function Committed({ phase: p }: Readonly<{ phase: RoomPhase }>) {
+  const tx = useT();
+  const sha = p.commit ? <code>{p.commit.slice(0, 7)}</code> : null;
+  return (
+    <>
+      {sha && p.commit_url ? (
+        <a href={p.commit_url} target="_blank" rel="noreferrer">
+          {sha}
+        </a>
+      ) : (
+        sha
+      )}
+      {sha && " · "}
+      {p.by_hand ? tx("done by hand") : tx("built ✓ reviewed ✓")}
+    </>
+  );
+}
+
+function phaseMeta(tx: T, p: RoomPhase, tone: Tone, step: string | null | undefined): string {
+  switch (tone) {
+    case "failed":
+      return tx("failed");
+    case "turn":
+      return stepLabel(tx, step);
+    case "writing": {
+      const who = p.writer ? [p.writer, p.doing] : [tx("the server")];
+      return [tx("being written"), ...who].filter(Boolean).join(" · ");
+    }
+    case "parked":
+      return tx("set aside");
+    default:
+      return tx("waiting its turn");
+  }
+}
+
+function PhaseRow({ phase: p, room }: Readonly<{ phase: RoomPhase; room: Room }>) {
   const tx = useT();
   const say = useSay();
-  const turn = room.in_turn === p.number;
-  const tone =
-    p.status === "done"
-      ? "done"
-      : p.status === "failed"
-        ? "failed"
-        : turn
-          ? "turn"
-          : p.writing
-            ? "writing"
-            : p.parked
-              ? "parked"
-              : "pending";
-  let meta: ReactNode;
-  if (p.status === "done") {
-    meta = (
-      <>
-        {p.commit &&
-          (p.commit_url ? (
-            <a href={p.commit_url} target="_blank" rel="noreferrer">
-              <code>{p.commit.slice(0, 7)}</code>
-            </a>
-          ) : (
-            <code>{p.commit.slice(0, 7)}</code>
-          ))}
-        {p.commit && " · "}
-        {p.by_hand ? tx("done by hand") : tx("built ✓ reviewed ✓")}
-      </>
-    );
-  } else if (tone === "failed") meta = tx("failed");
-  else if (turn) meta = stepLabel(tx, room.step);
-  else if (p.writing)
-    meta = p.writer
-      ? `${tx("being written")} · ${p.writer}${p.doing ? ` · ${p.doing}` : ""}`
-      : `${tx("being written")} · ${tx("the server")}`;
-  else if (p.parked) meta = tx("set aside");
-  else meta = tx("waiting its turn");
+  const tone = toneOf(p, room.in_turn === p.number);
   return (
     <li className={`room-phase ${tone}`}>
       <span className="room-pin" aria-hidden="true" />
@@ -472,7 +490,9 @@ function PhaseRow({ phase: p, room }: { phase: RoomPhase; room: Room }) {
         <div className="room-phase-title">
           {tx("Phase {n}", { n: p.number })} · {say(p.title)}
         </div>
-        <div className="room-phase-meta">{meta}</div>
+        <div className="room-phase-meta">
+          {tone === "done" ? <Committed phase={p} /> : phaseMeta(tx, p, tone, room.step)}
+        </div>
       </div>
     </li>
   );

@@ -104,36 +104,15 @@ class BuildRoom(BaseModel):
     server: RoomServer
 
 
-def build_room(
-    job: Job,
-    *,
-    machines: list[Worker],
-    calls: list[dict[str, Any]],
-    slots: int,
-    models: list[str],
-) -> BuildRoom:
-    """``calls`` are the account's open machine calls (``open_worker_calls``); only this
-    job's say which phase a machine writes, the rest only that it is busy."""
-    lane = lane_for(job)
-    mine = [c for c in calls if c["job_id"] == job.id]
-    by_phase = {int(c["phase"]): c for c in mine if c.get("phase") is not None}
-    busy = {str(c["worker_id"]) for c in calls if c.get("worker_id")}
-    # what the server writes: every phase written ahead that no machine took, and the one
-    # in its turn while it is being written -- unless a machine took that one too
-    in_turn = job.data.phase_index + 1 if job.state in LIVE else None
-    if job.state is JobState.REVIEW:
-        in_turn = job.data.phase_index  # built and committed to the index: being reviewed
-    written = {int(n) for n in job.data.ahead}
-    if job.state is JobState.DEVELOPING and in_turn is not None:
-        written.add(in_turn)
-
-    phases: list[RoomPhase] = []
-    for card in lane.steps:
+def _phases(job: Job, by_phase: dict[int, dict[str, Any]], written: set[int]) -> list[RoomPhase]:
+    """The plan's phases as the lane draws them, each with who is writing it now."""
+    out: list[RoomPhase] = []
+    for card in lane_for(job).steps:
         if not card.key.startswith("phase:") or card.phase is None:
             continue
         call = by_phase.get(card.phase)
         writing = card.phase in written or call is not None
-        phases.append(
+        out.append(
             RoomPhase(
                 number=card.phase,
                 title=card.task_title or card.label.split(": ", 1)[-1],
@@ -149,23 +128,50 @@ def build_room(
                 doing=call.get("progress") if call else None,
             )
         )
+    return out
 
-    room_machines = [
-        RoomMachine(
-            id=w.id,
-            name=w.name,
-            online=w.online,
-            lent_by_name=w.lent_by_name,
-            writes=[c.removeprefix(WRITES) for c in w.capabilities if c.startswith(WRITES)],
-            builds=[c for c in w.capabilities if c in PLATFORMS],
-            about=w.about,
-            phase=next((p for p, c in by_phase.items() if str(c["worker_id"]) == w.id), None),
-            doing=next((c.get("progress") for c in mine if str(c["worker_id"]) == w.id), None),
-            elsewhere=w.id in busy and not any(str(c["worker_id"]) == w.id for c in mine),
-        )
-        for w in machines
-    ]
-    machine_phases = set(by_phase)
+
+def _machine(w: Worker, mine: list[dict[str, Any]], busy: set[str]) -> RoomMachine:
+    """A machine's card: a phase of this development it writes, or only that it is busy
+    with another of the account's."""
+    held = next((c for c in mine if str(c["worker_id"]) == w.id), None)
+    return RoomMachine(
+        id=w.id,
+        name=w.name,
+        online=w.online,
+        lent_by_name=w.lent_by_name,
+        writes=[c.removeprefix(WRITES) for c in w.capabilities if c.startswith(WRITES)],
+        builds=[c for c in w.capabilities if c in PLATFORMS],
+        about=w.about,
+        phase=held.get("phase") if held else None,
+        doing=held.get("progress") if held else None,
+        elsewhere=held is None and w.id in busy,
+    )
+
+
+def build_room(
+    job: Job,
+    *,
+    machines: list[Worker],
+    calls: list[dict[str, Any]],
+    slots: int,
+    models: list[str],
+) -> BuildRoom:
+    """``calls`` are the account's open machine calls (``open_worker_calls``); only this
+    job's say which phase a machine writes, the rest only that it is busy."""
+    mine = [c for c in calls if c["job_id"] == job.id]
+    by_phase = {int(c["phase"]): c for c in mine if c.get("phase") is not None}
+    busy = {str(c["worker_id"]) for c in calls if c.get("worker_id")}
+    # what the server writes: every phase written ahead that no machine took, and the one
+    # in its turn while it is being written -- unless a machine took that one too
+    in_turn = job.data.phase_index + 1 if job.state in LIVE else None
+    if job.state is JobState.REVIEW:
+        in_turn = job.data.phase_index  # built and committed to the index: being reviewed
+    written = {int(n) for n in job.data.ahead}
+    if job.state is JobState.DEVELOPING and in_turn is not None:
+        written.add(in_turn)
+
+    phases = _phases(job, by_phase, written)
     return BuildRoom(
         job_id=job.id,
         state=job.state,
@@ -176,12 +182,10 @@ def build_room(
         in_turn=in_turn,
         step=_STEP.get(job.state),
         phases=phases,
-        machines=room_machines,
+        machines=[_machine(w, mine, busy) for w in machines],
         server=RoomServer(
             models=models,
-            writing=sorted(
-                p.number for p in phases if p.writing and p.number not in machine_phases
-            ),
+            writing=sorted(p.number for p in phases if p.writing and p.number not in by_phase),
         ),
     )
 
