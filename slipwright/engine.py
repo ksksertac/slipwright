@@ -1366,9 +1366,8 @@ class Engine:
         if skipped:
             parts.append(f"{skipped} skipped")
         who = f" ({role.value})" if role else " (retry)"
-        self.store.update_state(
+        self.store.note(
             job.id,
-            job.state,
             note=f"jira{who}: {', '.join(parts)}",
             detail="\n".join(o.line() for o in outcomes),
         )
@@ -1688,7 +1687,7 @@ class Engine:
             note = f"jira: {len(report.notes)} update(s)"
             detail = "\n".join(report.notes)
         if report.notes or report.error:
-            self.store.update_state(job.id, job.state, note=note, detail=detail)
+            self.store.note(job.id, note=note, detail=detail)
         return self.store.get(job.id)
 
     def jira_sweep(self) -> dict[str, Any]:
@@ -2041,7 +2040,7 @@ class Engine:
                     job, JobState.CANCELLED, note=note, detail=detail
                 )
             else:
-                job = self.store.update_state(job.id, job.state, note=note, detail=detail)
+                job = self.store.note(job.id, note=note, detail=detail)
         finally:
             lock.release()
         return job
@@ -2409,9 +2408,8 @@ class Engine:
             job.data.design_feedback[screen_id] = feedback.strip()
         self.store.save(job)
         left = len(designer.pending_screens(job))
-        self.store.update_state(
+        self.store.note(
             job.id,
-            job.state,
             note=(
                 f"design: approved {name} ({left} left)"
                 if ok
@@ -2789,9 +2787,8 @@ class Engine:
             self._told(job)
             return self.store.get(job.id)
         self._supersede(job.id, _Halt("redirect", by=by, message=message.id))
-        self.store.update_state(
+        self.store.note(
             job.id,
-            job.state,
             note=f"re-plan asked{_by(by)}: finishing the call it is on",
         )
         self._told(job)
@@ -2948,9 +2945,8 @@ class Engine:
             record.update({"acted": "error", "error": result.error.message})
             job.data.supervision = record
             self.store.save(job)
-            self.store.update_state(
+            self.store.note(
                 job.id,
-                job.state,
                 note=f"supervisor failed: {result.error.kind.value}; the gate waits for you",
                 detail=result.error.message,
             )
@@ -2986,9 +2982,8 @@ class Engine:
         record["acted"] = "auto" if auto else "none"
         job.data.supervision = record
         self.store.save(job)
-        self.store.update_state(
+        self.store.note(
             job.id,
-            job.state,
             note=(
                 f"supervisor: recommends {out.decision} "
                 f"(confidence {out.confidence:.2f}, risk {out.risk})"
@@ -3092,7 +3087,7 @@ class Engine:
             return self._notify_outcome(job)
         # stopping for good outranks a pause asked for a moment earlier
         self._supersede(job.id, _Halt("cancel", by=by))
-        self.store.update_state(job.id, job.state, note=f"{note}: finishing the call it is on")
+        self.store.note(job.id, note=f"{note}: finishing the call it is on")
         return self.store.get(job.id)
 
     # -- pausing to work by hand -------------------------------------------------------------
@@ -3124,9 +3119,8 @@ class Engine:
             return job
         if self._stopping.get(job.id, halt).kind != "cancel":
             self._supersede(job.id, halt)
-        self.store.update_state(
+        self.store.note(
             job.id,
-            job.state,
             note=f"pausing{_by(by)}: finishing the call it is on"
             + ("; the branch is pushed then" if push else ""),
         )
@@ -3575,7 +3569,7 @@ class Engine:
             )
         )
         self.store.save(job)
-        self.store.update_state(job.id, job.state, note=f"undo: {feedback}")
+        self.store.note(job.id, note=f"undo: {feedback}")
         return self.store.get(job.id)
 
     def _notify_team(self, job: Job, lang: str = "tr") -> Job:
@@ -3614,7 +3608,7 @@ class Engine:
         job.data.notified.append(marker)
         self.store.save(job)
         if told:
-            self.store.update_state(job.id, job.state, note=f"waiting for {', '.join(told)}")
+            self.store.note(job.id, note=f"waiting for {', '.join(told)}")
             return self.store.get(job.id)
         return job
 
@@ -4668,9 +4662,7 @@ class Engine:
             if retrieved is not None:
                 kw["standards"] = retrieved.as_context()
                 phase = job.data.phase_index + 1 if job.state is JobState.DEVELOPING else None
-                self.store.update_state(
-                    job.id, job.state, note=retrieved.note(phase), detail=retrieved.detail()
-                )
+                self.store.note(job.id, note=retrieved.note(phase), detail=retrieved.detail())
                 job.history = self.store.get(job.id).history
         problem = self._budget_problem(job)
         if problem is not None:
@@ -4732,9 +4724,8 @@ class Engine:
                 message.consumed_at = now
                 message.consumed_by = role.value
             self.store.save(job)
-            self.store.update_state(
+            self.store.note(
                 job.id,
-                job.state,
                 note=f"inbox: {len(pending)} message(s) consumed by {role.value}",
                 detail="\n\n".join(f"[{m.id}] {m.text}" for m in pending),
             )
@@ -4909,9 +4900,8 @@ class Engine:
                 ask = TRUNCATION_STEPS[truncations]
                 truncations += 1
                 kw["truncated"] = f"{result.error.message}. {ask}"
-                self.store.update_state(
+                self.store.note(
                     job.id,
-                    job.state,
                     note=(
                         f"{role.value} attempt {attempt}: {result.error.message}; "
                         f"asking for a smaller part ({truncations}/{len(TRUNCATION_STEPS)})"
@@ -4925,9 +4915,8 @@ class Engine:
             if attempt > retries:
                 return settle(result)
             wait = self.retry_backoff_s * (2 ** (attempt - 1))
-            self.store.update_state(
+            self.store.note(
                 job.id,
-                job.state,
                 note=(
                     f"{role.value} attempt {attempt} failed: {result.error.kind.value}; "
                     f"retrying in {wait:g}s ({attempt}/{retries} retries used)"
@@ -5276,9 +5265,8 @@ class Engine:
             # too literally: it flags a large task and leaves it out. Failing outright threw
             # away a paid plan the person never got to see, so it is asked once more with
             # the reason and the task list spelled out, and only then given up on.
-            self.store.update_state(
+            self.store.note(
                 job.id,
-                job.state,
                 note=f"architect: plan does not match the backlog ({mapping}); asking again",
                 detail=result.output.summary,
             )
@@ -5363,17 +5351,15 @@ class Engine:
             branch_diff="(nothing is built yet: propose the cases from the plan)",
         )
         if not result.ok or not isinstance(result.output, QAResult):
-            self.store.update_state(
+            self.store.note(
                 job.id,
-                job.state,
                 note="qa: could not propose test cases yet; they are asked for again later",
             )
             return self.store.get(job.id)
         job.data.test_cases = [c.model_dump(mode="json") for c in result.output.test_cases]
         self.store.save(job)
-        self.store.update_state(
+        self.store.note(
             job.id,
-            job.state,
             note=f"qa: {len(job.data.test_cases)} test case(s) proposed for the list",
             detail=json.dumps(job.data.test_cases, indent=2),
         )
@@ -5551,9 +5537,8 @@ class Engine:
                     return self._fail(
                         job, f"{role.value}'s changes could not be applied", detail=str(exc)
                     )
-                self.store.update_state(
+                self.store.note(
                     job.id,
-                    job.state,
                     note=f"{role.value} phase {index + 1}/{len(phases)}: an edit did not fit",
                     detail=str(exc),
                 )
@@ -5577,9 +5562,8 @@ class Engine:
             elif last:
                 break
             g.stage_all(worktree)
-            self.store.update_state(
+            self.store.note(
                 job.id,
-                job.state,
                 note=(
                     f"{role.value} phase {index + 1}/{len(phases)} part {part}: "
                     f"{result.output.summary} ({len(touched)} files, more to come)"
@@ -6202,7 +6186,7 @@ class Engine:
         return False
 
     def _record_gate_note(self, job: Job, note: str, detail: str | None) -> None:
-        self.store.update_state(job.id, job.state, note=note, detail=detail)
+        self.store.note(job.id, note=note, detail=detail)
         job.history = self.store.get(job.id).history
 
     def _failed_gate_choice(
@@ -6247,9 +6231,8 @@ class Engine:
         out = result.output
         choice = out.decision if out.decision in ("fix", "replan", "ask_human") else "fix"
         reason = "; ".join(out.reasons) or out.summary
-        self.store.update_state(
+        self.store.note(
             job.id,
-            job.state,
             note=f"supervisor: {choice} ({reason})",
             detail=json.dumps(out.model_dump(mode="json"), indent=2),
         )
@@ -6370,9 +6353,8 @@ class Engine:
         if not result.output.test_cases:
             # the cases ended up in the prose: ask once more for the array, then give up
             # readably rather than park a gate with nothing to approve
-            self.store.update_state(
+            self.store.note(
                 job.id,
-                job.state,
                 note="qa: no test cases in the answer; asking again for the list",
                 detail=result.output.summary,
             )
@@ -6496,9 +6478,8 @@ class Engine:
         source = self._source_of(job)
         stray = devops.outside((s.path for s in plan.scripts), source)
         if stray:
-            self.store.update_state(
+            self.store.note(
                 job.id,
-                job.state,
                 note=f"devops: proposed files it may not write ({', '.join(stray)}); asking again",
                 detail=plan.summary,
             )
@@ -6536,9 +6517,8 @@ class Engine:
         if not plan.scripts:
             job.data.devops_stage = 2
             self.store.save(job)
-            self.store.update_state(
+            self.store.note(
                 job.id,
-                job.state,
                 note=f"devops: nothing to deploy — {plan.summary}",
                 detail=json.dumps(job.data.deploy, indent=2),
             )
@@ -6576,9 +6556,8 @@ class Engine:
                 f"pipeline file."
             )
             self.store.save(job)
-            self.store.update_state(
+            self.store.note(
                 job.id,
-                job.state,
                 note=f"devops: the approved plan names {', '.join(stray)}; proposing again",
             )
             return self._deploy_gate(self.store.get(job.id))
@@ -6623,9 +6602,8 @@ class Engine:
             if result.output.phase_complete or part == self.max_phase_parts:
                 break
             g.stage_all(worktree)
-            self.store.update_state(
+            self.store.note(
                 job.id,
-                job.state,
                 note=(
                     f"devops part {part}: {result.output.summary} "
                     f"({len(written)} file(s), more to come)"
@@ -6647,9 +6625,8 @@ class Engine:
         if g.commit(worktree, f"slipwright: deployment ({plan.get('target')})"):
             self._push(job, worktree, "devops: deployment files")
         parts = f" in {len(summaries)} parts" if len(summaries) > 1 else ""
-        self.store.update_state(
+        self.store.note(
             job.id,
-            job.state,
             note=(f"devops: {len(touched)} deployment file(s) written{parts} — {summaries[-1]}"),
             detail=diff or "(no changes)",
         )
@@ -6680,9 +6657,8 @@ class Engine:
         self.store.save(job)
         if not result.ok or not isinstance(result.output, ReadmeResult):
             reason = result.error.message if result.error else "no README in the answer"
-            self.store.update_state(
+            self.store.note(
                 job.id,
-                job.state,
                 note=(
                     "architect: the README could not be written; the pull request goes "
                     "without it"
@@ -6697,9 +6673,8 @@ class Engine:
         diff = g.staged_diff(worktree)
         if g.commit(worktree, "slipwright: README"):
             self._push(job, worktree, "architect: README")
-        self.store.update_state(
+        self.store.note(
             job.id,
-            job.state,
             note=f"architect: README written — {result.output.summary}",
             detail=diff or "(no changes)",
         )
