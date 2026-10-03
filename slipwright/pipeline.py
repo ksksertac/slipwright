@@ -146,6 +146,21 @@ class _Reader:
             self.history[self.failed_i].from_state if self.failed_i is not None else None
         )
         self.whole: Span = (0, len(self.history))
+        # where this round of the development began: the last plan the Architect made. A
+        # re-planned development has the tests, the deployment and the pull request of an
+        # earlier round in its history, and what comes after the phases is this round's
+        # alone -- read from the whole of it, the first "approved" at an earlier test gate
+        # split the history, and the lane showed the written tests waiting while the job
+        # waited on its test cases, with no way to answer either
+        self.made: int = max(
+            (
+                i
+                for i, t in enumerate(self.history)
+                if (t.note or "").startswith(("architect: plan ready", "architect: re-planned"))
+            ),
+            default=0,
+        )
+        self.round: Span = (self.made, len(self.history))
 
     def visits(self, state: JobState, span: Span) -> list[int]:
         lo, hi = span
@@ -166,15 +181,15 @@ class _Reader:
         """QA visits the test gate twice; the first approval of it splits the history
         into the test-case stage and the written-tests stage."""
         split = self._first(
-            self.whole,
+            self.round,
             lambda _i, t: (
                 t.from_state is JobState.AWAITING_TEST_APPROVAL
                 and (t.note or "").startswith("approved")
             ),
         )
         if split is None:
-            return self.whole, (len(self.history), len(self.history))
-        return (0, split), (split, len(self.history))
+            return self.round, (len(self.history), len(self.history))
+        return (self.made, split), (split, len(self.history))
 
     def stage(
         self,
@@ -293,6 +308,7 @@ def _deploy_cards(job: Job, r: _Reader) -> list[StepCard]:
             # with nothing to deploy there is no gate: the step is done when the job
             # went straight on to the pull request
             output_into=(JobState.AWAITING_DEPLOY_APPROVAL, JobState.DONE),
+            span=r.round,
             current=job.data.devops_stage == 1,
         )
     ]
@@ -304,6 +320,7 @@ def _deploy_cards(job: Job, r: _Reader) -> list[StepCard]:
                 state=JobState.AWAITING_DEPLOY_APPROVAL,
                 pending="deployment",
                 editable=True,
+                span=r.round,
             )
         )
     return cards
@@ -319,14 +336,7 @@ def _phase_cards(job: Job, r: _Reader) -> list[StepCard]:
     # numbers: this plan's new phases are read only from where it was made, its kept ones
     # from the start
     kept = int(plan.get("kept") or 0) if isinstance(plan.get("kept"), int) else 0
-    made = max(
-        (
-            i
-            for i, t in enumerate(r.history)
-            if (t.note or "").startswith(("architect: plan ready", "architect: re-planned"))
-        ),
-        default=0,
-    )
+    made = r.made
     past_dev = job.state in (
         JobState.QA,
         JobState.AWAITING_TEST_APPROVAL,
@@ -752,6 +762,7 @@ def lane_for(job: Job) -> Lane:
             state=JobState.DEVOPS,
             role=RoleName.DEVOPS,
             output_into=JobState.DONE,
+            span=r.round,
             current=job.data.devops_stage == 2,
         ),
         StepCard(
