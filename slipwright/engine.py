@@ -4032,9 +4032,38 @@ class Engine:
             return job
         if job.worktree_path is not None:  # recorded but gone from disk: start clean
             self.workspace.destroy(job)
-        self.workspace.create(job)
+        self.workspace.create(job, self._trunk(job))
         job.data.base_commit = g.head_commit(require_worktree(job))
         return self.store.save(job)
+
+    def _trunk(self, job: Job) -> str | None:
+        """Where a new development's branch starts: the project's base branch as the host
+        has it now, fetched on its owner's token -- or None, the checkout's own HEAD.
+
+        The checkout is cloned once and nothing moves its HEAD afterwards, while pull
+        requests are merged on the host. Branched from HEAD, every development saw the
+        repository as it was the day it was cloned: an app merged two days before was
+        not there, the Product Owner and the Architect planned to write it from nothing,
+        and a mobile developer was paid to do it again. A checkout with no remote (a
+        local folder) or a host that cannot be reached keeps the old way: a development
+        that starts from a stale base is better than one that does not start.
+        """
+        if not g.has_remote(job.repo_path):
+            return None
+        project = self._project_of(job)
+        base = self.base_branch_of(project)
+        try:
+            commit = self.host_for(project).fetch(job.repo_path, base)
+        except Exception as exc:  # noqa: BLE001 - see above: the development still starts
+            log.warning(
+                "job %s: could not fetch %s, branching from the checkout: %s", job.id, base, exc
+            )
+            return None
+        # None: the host has no such branch yet (a repository with no commits)
+        if commit is None:
+            return None
+        known = g.run(job.repo_path, "cat-file", "-e", f"{commit}^{{commit}}", check=False)
+        return commit if known.returncode == 0 else None
 
     def job_result(self, job_id: str) -> JobResult:
         """What the development produced: its branch, the commits and files on it, and
