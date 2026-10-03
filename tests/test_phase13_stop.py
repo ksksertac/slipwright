@@ -170,7 +170,7 @@ def test_stop_is_offered_wherever_the_development_is() -> None:
     web = Path(__file__).resolve().parent.parent / "web" / "src"
     header = (web / "pages" / "JobPage.tsx").read_text(encoding="utf-8")
     # the header holds it next to Delete: the two answers to "I do not want this"
-    assert "<StopAction job={job} />\n          <DeleteJobButton" in header
+    assert "<StopAction job={job} />\n          <RemoveAction" in header
     lane = (web / "pages" / "PipelineTab.tsx").read_text(encoding="utf-8")
     # on the lane whether it is open or shut: Retry hides when the lane is open because
     # the detail repeats it, and stopping has no twin inside to hide behind
@@ -178,5 +178,7 @@ def test_stop_is_offered_wherever_the_development_is() -> None:
     assert "{!hasFinished(lane.state) && (" in lane
     assert "{!open && !hasFinished(lane.state) && (" not in lane
     # and Delete knows every terminal state, not two of the three: a development that was
-    # stopped could not be deleted, though the server had always allowed it
-    assert "if (!hasFinished(job.state)) return null;" in header
+    # stopped could not be deleted, though the server had always allowed it -- and a
+    # paused one, which is stopped too
+    remove = (web / "components" / "Remove.tsx").read_text(encoding="utf-8")
+    assert 'job.state === "paused" || hasFinished(job.state)' in remove

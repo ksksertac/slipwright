@@ -75,6 +75,11 @@ class JiraSettings(BaseModel):
         return bool(self.site_url and self.email and self.token_set)
 
 
+def _loose(name: str) -> str:
+    """A transition's name with only its letters and digits, lower-cased."""
+    return re.sub(r"[^a-z0-9]", "", name.lower())
+
+
 def adf(text: str) -> dict[str, Any]:
     """Atlassian Document Format for plain text: one paragraph per line."""
     lines = text.splitlines() or [""]
@@ -220,6 +225,23 @@ class JiraClient:
                 )
                 return True
         return False
+
+    def transition_to_any(self, key: str, names: list[str]) -> str | None:
+        """Take the first of ``names`` the issue offers, as a transition or a status, and
+        return what it was called -- None when it offers none of them. Matched loosely:
+        Jira writes "Won't Do" with either apostrophe, and boards rename it freely."""
+        offered = self.transitions(key)
+        for name in names:
+            wanted = _loose(name)
+            for t in offered:
+                if wanted in (_loose(t.name), _loose(t.to or "")):
+                    self._request(
+                        "POST",
+                        f"/rest/api/3/issue/{key}/transitions",
+                        json={"transition": {"id": t.id}},
+                    )
+                    return t.name
+        return None
 
     def comment(self, key: str, text: str) -> None:
         self._request("POST", f"/rest/api/3/issue/{key}/comment", json={"body": adf(text)})

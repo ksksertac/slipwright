@@ -578,8 +578,28 @@ export const TR: Record<string, string> = {
   Request: "İstek",
   Created: "Oluşturulma",
   "Delete development": "Geliştirmeyi sil",
-  "? Its worktree, branch, history and test runs are removed. A pull request already opened stays on GitHub.":
-    " silinsin mi? Worktree'si, dalı, geçmişi ve test çalıştırmaları kaldırılır. Açılmış bir pull request GitHub'da kalır.",
+  deleted: "silindi",
+  "Deleting…": "Siliniyor…",
+  "Delete it everywhere": "Her yerden sil",
+  "Delete (stop it first)": "Sil (önce durdur)",
+  "The development stays in the list, marked deleted, to be read. Nothing carries it on, retries or re-runs it again.":
+    'Geliştirme listede "silindi" olarak kalır, yalnızca okunabilir. Devam ettirilemez, yeniden denenemez, yeniden çalıştırılamaz.',
+  "Its branch is deleted on the host:": "Dalı uzak depodan silinir:",
+  "Its pull request is closed.": "Pull request'i kapatılır.",
+  "If any of it was merged into the base branch, a commit that reverts it is pushed there, on top of what is there now.":
+    "Bir kısmı ana dala merge edildiyse, onu geri alan bir commit ana dalın üstüne push edilir.",
+  "Its Jira issues are moved to Won't Do.": "Jira kayıtları Won't Do'ya taşınır.",
+  "Its worktree on this machine is removed.": "Bu makinedeki worktree'si kaldırılır.",
+  "Deleted by {who} {ago}": "{who} sildi · {ago}",
+  "Deleted {ago}": "Silindi · {ago}",
+  "Reverted on {branch}:": "{branch} üzerinde geri alındı:",
+  "Pull request closed:": "Pull request kapatıldı:",
+  "Branch deleted on the host.": "Dal uzak depodan silindi.",
+  "Jira, moved to Won't Do:": "Jira, Won't Do'ya taşındı:",
+  "Jira, no Won't Do to move to:": "Jira, Won't Do geçişi yok:",
+  "Not done -- do these by hand:": "Yapılamadı, bunları elle yapın:",
+  "Deleted by {1}": "{1} sildi",
+  Deleted: "Silindi",
 
   // -- pipeline -----------------------------------------------------------------------------------------
   "Every development shows up here as a lane of steps: what the agents did, what runs now, and what waits for you.":

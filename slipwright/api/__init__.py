@@ -607,7 +607,7 @@ def create_app(
         with no checkout behind it, so anything that would run something in it can only
         fail further in; it is there to be read and then deleted.
         """
-        _refuse_if_demo(request, job)
+        _refuse_if_read_only(request, job)
         user = getattr(request.state, "user", None)
         if user is None or not user.is_member:
             return
@@ -659,8 +659,14 @@ def create_app(
         except JobNotFound as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 
-    def _refuse_if_demo(request: Request, job: Job) -> None:
-        """Refuse anything that would run the worked example."""
+    def _refuse_if_read_only(request: Request, job: Job) -> None:
+        """Refuse anything that would run the worked example, or move a development
+        that was deleted: both are there to be read."""
+        if job.is_removed:
+            raise HTTPException(
+                status_code=409,
+                detail="this development was deleted: it is there to read, not to run",
+            )
         if job.project_id is None:
             return
         try:
@@ -1225,10 +1231,32 @@ def create_app(
         except ValueError as exc:  # nothing but spaces
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    @api.post("/jobs/{job_id}/remove", response_model=Job)
+    def remove_job(job_id: str, request: Request) -> Job:
+        """Delete a paused or finished development everywhere it reached -- its pull
+        request closed, its branch deleted, what was merged reverted on the base branch,
+        its Jira issues moved to Won't Do -- and keep it, marked deleted, to be read.
+        409 while it is still going, or when it was deleted already."""
+        user = require_owner(request)
+        eng = engine_for(request)
+        # the example is meant to be thrown away: it has nothing on any host to take back
+        _get(eng, job_id, request)
+        try:
+            return eng.remove_job(job_id, by=user.username)
+        except NotAwaitingApproval as exc:
+            raise HTTPException(
+                status_code=409, detail="this development was deleted already"
+            ) from exc
+        except (JobInProgress, JobIsRunning) as exc:
+            raise HTTPException(
+                status_code=409,
+                detail="only a stopped or finished development can be deleted; stop it first",
+            ) from exc
+
     @api.delete("/jobs/{job_id}", status_code=204)
     def delete_job(job_id: str, request: Request) -> None:
-        require_owner(request)
         """Delete a finished job (worktree, branch, port and rows). Running jobs: 409."""
+        require_owner(request)
         eng = engine_for(request)
         # deleting it is not running it: the example is meant to be thrown away
         _get(eng, job_id, request)
@@ -1518,7 +1546,7 @@ def create_app(
     def cancel(job_id: str, request: Request) -> Job:
         """Stop a development. 409 when it has already ended."""
         eng = engine_for(request)
-        _refuse_if_demo(request, _get(eng, job_id, request))
+        _refuse_if_read_only(request, _get(eng, job_id, request))
         try:
             return eng.cancel(job_id, by=require_owner(request).username)
         except NotAwaitingApproval as exc:
@@ -1531,7 +1559,7 @@ def create_app(
         """Pause a development so people can work on its branch; it keeps its place.
         409 when it has ended or is already paused, or when it cannot be pushed."""
         eng = engine_for(request)
-        _refuse_if_demo(request, _get(eng, job_id, request))
+        _refuse_if_read_only(request, _get(eng, job_id, request))
         try:
             return eng.pause(
                 job_id, push=bool(body and body.push), by=require_owner(request).username
@@ -1551,7 +1579,7 @@ def create_app(
         its branch meanwhile or without it. 409 when it is not paused, when commits were
         pushed and no pull was asked for, or when the pull cannot be made."""
         eng = engine_for(request)
-        _refuse_if_demo(request, _get(eng, job_id, request))
+        _refuse_if_read_only(request, _get(eng, job_id, request))
         try:
             job = eng.carry_on(
                 job_id,
@@ -1580,7 +1608,7 @@ def create_app(
         """Continue a failed job from the step it failed in."""
         require_owner(request)
         eng = engine_for(request)
-        _refuse_if_demo(request, _get(eng, job_id, request))
+        _refuse_if_read_only(request, _get(eng, job_id, request))
         try:
             job = eng.retry(job_id, run=False, feedback=(body.feedback if body else None))
         except NotAwaitingApproval as exc:
@@ -1593,7 +1621,7 @@ def create_app(
         """Send a failed job back to the plan with what should be tried instead."""
         require_owner(request)
         eng = engine_for(request)
-        _refuse_if_demo(request, _get(eng, job_id, request))
+        _refuse_if_read_only(request, _get(eng, job_id, request))
         try:
             job = eng.replan(job_id, body.note, run=False)
         except NotAwaitingApproval as exc:
@@ -1613,7 +1641,7 @@ def create_app(
         phases already built. The owner's, like every re-plan."""
         user = require_owner(request)
         eng = engine_for(request)
-        _refuse_if_demo(request, _get(eng, job_id, request))
+        _refuse_if_read_only(request, _get(eng, job_id, request))
         try:
             job = eng.replan_phase(job_id, body.note, by=user.username, run=False)
         except NotAwaitingApproval as exc:
@@ -1630,7 +1658,7 @@ def create_app(
         """Run the tests, or the DevOps step, again on a development that has stopped."""
         require_owner(request)
         eng = engine_for(request)
-        _refuse_if_demo(request, _get(eng, job_id, request))
+        _refuse_if_read_only(request, _get(eng, job_id, request))
         try:
             job = eng.rerun(job_id, body.step, run=False)
         except JobIsRunning as exc:
@@ -1651,7 +1679,7 @@ def create_app(
         through the inbox and the approval is marked undone."""
         require_owner(request)
         eng = engine_for(request)
-        _refuse_if_demo(request, _get(eng, job_id, request))
+        _refuse_if_read_only(request, _get(eng, job_id, request))
         try:
             return eng.undo_auto_approval(job_id, body.feedback)
         except NotAwaitingApproval as exc:
@@ -1672,7 +1700,7 @@ def create_app(
         """Who may write to the agent on a step: the owner, or the member who holds that
         agent. Asking costs a call on the account's keys, so it is the same people who
         may act for that agent at its gate -- not anybody on the team."""
-        _refuse_if_demo(request, job)
+        _refuse_if_read_only(request, job)
         try:
             card = engine_for(request).talk_card(job, step)
         except NothingToAsk as exc:
@@ -1741,7 +1769,7 @@ def create_app(
         owner = require_owner(request)
         eng = engine_for(request)
         job = _get(eng, job_id, request)
-        _refuse_if_demo(request, job)
+        _refuse_if_read_only(request, job)
         try:
             job = eng.redirect(
                 job.id, body.text, by=owner.username, reply_to=body.reply_to, run=False

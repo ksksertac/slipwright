@@ -5,7 +5,6 @@ import { DraftFiles } from "../components/Attachments";
 import {
   useActivity,
   useBoard,
-  useDeleteJob,
   useProgress,
   useProject,
   useProjectJobs,
@@ -17,9 +16,7 @@ import { GateActions } from "../components/GateActions";
 import { IconEdit, IconExternal, IconPlus, IconTrash } from "../components/icons";
 import { JiraLink } from "../components/JiraLink";
 import { Menu } from "../components/Menu";
-import { ConfirmModal } from "../components/Modal";
 import { DeleteProjectModal } from "../components/ProjectDialogs";
-import { useToast } from "../components/Toast";
 import {
   Empty,
   ErrorBox,
@@ -43,6 +40,7 @@ import { sentenceCase, useT } from "../i18n";
 import { SayProvider, useSay } from "../i18n/said";
 import { ResultCard } from "../components/ResultCard";
 import { WorkListPanel } from "../components/WorkList";
+import { isRemoved, mayRemove, RemoveDialog } from "../components/Remove";
 
 const TABS = [
   "pipeline",
@@ -471,11 +469,10 @@ function DevelopmentsTab({ projectId }: { projectId: string }) {
 
 function JobRow({ job, projectId }: { job: Job; projectId: string }) {
   const tx = useT();
-  const remove = useDeleteJob();
-  const toast = useToast();
+  const team = useMyTeam();
   const navigate = useNavigate();
   const [confirm, setConfirm] = useState(false);
-  const terminal = job.state === "done" || job.state === "failed";
+  const removed = isRemoved(job);
   return (
     <tr>
       <td>
@@ -483,14 +480,14 @@ function JobRow({ job, projectId }: { job: Job; projectId: string }) {
         <div className="faint tiny mono">{job.id}</div>
       </td>
       <td>
-        <StateBadge state={job.state} />
+        <StateBadge state={job.state} removed={removed} />
       </td>
       <td className="muted small">{formatTime(job.created_at)}</td>
       <td className="muted small">
         {job.history.length > 0 ? timeAgo(job.history[job.history.length - 1]!.at) : "—"}
       </td>
       <td>
-        {job.data.pr_url ? (
+        {job.data.pr_url && !removed ? (
           <a href={job.data.pr_url} target="_blank" rel="noreferrer">
             {tx("open ↗")}
           </a>
@@ -503,34 +500,14 @@ function JobRow({ job, projectId }: { job: Job; projectId: string }) {
           <button onClick={() => navigate(`/projects/${projectId}/jobs/${job.id}`)}>
             <IconExternal /> {tx("Open")}
           </button>
-          <button className="danger" disabled={!terminal} onClick={() => setConfirm(true)}>
-            <IconTrash /> Delete{terminal ? "" : " (still running)"}
-          </button>
+          {/* a deleted one is there to read; one still going is stopped first */}
+          {!removed && isOwner(team.data) && (
+            <button className="danger" disabled={!mayRemove(job)} onClick={() => setConfirm(true)}>
+              <IconTrash /> {mayRemove(job) ? tx("Delete") : tx("Delete (stop it first)")}
+            </button>
+          )}
         </Menu>
-        {confirm && (
-          <ConfirmModal
-            title={tx("Delete development")}
-            body={
-              <>
-                {tx("Delete")} <strong>{nameOf(job)}</strong>
-                {tx(
-                  "? Its worktree, branch, history and test runs are removed. A pull request already opened stays on GitHub.",
-                )}
-              </>
-            }
-            busy={remove.isPending}
-            error={remove.error ? describeError(remove.error) : null}
-            onClose={() => setConfirm(false)}
-            onConfirm={() =>
-              remove.mutate(job.id, {
-                onSuccess: () => {
-                  toast.ok("Development deleted");
-                  setConfirm(false);
-                },
-              })
-            }
-          />
-        )}
+        {confirm && <RemoveDialog job={job} onClose={() => setConfirm(false)} />}
       </td>
     </tr>
   );

@@ -531,6 +531,17 @@ class JobData(BaseModel):
         "pushed so people could work on it -- the commit pushed (pushed), whether unfinished "
         "work was committed to get it there (wip), and why a push failed (push_error).",
     )
+    # -- deleted --
+    removed: dict[str, Any] | None = Field(
+        default=None,
+        description="Set once the development was deleted: who and when (by, at), and what "
+        "was taken off the host -- pull requests closed (prs_closed), the branch "
+        "(branch_deleted), the revert pushed onto the base branch when it had been merged "
+        "(reverted: {onto, commit, commits}), Jira issues marked Won't Do (jira_closed) or "
+        "offering no such move (jira_left) -- and whatever could not be (errors). A "
+        "deleted development is kept to be read; nothing moves it again. It lives here "
+        "rather than as a state of its own so that a release rolled back can still read it.",
+    )
     reconcile: dict[str, Any] | None = Field(
         default=None,
         description="The Architect's reading of what people pushed while the development "
@@ -638,6 +649,11 @@ class Job(BaseModel):
     @property
     def is_terminal(self) -> bool:
         return self.state in TERMINAL_STATES
+
+    @property
+    def is_removed(self) -> bool:
+        """Deleted: kept to be read, and nothing moves it again."""
+        return self.data.removed is not None
 
     @property
     def pending_messages(self) -> list[InboxMessage]:
