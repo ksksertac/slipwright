@@ -302,6 +302,12 @@ behaviour deliberately changed, rewrite it to state the new rule -- do not weake
   call: it holds no lock, writes only its own row, and its cost waits there until whoever
   holds the job next folds it in (`_bill_answers`). Anything that writes to a job while it
   may be running wants the same shape.
+- **A note is not a move.** A history entry that changes nothing is `store.note(job_id,
+  ...)`, written at whatever state the job is in *now*. It used to be
+  `update_state(job.id, job.state, ...)`, a move to the state the writer's copy held: a
+  phase written ahead (T16.3) runs on an old copy, its retry note put a job that had gone
+  on to review back in developing, and the run's next save crashed it -- "save() cannot
+  change state (developing -> review)". `update_state` is for moves only.
 - **A re-plan asked while a phase runs is a halt that carries on** (`_Halt("redirect")`):
   the run stops before its next call and goes to the Architect with the built phases kept
   (`_replan_from`), instead of ending. A stop or a pause that overtakes it marks it

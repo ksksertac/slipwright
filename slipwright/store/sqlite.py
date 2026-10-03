@@ -557,20 +557,34 @@ class JobStore(
         )
         return self.get(job.id)
 
+    def note(self, job_id: str, note: str, detail: str | None = None) -> Job:
+        """Append an entry to the job's history and leave its state as it is *now*.
+
+        A note used to be ``update_state(job.id, job.state, ...)`` -- a move to the state
+        the writer's copy held. A phase written ahead (T16.3) runs on a copy taken while
+        the job was developing; its retry note, written while the run had moved on to
+        review, put the job back in developing, and the run's next save crashed it:
+        "save() cannot change state (developing -> review)". The state is read in the
+        same transaction as the entry is written, so nothing can come between them."""
+        return self.update_state(job_id, None, note=note, detail=detail)
+
     def update_state(
         self,
         job_id: str,
-        to_state: JobState,
+        to_state: JobState | None,
         note: str | None = None,
         detail: str | None = None,
     ) -> Job:
-        """Append a transition and move the job to ``to_state`` atomically."""
+        """Append a transition and move the job to ``to_state`` atomically. None: no move,
+        an entry at whatever state the job is in (``note``)."""
         with self.db.begin() as conn:
             row = one(conn.execute(select(jobs.c.state).where(jobs.c.id == job_id)))
             if row is None:
                 raise JobNotFound(job_id)
+            current = JobState(row["state"])
+            to_state = current if to_state is None else to_state
             transition = Transition(
-                from_state=JobState(row["state"]),
+                from_state=current,
                 to_state=to_state,
                 at=utcnow(),
                 note=note,
