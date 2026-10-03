@@ -103,6 +103,14 @@ def _android(home: str | None) -> str | None:
     said = f"Android SDK at $ANDROID_HOME, licences accepted: platforms {', '.join(platforms)}"
     if tools:
         said += f"; build-tools {', '.join(tools)}"
+    # what a React Native or Expo app compiles its native code with. Unnamed, the Architect
+    # planned one, the project asked for the NDK its React Native version defaults to, and
+    # the build stopped on a tool that was never there -- with nothing anybody could fix
+    ndk = _names(root / "ndk")
+    said += f"; NDK {', '.join(ndk)}" if ndk else "; no NDK (native code cannot be built)"
+    cmake = _names(root / "cmake")
+    if cmake:
+        said += f"; CMake {', '.join(cmake)}"
     return said
 
 

@@ -33,7 +33,11 @@ RUN mkdir -p /src/slipwright/api && npm run build
 FROM --platform=$BUILDPLATFORM eclipse-temurin:21-jdk AS android
 ARG ANDROID_TOOLS=16111833
 ARG ANDROID_TOOLS_SHA1=e025545c62a8e64c7559119566a569fb1dec5f60
-ARG ANDROID_PACKAGES="platforms;android-35 platforms;android-36 build-tools;35.0.0 build-tools;36.0.0"
+# ndk and cmake: a React Native or Expo app compiles native code, and Gradle cannot fetch
+# them later -- sdkmanager is gone and the project runs as a user who installs nothing.
+# The version is the one React Native 0.76 and after ask for; the Architect is told it and
+# pins the project to it (gates/toolchains.py).
+ARG ANDROID_PACKAGES="platforms;android-35 platforms;android-36 build-tools;35.0.0 build-tools;36.0.0 ndk;27.1.12297006 cmake;3.22.1"
 ARG GRADLE_VERSION=8.14.3
 ARG GRADLE_SHA256=bd71102213493060956ec229d946beee57158dbd89d0e62b91bca0fa2c5f3531
 RUN apt-get update \

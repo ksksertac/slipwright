@@ -51,6 +51,10 @@ def test_the_runner_image_carries_the_same_android_toolchain_as_the_server() -> 
 
     assert pinned(server) == pinned(runner)
     assert any(line.startswith("ARG ANDROID_PACKAGES=") for line in pinned(server))
+    # a React Native app's Android build compiles native code: without these it stops
+    # before Gradle starts, and nothing a project's commands may do can install them
+    packages = next(line for line in pinned(server) if line.startswith("ARG ANDROID_PACKAGES="))
+    assert "ndk;" in packages and "cmake;" in packages
     for text in (server, runner):
         assert "ANDROID_HOME=/opt/android-sdk" in text and "JAVA_HOME=/opt/java/openjdk" in text
         assert "/usr/local/bin/gradle" in text
