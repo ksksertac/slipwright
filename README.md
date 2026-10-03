@@ -47,6 +47,9 @@ finished. Slipwright is built the other way round:
   waiting for you keeps waiting.
 - **Your keys, your repository.** It runs on your own model keys, pushes to your own
   GitHub or Bitbucket, and mirrors the backlog into your own Jira.
+- **As fast as your team.** Phases that do not need each other are written side by side,
+  on the server and on your team's own computers, and every finished phase is pushed at
+  once. Stop it any time, work on the branch by hand, and it pulls your work and carries on.
 
 ## How a development flows
 
@@ -238,6 +241,87 @@ costs:
 - a large file is changed with **edits** to the parts that move, not written out again;
 - dependencies (`node_modules`, `.venv`, `build`...) are never committed, and lock files
   are left out of every diff a role is shown.
+
+### Your team's computers write side by side
+
+<img src="docs/screenshots/machines.png" alt="Settings, Machines: three connected computers, online, each with the agents it writes for and the platforms it builds, and a card to connect another" />
+
+Lend a computer to the account with the **Slipwright Agent** app, and the phases of the
+agents you choose are written there, on that computer's own Claude Code or ChatGPT plan or
+its own key. The owner's laptop, a teammate's, a build server: each takes the next phase
+that is ready, so a plan as wide as your team is written as fast as your team. The server
+still checks, builds, reviews and commits every answer, one at a time, on the one branch.
+
+```mermaid
+gantt
+    title The same six phases: one model, or three computers
+    dateFormat HH:mm
+    axisFormat %H:%M
+    section One model
+    Phase 1 :o1, 00:00, 20m
+    Phase 2 :o2, after o1, 20m
+    Phase 3 :o3, after o2, 20m
+    Phase 4 :o4, after o3, 20m
+    Phase 5 :o5, after o4, 20m
+    Phase 6 :o6, after o5, 20m
+    section Server
+    Phase 1 :s1, 00:00, 20m
+    Phase 3 (needs 1) :s3, after s1, 20m
+    Phase 6 (needs 3) :s6, after s3, 20m
+    section Ayşe's MacBook
+    Phase 2 (needs 1) :a2, after s1, 20m
+    Phase 5 (needs 2) :a5, after a2, 20m
+    section Can's ThinkPad
+    Phase 4 :c4, 00:00, 20m
+```
+
+A computer that sleeps, loses its network or runs out of plan costs only the wait: its
+phase is written on the account's own model instead. Machines on another network come in
+through an end-to-end sealed relay, with nothing opened on either side.
+[Setting it up](#your-teams-computers-machines)
+
+### Native iOS and Android: the Mobile Builder
+
+No container can hold macOS, so Xcode can never run in Slipwright's Docker image. The
+**Mobile Builder** is a small helper on a Mac, outside Docker, that does the builds the
+server cannot: **iOS with Xcode**, **Android with Android Studio**. A development with a
+native app builds everything else as usual, then waits at *Waiting for the Mobile
+Builder*; nothing fails and nothing is spent, and it carries on by itself when the Mac
+connects. A Mac's card says what it builds (`builds iOS`, `builds Android` above).
+[Setting it up](#mobile-apps-the-mobile-builder)
+
+### Talk to the agent on a step
+
+<img src="docs/screenshots/agent-talk.png" alt="A phase's side panel: two questions to the Backend Developer and its answers; the second heard a change, which waits in the box with Plan it again from here and Ask" />
+
+Open any step and **Write to the agent** that holds it. A question is answered by that
+agent, on its own model, with the step's record, the plan and the work in progress in
+front of it, and changes nothing. When the answer hears a request, it is put in the box
+for you to edit, then **send to this step** (read by the agent's next call on it) or
+**plan it again from here**, keeping the phases already built.
+
+### Stop, work on it by hand, carry on
+
+<table>
+<tr>
+<td width="50%" valign="top"><img src="docs/screenshots/paused.png" alt="A paused development: Paused by Ada, the branch is pushed, with the git commands to check it out" /></td>
+<td width="50%" valign="top"><img src="docs/screenshots/pause-carry-on.png" alt="The carry-on dialog: somebody has pushed to the branch since it was paused, so pull them in; Carry on, and Pull and carry on" /></td>
+</tr>
+<tr>
+<td valign="top"><b>Stop and push.</b> A development stops where it is, keeps its place, and pushes its branch as it stands, half-written phase and all, with the two commands to check it out.</td>
+<td valign="top"><b>Pull and carry on.</b> A person fixes what they want and pushes. Slipwright pulls their commits, the Architect reads what they did against the plan, and the phases they finished are not built again.</td>
+</tr>
+</table>
+
+### Move to another computer
+
+<img src="docs/screenshots/move.png" alt="Settings, Move: this installation's card, a receiving code counting down from three minutes, and three promises: sealed end to end, keys arrive working, all or nothing" />
+
+**Settings → Move** carries an account to another Slipwright on the network in one go:
+projects, developments at whatever gate they stopped, history, attachments, settings and
+keys, every checkout with its unpushed branches and uncommitted work. The code is the
+input to a key exchange, so nothing on the network can read it, and a move that stops
+half-way leaves nothing behind. [More](#moving-to-another-computer)
 
 ### Any model, per agent
 
