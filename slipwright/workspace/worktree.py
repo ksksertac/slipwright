@@ -57,10 +57,12 @@ def worktree_path(worktrees_root: Path, job: Job) -> Path:
     return worktrees_root / job.id
 
 
-def create(job: Job, worktrees_root: Path) -> Path:
+def create(job: Job, worktrees_root: Path, start_point: str | None = None) -> Path:
     """Create the job's worktree and branch. Returns the worktree path.
 
-    Does not touch the store; the caller records ``worktree_path`` on the job.
+    The branch starts at ``start_point`` when one is given -- the host's trunk, just
+    fetched -- and at the checkout's own HEAD otherwise. Does not touch the store; the
+    caller records ``worktree_path`` on the job.
     """
     repo = job.repo_path
     path = worktree_path(worktrees_root, job)
@@ -74,7 +76,7 @@ def create(job: Job, worktrees_root: Path) -> Path:
     worktrees_root.mkdir(parents=True, exist_ok=True)
     with _repo_lock(repo):
         try:
-            git.run(repo, "worktree", "add", "-b", branch, str(path))
+            git.run(repo, "worktree", "add", "-b", branch, str(path), *filter(None, [start_point]))
         except git.GitError as exc:
             _cleanup_partial(repo, path, branch)
             raise WorktreeError(

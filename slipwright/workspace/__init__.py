@@ -44,10 +44,10 @@ class Workspace:
         """Seed the allocator with ports already held by persisted jobs (after a restart)."""
         self.ports.reserve(j.port for j in jobs if j.port is not None)
 
-    def create(self, job: Job) -> Job:
+    def create(self, job: Job, start_point: str | None = None) -> Job:
         port = self.ports.allocate()
         try:
-            job.worktree_path = worktree.create(job, self.worktrees_root)
+            job.worktree_path = worktree.create(job, self.worktrees_root, start_point)
         except WorktreeError:
             self.ports.release(port)
             raise
