@@ -91,7 +91,8 @@ slipwright/
                       and what a press may do; listeners.py runs the bots
 
 web/src/              React. i18n.tsx translates the interface, i18n/said.tsx the agents'
-                      own prose
+                      own prose; components/BuildRoom.tsx is the build room that opens
+                      over an opened lane while its phases run
 ```
 
 ## The rules that are easy to break
@@ -185,6 +186,11 @@ PR). The `test` check runs ruff and mypy only, and the macOS job is off. So run
 before every PR -- nothing else stands between a change and every installation. Both
 are marked `TEMPORARILY OFF` in `docker.yml`, one line each to turn back on.
 
+**SonarCloud reviews every PR too**, and its quality gate fails on a new *bug* even when
+`test` is green (#92: a `sort()` with no compare function). It is not a required check,
+but a red one is fixed before merging, not waved through. Its findings are public:
+`https://sonarcloud.io/api/issues/search?componentKeys=ksksertac_slipwright&pullRequest=<n>&resolved=false`.
+
 ## Configuration
 
 | Variable | Default | What it decides |
@@ -261,6 +267,18 @@ behaviour deliberately changed, rewrite it to state the new rule -- do not weake
   applies, builds, reviews and commits it. Never let a machine's answer skip that, and
   never wait on a machine that is not visibly at it -- unclaimed, quiet or failed, the call
   is taken back and the account's own model writes it (`providers/machine.py`).
+- **The machines' protocol grows by new calls, never new fields.** The worker's request
+  bodies are `extra="forbid"`: an unknown field refuses the whole poll, so a newer app
+  sending one would stop working against an older server. Protocol 2 added what a machine
+  *is* as its own call, `POST /api/worker/about` -- an older server answers 404 and the app
+  carries on. `MachineAbout` itself ignores fields it does not know, and is shown on the
+  machine's card, never routed on: work goes by capabilities. A protocol change is a new
+  `PROTOCOL` on both sides, `docs/machines-protocol.md`, and two PRs.
+- **The build room follows the Building stage.** It opens only inside an opened lane, while
+  the job is in `building.py`'s `LIVE` states (`BuildRoom.tsx` keeps the same list -- change
+  both), hides at every person's turn and comes back after it, and closes when the phases
+  are done. Closed by hand it stays closed until the next approval. It is polled every two
+  seconds, so `/api/jobs/{id}/building` reads the job with `details=False`.
 - **The relay is a door for machines only.** It is off until somebody turns it on; the
   host serves nothing through it but `/api/worker/`, refuses a replayed or stale request,
   and the relay reads none of it. The room and its keys are the installation's
@@ -335,6 +353,8 @@ owner's, never a member's.
 - **[README.md](README.md)** — what Slipwright is and how to run it. For people.
 - **[TASKS.md](TASKS.md)** — the build plan, phase by phase, with the design notes for
   each. The long-form *why* for decisions that predate this file.
-- **This file** — orientation and the rules that are easy to break.
+- **This file** — orientation and the rules that are easy to break. **Kept current**: a PR
+  that adds a module, a rule, a trap, a setting, a gate or a step in the workflow changes
+  this file in the same PR. A file that lags the code teaches the next agent the old way.
 - **The code** — comments carry the reasoning. When something here and a comment
   disagree, the comment is nearer the truth; fix this file.
