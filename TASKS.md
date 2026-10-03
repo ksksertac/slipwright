@@ -1760,6 +1760,8 @@ headless worker and the desktop app all follow it.
   frame, a replayed request and a path outside `/api/worker/` are refused
 
 ### T17.4 — The desktop app
+> Since moved to its own repository, ksksertac/slipwright-agent, with its own releases
+> and version; the paths below are as they were in `desktop/` here.
 **Done when**
 - [ ] `desktop/`: an Electron app for macOS, Windows and Linux, in Slipwright's own colours
   and mark. The left side is the machine's agents -- Backend, Web, Mobile, DevOps -- each
@@ -1777,6 +1779,7 @@ headless worker and the desktop app all follow it.
 - [ ] Pause, start at login, not on battery; packaged with electron-builder
 
 ### T17.5 — A server with no window: slipwright-agent
+> In ksksertac/slipwright-agent with the app (T17.4).
 Somebody reaches a build server over SSH and SFTP, not a desktop. It has no window and
 usually no keyring, so what the app keeps behind both comes from a file.
 **Done when**
@@ -1793,6 +1796,15 @@ usually no keyring, so what the app keeps behind both comes from a file.
   only when asked
 - [x] Tests (`desktop/test/cli-settings.test.ts`), and a run against a real server with a
   stand-in `claude`: paired from the code, took a call, answered it
+
+### T17.6 — The app lives on its own
+**Done when**
+- [x] `desktop/` moves, with its history, to ksksertac/slipwright-agent (public): every
+  merge there is its next patch, built for Windows, macOS and Linux and released with
+  `slipwright-agent.cjs` and the `latest*.yml` the app updates itself from
+- [x] Each request says the protocol's number (`x-slipwright-protocol`); a server that
+  no longer speaks it answers 426 and the app says to update. Through the relay too
+- [x] The Machines page links to the app's latest release
 
 ### Order
 T17.1 and T17.2 on the server first: a machine on the same network writes phases. T17.3

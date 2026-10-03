@@ -2075,6 +2075,8 @@ export const TR: Record<string, string> = {
   "Connect a machine": "Makine bağla",
   "Make a code and paste it into the app": "Bir kod oluştur ve uygulamaya yapıştır",
   "With the Slipwright Agent app": "Slipwright Agent uygulamasıyla",
+  "Download:": "İndir:",
+  "Server (no window)": "Sunucu (ekransız)",
   "Open the app, go to Slipwright team and paste this code:":
     "Uygulamayı aç, Slipwright ekibi sayfasına git ve bu kodu yapıştır:",
   "Or without the app, in a terminal": "Ya da uygulama olmadan, terminalde",
