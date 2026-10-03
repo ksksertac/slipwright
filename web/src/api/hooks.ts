@@ -5,6 +5,7 @@ import {
   api,
   type ActivityItem,
   type Attachment,
+  type BuildRoom,
   type ChannelName,
   type ChatGPTLogin,
   type CheckoutPath,
@@ -462,6 +463,18 @@ export function useJob(id: string, refetchInterval?: number) {
     queryKey: keys.job(id),
     queryFn: () => api.get<Job>(`/api/jobs/${id}`),
     refetchInterval,
+  });
+}
+
+/** The build room (components/BuildRoom.tsx): the phases as they are written and built,
+ * and who writes them. Under the job's key, so a job event refreshes it; polled besides,
+ * because a machine saying "3/7 files" is not an event. */
+export function useBuildRoom(id: string, open: boolean) {
+  return useQuery({
+    queryKey: [...keys.job(id), "building"] as const,
+    queryFn: () => api.get<BuildRoom>(`/api/jobs/${id}/building`),
+    enabled: open,
+    refetchInterval: open ? 2000 : false,
   });
 }
 
