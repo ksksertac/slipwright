@@ -47,6 +47,7 @@ import { ConfirmModal } from "../components/Modal";
 import { DeploymentGate } from "../components/DeploymentGate";
 import { CarryOnAction, PausedPanel, PauseAction, ReconcileGate } from "../components/Pause";
 import { ProfileForm } from "../components/ProfileForm";
+import { Diagram } from "../components/Diagram";
 import { StackPanel } from "../components/StackPanel";
 import { useToast } from "../components/Toast";
 import {
@@ -532,6 +533,12 @@ function ArchitectureGate({ job }: { job: Job }) {
   return (
     <div style={{ marginTop: 12 }}>
       {plan.summary && <p>{say(plan.summary)}</p>}
+      {plan.diagram && (
+        <>
+          <h3>{tx("Architecture")}</h3>
+          <Diagram source={plan.diagram} />
+        </>
+      )}
       <StackPanel job={job} editable />
       {plan.decisions && plan.decisions.length > 0 && (
         <>

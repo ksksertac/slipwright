@@ -88,6 +88,11 @@ const RULES: Rule[] = [
     re: /^architect: plan ready — (\d+) phases, (\d+) decisions$/,
     out: "Plan ready: {1} phases, {2} decisions",
   },
+  { re: /^architect: README written — (.*)$/, out: "README written: {1}", prose: [1] },
+  {
+    re: /^architect: the README could not be written; the pull request goes without it$/,
+    out: "The README could not be written; the pull request goes without it",
+  },
   {
     re: /^\w+ phase (\d+)\/(\d+), fix attempt (\d+): (.*) \((\d+) files(?: in \d+ parts)?\)$/,
     out: "Phase {1}/{2}, build fix {3}: {4} ({5} files)",

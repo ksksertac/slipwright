@@ -14,8 +14,8 @@ from typing import Any
 from slipwright.gates import toolchains
 from slipwright.invoke import RoleResult, invoke_role
 from slipwright.providers import ModelProvider
-from slipwright.roles.common import base_context, require_worktree, scan_worktree
-from slipwright.roles.results import ArchitectResult, PlanPhase
+from slipwright.roles.common import base_context, project_facts, require_worktree, scan_worktree
+from slipwright.roles.results import ArchitectResult, PlanPhase, ReadmeResult
 from slipwright.roles.specialists import Domain
 from slipwright.schemas.job import Job
 from slipwright.schemas.profile import Profile, RoleName
@@ -97,6 +97,17 @@ You are the Software Architect. Read the repository (`worktree`) and the approve
    in `summary`. A task too large for one answer may take several consecutive phases, each
    a part of it with the same `task_id`. A plan that leaves a task out is not reviewable
    and is thrown away.
+   The project's `README.md` is yours, and you write it after the last phase is built:
+   no phase lists it among its files, and no phase is a report. Findings, audits and
+   checklists a task asks for go in their own files under `docs/`, never in the README.
+5. `diagram` — the architecture as a Mermaid `flowchart TD` (top to bottom: it is shown
+   in a narrow panel, where a long left-to-right chain shrinks to nothing): one
+   node per part of the product (the app, its screens or modules, services, stores,
+   external systems and devices), labelled in the project's language with what it is
+   written in, and an arrow for each thing that talks to another, labelled with how
+   (HTTP, Bluetooth, a queue, a file). Group a part's insides in a `subgraph`. Draw what
+   this plan will build, not a generic picture; a dozen nodes is plenty. Give the source
+   only, without a code fence. It is shown at the approval gate and in the README.
 If `feedback` is present, a human rejected your previous plan (`previous_plan`); address
 every point in it. If a `jira` section is present you may add Jira actions for existing
 issues. If a `standards` section is present its sections are binding unless they
@@ -157,6 +168,76 @@ def run(
     context["can_build_here"] = toolchains.buildable()
     kwargs = {} if timeout_s is None else {"timeout_s": timeout_s}
     return invoke_role(RoleName.ARCHITECT, seed, context, provider=provider, **kwargs)
+
+
+README_INSTRUCTIONS = """\
+You are the Software Architect, and the development you planned is built. Write the
+project's `README.md` -- the page a person sees first when they open the repository. It
+describes the product as it now stands, for somebody who has never seen it: what it is,
+what it looks like inside, and how to run it. It is not a report of this development, an
+audit, a checklist or a log of what was verified; nothing about agents, phases, Jira keys
+or what could not be confirmed belongs in it.
+
+Read `worktree` (the tree and the manifests), `plan`, `project` and `existing_readme`, and
+write, in this order:
+1. A title and a one-line tagline, then a row of shields.io badges for the language, the
+   framework(s) in `plan.stack` and the license if the tree has one
+   (`![React Native](https://img.shields.io/badge/React_Native-0.74-61DAFB?logo=react)`).
+2. A short paragraph on what the product does and for whom, then its features as a
+   bulleted list, each with a fitting emoji -- taken from what the code does, never from
+   what was only planned.
+3. `## Architecture`: `plan.diagram` in a ```mermaid block (correct it if it no longer
+   matches the tree, draw one if there is none), then a few sentences on how the parts
+   fit together.
+4. A tech stack table: the part, what it is written in, and why.
+5. The project structure: the main folders as a short annotated tree, not every file.
+   Leave out build output (`dist/`, `build/`) as if it were not there.
+6. Getting started: prerequisites, then the exact commands to install, build, test and
+   run from `project` (the run command's `{port}` filled with a real port), each in a
+   fenced block. A mobile app says how to start it on a device or an emulator.
+7. Anything a person must set themselves (environment variables, keys, permissions), and
+   a link to `deployment/README.md` if the tree has it.
+Headings are in the project's language like the rest of the prose. Use headings, tables
+and fenced blocks so it reads well on GitHub, and keep to what is true of this
+repository. If `existing_readme` holds something a person wrote that is still true -- a
+license, credits, contact -- keep it."""
+
+
+def write_readme(
+    job: Job,
+    profile: Profile,
+    *,
+    existing: str = "",
+    provider: ModelProvider | None = None,
+    timeout_s: float | None = None,
+    jira: dict[str, Any] | None = None,
+    standards: dict[str, Any] | None = None,
+) -> RoleResult:
+    """The README, once every phase is built: the Architect knows what the parts are and
+    why, and it is the one role that sees the whole of it. Left to the phases, the README
+    became whatever the last docs task needed -- a project's front page that read as an
+    audit of what could not be verified, with nothing about what the app is."""
+    worktree = require_worktree(job)
+    context = base_context(job, instructions=README_INSTRUCTIONS, standards=standards)
+    plan = job.data.plan or {}
+    context["plan"] = {
+        "summary": plan.get("summary", ""),
+        "stack": plan.get("stack", []),
+        "decisions": plan.get("decisions", []),
+        "diagram": plan.get("diagram", ""),
+    }
+    context["project"] = project_facts(profile)
+    context["worktree"] = scan_worktree(worktree)
+    context["existing_readme"] = existing
+    kwargs = {} if timeout_s is None else {"timeout_s": timeout_s}
+    return invoke_role(
+        RoleName.ARCHITECT,
+        profile,
+        context,
+        provider=provider,
+        output_schema_cls=ReadmeResult,
+        **kwargs,
+    )
 
 
 def accepted_profile(result: ArchitectResult, seed: Profile) -> Profile:
@@ -234,9 +315,11 @@ def phase_task_map(phases: Sequence[PlanPhase], task_ids: list[str]) -> dict[str
 
 __all__ = [
     "INSTRUCTIONS",
+    "README_INSTRUCTIONS",
     "accepted_profile",
     "dependency_problem",
     "kept_phases",
     "phase_task_map",
     "run",
+    "write_readme",
 ]

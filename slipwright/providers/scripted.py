@@ -32,14 +32,19 @@ ASIDES: tuple[tuple[str, str], ...] = (
     ("gate_triage", "was the failing test itself wrong"),
     ("reading", "Read the file in `file`"),
     ("reconcile", "that had not been built yet"),
+    ("readme", "the development you planned is built"),
 )
+
+#: The README the Architect writes before the pull request. Every development that reaches
+#: DevOps asks for one, so a script answers it unless a test says otherwise.
+README = {"summary": "scripted README", "readme": "# Scripted\n\nWhat it is.\n"}
 
 
 class ScriptedProvider:
     def __init__(self, replies: dict[RoleName, Reply] | None = None) -> None:
         self.replies: dict[RoleName, Reply] = dict(replies or {})
         # keyed by the names in ``ASIDES`` rather than by role
-        self.discovery: dict[str, Reply] = {}
+        self.discovery: dict[str, Reply] = {"readme": README}
         self.requests: list[ModelRequest] = []
         self.translation_tag = "translated"
 
@@ -190,6 +195,7 @@ def canned(profile: Profile) -> ScriptedProvider:
         # nothing to deploy: the gate is skipped, so a scripted pipeline still walks
         # end to end. A test that wants the gate replaces this with a real target.
         "deploy": {"summary": "scripted: nothing to deploy", "target": "none", "scripts": []},
+        "readme": README,
         "deploy_write": {
             "summary": "scripted deployment files",
             "changes": [{"path": "deployment/README.md", "content": "# Deployment\n\nScripted.\n"}],

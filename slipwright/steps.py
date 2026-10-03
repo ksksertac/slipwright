@@ -402,7 +402,18 @@ def _architecture_groups(job: Job) -> list[StepGroup]:
                 children=[StepItem(kind="file", title=f) for f in files],
             )
         )
+    # the drawing comes first: it is what the rest of the panel describes. ``detail`` is
+    # the Mermaid source and the page draws it; a plan from before drawings has none, and
+    # the group, with no items and nothing to say when empty, is left out
+    diagram = str(plan.get("diagram") or "").strip()
+    drawing = [StepItem(kind="diagram", title="Architecture", detail=diagram)] if diagram else []
     return [
+        StepGroup(
+            key="diagram",
+            label="Architecture",
+            note="The parts of the product and how they talk to each other.",
+            items=drawing,
+        ),
         StepGroup(
             key="decisions",
             label="Decisions",
@@ -749,7 +760,8 @@ def _gate_groups(job: Job, card: StepCard) -> list[StepGroup]:
     if card.key == "backlog_gate":
         material = [_backlog_groups(job)[0]]
     elif card.key == "architecture_gate":
-        material = _architecture_groups(job)[:3]
+        # the drawing, the decisions, the setup and the phases; not the Jira mirror
+        material = _architecture_groups(job)[:4]
     elif card.key == "design_gate":
         # the screens themselves, not only the yes: "what did I approve" is asked at the
         # gate long after the Designer's own card has stopped being the obvious place

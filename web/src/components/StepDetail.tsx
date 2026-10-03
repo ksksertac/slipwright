@@ -12,6 +12,7 @@ import type { StepBadge, StepDetail, StepGroup, StepItem } from "../api/client";
 import { useStepDetail } from "../api/hooks";
 import { AgentTalk } from "./AgentTalk";
 import { Detail } from "./Detail";
+import { Diagram } from "./Diagram";
 import { IconCheck, IconChevron } from "./icons";
 import { Loading, timeAgo } from "./ui";
 import { useT } from "../i18n";
@@ -190,11 +191,13 @@ function Group({ group }: { group: StepGroup }) {
     <section className="step-group">
       <div className="step-group-head">
         <h4>{tx(group.label)}</h4>
-        <span className="faint tiny">{group.items.length || ""}</span>
+        {group.key !== "diagram" && <span className="faint tiny">{group.items.length || ""}</span>}
       </div>
       {group.note && <div className="muted small">{tx(group.note)}</div>}
       {group.items.length === 0 ? (
         <div className="step-empty">{tx(group.empty)}</div>
+      ) : group.key === "diagram" ? (
+        <Diagram source={group.items[0]!.detail} />
       ) : (
         <ul className="step-items">
           {foldRetries(group.items).map((item, i) => (

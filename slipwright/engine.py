@@ -114,6 +114,7 @@ from slipwright.roles.results import (
     PlanPhase,
     POResult,
     QAResult,
+    ReadmeResult,
     Recommendation,
     ReconcileResult,
     StackChoice,
@@ -421,6 +422,10 @@ class InvalidEdit(ValueError):
 #: How much of a call's answer the job keeps, for the page that follows it as it runs.
 OUTPUT_KEPT = 1500
 SUMMARY_KEPT = 400
+
+#: How much of the README already there the Architect reads before writing it again: enough
+#: for a person's license and credits, not a 40-page audit sent back to be rewritten.
+MAX_EXISTING_README = 20_000
 
 
 def _clip(text: object, limit: int) -> str | None:
@@ -2243,6 +2248,8 @@ class Engine:
             "summary": str(plan.get("summary", current.get("summary", ""))),
             "stack": [c.model_dump(mode="json") for c in stack],
             "decisions": [str(d) for d in decisions],
+            # the drawing is not edited at the gate; an edit of the phases keeps it
+            "diagram": str(current.get("diagram") or ""),
             "phases": [p.model_dump(mode="json") for p in phases],
             "breakdown": breakdown.model_dump(mode="json"),
         }
@@ -5016,6 +5023,7 @@ class Engine:
             "summary": result.output.summary,
             "stack": [s.model_dump(mode="json") for s in result.output.stack],
             "decisions": result.output.decisions,
+            "diagram": result.output.diagram,
             "phases": [p.model_dump(mode="json") for p in phases],
             "breakdown": breakdown.model_dump(mode="json"),
         }
@@ -6356,6 +6364,55 @@ class Engine:
         job.history = self.store.get(job.id).history
         return None
 
+    def _write_readme(self, job: Job) -> Job:
+        """The Architect writes the project's README once every phase is built, and the
+        pull request carries it.
+
+        Nobody owned the README before: a docs task wrote into it whatever it was asked to
+        record, and a finished React Native app went out with a front page that was an
+        audit of what could not be verified, and not a word on what the app is. A README
+        that cannot be written is not worth failing a built development over -- the pull
+        request goes without it, and the history says so."""
+        profile = self._profile(job)
+        worktree = require_worktree(job)
+        readme = worktree / "README.md"
+        existing = readme.read_text(encoding="utf-8", errors="replace") if readme.is_file() else ""
+        result = self._invoke(
+            RoleName.ARCHITECT,
+            architect.write_readme,
+            job,
+            profile=profile,
+            existing=existing[:MAX_EXISTING_README],
+        )
+        job.data.readme_written = True
+        self.store.save(job)
+        if not result.ok or not isinstance(result.output, ReadmeResult):
+            reason = result.error.message if result.error else "no README in the answer"
+            self.store.update_state(
+                job.id,
+                job.state,
+                note=(
+                    "architect: the README could not be written; the pull request goes "
+                    "without it"
+                ),
+                detail=reason,
+            )
+            return self.store.get(job.id)
+        # LF whatever the platform: a README written on Windows came back CRLF in a
+        # repository that is LF everywhere else
+        readme.write_text(result.output.readme.rstrip() + "\n", encoding="utf-8", newline="\n")
+        g.stage_all(worktree)
+        diff = g.staged_diff(worktree)
+        if g.commit(worktree, "slipwright: README"):
+            self._push(job, worktree, "architect: README")
+        self.store.update_state(
+            job.id,
+            job.state,
+            note=f"architect: README written — {result.output.summary}",
+            detail=diff or "(no changes)",
+        )
+        return self.store.get(job.id)
+
     def _devops(self, job: Job) -> Job:
         profile = self._profile(job)
         worktree = require_worktree(job)
@@ -6367,6 +6424,8 @@ class Engine:
         if failed is not None:
             return failed
         job = self.store.get(job.id)
+        if job.data.pr_url is None and not job.data.readme_written:
+            job = self._write_readme(job)
 
         if job.data.pr_url is None:
             result = self._invoke(

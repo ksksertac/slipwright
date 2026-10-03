@@ -3350,6 +3350,12 @@
             "title": "Qa Stage",
             "type": "integer"
           },
+          "readme_written": {
+            "default": false,
+            "description": "The Architect has written the project's README for this development, or tried and could not: it is asked once, before the pull request.",
+            "title": "Readme Written",
+            "type": "boolean"
+          },
           "recommendation": {
             "anyOf": [
               {
@@ -3541,6 +3547,7 @@
           "qa_diagnosis",
           "qa_gate_fixes",
           "qa_stage",
+          "readme_written",
           "recommendation",
           "recommendation_route",
           "reconcile",
