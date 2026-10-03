@@ -522,6 +522,8 @@ export function JiraPage({ state }: { state: AppState }) {
 export function SettingsPage({ state }: { state: AppState }) {
   const s = state.settings;
   const [max, setMax] = useState(String(s.maxConcurrent));
+  const [withSecrets, setWithSecrets] = useState(false);
+  const [exported, setExported] = useState<string | null>(null);
   const toggles: [keyof typeof s, string, string][] = [
     ["runBuilds", t("Run build and test commands on this machine"), t("The commands the agents wrote run in a folder of their own, with a restricted environment.")],
     ["startAtLogin", t("Start when the computer starts"), t("Runs in the background with a tray icon.")],
@@ -565,6 +567,35 @@ export function SettingsPage({ state }: { state: AppState }) {
             <option value="light">{t("Light")}</option>
             <option value="dark">{t("Dark")}</option>
           </select>
+        </div>
+      </div>
+      {/* a server reached over SSH has no window: what is set up here goes there as a file */}
+      <div className="card form" style={{ marginTop: 16 }}>
+        <div className="sec">
+          <h3>{t("Run on a server")}</h3>
+          <p>
+            {t(
+              "On a server you reach over SSH, run slipwright-agent in a folder with a settings.json beside it. This saves the agents and models chosen here as that file; upload it, put a fresh connection code in \"code\" and start it.",
+            )}
+          </p>
+        </div>
+        <div className="toggle-row">
+          <div className="sec">
+            <h3>{t("Put the keys and tokens in the file too")}</h3>
+            <p>{t("Otherwise they are written as env: names to set on the server, and no secret leaves this machine.")}</p>
+          </div>
+          <Switch on={withSecrets} label={t("Put the keys and tokens in the file too")} onChange={setWithSecrets} />
+        </div>
+        <div className="row-btns">
+          <button
+            className="btn primary"
+            onClick={() =>
+              void window.agent.exportServerSettings(withSecrets).then((r) => setExported(r.ok ? r.message : null))
+            }
+          >
+            {t("Save settings.json")}
+          </button>
+          {exported && <span className="muted small">{t("Saved: {path}", { path: exported })}</span>}
         </div>
       </div>
     </>

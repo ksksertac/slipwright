@@ -4,7 +4,7 @@
 // window is closed would be no use to anybody.
 
 import { execFile } from "node:child_process";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { join } from "node:path";
 import {
@@ -23,6 +23,7 @@ import {
 } from "electron";
 import type { AgentId, AgentSettings, AppState, Connection, Detected, HistoryEntry, Result, Secrets, Settings } from "@shared/types";
 import { AGENTS } from "@shared/types";
+import { fromApp } from "../cli/settings";
 import { capabilities as deriveCapabilities } from "./capabilities";
 import { pair, Unpaired, WorkerClient } from "./client";
 import { CodeError } from "./code";
@@ -424,6 +425,33 @@ function ipc(): void {
   ipcMain.handle("saveSource", (_e, github: string | null, user: string | null, bitbucket: string | null) => verifySource(github, user, bitbucket));
   ipcMain.handle("saveJira", (_e, site: string, email: string, token: string | null) => verifyJira(site, email, token));
   ipcMain.handle("detect", () => redetect());
+  ipcMain.handle("exportServerSettings", async (_e, withSecrets: boolean): Promise<Result> => {
+    const picked = await dialog.showSaveDialog(window!, {
+      defaultPath: "settings.json",
+      filters: [{ name: "JSON", extensions: ["json"] }],
+    });
+    if (picked.canceled || !picked.filePath) return { ok: false, message: "" };
+    const file = fromApp(
+      {
+        agents: store.settings.agents,
+        maxConcurrent: store.settings.maxConcurrent,
+        runBuilds: store.settings.runBuilds,
+        bitbucketUser: store.settings.bitbucket.user,
+        jira: store.settings.jira,
+      },
+      {
+        anthropic: store.secret("anthropic"),
+        openai: store.secret("openai"),
+        github: store.secret("github"),
+        bitbucket: store.secret("bitbucket"),
+        jira: store.secret("jira"),
+      },
+      "",
+      withSecrets === true,
+    );
+    writeFileSync(picked.filePath, `${JSON.stringify(file, null, 2)}\n`, { mode: 0o600 });
+    return { ok: true, message: picked.filePath };
+  });
   ipcMain.handle("chooseWorkDir", async () => {
     const picked = await dialog.showOpenDialog(window!, { properties: ["openDirectory", "createDirectory"], defaultPath: store.settings.workDir });
     if (picked.canceled || !picked.filePaths[0]) return null;

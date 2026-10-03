@@ -22,6 +22,7 @@ const api: AgentApi = {
   saveJira: (site, email, token) => ipcRenderer.invoke("saveJira", site, email, token),
   detect: () => ipcRenderer.invoke("detect"),
   chooseWorkDir: () => ipcRenderer.invoke("chooseWorkDir"),
+  exportServerSettings: (withSecrets) => ipcRenderer.invoke("exportServerSettings", withSecrets),
 };
 
 contextBridge.exposeInMainWorld("agent", api);

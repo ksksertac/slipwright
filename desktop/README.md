@@ -74,6 +74,80 @@ itself: the macOS build in particular needs a Mac.
   (`CSC_LINK`, `CSC_KEY_PASSWORD`) removes the warning; an EV certificate removes it at once.
 - **Linux.** Nothing to sign; the AppImage needs `chmod +x`.
 
+## On a server: slipwright-agent
+
+A server reached over SSH has no window and usually no keyring, so the app's worker also
+comes as one file with no window at all: `out/cli/slipwright-agent.cjs`, built by
+`npm run build:cli`. It needs Node 20 or newer and nothing else -- no `npm install`, no
+Electron, no Python. It does what the app does, and reads what the app keeps behind its
+window from **`settings.json` in the folder it is run from**.
+
+```bash
+mkdir ~/slipwright && cd ~/slipwright        # upload slipwright-agent.cjs here (SFTP)
+node slipwright-agent.cjs init               # writes settings.json to fill in
+# put the code from Slipwright (Settings → Machines → Connect a machine) in "code",
+# choose each agent's model; upload the file again whenever you like
+node slipwright-agent.cjs check              # models found, agents, tokens, pairing
+node slipwright-agent.cjs                    # pairs the first time, then takes work
+```
+
+`settings.json`:
+
+```json
+{
+  "code": "SW-…",
+  "name": "build-server-1",
+  "max_concurrent": 1,
+  "work_dir": "./work",
+  "run_builds": true,
+  "agents": {
+    "backend": { "enabled": true, "model": "claude-code:sonnet" },
+    "web":     { "enabled": true, "model": "codex" },
+    "mobile":  { "enabled": false },
+    "devops":  { "enabled": false }
+  },
+  "keys":   { "anthropic": "env:ANTHROPIC_API_KEY", "openai": "" },
+  "source": { "github_token": "env:GITHUB_TOKEN", "bitbucket_user": "", "bitbucket_app_password": "" },
+  "jira":   { "site": "acme.atlassian.net", "email": "you@acme.com", "token": "env:JIRA_TOKEN" }
+}
+```
+
+- A model is `claude-code`, `codex`, `anthropic` or `openai`, optionally `:<model>`. Claude
+  Code and Codex must be installed and signed in on the server (`claude`, `codex login`).
+- Any secret may be `"env:NAME"`, read from the environment, so it can live in a systemd
+  unit rather than the file. A file holding keys should be `chmod 600`; the program warns
+  when others can read it.
+- The pairing is kept in **`slipwright-agent.state.json`** beside it, readable by its owner
+  only, so uploading a new `settings.json` never unpairs the machine. The code is used once;
+  delete the state file to pair again.
+- `settings.json` is read again within seconds of changing: switch an agent off or change
+  its model without a restart. A file that does not parse is reported and the last good
+  one is kept.
+- Stopping it (Ctrl+C, `systemctl stop`) hands back what it holds; the server writes that
+  phase itself.
+- The app writes this file for you: **Ayarlar → Sunucuda çalıştır → settings.json olarak
+  kaydet**, with or without the keys.
+
+To keep it running, a systemd unit (`/etc/systemd/system/slipwright-agent.service`):
+
+```ini
+[Unit]
+Description=Slipwright Agent
+After=network-online.target
+
+[Service]
+User=slipwright
+WorkingDirectory=/home/slipwright/slipwright
+ExecStart=/usr/bin/node /home/slipwright/slipwright/slipwright-agent.cjs
+Environment=ANTHROPIC_API_KEY=sk-ant-…
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Run it as a user of its own: the build commands it runs are written by a model.
+
 ## What it does with a phase
 
 1. Polls with what it can be given: `ios` / `android` when found (and builds are on), and

@@ -61,6 +61,7 @@ export class Worker extends EventEmitter {
   private stopped = true;
   private wake: (() => void) | null = null;
   private loop: Promise<void> | null = null;
+  private handling = new Set<Promise<void>>();
 
   constructor(private readonly host: WorkerHost) {
     super();
@@ -83,6 +84,8 @@ export class Worker extends EventEmitter {
     this.kick();
     for (const r of this.running.values()) r.abort.abort();
     await this.loop;
+    // what was in hand has said so to the server before the process goes
+    await Promise.allSettled([...this.handling]);
   }
 
   /** Something changed (a setting, a task finished): look again now, not after a sleep. */
@@ -114,7 +117,11 @@ export class Worker extends EventEmitter {
         const task = await client.poll(capabilities, this.host.name());
         this.host.connected(true);
         pause = 1000;
-        if (task) void this.handle(client, task);
+        if (task) {
+          const handled = this.handle(client, task).catch(() => undefined);
+          this.handling.add(handled);
+          void handled.finally(() => this.handling.delete(handled));
+        }
       } catch (error) {
         if (error instanceof Unpaired) {
           this.host.unpaired(error.message);
@@ -307,7 +314,14 @@ export class Worker extends EventEmitter {
       return this.entry(view, "answered", answer.model);
     } catch (error) {
       clearInterval(ticker);
-      if (error instanceof Cancelled || abort.signal.aborted) return this.entry(view, "taken-back", null);
+      if (error instanceof Cancelled || abort.signal.aborted) {
+        // stopped by its owner, not taken back by the server: say so, so the server writes
+        // the phase now rather than after a minute of waiting on a machine that is gone
+        if (this.stopped) {
+          await client.fail(task.id, { message: "the machine was stopped", kind: "error" }).catch(() => undefined);
+        }
+        return this.entry(view, "taken-back", this.stopped ? "stopped" : null);
+      }
       if (error instanceof Unpaired) throw error;
       const failure = error instanceof ModelFailure ? error : new ModelFailure((error as Error).message, "error");
       say(failure.message, "bad");

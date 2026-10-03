@@ -174,6 +174,14 @@ const tr: Record<string, string> = {
   "At most this many tasks at once": "Aynı anda en fazla kaç iş",
   "Work folder": "Çalışma klasörü",
   Theme: "Tema",
+  "Run on a server": "Sunucuda çalıştır",
+  'On a server you reach over SSH, run slipwright-agent in a folder with a settings.json beside it. This saves the agents and models chosen here as that file; upload it, put a fresh connection code in "code" and start it.':
+    'SSH ile bağlandığın bir sunucuda slipwright-agent, yanındaki settings.json ile çalışır. Bu düğme burada seçtiğin ajanları ve modelleri o dosya olarak kaydeder; sunucuya yükle, "code" alanına yeni bir bağlantı kodu yaz ve başlat.',
+  "Put the keys and tokens in the file too": "Anahtarları ve token'ları da dosyaya yaz",
+  "Otherwise they are written as env: names to set on the server, and no secret leaves this machine.":
+    "Yazılmazsa sunucuda tanımlanacak env: adları olarak yazılır ve hiçbir gizli bilgi bu bilgisayardan çıkmaz.",
+  "Save settings.json": "settings.json olarak kaydet",
+  "Saved: {path}": "Kaydedildi: {path}",
   System: "Sistem",
   Light: "Açık",
   Dark: "Koyu",

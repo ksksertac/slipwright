@@ -458,13 +458,16 @@ class WorkerStoreMixin:
                 if won:
                     row = one(
                         conn.execute(
-                            select(worker_calls.c.request_json).where(
+                            select(worker_calls.c.request_json, worker_calls.c.phase).where(
                                 worker_calls.c.id == candidate["id"]
                             )
                         )
                     )
                     assert row is not None
-                    return WorkerCall(id=candidate["id"], **json.loads(row["request_json"]))
+                    request = json.loads(row["request_json"])
+                    # the row's own columns are the record; the request only repeats them
+                    request.setdefault("phase", row["phase"])
+                    return WorkerCall(id=candidate["id"], **request)
         return None
 
     def worker_call_row(self, call_id: str) -> dict[str, Any] | None:

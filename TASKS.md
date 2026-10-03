@@ -1776,6 +1776,24 @@ headless worker and the desktop app all follow it.
 - [ ] Builds what this machine can (Xcode, Android SDK), as `slipwright worker` does
 - [ ] Pause, start at login, not on battery; packaged with electron-builder
 
+### T17.5 — A server with no window: slipwright-agent
+Somebody reaches a build server over SSH and SFTP, not a desktop. It has no window and
+usually no keyring, so what the app keeps behind both comes from a file.
+**Done when**
+- [x] `desktop/out/cli/slipwright-agent.cjs` (`npm run build:cli`): the app's worker, models
+  and relay in one file; Node 20 and nothing else on the server
+- [x] It reads `settings.json` in the folder it is run from (or `--settings`): the code,
+  the name, each agent's model, keys, source and Jira tokens. A secret may be `"env:NAME"`;
+  a file others can read is warned about
+- [x] The pairing is kept apart in `slipwright-agent.state.json` (0600), so uploading a new
+  settings.json never unpairs it; the file is read again within seconds of changing
+- [x] `init` writes a template, `check` says what it would do, no command works until stopped;
+  stopping tells the server, which writes the phase itself at once
+- [x] The app saves its own choices as that file (*Ayarlar → Sunucuda çalıştır*), the keys
+  only when asked
+- [x] Tests (`desktop/test/cli-settings.test.ts`), and a run against a real server with a
+  stand-in `claude`: paired from the code, took a call, answered it
+
 ### Order
 T17.1 and T17.2 on the server first: a machine on the same network writes phases. T17.3
 then takes it past the router, and T17.4 puts it in front of somebody who will never open

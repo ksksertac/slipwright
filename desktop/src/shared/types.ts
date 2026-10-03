@@ -139,4 +139,6 @@ export interface AgentApi {
   saveJira(site: string, email: string, token: string | null): Promise<Result>;
   detect(): Promise<Detected>;
   chooseWorkDir(): Promise<string | null>;
+  /** This machine's choices as a settings.json for a server (slipwright-agent). */
+  exportServerSettings(withSecrets: boolean): Promise<Result>;
 }

@@ -18,7 +18,8 @@
     "dist": "npm run build && electron-builder",
     "dist:win": "npm run build && electron-builder --win",
     "dist:mac": "npm run build && electron-builder --mac",
-    "dist:linux": "npm run build && electron-builder --linux"
+    "dist:linux": "npm run build && electron-builder --linux",
+    "build:cli": "node scripts/build-cli.mjs"
   },
   "dependencies": {
     "tar": "^7.4.3",
@@ -44,6 +45,7 @@
     "eslint-plugin-react-hooks": "^7.0.0",
     "globals": "^16.0.0",
     "@fontsource/inter": "^5.2.0",
-    "@fontsource/jetbrains-mono": "^5.2.0"
+    "@fontsource/jetbrains-mono": "^5.2.0",
+    "esbuild": "^0.25.0"
   }
 }
