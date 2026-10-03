@@ -82,9 +82,11 @@ def test_every_phase_is_pushed_and_the_pull_request_is_a_draft_from_the_first(
     job = _drive(engine, engine.approve(engine.approve(job.id).id))
 
     assert job.state is JobState.DONE
-    # a push per phase, one for the tests, then DevOps' own before it finishes the PR
+    # a push per phase, one for the tests, one for the Architect's README, then DevOps' own
+    # before it finishes the PR
     assert host.calls[:2] == ["push", "draft:add a health page"]
-    assert len(set(host.pushed)) == 4  # three phases and the tests, each a commit of its own
+    # three phases, the tests and the README, each a commit of its own
+    assert len(set(host.pushed)) == 5
     finished = [c for c in host.calls if c.startswith(("finish:", "open:"))]
     assert len(finished) == 1 and finished[0].startswith("finish:")  # the draft, not a 2nd PR
     assert job.data.pr_url == job.data.draft_pr_url == "https://example.test/pr/7"
