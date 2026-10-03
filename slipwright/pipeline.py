@@ -315,6 +315,18 @@ def _phase_cards(job: Job, r: _Reader) -> list[StepCard]:
     if not phases:
         return [StepCard(key="develop", label="Develop", status=StepStatus.PENDING)]
     titles = _task_titles(job)
+    # a re-planned development has history for phases of earlier plans under the same
+    # numbers: this plan's new phases are read only from where it was made, its kept ones
+    # from the start
+    kept = int(plan.get("kept") or 0) if isinstance(plan.get("kept"), int) else 0
+    made = max(
+        (
+            i
+            for i, t in enumerate(r.history)
+            if (t.note or "").startswith(("architect: plan ready", "architect: re-planned"))
+        ),
+        default=0,
+    )
     past_dev = job.state in (
         JobState.QA,
         JobState.AWAITING_TEST_APPROVAL,
@@ -333,21 +345,23 @@ def _phase_cards(job: Job, r: _Reader) -> list[StepCard]:
             if design_gate is not None:
                 cards.append(design_gate)
         role = specialist_for(str(phase.get("domain") or "general"))
+        since = 0 if number <= kept else made
         outputs = [
             i
             for i, t in enumerate(r.history)
-            if (m := _PHASE_NOTE.match(t.note or "")) and int(m.group(2)) == number
+            if i >= since and (m := _PHASE_NOTE.match(t.note or "")) and int(m.group(2)) == number
         ]
         gate_logs = [
             i
             for i, t in enumerate(r.history)
-            if (m := (_GATE_PASSED.match(t.note or "") or _GATE_FAILED.match(t.note or "")))
+            if i >= since
+            and (m := (_GATE_PASSED.match(t.note or "") or _GATE_FAILED.match(t.note or "")))
             and int(m.group(1)) == number
         ]
         passed = [
             t
-            for t in r.history
-            if (m := _GATE_PASSED.match(t.note or "")) and int(m.group(1)) == number
+            for i, t in enumerate(r.history)
+            if i >= since and (m := _GATE_PASSED.match(t.note or "")) and int(m.group(1)) == number
         ]
         start: datetime | None = None
         end: datetime | None = None
