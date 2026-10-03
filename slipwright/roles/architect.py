@@ -35,8 +35,13 @@ You are the Software Architect. Read the repository (`worktree`) and the approve
    installed `gradle` (not `./gradlew`, unless the repository already commits
    `gradle/wrapper/gradle-wrapper.jar`: that file is binary and cannot be written), on an
    Android Gradle Plugin version that runs on that Gradle, with a `compileSdk` among the
-   listed platforms. If what the project needs is not there, say so in `summary` rather
-   than working around it. Write commands that can survive all that. In particular:
+   listed platforms. A React Native or Expo app compiles native code: pin its
+   `ndkVersion` (and the CMake version, where the project names one) to the ones
+   `toolchains` lists, in the Android project's own Gradle files, rather than leaving
+   the framework's default -- a default that is not installed stops every build. Flutter
+   is not installed: a new mobile app is written in React Native unless the repository
+   already holds a Flutter one. If what the project needs is not there, say so in
+   `summary` rather than working around it. Write commands that can survive all that. In particular:
    install with the command that creates a lock
    file (`npm install`, not `npm ci`) unless the repository already has one committed,
    because a project being written for the first time does not; and leave out anything

@@ -34,6 +34,19 @@ def test_an_android_sdk_and_a_jdk_are_named_with_what_they_hold(tmp_path: Path) 
     assert "android-35, android-36" in android and "build-tools 35.0.0" in android
 
 
+def test_the_ndk_and_cmake_are_named_so_a_react_native_app_is_pinned_to_them(
+    tmp_path: Path,
+) -> None:
+    sdk = _sdk(tmp_path / "sdk")
+    bare = toolchains.installed({"PATH": "", "ANDROID_HOME": str(sdk)})
+    assert "no NDK (native code cannot be built)" in bare[0], "missing is said, not left out"
+
+    (sdk / "ndk" / "27.1.12297006").mkdir(parents=True)
+    (sdk / "cmake" / "3.22.1").mkdir(parents=True)
+    said = toolchains.installed({"PATH": "", "ANDROID_HOME": str(sdk)})
+    assert "NDK 27.1.12297006" in said[0] and "CMake 3.22.1" in said[0]
+
+
 @pytest.mark.skipif(sys.platform == "win32", reason="a shell script is not a Windows command")
 def test_gradle_is_named_with_its_version(tmp_path: Path) -> None:
     home = tmp_path / "gradle-8.14.3" / "bin"
