@@ -59,7 +59,11 @@ def test_devops_is_sent_the_changed_files_not_the_branch_diff(
     described = next(c for c in devops if "draft" in c)
     assert "branch_diff" not in described
     assert "OK" in described["changed_files"]  # the file the phases wrote
-    assert "+++" not in described["changed_files"]
+    # names and counts, not lines: no diff header and no hunk. Not a bare "+++", which is
+    # also what --stat draws for a file with three lines added -- the README the Architect
+    # writes before the pull request is one
+    assert "+++ b/" not in described["changed_files"]
+    assert "@@" not in described["changed_files"]
 
 
 # -- T15.3: the developer's tree ------------------------------------------------------------
