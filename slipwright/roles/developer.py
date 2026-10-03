@@ -21,6 +21,7 @@ from slipwright.roles.common import (
     project_facts,
     read_files,
     require_worktree,
+    where_it_runs,
 )
 from slipwright.roles.results import DeveloperResult
 from slipwright.schemas.job import Job
@@ -205,6 +206,8 @@ def run(
         wanted = editable_files(job, worktree)
 
     context["project"] = project_facts(profile)
+    # its own build and tests run there too: it must not write what can never pass there
+    context["where_it_runs"] = where_it_runs()
     # a CI fix touches the whole branch and keeps every phase whole; a phase sees its own
     context["plan"] = plan_outline(plan, None if ci_failure is not None else job.data.phase_index)
     if truncated:

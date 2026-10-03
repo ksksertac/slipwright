@@ -23,6 +23,7 @@ from slipwright.roles.common import (
     project_facts,
     read_files,
     require_worktree,
+    where_it_runs,
 )
 from slipwright.schemas.job import Job
 from slipwright.schemas.profile import Profile, RoleName
@@ -36,6 +37,13 @@ levels the change needs — unit cases for logic, integration cases for each rea
 UI or API the way a user would. Keep the list tight: at most 15 cases, each with a short
 name and a description of one or two sentences — the list is for a person to approve, not
 a test plan document. Do not write test code yet; return only `test_cases`.
+Every case is run by the project's test command where `where_it_runs` says, so propose
+only cases that can run there. A check that needs a device, an emulator or a simulator
+(launching the app on a phone, a screen reader, rotation, a system font size) or a
+person's eyes (how a screen looks) is not a test case here: name those in `summary` as
+checks for a person to do by hand, and propose instead what can be tested without them
+(the build producing the app, its manifest or configuration, a component rendered in a
+unit test).
 If `feedback` is present, a human rejected your previous list; address every point in it.
 If a `standards` section is present its sections are binding unless they contradict
 the core rules; say in `summary` when one could not be followed and why."""
@@ -48,6 +56,10 @@ e2e runner (Playwright, Cypress, Detox, …) when one exists; otherwise drive th
 API in-process and say so in `summary`. Return the complete contents of each test file in
 `changes`; paths are relative to the project root. If `build_failure` is present, your
 previous tests did not pass the build gate: read the output and fix them.
+The tests run where `where_it_runs` says. Never write one that needs a device, an
+emulator or a simulator, starts one, or installs anything: it can never pass there. When
+an approved case can only be checked that way, test the part of it that can be checked
+without one and say in `summary` which part is left for a person to check by hand.
 If a `jira` section is present, open a Bug issue (parent: the story's key) for each defect
 you find in the change, and close it with a comment once the fix passes.
 If a `standards` section is present its sections are binding unless they contradict
@@ -60,8 +72,12 @@ run. Decide one thing only: was the failing test itself wrong, or was the code w
 The test is wrong when it asserts something nobody agreed to — it contradicts `plan`,
 `current_phase` or `approved_test_cases`, it was written against an older shape of the
 code, it fixes an incidental detail (wording, ordering, formatting) that was never part of
-the contract, or it contradicts itself. The code is wrong in every other case, including
-when the test is ugly, slow or awkward but the behaviour it asserts is the agreed one.
+the contract, or it contradicts itself. It is also wrong when it needs what
+`where_it_runs` says is not there -- a device, an emulator, a simulator, a tool to
+install: no change to the code can make it pass, so rewrite it to test what can be
+tested there and say in `summary` what is left for a person to check by hand. The code
+is wrong in every other case, including when the test is ugly, slow or awkward but the
+behaviour it asserts is the agreed one.
 Never weaken, skip, delete or loosen a test to make it pass, and never change a test
 merely because the code disagrees with it: if two sides of the project disagree about a
 contract, the side the plan named is right and the other one is the defect.
@@ -115,6 +131,7 @@ def run(
     context["project"] = project_facts(profile)
     context["plan"] = plan_outline(job.data.plan)
     context["branch_diff"] = branch_diff
+    context["where_it_runs"] = where_it_runs()
     if stage == 1:
         context["previous_test_cases"] = job.data.test_cases
     else:
@@ -145,6 +162,7 @@ def triage(
     worktree = require_worktree(job)
     tree = list_tree(worktree)
     context = base_context(job, instructions=GATE_TRIAGE, jira=jira, standards=standards)
+    context["where_it_runs"] = where_it_runs()
     context["project"] = project_facts(profile)
     context["plan"] = plan_outline(job.data.plan)
     context["current_phase"] = phase

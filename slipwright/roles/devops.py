@@ -16,7 +16,7 @@ from typing import Any
 
 from slipwright.invoke import RoleResult, invoke_role
 from slipwright.providers import ModelProvider
-from slipwright.roles.common import base_context, plan_outline, project_facts
+from slipwright.roles.common import base_context, plan_outline, project_facts, where_it_runs
 from slipwright.roles.developer import IN_PARTS
 from slipwright.roles.results import DeployPlan, DeveloperResult
 from slipwright.schemas.job import Job, JobState
@@ -178,6 +178,7 @@ def plan_deploy(
     context["plan"] = plan_outline(job.data.plan)
     context["project"] = project_facts(profile)
     context["deployment_folder"] = DEPLOY_FOLDER
+    context["where_it_runs"] = where_it_runs()
     context["pipeline_file"] = pipeline
     context["existing"] = sorted(existing or {})
     context["previous_proposal"] = job.data.deploy
@@ -214,6 +215,7 @@ def write_deployment(
     if truncated or continuation:
         instructions += IN_PARTS
     context = base_context(job, instructions=instructions, jira=jira, standards=standards)
+    context["where_it_runs"] = where_it_runs()
     if truncated:
         context["output_was_truncated"] = truncated
     if continuation:
