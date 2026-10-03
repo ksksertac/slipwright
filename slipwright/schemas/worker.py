@@ -6,7 +6,42 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+#: Where a machine says it runs, when it can tell (docs/machines-protocol.md §1): the
+#: three clouds that lend machines by the hour, and Amazon's Macs, which are told apart
+#: because they are the ones that build iOS. Anything else is shown as nothing.
+HOSTS = ("aws-ec2", "ec2-mac", "azure-vm", "gcp")
+
+
+class MachineAbout(BaseModel):
+    """What a machine says it is: drawn on its card while it writes a development, so a
+    person can tell the EC2 box from the laptop. Only shown, never trusted -- nothing is
+    routed on it, which is what capabilities are for."""
+
+    # ignored, not refused: an app newer than this server may say more about itself
+    model_config = ConfigDict(extra="ignore")
+
+    os: str | None = Field(default=None, max_length=60, description="Ubuntu 24.04, macOS 15")
+    host: str | None = Field(default=None, description="One of HOSTS; anything else is none.")
+    size: str | None = Field(
+        default=None, max_length=40, description="The cloud's name for it: c7i.xlarge."
+    )
+    writers: list[str] = Field(
+        default_factory=list,
+        max_length=6,
+        description="What writes on it: each tool and its model, as the machine names them.",
+    )
+
+    @field_validator("host")
+    @classmethod
+    def _known_host(cls, value: str | None) -> str | None:
+        return value if value in HOSTS else None
+
+    @field_validator("writers")
+    @classmethod
+    def _short(cls, value: list[str]) -> list[str]:
+        return [w.strip()[:60] for w in value if w.strip()]
 
 
 class Worker(BaseModel):
@@ -32,6 +67,9 @@ class Worker(BaseModel):
     doing_phase: int | None = Field(default=None, description="The phase it is writing.")
     doing: str | None = Field(
         default=None, description="What it last said it was doing, in its own words."
+    )
+    about: MachineAbout | None = Field(
+        default=None, description="What it said it is; none from a machine that never said."
     )
 
 
@@ -132,6 +170,8 @@ __all__ = [
     "CallImage",
     "CallProgress",
     "CallRepo",
+    "HOSTS",
+    "MachineAbout",
     "TaskResult",
     "Worker",
     "WorkerCall",

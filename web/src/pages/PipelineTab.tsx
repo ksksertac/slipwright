@@ -22,6 +22,7 @@ import {
   useTransition,
 } from "../api/hooks";
 import { AgentIcon, DomainBadge, ROLE_LABEL } from "../components/agents";
+import { BuildRoomHost, useBuildRoomOpener } from "../components/BuildRoom";
 import { BulkBar } from "../components/BulkBar";
 import {
   BudgetAnswer,
@@ -337,14 +338,17 @@ function LaneDetail({
   if (job.error) return <ErrorBox error={job.error} />;
   if (!job.data) return null;
   return (
-    <JobDetail
-      job={job.data}
-      projectId={projectId}
-      flow={<LaneFlow lane={lane} onOpen={onOpen} openKey={openKey} />}
-      // ending it for good is in here, behind Details: the head offers the pause, which is
-      // what somebody pressing a stop button there usually means
-      end={<StopAction job={job.data} compact />}
-    />
+    // the build room opens over an opened lane while its phases run (components/BuildRoom)
+    <BuildRoomHost lane={lane}>
+      <JobDetail
+        job={job.data}
+        projectId={projectId}
+        flow={<LaneFlow lane={lane} onOpen={onOpen} openKey={openKey} />}
+        // ending it for good is in here, behind Details: the head offers the pause, which is
+        // what somebody pressing a stop button there usually means
+        end={<StopAction job={job.data} compact />}
+      />
+    </BuildRoomHost>
   );
 }
 
@@ -403,6 +407,8 @@ function StageHead({ stage }: { stage: Stage }) {
   const { done, total } = stageTally(stage);
   const Icon = STAGE_ICON[stage.key] ?? IconLayers;
   const agent = stageAgent(stage.steps);
+  const watch = useBuildRoomOpener();
+  const phases = stage.steps.some((s) => s.key.startsWith("phase:"));
   return (
     <div className="flow-stage-head">
       <span className="flow-stage-icon">{agent ? <AgentIcon role={agent} /> : <Icon />}</span>
@@ -410,6 +416,12 @@ function StageHead({ stage }: { stage: Stage }) {
         <span className="flow-stage-title">{tx(STAGE_LABEL[stage.key] ?? stage.key)}</span>
         <span className="flow-stage-note">{tx(STAGE_NOTE[stage.key] ?? "")}</span>
       </span>
+      {/* the room opens by itself while the phases run; this is for any other time */}
+      {stage.key === "build" && watch && phases && (
+        <button type="button" className="btn small room-watch" onClick={watch}>
+          {tx("Watch live")}
+        </button>
+      )}
       <span className="flow-stage-progress">
         <span className="count">{stageCount(tx, stage)}</span>
         <span className="track">

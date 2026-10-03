@@ -18,6 +18,7 @@ answered the same way. Every call but `pair` carries `Authorization: Bearer swk_
 | `POST /pair` | `{code, name, capabilities}` | `200 {worker_id, token}`; `400` a bad copy; `403` used or run out |
 | `POST /poll` | `{capabilities, wait_s ≤ 25, name?}` | `200` a build or a call; `204` nothing yet, ask again |
 | `POST /heartbeat` | – | `204` |
+| `POST /about` | `{os?, host?, size?, writers?}` (§1, *What it is*) | `204`; `404` from a server before protocol 2: carry on |
 | `GET /tasks/{id}/snapshot` | – | `200` tar.gz of the worktree |
 | `POST /tasks/{id}/result` | `{exit_code, output, seconds}` | `204`; `409` not held |
 | `POST /calls/{id}/progress` | `{text}` | `204`; `409` the call is no longer this machine's: stop |
@@ -29,7 +30,7 @@ answered the same way. Every call but `pair` carries `Authorization: Bearer swk_
 ### The protocol's number
 
 The app and the server are released apart, so every request may say which version of
-this protocol it speaks: `x-slipwright-protocol: 1`. A server that no longer speaks it
+this protocol it speaks: `x-slipwright-protocol: 2`. A server that no longer speaks it
 answers **426** with a `detail` to show ("update Slipwright Agent"); the machine keeps
 its pairing and asks again later. A request that says nothing -- `slipwright worker`, or
 an app from before the header -- is taken as version 1. Through the relay the header
@@ -49,6 +50,25 @@ Strings, each one a thing the machine can be given:
 
 Anything else is ignored. A machine that sends no `write:` capability is never given a call,
 which is how a worker from before Phase 17 keeps working unchanged.
+
+### What it is (protocol 2)
+
+Said once when the machine starts, and again when it changes: shown on its card while it
+writes a development, never used to route work -- that is what capabilities are for.
+
+```json
+{"os": "Ubuntu 24.04", "host": "aws-ec2", "size": "c7i.xlarge",
+ "writers": ["Claude Code sonnet", "Codex gpt-5"]}
+```
+
+- `host` is one of `aws-ec2`, `ec2-mac`, `azure-vm`, `gcp`, read from the cloud's own
+  metadata address; anything else, or nothing, is a machine of no cloud
+- `size` is the cloud's name for it; `writers` is each agent switched on, tool and model
+- Every field may be left out, and one the server does not know is ignored
+
+It is its own call rather than a field of the poll because a poll is refused whole for a
+field it does not know: a server before protocol 2 answers this one 404, and the machine
+carries on without saying.
 
 ### A build (`kind: "build"`)
 

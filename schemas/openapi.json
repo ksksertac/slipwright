@@ -823,6 +823,99 @@
         "title": "BudgetSettings",
         "type": "object"
       },
+      "BuildRoom": {
+        "additionalProperties": false,
+        "properties": {
+          "branch": {
+            "title": "Branch",
+            "type": "string"
+          },
+          "in_turn": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The phase being taken in its turn.",
+            "title": "In Turn"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "live": {
+            "description": "A phase is being written or built: the room is open.",
+            "title": "Live",
+            "type": "boolean"
+          },
+          "machines": {
+            "items": {
+              "$ref": "#/components/schemas/RoomMachine"
+            },
+            "title": "Machines",
+            "type": "array"
+          },
+          "phases": {
+            "items": {
+              "$ref": "#/components/schemas/RoomPhase"
+            },
+            "title": "Phases",
+            "type": "array"
+          },
+          "pr_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pr Url"
+          },
+          "server": {
+            "$ref": "#/components/schemas/RoomServer"
+          },
+          "slots": {
+            "description": "Phases written at once, the one in its turn included.",
+            "title": "Slots",
+            "type": "integer"
+          },
+          "state": {
+            "$ref": "#/components/schemas/JobState"
+          },
+          "step": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "writing, building, reviewing or reconciling.",
+            "title": "Step"
+          }
+        },
+        "required": [
+          "branch",
+          "in_turn",
+          "job_id",
+          "live",
+          "machines",
+          "phases",
+          "pr_url",
+          "server",
+          "slots",
+          "state",
+          "step"
+        ],
+        "title": "BuildRoom",
+        "type": "object"
+      },
       "CallAnswer": {
         "additionalProperties": false,
         "description": "The model's text exactly as it came: the server parses it as it would its own.",
@@ -4292,6 +4385,60 @@
         "title": "LocalRepos",
         "type": "object"
       },
+      "MachineAbout": {
+        "description": "What a machine says it is: drawn on its card while it writes a development, so a\nperson can tell the EC2 box from the laptop. Only shown, never trusted -- nothing is\nrouted on it, which is what capabilities are for.",
+        "properties": {
+          "host": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "One of HOSTS; anything else is none.",
+            "title": "Host"
+          },
+          "os": {
+            "anyOf": [
+              {
+                "maxLength": 60,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Ubuntu 24.04, macOS 15",
+            "title": "Os"
+          },
+          "size": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The cloud's name for it: c7i.xlarge.",
+            "title": "Size"
+          },
+          "writers": {
+            "description": "What writes on it: each tool and its model, as the machine names them.",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 6,
+            "title": "Writers",
+            "type": "array"
+          }
+        },
+        "title": "MachineAbout",
+        "type": "object"
+      },
       "MachineCall": {
         "properties": {
           "job_id": {
@@ -7189,6 +7336,244 @@
           "runs"
         ],
         "title": "RoleWork",
+        "type": "object"
+      },
+      "RoomMachine": {
+        "additionalProperties": false,
+        "properties": {
+          "about": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MachineAbout"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "builds": {
+            "description": "The platforms it builds.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Builds",
+            "type": "array"
+          },
+          "doing": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Doing"
+          },
+          "elsewhere": {
+            "default": false,
+            "title": "Elsewhere",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "lent_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lent By Name"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "online": {
+            "title": "Online",
+            "type": "boolean"
+          },
+          "phase": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phase"
+          },
+          "writes": {
+            "description": "The domains it writes.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Writes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "about",
+          "builds",
+          "doing",
+          "elsewhere",
+          "id",
+          "lent_by_name",
+          "name",
+          "online",
+          "phase",
+          "writes"
+        ],
+        "title": "RoomMachine",
+        "type": "object"
+      },
+      "RoomPhase": {
+        "additionalProperties": false,
+        "properties": {
+          "by_hand": {
+            "default": false,
+            "title": "By Hand",
+            "type": "boolean"
+          },
+          "commit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commit"
+          },
+          "commit_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commit Url"
+          },
+          "doing": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What that machine last said.",
+            "title": "Doing"
+          },
+          "domain": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Domain"
+          },
+          "number": {
+            "title": "Number",
+            "type": "integer"
+          },
+          "parked": {
+            "default": false,
+            "title": "Parked",
+            "type": "boolean"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          },
+          "status": {
+            "$ref": "#/components/schemas/StepStatus"
+          },
+          "title": {
+            "description": "The task it does, else the phase's goal.",
+            "title": "Title",
+            "type": "string"
+          },
+          "writer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The machine writing it; none when it is this server.",
+            "title": "Writer"
+          },
+          "writing": {
+            "default": false,
+            "title": "Writing",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "by_hand",
+          "commit",
+          "commit_url",
+          "doing",
+          "domain",
+          "number",
+          "parked",
+          "role",
+          "status",
+          "title",
+          "writer",
+          "writing"
+        ],
+        "title": "RoomPhase",
+        "type": "object"
+      },
+      "RoomServer": {
+        "additionalProperties": false,
+        "properties": {
+          "models": {
+            "description": "What the server writes this plan's phases with.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Models",
+            "type": "array"
+          },
+          "writing": {
+            "description": "Phases it is writing now.",
+            "items": {
+              "type": "integer"
+            },
+            "title": "Writing",
+            "type": "array"
+          }
+        },
+        "required": [
+          "models",
+          "writing"
+        ],
+        "title": "RoomServer",
         "type": "object"
       },
       "RuleCreate": {
@@ -10495,6 +10880,17 @@
       "Worker": {
         "additionalProperties": false,
         "properties": {
+          "about": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MachineAbout"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What it said it is; none from a machine that never said."
+          },
           "capabilities": {
             "description": "What it said at its last poll it can do: platforms it builds (ios, android) and domains it writes (write:backend, ...).",
             "items": {
@@ -10613,6 +11009,7 @@
           }
         },
         "required": [
+          "about",
           "capabilities",
           "doing",
           "doing_phase",
@@ -12329,6 +12726,46 @@
           }
         },
         "summary": "Set Backlog"
+      }
+    },
+    "/api/jobs/{job_id}/building": {
+      "get": {
+        "description": "One development's phases as they are written and built, and the machines\nwriting them: what the build room draws. Polled while a phase runs, so the job is\nread without its details.",
+        "operationId": "get_building_api_jobs__job_id__building_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildRoom"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Building"
       }
     },
     "/api/jobs/{job_id}/cancel": {
@@ -18252,6 +18689,41 @@
           }
         },
         "summary": "Get Version"
+      }
+    },
+    "/api/worker/about": {
+      "post": {
+        "description": "What this machine is -- its system, its cloud and size, what writes on it -- said\nonce when it starts. Its own call rather than a field of the poll: a poll is refused\nwhole for a field it does not know, so a new app could not have said it to an old\nserver, while this answers 404 there and the app carries on.",
+        "operationId": "about_api_worker_about_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MachineAbout"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "About",
+        "tags": [
+          "workers"
+        ]
       }
     },
     "/api/worker/calls/{call_id}/answer": {

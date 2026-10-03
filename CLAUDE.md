@@ -69,6 +69,8 @@ slipwright/
   worklist.py         what a development will do, grouped by agent
   update.py           a newer release, offered in the corner and installed on a press
   steps.py            what one pipeline step actually produced
+  building.py         the build room: a development's phases as they are written and
+                      built, and the machines writing them (web: components/BuildRoom)
   costs.py + prices.py  what a development cost against what it was expected to
   support.py          the support desk
   net.py              retrying a request that never left

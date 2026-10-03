@@ -498,6 +498,8 @@ workers = Table(
     # the person on the account who lent it (T17.2): they see and remove it, and so does
     # the owner. Null for a machine paired before anybody but the owner could lend one
     Column("lent_by", String(64)),
+    # what it said it is (os, cloud, size, what writes on it): shown, never routed on
+    Column("about_json", Text),
     Index("workers_owner", "owner_id"),
 )
 

@@ -39,6 +39,7 @@ from slipwright.schemas.worker import (
     CallAnswer,
     CallFailure,
     CallProgress,
+    MachineAbout,
     TaskResult,
     Worker,
     WorkerCall,
@@ -52,8 +53,9 @@ router = APIRouter(tags=["workers"])
 
 #: The worker protocol this server speaks (docs/machines-protocol.md), and the oldest a
 #: machine may still speak. The desktop app is released apart now: one that is too old is
-#: told so plainly (426), not left to fail on a field it never sends.
-PROTOCOL = 1
+#: told so plainly (426), not left to fail on a field it never sends. 2 added ``/about``;
+#: a machine that speaks 1 is still served, it only never says what it is.
+PROTOCOL = 2
 OLDEST_PROTOCOL = 1
 PROTOCOL_HEADER = "x-slipwright-protocol"
 
@@ -368,6 +370,16 @@ def heartbeat(request: Request) -> None:
     """Still here, still building: sent while a long build runs."""
     worker = _worker(request)
     _engine(request).store.touch_worker(worker.id)
+
+
+@router.post("/worker/about", status_code=204)
+def about(body: MachineAbout, request: Request) -> None:
+    """What this machine is -- its system, its cloud and size, what writes on it -- said
+    once when it starts. Its own call rather than a field of the poll: a poll is refused
+    whole for a field it does not know, so a new app could not have said it to an old
+    server, while this answers 404 there and the app carries on."""
+    worker = _worker(request)
+    _engine(request).store.describe_worker(worker.id, body)
 
 
 @router.get("/worker/tasks/{task_id}/snapshot")

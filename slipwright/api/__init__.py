@@ -47,6 +47,7 @@ from slipwright.activity import (
     project_progress,
 )
 from slipwright.board import Board, project_board
+from slipwright.building import BuildRoom, build_room
 from slipwright.costs import ProjectCosts, project_costs
 from slipwright.engine import (
     BriefIsRunning,
@@ -65,7 +66,7 @@ from slipwright.engine import (
 from slipwright.firstrun import WARNING as FIRST_RUN_WARNING
 from slipwright.firstrun import default_admin_still_open, ensure_default_admin
 from slipwright.orchestrator import IllegalTransitionError
-from slipwright.pipeline import Pipeline, pipeline
+from slipwright.pipeline import Pipeline, lane_for, pipeline
 from slipwright.providers import ProviderUnavailableError
 from slipwright.quota import QuotaExceeded, warn_if_unprotected
 from slipwright.schemas.attachment import Attachment
@@ -865,6 +866,51 @@ def create_app(
             reverse=True,
         )
         return pipeline(jobs, project_id=project_id)
+
+    @api.get("/jobs/{job_id}/building", response_model=BuildRoom)
+    def get_building(job_id: str, request: Request) -> BuildRoom:
+        """One development's phases as they are written and built, and the machines
+        writing them: what the build room draws. Polled while a phase runs, so the job is
+        read without its details."""
+        # the Machines page's own rule for whose machines a person is shown
+        from slipwright import workers as pairing
+        from slipwright.api.workers import _who
+
+        eng = engine_for(request)
+        job = _get(eng, job_id, request, details=False)
+        account, person = _who(request)
+        machines = eng.store.list_workers(account, live_since=pairing.live_since())
+        if person is not None:  # a member is shown their own machines, as on Machines
+            machines = [w for w in machines if w.lent_by == person]
+        names = {u.id: u.username for u in eng.store.list_users(account)} if account else {}
+        machines = [
+            w.model_copy(update={"lent_by_name": names.get(w.lent_by or "")}) for w in machines
+        ]
+        project: Project | None = None
+        if job.project_id:
+            try:
+                project = eng.store.get_project(job.project_id, _owner(request))
+            except ProjectNotFound:
+                project = None  # a deleted project's development is still there to read
+        profile = job.profile or (eng.project_profile(project) if project else eng.seed_profile)
+        roles = {
+            card.role
+            for card in lane_for(job).steps
+            if card.key.startswith("phase:") and card.role is not None
+        }
+        models: list[str] = []
+        for role in sorted(roles, key=lambda r: r.value):
+            provider, model = eng.effective_routing(profile.roles[role], role)
+            label = f"{provider} · {model}" if model else provider
+            if label not in models:
+                models.append(label)
+        return build_room(
+            job,
+            machines=machines,
+            calls=eng.store.open_worker_calls(account),
+            slots=(project.budget.max_parallel_phases if project else None) or 1,
+            models=models,
+        )
 
     @api.get("/projects/{project_id}/progress", response_model=ProjectProgress)
     def get_progress(project_id: str, request: Request) -> ProjectProgress:

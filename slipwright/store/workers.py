@@ -18,6 +18,7 @@ from slipwright.schemas.job import new_job_id, utcnow
 from slipwright.schemas.worker import (
     CallAnswer,
     CallFailure,
+    MachineAbout,
     TaskResult,
     Worker,
     WorkerCall,
@@ -52,6 +53,9 @@ def _worker(row: dict[str, Any], *, live_since: datetime | None = None) -> Worke
             and not row["revoked_at"]
         ),
         lent_by=row.get("lent_by") or None,
+        about=MachineAbout.model_validate_json(row["about_json"])
+        if row.get("about_json")
+        else None,
     )
 
 
@@ -183,6 +187,16 @@ class WorkerStoreMixin:
             values["name"] = name
         with self.db.begin() as conn:
             conn.execute(update(workers).where(workers.c.id == worker_id).values(**values))
+
+    def describe_worker(self, worker_id: str, about: MachineAbout) -> None:
+        """What it says it is, replacing what it said before: a machine resized or moved
+        to another plan says so the next time it starts."""
+        with self.db.begin() as conn:
+            conn.execute(
+                update(workers)
+                .where(workers.c.id == worker_id)
+                .values(about_json=about.model_dump_json(), last_seen_at=utcnow().isoformat())
+            )
 
     def list_workers(
         self, owner_id: str | None, *, live_since: datetime | None = None
@@ -368,7 +382,6 @@ class WorkerStoreMixin:
     def drop_worker_task(self, task_id: str) -> None:
         with self.db.begin() as conn:
             conn.execute(delete(worker_tasks).where(worker_tasks.c.id == task_id))
-
 
     # -- calls (T17.1) ---------------------------------------------------------------------
 
