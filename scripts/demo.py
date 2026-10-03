@@ -291,16 +291,20 @@ def a_remote(at: Path) -> Path:
     return remote
 
 
-def _phase_of(req: Any) -> int:
-    """Which phase a specialist is being asked for, from the context it is handed."""
-    # read as JSON rather than matched: the context is written with sorted keys, so the
-    # number is wherever the alphabet puts it, not first
+def _context(req: Any) -> dict[str, Any]:
+    """The context a role is handed, read as JSON rather than matched as text: how it is
+    laid out is the engine's business (compact since T15.7)."""
     marker = "Context:\n"
     start = req.prompt.find(marker)
     if start < 0:
-        return 1
+        return {}
     context, _ = json.JSONDecoder().raw_decode(req.prompt, start + len(marker))
-    return int((context.get("current_phase") or {}).get("number", 1))
+    return context if isinstance(context, dict) else {}
+
+
+def _phase_of(req: Any) -> int:
+    """Which phase a specialist is being asked for, from the context it is handed."""
+    return int((_context(req).get("current_phase") or {}).get("number", 1))
 
 
 def the_script(profile: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -352,18 +356,22 @@ def the_script(profile: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]
                 "files": ["app/notes.py", "app/main.py"],
                 "task_id": "t1",
                 "domain": "backend",
+                "depends_on": [],
             },
             {
                 "goal": "The notes page",
                 "files": ["web/index.html", "web/notes.js"],
                 "task_id": "t2",
                 "domain": "web",
+                # the two pages need the search, not each other: written side by side
+                "depends_on": [1],
             },
             {
                 "goal": "The editor, with tags",
                 "files": ["web/edit.html", "web/edit.js"],
                 "task_id": "t3",
                 "domain": "web",
+                "depends_on": [1],
             },
         ],
     }
@@ -430,7 +438,7 @@ def the_script(profile: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]
         }
 
     def qa(req: Any) -> dict[str, Any]:
-        if '"stage": 1' in req.prompt:
+        if _context(req).get("stage") == 1:
             return {
                 "summary": "Three cases: search, the tag filter, and the page itself.",
                 "test_cases": [
