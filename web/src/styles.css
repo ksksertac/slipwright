@@ -4895,6 +4895,45 @@ tr.run-detail td {
   color: var(--text-3);
   font-style: italic;
 }
+/* The Architect's drawing (components/Diagram.tsx): it fits the column it is in and
+   opens full size when pressed, so a wide chart is never scrolled sideways in a panel. */
+.diagram {
+  display: block;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  cursor: zoom-in;
+  text-align: center;
+  font: inherit;
+  color: inherit;
+}
+.diagram:hover {
+  border-color: var(--line-strong);
+}
+/* Mermaid writes its own max-width on the svg; the drawing is scaled to the column
+   instead, so a wide chart is not drawn at a size nobody can read */
+.diagram svg {
+  width: 100%;
+  max-width: 100% !important;
+  height: auto;
+}
+.diagram.loading {
+  min-height: 160px;
+  background: var(--surface-2);
+  cursor: default;
+}
+.diagram.full {
+  cursor: default;
+  border: 0;
+  padding: 0;
+  overflow: auto;
+}
+.diagram-source {
+  white-space: pre-wrap;
+  font-size: 12px;
+}
 .step-items {
   list-style: none;
   margin: 0;

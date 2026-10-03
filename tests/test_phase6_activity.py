@@ -63,6 +63,7 @@ def test_activity_feed_lists_the_whole_pipeline_in_order(
         (ActivityKind.ROLE, RoleName.QA),
         (ActivityKind.APPROVAL, None),
         (ActivityKind.ROLE, RoleName.DEVOPS),  # how this is deployed: nothing to (T11.6)
+        (ActivityKind.ROLE, RoleName.ARCHITECT),  # the README, before the pull request
         (ActivityKind.DONE, RoleName.DEVOPS),
     ]
     assert items[5].title.startswith("rejected: split more")

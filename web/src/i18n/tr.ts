@@ -624,6 +624,9 @@ export const TR: Record<string, string> = {
   Backlog: "Backlog",
   "Backlog approval": "Backlog onayı",
   Architecture: "Mimari",
+  "The parts of the product and how they talk to each other.":
+    "Ürünün parçaları ve birbirleriyle nasıl konuştukları.",
+  "Open the drawing full size": "Çizimi tam boyutta aç",
   "Architecture approval": "Mimari onayı",
   Develop: "Geliştirme",
   "QA: test cases": "QA: test vakaları",
@@ -1314,6 +1317,9 @@ export const TR: Record<string, string> = {
     "{1} dağıtım dosyası yazıldı, {2} parçada: {3}",
   "{1} deployment files written: {2}": "{1} dağıtım dosyası yazıldı: {2}",
   "Nothing to deploy: {1}": "Dağıtılacak bir şey yok: {1}",
+  "README written: {1}": "README yazıldı: {1}",
+  "The README could not be written; the pull request goes without it":
+    "README yazılamadı; pull request onsuz açılıyor",
   "Jira, second try: {1}": "Jira, ikinci deneme: {1}",
   "Jira: {1}": "Jira: {1}",
   "Jira: {1} updates": "Jira: {1} güncelleme",

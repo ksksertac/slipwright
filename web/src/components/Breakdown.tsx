@@ -29,6 +29,8 @@ export interface PlanShape {
   /** One entry per part of the product: which language and framework (T11.5). */
   stack?: StackChoice[];
   decisions?: string[];
+  /** The Architect's drawing of the product, as Mermaid source. */
+  diagram?: string;
   phases: {
     goal: string;
     files?: string[];

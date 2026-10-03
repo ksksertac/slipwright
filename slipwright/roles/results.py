@@ -227,6 +227,11 @@ class POResult(RoleOutput):
         return self
 
 
+#: A drawing of a dozen boxes is a few hundred characters; this is room for a large one
+#: and no room for a model that has started pasting code into it.
+DIAGRAM_MAX = 8_000
+
+
 class ArchitectResult(RoleOutput):
     """The Architect's answer: how the project is built, what was decided, and the
     phases (one per backlog task; the engine checks the mapping against the backlog)."""
@@ -237,6 +242,12 @@ class ArchitectResult(RoleOutput):
         description="One entry per part of the product: which language and framework.",
     )
     decisions: list[str] = Field(default_factory=list)
+    diagram: str = Field(
+        default="",
+        max_length=DIAGRAM_MAX,
+        description="The architecture as a Mermaid `flowchart`: the parts of the product, "
+        "what each is written in, and what talks to what. Source only, no code fence.",
+    )
     phases: list[PlanPhase] = Field(min_length=1)
 
     @model_validator(mode="after")
@@ -564,6 +575,15 @@ class DevOpsResult(RoleOutput):
     pr_body: str = Field(min_length=1)
 
 
+class ReadmeResult(RoleOutput):
+    """The project's README, written by the Architect once the development is built."""
+
+    readme: str = Field(
+        min_length=1,
+        description="The complete contents of README.md, in Markdown.",
+    )
+
+
 class SupervisorResult(RoleOutput):
     """Recommendation at a human gate (T9.8), or the choice on a failed build gate
     (T9.7): ``fix`` (the same specialist tries again), ``replan`` (the architect
@@ -633,6 +653,7 @@ def result_schema_for(role: RoleName) -> type[RoleOutput]:
 
 
 __all__ = [
+    "DIAGRAM_MAX",
     "RESULT_SCHEMAS",
     "AgentAnswer",
     "AnalysisResult",
@@ -661,6 +682,7 @@ __all__ = [
     "QAResult",
     "ReconcileResult",
     "ScreenDesign",
+    "ReadmeResult",
     "RoleOutput",
     "StackChoice",
     "SupervisorResult",

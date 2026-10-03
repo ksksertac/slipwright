@@ -484,6 +484,11 @@ class JobData(BaseModel):
         "DevOps writes no deployment files and opens the pull request with the code "
         "alone. The deployment may be done by hand, or not wanted at all.",
     )
+    readme_written: bool = Field(
+        default=False,
+        description="The Architect has written the project's README for this development, "
+        "or tried and could not: it is asked once, before the pull request.",
+    )
     pr_url: str | None = None
     phase_commits: dict[str, str] = Field(
         default_factory=dict,
