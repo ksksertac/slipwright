@@ -313,6 +313,27 @@ class Host:
         )
         self.pushed.append(branch)
 
+    def remote_head(self, worktree: Path, branch: str) -> str | None:
+        out = subprocess.run(
+            ["git", "ls-remote", "--heads", str(self.remote), f"refs/heads/{branch}"],
+            cwd=worktree,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+        return out.split()[0] if out.strip() else None
+
+    def fetch(self, worktree: Path, branch: str) -> str | None:
+        head = self.remote_head(worktree, branch)
+        if head is not None:
+            subprocess.run(
+                ["git", "fetch", "-q", str(self.remote), f"+{branch}:refs/remotes/origin/{branch}"],
+                cwd=worktree,
+                check=True,
+                capture_output=True,
+            )
+        return head
+
     def open_pr(self, worktree: Path, branch: str, title: str, body: str) -> str:
         return f"{self.url}/pull/42"
 
