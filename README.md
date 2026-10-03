@@ -244,13 +244,23 @@ costs:
 
 ### Your team's computers write side by side
 
-<img src="docs/screenshots/machines.png" alt="Settings, Machines: three connected computers, online, each with the agents it writes for and the platforms it builds, and a card to connect another" />
+<img src="docs/screenshots/machines-at-work.gif" alt="One Slipwright hands out phases to a MacBook, a Windows PC and a Linux server; each writes its phase with its own model, the Mac builds iOS, and the answers flow back until the development is done" />
 
-Lend a computer to the account with the **Slipwright Agent** app, and the phases of the
-agents you choose are written there, on that computer's own Claude Code or ChatGPT plan or
-its own key. The owner's laptop, a teammate's, a build server: each takes the next phase
-that is ready, so a plan as wide as your team is written as fast as your team. The server
-still checks, builds, reviews and commits every answer, one at a time, on the one branch.
+One Slipwright gives the orders; every computer you lend it does the work. Lend a computer
+to the account with the [**Slipwright Agent**](https://github.com/ksksertac/slipwright-agent)
+app, and the phases of the agents you choose are written there:
+
+- **Slipwright decides.** It keeps the plan, the gates and the order of the phases, and
+  checks, builds, reviews and commits every answer, one at a time, on the one branch.
+- **Each machine asks for what it can do** -- `write:backend`, `write:web`, `ios`,
+  `android` -- and is given only that. A Mac with Xcode builds iOS, a Windows PC with Codex
+  writes the web phases, a Linux server runs `slipwright-agent` with no window at all.
+- **On its own model and keys:** that computer's Claude Code or ChatGPT plan, or its own
+  API key. The keys never leave it.
+- **Side by side.** The owner's laptop, a teammate's, a build server: each takes the next
+  phase that is ready, so a plan as wide as your team is written as fast as your team.
+
+<img src="docs/screenshots/machines.png" alt="Settings, Machines: three connected computers, online, each with the agents it writes for and the platforms it builds, and a card to connect another" />
 
 ```mermaid
 gantt
