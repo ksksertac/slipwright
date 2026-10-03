@@ -45,6 +45,8 @@ const ERROR_LABEL: Record<string, string> = {
 const RULES: Rule[] = [
   // -- what a person did at a gate -------------------------------------------------------
   { re: /^job started$/, out: "Development started" },
+  { re: /^deleted by (.+)$/, out: "Deleted by {1}" },
+  { re: /^deleted$/, out: "Deleted" },
   {
     re: /^(approved[^:]*) by (.+?): continue with (\w+)$/,
     out: "{1}, by {2}; continues with {3}",

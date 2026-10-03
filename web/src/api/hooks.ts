@@ -769,11 +769,18 @@ export function useRenameJob(jobId: string) {
   });
 }
 
-export function useDeleteJob() {
+/** Delete a stopped or finished development everywhere it reached -- pull request, branch,
+ *  what was merged, its Jira issues -- and keep it, marked deleted, to be read. */
+export function useRemoveJob(jobId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => api.delete<void>(`/api/jobs/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.projects }),
+    mutationFn: () => api.post<Job>(`/api/jobs/${jobId}/remove`, {}),
+    onSuccess: (job) => {
+      qc.setQueryData(keys.job(jobId), job);
+      void qc.invalidateQueries({ queryKey: keys.job(jobId) });
+      void qc.invalidateQueries({ queryKey: keys.projects });
+      void qc.invalidateQueries({ queryKey: keys.overview });
+    },
   });
 }
 

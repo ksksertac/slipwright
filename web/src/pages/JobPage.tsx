@@ -5,7 +5,6 @@ import { describeError, type Job, type Profile, type Transition } from "../api/c
 import { useNavigate } from "react-router-dom";
 import {
   keys,
-  useDeleteJob,
   useJob,
   useProject,
   useSendMessage,
@@ -40,16 +39,15 @@ import {
   failureOf,
   pendingApproval,
 } from "../components/GateActions";
-import { IconEdit, IconExternal, IconLayers, IconTrash } from "../components/icons";
+import { IconEdit, IconExternal, IconLayers } from "../components/icons";
 import { isOwner } from "../api/gates";
 import { JiraLink } from "../components/JiraLink";
-import { ConfirmModal } from "../components/Modal";
 import { DeploymentGate } from "../components/DeploymentGate";
 import { CarryOnAction, PausedPanel, PauseAction, ReconcileGate } from "../components/Pause";
+import { isRemoved, RemoveAction, RemovedPanel } from "../components/Remove";
 import { ProfileForm } from "../components/ProfileForm";
 import { Diagram } from "../components/Diagram";
 import { StackPanel } from "../components/StackPanel";
-import { useToast } from "../components/Toast";
 import {
   Empty,
   ErrorBox,
@@ -94,7 +92,7 @@ export function JobPage() {
             { label: nameOf(j) },
           ]}
         />
-        <JobHead job={j} projectId={projectId} />
+        <JobHead job={j} />
         <JobFiles projectId={projectId} jobId={j.id} />
         <JobDetail job={j} projectId={projectId} />
       </div>
@@ -164,7 +162,7 @@ function JobName({ job }: { job: Job }) {
 /** The head of the page. The request used to be the <h1>, which on a real request meant a
  * fourteen-line heading and no page title at all; it is a paragraph, so it reads as one --
  * two lines with the rest a click away -- under a title that says what this page is. */
-function JobHead({ job, projectId }: { job: Job; projectId: string }) {
+function JobHead({ job }: { job: Job }) {
   const tx = useT();
   const [open, setOpen] = useState(false);
   const long = job.request.length > 220;
@@ -173,10 +171,10 @@ function JobHead({ job, projectId }: { job: Job; projectId: string }) {
       <div className="job-head-top">
         <div className="job-head-id">
           <JobName job={job} />
-          <StateBadge state={job.state} />
+          <StateBadge state={job.state} removed={isRemoved(job)} />
         </div>
         <div className="row" style={{ flexWrap: "nowrap" }}>
-          {job.data.pr_url && (
+          {job.data.pr_url && !isRemoved(job) && (
             <a className="btn" href={job.data.pr_url} target="_blank" rel="noreferrer">
               <IconExternal /> {tx("Pull request")}
             </a>
@@ -184,7 +182,7 @@ function JobHead({ job, projectId }: { job: Job; projectId: string }) {
           <PauseAction job={job} />
           <CarryOnAction job={job} />
           <StopAction job={job} />
-          <DeleteJobButton job={job} projectId={projectId} />
+          <RemoveAction job={job} />
         </div>
       </div>
       <div className="job-ask">
@@ -349,50 +347,11 @@ function JobTabs({ job, projectId, flow }: { job: Job; projectId: string; flow?:
   );
 }
 
-function DeleteJobButton({ job, projectId }: { job: Job; projectId: string }) {
-  const tx = useT();
-  const remove = useDeleteJob();
-  const toast = useToast();
-  const navigate = useNavigate();
-  const [open, setOpen] = useState(false);
-  if (!hasFinished(job.state)) return null;
-  return (
-    <>
-      <button className="btn danger" onClick={() => setOpen(true)}>
-        <IconTrash /> {tx("Delete")}
-      </button>
-      {open && (
-        <ConfirmModal
-          title={tx("Delete development")}
-          body={
-            <>
-              {tx("Delete")} <strong>{nameOf(job)}</strong>
-              {tx(
-                "? Its worktree, branch, history and test runs are removed. A pull request already opened stays on GitHub.",
-              )}
-            </>
-          }
-          busy={remove.isPending}
-          error={remove.error ? describeError(remove.error) : null}
-          onClose={() => setOpen(false)}
-          onConfirm={() =>
-            remove.mutate(job.id, {
-              onSuccess: () => {
-                toast.ok("Development deleted");
-                navigate(`/projects/${projectId}/developments`);
-              },
-            })
-          }
-        />
-      )}
-    </>
-  );
-}
-
 // -- gates -----------------------------------------------------------------------------
 
 function GatePanel({ job }: { job: Job }) {
   const tx = useT();
+  if (isRemoved(job)) return <RemovedPanel job={job} />;
   const pending = pendingApproval(job);
   if (!pending) {
     if (job.state === "failed") {
@@ -1159,7 +1118,7 @@ function Steering({ job }: { job: Job }) {
             </tbody>
           </table>
         )}
-        {job.state !== "done" && job.state !== "failed" && (
+        {job.state !== "done" && job.state !== "failed" && !isRemoved(job) && (
           <form
             className="row"
             style={{ marginTop: 10 }}

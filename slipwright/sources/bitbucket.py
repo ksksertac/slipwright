@@ -9,6 +9,7 @@ GitHub.
 from __future__ import annotations
 
 import contextlib
+import re
 from pathlib import Path
 from typing import Any
 
@@ -229,6 +230,53 @@ class BitbucketHost:
         if any(s is CiState.PENDING for s in states):
             return CiStatus(CiState.PENDING, summary=summary)
         return CiStatus(CiState.SUCCESS, summary=summary)
+
+    # -- taking a deleted development back off the host ---------------------------------
+
+    def push_onto(self, worktree: Path, branch: str) -> None:
+        """HEAD onto ``branch``, never forced: see ``GhHost.push_onto``."""
+        if not g.has_remote(worktree, "origin"):
+            raise NoRemote("the checkout has no remote named 'origin'")
+        url = self.authenticated_url(_origin(worktree))
+        try:
+            g.run(worktree, "push", url, f"HEAD:refs/heads/{branch}")
+        except g.GitError as exc:
+            raise GitHostError(
+                f"push to {branch} refused: {_scrub(exc.stderr, self.creds.token)}"
+            ) from exc
+
+    def delete_branch(self, worktree: Path, branch: str) -> bool:
+        if self.remote_head(worktree, branch) is None:
+            return False
+        url = self.authenticated_url(_origin(worktree))
+        try:
+            g.run(worktree, "push", url, "--delete", f"refs/heads/{branch}")
+        except g.GitError as exc:
+            raise GitHostError(
+                f"could not delete {branch}: {_scrub(exc.stderr, self.creds.token)}"
+            ) from exc
+        return True
+
+    def close_pr(self, worktree: Path, pr_url: str) -> bool:
+        """Decline a pull request that is still open -- Bitbucket's word for closing one."""
+        path = self._pr_path(worktree, pr_url)
+        if self._get(path).json().get("state") != "OPEN":
+            return False
+        self._post(f"{path}/decline")
+        return True
+
+    def merged_commit(self, worktree: Path, pr_url: str) -> str | None:
+        pr = self._get(self._pr_path(worktree, pr_url)).json()
+        if pr.get("state") != "MERGED":
+            return None
+        sha = (pr.get("merge_commit") or {}).get("hash")
+        return str(sha) if sha else None
+
+    def _pr_path(self, worktree: Path, pr_url: str) -> str:
+        found = re.search(r"/pull-requests/(\d+)", pr_url)
+        if found is None:
+            raise SourceError(f"not a Bitbucket pull request: {pr_url}")
+        return f"/repositories/{self._repo_of(worktree)}/pullrequests/{found.group(1)}"
 
     # -- plumbing ---------------------------------------------------------------------------
 

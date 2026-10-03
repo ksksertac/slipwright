@@ -224,6 +224,12 @@ behaviour deliberately changed, rewrite it to state the new rule -- do not weake
   also refuses the demo project. A new mutating endpoint that skips it has no guard.
 - **The demo project has no checkout.** Anything that would run something in it must
   refuse (409) rather than fail deeper in. Deleting it is allowed -- that is its purpose.
+- **A deleted development is kept, and read-only.** `remove_job` (the page's *Delete*)
+  closes the pull request, deletes the branch, reverts what was merged with a commit
+  pushed on top of the base branch (never forced), moves the Jira issues to Won't Do,
+  and marks `data.removed` -- a field, not a state, so a release rolled back can still
+  read the row. `_refuse_if_read_only` (the API) and `JobRemoved` (the engine) refuse
+  every move after it; a new action on a job goes through one of them.
 - **A chat press is a gate action.** `notify/core.py`'s `_refusal` is the chat twin of
   `_may_act`; a press counts only from the chat account linked to the person it was asked
   of, and only for the gate visit (`gate_marker`) it was asked about. Change one guard and

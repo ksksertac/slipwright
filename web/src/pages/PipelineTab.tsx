@@ -32,6 +32,7 @@ import {
 } from "../components/GateActions";
 import { DeploymentGate } from "../components/DeploymentGate";
 import { CarryOnAction, PauseAction, ReconcileGate } from "../components/Pause";
+import { RemoveAction } from "../components/Remove";
 import { DesignGate } from "../components/DesignGate";
 import { Detail } from "../components/Detail";
 import { ReviewDetail } from "../components/Review";
@@ -247,7 +248,7 @@ function LaneRow({
         <div className="lane-id">
           <span className="lane-title">{nameOf(lane)}</span>
           <div className="lane-sub">
-            <StateBadge state={lane.state} />
+            <StateBadge state={lane.state} removed={lane.removed} />
             {/* the badge says what kind of work is happening; this says whose, which is
                 the question "build gate" on its own never answered */}
             {lane.running_label && (
@@ -277,7 +278,7 @@ function LaneRow({
           <div className="lane-actions">
             {/* the failure is spelled out inside the detail, so the shortcut is for the
                 closed lane, where nothing else offers it */}
-            {lane.state === "failed" && !open && (
+            {lane.state === "failed" && !open && !lane.removed && (
               <span onClick={stop} className="lane-actions-item">
                 <LaneRetry jobId={lane.job_id} />
               </span>
@@ -289,6 +290,13 @@ function LaneRow({
             {!hasFinished(lane.state) && (
               <span onClick={stop} className="lane-actions-item">
                 <LaneStop jobId={lane.job_id} />
+              </span>
+            )}
+            {/* a stopped development carries on or is deleted; a finished one can only be
+                deleted. A deleted one offers nothing but its detail */}
+            {(lane.state === "paused" || hasFinished(lane.state)) && !lane.removed && (
+              <span onClick={stop} className="lane-actions-item">
+                <LaneRemove jobId={lane.job_id} />
               </span>
             )}
             {/* the button is what a keyboard reaches; the click on the head is the mouse's */}
@@ -474,6 +482,11 @@ function BriefPart({
 function LaneRetry({ jobId }: { jobId: string }) {
   const job = useJob(jobId);
   return job.data ? <RetryActions job={job.data} /> : null;
+}
+
+function LaneRemove({ jobId }: { jobId: string }) {
+  const job = useJob(jobId);
+  return job.data ? <RemoveAction job={job.data} lane /> : null;
 }
 
 function LaneStop({ jobId }: { jobId: string }) {
@@ -724,7 +737,7 @@ function StepPanel({
               jobId={jobId}
               projectId={projectId}
               stepKey={step.key}
-              laneState={lane?.state}
+              laneState={lane?.removed ? undefined : lane?.state}
             />
             <StepDetailView jobId={jobId} stepKey={step.key} />
             {step.outputs.length > 0 && (

@@ -82,6 +82,8 @@ class Lane(BaseModel):
     running_label: str | None = None
     running_role: RoleName | None = None
     steps: list[StepCard]
+    # deleted: shown, never moved -- the lane offers nothing but its detail
+    removed: bool = False
 
 
 class Pipeline(BaseModel):
@@ -633,6 +635,13 @@ def _annotate_supervision(job: Job, steps: list[StepCard]) -> None:
 
 
 def lane_for(job: Job) -> Lane:
+    lane = _lane_for(job)
+    if job.is_removed:
+        return lane.model_copy(update={"removed": True, "pending_approval": None})
+    return lane
+
+
+def _lane_for(job: Job) -> Lane:
     pause = job.data.pause or {}
     if job.state is JobState.PAUSED and pause.get("from_state"):
         # drawn as it stood when it was paused, with the step it was on marked as paused

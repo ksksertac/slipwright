@@ -176,6 +176,22 @@ class GitHubHost:
         with self._quiet_about_the_token():
             return self._gh.finish_pr(worktree, branch, title, body)
 
+    def push_onto(self, worktree: Path, branch: str) -> None:
+        with self._quiet_about_the_token():
+            self._gh.push_onto(worktree, branch)
+
+    def delete_branch(self, worktree: Path, branch: str) -> bool:
+        with self._quiet_about_the_token():
+            return self._gh.delete_branch(worktree, branch)
+
+    def close_pr(self, worktree: Path, pr_url: str) -> bool:
+        with self._quiet_about_the_token():
+            return self._gh.close_pr(worktree, pr_url)
+
+    def merged_commit(self, worktree: Path, pr_url: str) -> str | None:
+        with self._quiet_about_the_token():
+            return self._gh.merged_commit(worktree, pr_url)
+
     def ci_status(self, worktree: Path, branch: str, pr_url: str) -> CiStatus:
         with self._quiet_about_the_token():
             return self._gh.ci_status(worktree, branch, pr_url)

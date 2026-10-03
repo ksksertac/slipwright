@@ -137,7 +137,8 @@ export function RetryActions({ job }: { job: Job }) {
   const [replanning, setReplanning] = useState(false);
   // a development that has stopped is moved by whoever owns the account: a member holds
   // an agent, and a failed job is not waiting at anybody's gate
-  if (job.state !== "failed" || !isOwner(team.data)) return null;
+  // and a deleted one is moved by nobody
+  if (job.state !== "failed" || job.data.removed || !isOwner(team.data)) return null;
   return (
     <div className="row">
       <button

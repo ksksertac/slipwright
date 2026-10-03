@@ -188,6 +188,63 @@ class GhHost:
         url: str = json.loads(view.stdout)["url"]
         return url
 
+    # -- taking a deleted development back off the host ---------------------------------
+
+    def push_onto(self, worktree: Path, branch: str) -> None:
+        """Put HEAD on ``branch`` as what comes next on it -- never forced. The base
+        branch is everybody's: a force there would take whatever was merged since with it,
+        so a branch that moved meanwhile is refused and the caller says so."""
+        if not g.has_remote(worktree, self.remote):
+            raise NoRemote(f"the checkout has no remote named {self.remote!r}")
+        try:
+            g.run(
+                worktree,
+                *self._credentials(),
+                "push",
+                self.remote,
+                f"HEAD:refs/heads/{branch}",
+                env=self._env(),
+            )
+        except g.GitError as exc:
+            raise GitHostError(f"push to {branch} refused: {exc.stderr}") from exc
+
+    def delete_branch(self, worktree: Path, branch: str) -> bool:
+        """Remove ``branch`` from the host. False when it was not there to remove."""
+        if self.remote_head(worktree, branch) is None:
+            return False
+        try:
+            g.run(
+                worktree,
+                *self._credentials(),
+                "push",
+                self.remote,
+                "--delete",
+                branch,
+                env=self._env(),
+            )
+        except g.GitError as exc:
+            raise GitHostError(f"could not delete {branch}: {exc.stderr}") from exc
+        return True
+
+    def close_pr(self, worktree: Path, pr_url: str) -> bool:
+        """Close a pull request that is still open. False when it already was not."""
+        view = self._gh(worktree, "pr", "view", pr_url, "--json", "state")
+        if json.loads(view.stdout).get("state") != "OPEN":
+            return False
+        self._gh(worktree, "pr", "close", pr_url)
+        return True
+
+    def merged_commit(self, worktree: Path, pr_url: str) -> str | None:
+        """The commit a merged pull request put on its base branch, or None when it was
+        not merged. A squash merge leaves none of the branch's own commits on the base;
+        this is the one commit that holds them."""
+        view = self._gh(worktree, "pr", "view", pr_url, "--json", "state,mergeCommit")
+        data: dict[str, Any] = json.loads(view.stdout)
+        if data.get("state") != "MERGED":
+            return None
+        oid = (data.get("mergeCommit") or {}).get("oid")
+        return str(oid) if oid else None
+
     def ci_status(self, worktree: Path, branch: str, pr_url: str) -> CiStatus:
         view = self._gh(worktree, "pr", "view", pr_url, "--json", "statusCheckRollup")
         checks: list[dict[str, Any]] = json.loads(view.stdout).get("statusCheckRollup") or []

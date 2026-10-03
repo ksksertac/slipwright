@@ -183,6 +183,7 @@ from slipwright.teams import Letter, Teams, builder_letter, failed_letter
 from slipwright.translate import OTHER_LANGUAGE, strings_of, translate
 from slipwright.workspace import Workspace
 from slipwright.workspace import git as g
+from slipwright.workspace.worktree import _repo_lock
 from slipwright.workspace.worktree import rmtree as _rmtree
 
 log = logging.getLogger(__name__)
@@ -341,8 +342,44 @@ class JobIsRunning(ValueError):
         self.job = job
 
 
+class JobRemoved(NotAwaitingApproval):
+    """The development was deleted: it is there to be read, and nothing moves it again.
+    A ``NotAwaitingApproval`` so that every door already refusing a finished development
+    refuses this one the same way."""
+
+    def __init__(self, job: Job) -> None:
+        ValueError.__init__(self, f"job {job.id} was deleted")
+        self.job = job
+
+
+#: What a deleted development's Jira issues are moved to, the first one the board offers.
+#: Not Done: the work was not done, and a board counting it as delivered would lie.
+WONT_DO = ["Won't Do", "Won't Fix", "Cancelled", "Canceled", "Rejected", "Declined"]
+
+
 def _by(who: str | None) -> str:
     return f" by {who}" if who else ""
+
+
+def _removal_summary(report: dict[str, Any]) -> str:
+    """What a deletion took off the host and what it could not, a line each, for the
+    history entry that records it."""
+    lines: list[str] = []
+    reverted = report.get("reverted")
+    if reverted:
+        lines.append(
+            f"reverted {reverted['commits']} commit(s) on {reverted['onto']}: "
+            f"{str(reverted['commit'])[:12]}"
+        )
+    lines += [f"pull request closed: {url}" for url in report.get("prs_closed", [])]
+    if report.get("branch_deleted"):
+        lines.append("branch deleted on the host")
+    if report.get("jira_closed"):
+        lines.append("Jira, Won't Do: " + ", ".join(report["jira_closed"]))
+    if report.get("jira_left"):
+        lines.append("Jira, no Won't Do to move to: " + ", ".join(report["jira_left"]))
+    lines += [f"not done: {why}" for why in report.get("errors", [])]
+    return "\n".join(lines)
 
 
 class _Stopped(Exception):
@@ -1630,6 +1667,8 @@ class Engine:
     def _jira_reconcile(self, job: Job) -> Job:
         """Mirror the job into Jira (no-op unless the project is linked and Jira is set up).
         Never raises: a Jira outage is recorded on the job and retried next time."""
+        if job.is_removed:
+            return job  # its issues were moved to Won't Do and hear nothing more
         job = self._retry_jira_queue(job)
         try:
             sync = self._jira_sync_for(job)
@@ -1666,6 +1705,8 @@ class Engine:
                 continue
             if job.state is JobState.FAILED and not job.data.jira_keys:
                 continue  # never mirrored: nothing to complete
+            if job.is_removed:
+                continue
             summary["jobs"] += 1
             with self._locks[job.id]:  # never alongside the job's own handler
                 try:
@@ -1940,6 +1981,243 @@ class Engine:
             if job.worktree_path is not None or job.port is not None:
                 self.workspace.destroy(job)
             self.store.delete_job(job.id)
+
+    # -- deleting a development for good -----------------------------------------------------
+
+    def remove_job(self, job_id: str, *, by: str | None = None) -> Job:
+        """Delete a stopped or finished development, everywhere it reached, and keep it
+        to be read.
+
+        ``delete_job`` takes the rows away and leaves the host as it was -- "a pull request
+        already opened stays on GitHub" -- which is the opposite of what somebody deleting
+        a development means: the branch, the draft and, once merged, the code itself are
+        all still there. This takes them back: the pull request is closed and the branch
+        deleted; work already merged into the base branch is reverted there, one commit
+        pushed on top (never a force: the base branch is everybody's); the Jira issues
+        are moved to Won't Do and hear nothing more; the worktree goes. The development
+        stays in the list marked deleted, and nothing -- carry on, retry, re-run -- moves
+        it again.
+
+        A step that cannot be done is recorded, not fatal: a revert that conflicts with
+        what was merged after it, a host that refuses. The person reads what is left.
+        """
+        job = self.store.get(job_id)
+        if job.is_removed:
+            raise JobRemoved(job)
+        if not (job.is_terminal or job.state is JobState.PAUSED):
+            raise JobInProgress(job.id, job.state)
+        lock = self._locks[job.id]
+        # a pause asked while a call was in flight is still finishing it: the run owns the
+        # job until it lets go, and deleting under it would race its next save
+        if not lock.acquire(blocking=False):
+            raise JobIsRunning(job)
+        try:
+            job = self.store.get(job_id)
+            report: dict[str, Any] = {
+                "by": by,
+                "at": utcnow().isoformat(),
+                "prs_closed": [],
+                "branch_deleted": False,
+                "reverted": None,
+                "jira_closed": [],
+                "jira_left": [],
+                "errors": [],
+            }
+            project = self._project_of(job)
+            # the example has no checkout and was never anywhere: it is only marked
+            if project is None or not project.is_demo:
+                self._take_off_host(job, project, report)
+                self._jira_wont_do(job, report)
+                try:
+                    self.workspace.destroy(job)
+                except Exception as exc:  # noqa: BLE001 -- a folder left behind is noted
+                    report["errors"].append(f"the worktree was not removed: {exc}")
+            job.data.removed = report
+            self.store.save(job)
+            note = f"deleted{_by(by)}"
+            detail = _removal_summary(report) or None
+            if job.state is JobState.PAUSED:
+                job = self.orchestrator.transition(
+                    job, JobState.CANCELLED, note=note, detail=detail
+                )
+            else:
+                job = self.store.update_state(job.id, job.state, note=note, detail=detail)
+        finally:
+            lock.release()
+        return job
+
+    def _take_off_host(self, job: Job, project: Project | None, report: dict[str, Any]) -> None:
+        checkout = job.repo_path
+        if not (checkout / ".git").exists() or not g.has_remote(checkout):
+            return  # a local folder: nothing was ever pushed anywhere
+        try:
+            host = self._host_of(job)
+        except Exception as exc:  # noqa: BLE001 -- no token is a reason, not a crash
+            report["errors"].append(f"the host could not be reached: {exc}")
+            return
+        base = self.base_branch_of(project)
+        tip = self._tip_of(job, host, checkout)
+        try:
+            upstream = host.fetch(checkout, base)
+        except Exception as exc:  # noqa: BLE001
+            report["errors"].append(f"{base} could not be read: {exc}")
+            upstream = None
+        merged = False
+        if upstream is not None:
+            undo = self._merged_commits(job, host, checkout, tip, upstream)
+            if undo:
+                merged = True
+                self._revert_onto(job, host, checkout, base, upstream, undo, report)
+        if not merged:
+            close = getattr(host, "close_pr", None)
+            for url in dict.fromkeys(u for u in (job.data.pr_url, job.data.draft_pr_url) if u):
+                if close is None:
+                    report["errors"].append(f"close the pull request by hand: {url}")
+                    continue
+                try:
+                    if close(checkout, url):
+                        report["prs_closed"].append(url)
+                except Exception as exc:  # noqa: BLE001
+                    report["errors"].append(f"{url} was not closed: {exc}")
+        delete = getattr(host, "delete_branch", None)
+        if delete is not None:
+            try:
+                report["branch_deleted"] = bool(delete(checkout, job.branch))
+            except Exception as exc:  # noqa: BLE001
+                report["errors"].append(f"{job.branch} was not deleted on the host: {exc}")
+        # the copy a fetch left in the checkout, so nothing local still names the branch
+        g.run(checkout, "update-ref", "-d", f"refs/remotes/origin/{job.branch}", check=False)
+
+    def _tip_of(self, job: Job, host: SourceHost, checkout: Path) -> str | None:
+        """The last commit of the development: the branch on the host when people pushed
+        to it after the development did, else the development's own."""
+        local: str | None = None
+        if job.worktree_path is not None and job.worktree_path.is_dir():
+            local = g.head_commit(job.worktree_path)
+        elif g.branch_exists(checkout, job.branch):
+            local = g.run(checkout, "rev-parse", job.branch).stdout.strip()
+        try:
+            remote = host.fetch(checkout, job.branch)
+        except Exception:  # noqa: BLE001 -- what the checkout has is the next best thing
+            remote = None
+        if remote is not None and (local is None or g.contains(checkout, local, remote)):
+            return remote
+        return local
+
+    def _merged_commits(
+        self, job: Job, host: SourceHost, checkout: Path, tip: str | None, upstream: str
+    ) -> list[tuple[str, bool]]:
+        """What of the development is on the base branch, as (commit, is a merge) pairs
+        newest first -- the order they are reverted in. Merged with a merge commit or
+        fast-forwarded, the base holds its own commits; squashed, it holds one commit the
+        host made, which only the pull request can name."""
+        base_commit = job.data.base_commit
+        if tip and base_commit and g.contains(checkout, tip, upstream):
+            shas = g.run(checkout, "rev-list", "--no-merges", tip, f"^{base_commit}").stdout.split()
+            if shas:
+                return [(sha, False) for sha in shas]
+        named = getattr(host, "merged_commit", None)
+        if named is None:
+            return []
+        for url in dict.fromkeys(u for u in (job.data.pr_url, job.data.draft_pr_url) if u):
+            try:
+                sha = named(checkout, url)
+            except Exception:  # noqa: BLE001 -- unknown is treated as not merged
+                continue
+            if sha and g.known(checkout, sha) and g.contains(checkout, sha, upstream):
+                parents = g.run(checkout, "rev-list", "--parents", "-n", "1", sha).stdout.split()
+                return [(sha, len(parents) > 2)]
+        return []
+
+    def _revert_onto(
+        self,
+        job: Job,
+        host: SourceHost,
+        checkout: Path,
+        base: str,
+        upstream: str,
+        undo: list[tuple[str, bool]],
+        report: dict[str, Any],
+    ) -> None:
+        """Revert ``undo`` on ``base`` as it is on the host, as one commit, and push it on
+        top. Done in a worktree of its own: the checkout's HEAD is somebody's."""
+        scratch = self.workspace.worktrees_root / f".revert-{job.id}"
+        with _repo_lock(checkout):
+            if scratch.exists():
+                _rmtree(scratch)
+            g.run(checkout, "worktree", "prune", check=False)
+            g.run(checkout, "worktree", "add", "-q", "--detach", str(scratch), upstream)
+        try:
+            for sha, is_merge in undo:
+                proc = g.run(
+                    scratch,
+                    "revert",
+                    "--no-commit",
+                    *(["-m", "1"] if is_merge else []),
+                    sha,
+                    check=False,
+                )
+                if proc.returncode != 0:
+                    clash = g.run(
+                        scratch, "diff", "--name-only", "--diff-filter=U", check=False
+                    ).stdout.split()
+                    why = ", ".join(clash) or proc.stderr.strip() or "git refused"
+                    report["errors"].append(
+                        f"{base} was not reverted: what was merged after it changed the "
+                        f"same lines ({why}). Revert it by hand."
+                    )
+                    return
+            title = (job.title or job.request).strip().splitlines()[0][:72]
+            message = (
+                f'Revert "{title}"\n\n'
+                f"The development {job.id} was deleted in Slipwright"
+                f"{_by(report.get('by'))}; this takes its {len(undo)} commit(s) back off "
+                f"{base}."
+            )
+            if not g.commit(scratch, message):
+                return  # somebody had already reverted it: nothing is left to take off
+            push_onto = getattr(host, "push_onto", None)
+            if push_onto is None:
+                report["errors"].append(f"{base} was not reverted: this host cannot push it")
+                return
+            push_onto(scratch, base)
+            report["reverted"] = {
+                "onto": base,
+                "commit": g.head_commit(scratch),
+                "commits": len(undo),
+            }
+        except Exception as exc:  # noqa: BLE001 -- refused, protected, moved meanwhile
+            report["errors"].append(f"{base} was not reverted: {exc}")
+        finally:
+            with _repo_lock(checkout):
+                g.run(checkout, "worktree", "remove", "--force", str(scratch), check=False)
+                if scratch.exists():
+                    _rmtree(scratch)
+                g.run(checkout, "worktree", "prune", check=False)
+
+    def _jira_wont_do(self, job: Job, report: dict[str, Any]) -> None:
+        """Move the development's Jira issues to Won't Do -- and that is the last Jira
+        hears of it: no comment, and the sweep passes a deleted development by."""
+        if not job.data.jira_keys:
+            return
+        try:
+            sync = self._jira_sync_for(job)
+        except JiraError as exc:
+            report["errors"].append(f"Jira could not be reached: {exc}")
+            return
+        if sync is None:
+            return
+        # a board that calls it something else names it on the project, like its other moves
+        own = sync.project.jira_transitions.get("wont_do")
+        names = [own, *WONT_DO] if own else WONT_DO
+        for key in dict.fromkeys(job.data.jira_keys.values()):
+            try:
+                if sync.client.transition_to_any(key, names):
+                    report["jira_closed"].append(key)
+                else:
+                    report["jira_left"].append(key)
+            except JiraError as exc:
+                report["errors"].append(f"{key}: {exc}")
 
     def seed_for(self, job: Job) -> Profile:
         """The seed profile a job starts from: its project's, else the engine's default."""
@@ -2312,6 +2590,8 @@ class Engine:
         Written as a row of its own and nothing else: saving the job from here would put
         the request's copy of it over whatever the run has written since it was read."""
         job = self.store.get(job_id)
+        if job.is_removed:
+            raise JobRemoved(job)
         self.store.add_message(
             JobMessage(
                 job_id=job.id,
@@ -2754,6 +3034,8 @@ class Engine:
         if step not in targets:
             raise ValueError(f"unknown step {step!r}; expected one of {sorted(targets)}")
         job = self.store.get(job_id)
+        if job.is_removed:
+            raise JobRemoved(job)
         if job.state in WORKING_STATES:
             raise JobIsRunning(job)
         if job.state is JobState.PAUSED:
@@ -2863,6 +3145,8 @@ class Engine:
         a phase somebody finished is not built a second time.
         """
         job = self.store.get(job_id)
+        if job.is_removed:
+            raise JobRemoved(job)
         if job.state is not JobState.PAUSED:
             raise NotAwaitingApproval(job)
         pause = dict(job.data.pause or {})
@@ -3169,6 +3453,8 @@ class Engine:
         (build attempts, retries, review rounds, CI fixes) start over; everything built so
         far stays. Optional feedback reaches the next role through the inbox."""
         job = self.store.get(job_id)
+        if job.is_removed:
+            raise JobRemoved(job)
         if job.state is not JobState.FAILED:
             raise NotAwaitingApproval(job)
         failure = next(
@@ -3221,6 +3507,8 @@ class Engine:
         first.
         """
         job = self.store.get(job_id)
+        if job.is_removed:
+            raise JobRemoved(job)
         if job.state is not JobState.FAILED:
             raise NotAwaitingApproval(job)
         note = note.strip()
@@ -3270,6 +3558,8 @@ class Engine:
         """The human overrules the supervisor after the fact: the feedback reaches the
         next role through the inbox and the record shows the approval was undone."""
         job = self.store.get(job_id)
+        if job.is_removed:
+            raise JobRemoved(job)
         record = job.data.supervision
         if not record or record.get("acted") != "auto" or record.get("undone"):
             raise NotAwaitingApproval(job)
@@ -4211,6 +4501,8 @@ class Engine:
         "Split it in three" is the Architect's to do, not the developer's: sent to the
         developer it was read as one more try of the same phase."""
         job = self.store.get(job_id)
+        if job.is_removed:
+            raise JobRemoved(job)
         if job.state is not JobState.AWAITING_DECISION or job.data.decision_kind != "phase_budget":
             raise NotAwaitingApproval(job)
         if not note.strip():

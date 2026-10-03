@@ -67,8 +67,11 @@ export function hasFinished(state: JobState): boolean {
   return FINISHED.includes(state);
 }
 
-export function StateBadge({ state }: { state: JobState }) {
+/** ``removed``: the development was deleted, which says more than the state it was left
+ *  in -- a deleted one that had finished would otherwise still read "done". */
+export function StateBadge({ state, removed = false }: { state: JobState; removed?: boolean }) {
   const tx = useT();
+  if (removed) return <span className="badge bad">{tx("deleted")}</span>;
   return <span className={`badge ${STATE_CLASS[state]}`}>{tx(STATE_LABEL[state])}</span>;
 }
 
