@@ -127,6 +127,7 @@ def test_sizes_are_filled_in_for_the_history_written_before_them(tmp_path: Path)
             conn.execute(text("ALTER TABLE workers DROP COLUMN lent_by"))
             conn.execute(text("ALTER TABLE worker_codes DROP COLUMN lent_by"))
             conn.execute(text("ALTER TABLE worker_codes DROP COLUMN pair_key"))
+            conn.execute(text("ALTER TABLE workers DROP COLUMN about_json"))  # (0016)
             conn.execute(
                 text(
                     "INSERT INTO jobs (id, request, title, repo_path, state, created_at,"

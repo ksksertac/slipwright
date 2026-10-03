@@ -30,7 +30,7 @@ class MachineAbout(BaseModel):
     writers: list[str] = Field(
         default_factory=list,
         max_length=6,
-        description="What writes on it, tool and model: Claude Code sonnet, Codex gpt-5.",
+        description="What writes on it: each tool and its model, as the machine names them.",
     )
 
     @field_validator("host")
