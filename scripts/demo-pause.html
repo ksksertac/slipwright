@@ -1,0 +1,559 @@
+<!doctype html>
+<!--
+  The README's "Stop, work on it by hand, carry on" picture, as one scene drawn in time.
+
+  A development is stopped and its branch pushed; somebody checks it out in their editor,
+  finishes the half-written phase by hand and pushes; Slipwright pulls it in, the Architect
+  reads what they did, and the development carries on from the phase after it. The
+  wording is the interface's own (web/src/components/Pause.tsx), so the picture never
+  promises a button that is not there.
+
+  Nothing here moves by itself: render(t) draws the scene as it is t milliseconds in, from
+  t alone, so record-pause.mjs can shoot it frame by frame and every take is the same.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=block" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f1115; --surface: #171a20; --surface-2: #1d2129; --surface-3: #252a34;
+    --line: #262b35; --line-strong: #353c49; --text: #f2f4f7; --text-2: #b8c0cc; --text-3: #6f7a8a;
+    --accent: #3987e5; --accent-soft: #172a45; --good: #0ca30c; --good-soft: #10301a; --good-text: #4ade80;
+    --warn: #fab219; --warn-soft: #3a2b08; --warn-text: #fbbf24; --violet: #a78bfa; --violet-soft: #2a2145;
+    --mono: "JetBrains Mono", Consolas, monospace; --font: "Inter", "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #0a0d12; }
+  body { font: 13px/1.45 var(--font); color: var(--text); -webkit-font-smoothing: antialiased; }
+  #stage {
+    position: relative; width: 1000px; height: 600px; overflow: hidden;
+    background:
+      radial-gradient(700px 380px at 12% 0%, rgba(57,135,229,.22), transparent 70%),
+      radial-gradient(600px 340px at 100% 100%, rgba(167,139,250,.12), transparent 70%),
+      linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px) 0 0 / 28px 28px,
+      linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px) 0 0 / 28px 28px,
+      #0a0d12;
+  }
+
+  /* the strip on top: what this is, and which of the three steps is on screen */
+  .top { position: absolute; left: 24px; right: 24px; top: 16px; height: 34px; display: flex; align-items: center; gap: 12px; }
+  .top .title { font-weight: 700; font-size: 15px; letter-spacing: -.01em; white-space: nowrap; }
+  .top .title span { color: var(--accent); }
+  .steps { margin-left: auto; display: flex; gap: 6px; }
+  .step { display: flex; align-items: center; gap: 7px; padding: 5px 11px 5px 6px; border-radius: 999px; border: 1px solid var(--line); background: rgba(23,26,32,.7); color: var(--text-3); font-weight: 600; font-size: 12px; white-space: nowrap; }
+  .step i { font-style: normal; width: 19px; height: 19px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-3); font-size: 11px; }
+  .step.on { color: var(--text); border-color: var(--accent); background: var(--accent-soft); }
+  .step.on i { background: var(--accent); color: #fff; }
+  .step.done { color: var(--good-text); }
+  .step.done i { background: var(--good-soft); color: var(--good-text); }
+
+  /* a window, either of them */
+  .win { position: absolute; left: 24px; top: 62px; width: 952px; height: 520px; border-radius: 12px; overflow: hidden; border: 1px solid var(--line-strong); box-shadow: 0 24px 60px rgba(0,0,0,.55), 0 0 0 1px rgba(0,0,0,.4); }
+  .bar { height: 32px; display: flex; align-items: center; gap: 7px; padding: 0 12px; background: #13161b; border-bottom: 1px solid var(--line); }
+  .bar .dot { width: 11px; height: 11px; border-radius: 50%; }
+  .bar .url { margin-left: 14px; flex: 1; max-width: 520px; height: 20px; border-radius: 6px; background: var(--surface-2); color: var(--text-3); font: 11px/20px var(--mono); padding: 0 10px; white-space: nowrap; overflow: hidden; }
+
+  /* Slipwright */
+  #sw { background: var(--bg); }
+  #sw .body { display: grid; grid-template-columns: 168px 1fr; height: calc(100% - 32px); }
+  #sw aside { background: #13161b; border-right: 1px solid var(--line); padding: 14px 10px; display: grid; gap: 3px; align-content: start; }
+  #sw .brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 14px; padding: 0 6px 12px; }
+  #sw .brand svg { width: 24px; height: 24px; }
+  #sw .nav { display: flex; align-items: center; gap: 9px; padding: 7px 8px; border-radius: 8px; color: var(--text-2); font-size: 12.5px; }
+  #sw .nav b { width: 22px; height: 22px; border-radius: 6px; background: var(--surface-3); display: block; }
+  #sw .nav.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  #sw .nav.on b { background: rgba(57,135,229,.35); }
+  #sw main { padding: 14px 20px; display: grid; gap: 11px; align-content: start; position: relative; }
+  .crumb { color: var(--text-3); font-size: 11.5px; }
+  .crumb b { color: var(--text-2); font-weight: 500; }
+  .h1row { display: flex; align-items: center; gap: 10px; }
+  .h1row h1 { margin: 0; font-size: 19px; letter-spacing: -.015em; }
+  .badge { font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 999px; white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; }
+  .badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .b-run { background: var(--accent-soft); color: var(--accent); }
+  .b-pause { background: var(--accent-soft); color: #7fb2f0; }
+  .b-read { background: var(--violet-soft); color: var(--violet); }
+  .b-wait { background: var(--warn-soft); color: var(--warn-text); }
+  .acts { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+  .btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line-strong); background: var(--surface); color: var(--text); border-radius: 8px; padding: 6px 12px; font: 500 12.5px var(--font); white-space: nowrap; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.quiet { border-color: transparent; background: none; color: var(--text-2); }
+  .btn.hot { box-shadow: 0 0 0 3px rgba(57,135,229,.45); }
+  .meta { display: flex; gap: 26px; font-size: 10.5px; letter-spacing: .06em; color: var(--text-3); text-transform: uppercase; font-weight: 600; }
+  .meta div span { display: block; font: 400 11.5px var(--mono); text-transform: none; letter-spacing: 0; color: var(--text-2); margin-top: 2px; }
+  .stages { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .stg { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 8px 11px; }
+  .stg b { display: block; font-size: 12.5px; }
+  .stg span { color: var(--text-3); font-size: 11.5px; }
+  .stg.on { border-color: rgba(57,135,229,.55); }
+  .stg.dim b { color: var(--text-3); }
+  .card { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; }
+  .phases { padding: 4px 0; }
+  .ph { display: grid; grid-template-columns: 26px 1fr auto; gap: 10px; align-items: center; padding: 8px 14px; border-top: 1px solid var(--line); }
+  .ph:first-child { border-top: 0; }
+  .ph .n { color: var(--text-3); font: 12px var(--mono); }
+  .ph .g { font-size: 12.5px; }
+  .ph .g small { display: block; color: var(--text-3); font-size: 11px; }
+  .chip { font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
+  .c-done { background: var(--good-soft); color: var(--good-text); }
+  .c-run { background: var(--accent-soft); color: var(--accent); }
+  .c-hand { background: var(--violet-soft); color: var(--violet); }
+  .c-idle { background: var(--surface-3); color: var(--text-3); }
+  .c-half { background: var(--warn-soft); color: var(--warn-text); }
+  .prog { height: 4px; border-radius: 2px; background: var(--surface-3); margin-top: 5px; overflow: hidden; width: 260px; }
+  .prog i { display: block; height: 100%; background: var(--accent); }
+  .paused { border: 1px solid #1d4d2a; background: #0f2a17; border-radius: 10px; padding: 11px 14px; display: grid; gap: 6px; }
+  .paused .l1 { display: flex; align-items: center; }
+  .paused strong { color: var(--good-text); font-size: 13px; }
+  .paused p { margin: 0; color: var(--good-text); font-size: 12px; }
+  .paused pre { margin: 0; background: #0b1810; border: 1px solid #173a22; border-radius: 7px; padding: 8px 11px; font: 11.5px/1.6 var(--mono); color: var(--good-text); }
+  .gate { padding: 12px 14px; display: grid; gap: 9px; }
+  .gate .l1 { display: flex; align-items: center; gap: 9px; }
+  .gate h3 { margin: 0; font-size: 13.5px; }
+  .gate p { margin: 0; color: var(--text-2); font-size: 12px; }
+  table { border-collapse: collapse; width: 100%; font-size: 12px; }
+  th { text-align: left; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-3); font-weight: 600; padding: 5px 8px; border-bottom: 1px solid var(--line); }
+  td { padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  tr:last-child td { border-bottom: 0; }
+  td.ev { color: var(--text-3); font-size: 11.5px; }
+  .reading { padding: 14px; display: flex; gap: 12px; align-items: center; }
+  .av { width: 30px; height: 30px; border-radius: 8px; background: var(--violet-soft); color: var(--violet); display: grid; place-items: center; font-weight: 700; font-size: 12px; }
+  .reading b { display: block; font-size: 12.5px; }
+  .reading span { color: var(--text-3); font-size: 11.5px; }
+  .shade { position: absolute; inset: 0; background: rgba(6,8,11,.62); display: grid; place-items: center; }
+  .modal { width: 470px; background: var(--surface); border: 1px solid var(--line-strong); border-radius: 12px; box-shadow: 0 20px 50px rgba(0,0,0,.6); }
+  .modal header { padding: 13px 18px; font-weight: 600; font-size: 13.5px; border-bottom: 1px solid var(--line); }
+  .modal .mb { padding: 13px 18px; display: grid; gap: 9px; font-size: 12.5px; color: var(--text); }
+  .modal .mb p { margin: 0; }
+  .modal .muted { color: var(--text-3); font-size: 11.5px; }
+  .modal .mono { font: 11.5px var(--mono); color: var(--text-2); }
+  .modal .moved { background: #0f2a17; color: var(--good-text); border-radius: 8px; padding: 9px 12px; font-size: 12px; }
+  .modal footer { padding: 11px 18px; border-top: 1px solid var(--line); display: flex; justify-content: flex-end; gap: 8px; }
+
+  /* the editor */
+  #vs { background: #1e1e1e; font-family: var(--font); }
+  #vs .bar { background: #2b2b2b; border-color: #191919; justify-content: flex-start; }
+  #vs .bar .t { flex: 1; text-align: center; color: #c5c5c5; font-size: 12px; margin-right: 60px; }
+  #vs .body { display: grid; grid-template-columns: 44px 196px 1fr; height: calc(100% - 32px - 22px); }
+  #vs .act { background: #333333; display: grid; align-content: start; gap: 16px; padding-top: 12px; justify-items: center; }
+  #vs .act b { width: 22px; height: 22px; border-radius: 4px; border: 2px solid #858585; display: block; }
+  #vs .act b.on { border-color: #e7e7e7; }
+  #vs .exp { background: #252526; color: #cccccc; font-size: 12.5px; padding-top: 8px; }
+  #vs .exp .h { font-size: 10.5px; letter-spacing: .06em; padding: 2px 14px 8px; color: #bbbbbb; font-weight: 600; }
+  #vs .f { padding: 2px 14px; display: flex; justify-content: space-between; white-space: nowrap; }
+  #vs .f.on { background: #37373d; }
+  #vs .f .m { color: #e2c08d; font-weight: 600; font-size: 11px; }
+  #vs .f.mod { color: #e2c08d; }
+  #vs .right { display: grid; grid-template-rows: 30px minmax(0, 1fr) 176px; min-width: 0; min-height: 0; }
+  #vs .tabs { background: #252526; display: flex; }
+  #vs .tab { background: #1e1e1e; color: #ffffff; font-size: 12px; padding: 7px 14px; border-top: 1px solid #3987e5; display: flex; gap: 8px; }
+  #vs .tab .dotm { color: #e2c08d; }
+  #vs .ed { font: 12.5px/19px var(--mono); font-variant-ligatures: none; padding-top: 8px; color: #d4d4d4; overflow: hidden; }
+  #vs .ln { display: grid; grid-template-columns: 46px 1fr; white-space: pre; }
+  #vs .ln .no { color: #6e7681; text-align: right; padding-right: 18px; }
+  #vs .ln.cur { background: #282828; }
+  #vs .ln.cur .no { color: #c6c6c6; }
+  #vs .ln.sel .tx { background: #264f78; }
+  .cur-bar { display: inline-block; width: 2px; height: 15px; background: #aeafad; vertical-align: -3px; margin-left: 1px; }
+  .k { color: #c586c0; } .kw { color: #569cd6; } .s { color: #ce9178; } .cm { color: #6a9955; }
+  .fn { color: #dcdcaa; } .ty { color: #4ec9b0; } .tg { color: #569cd6; } .at { color: #9cdcfe; } .pu { color: #808080; } .va { color: #9cdcfe; }
+  #vs .term { border-top: 1px solid #3c3c3c; background: #181818; padding: 8px 14px 6px; font: 12px/18px var(--mono); font-variant-ligatures: none; color: #cccccc; overflow: hidden; display: flex; flex-direction: column; }
+  #term { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; min-height: 0; }
+  #vs .term .pr { color: #3fb950; }
+  #vs .term .pa { color: #58a6ff; }
+  #vs .term .dim { color: #8b949e; }
+  #vs .termhead { font: 600 10.5px var(--font); letter-spacing: .06em; color: #e7e7e7; padding: 0 0 6px; border-bottom: 0; }
+  #vs .status { height: 22px; background: #007acc; color: #fff; font-size: 11.5px; display: flex; align-items: center; gap: 14px; padding: 0 10px; }
+
+  /* the pointer, and the ring a press leaves */
+  #ptr { position: absolute; width: 22px; height: 22px; pointer-events: none; z-index: 9; filter: drop-shadow(0 2px 3px rgba(0,0,0,.6)); }
+  #ring { position: absolute; width: 34px; height: 34px; margin: -17px 0 0 -17px; border-radius: 50%; border: 2px solid rgba(57,135,229,.9); z-index: 8; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="top">
+    <div class="title">Stop, work on it <span>by hand</span>, carry on</div>
+    <div class="steps">
+      <div class="step" id="st1"><i>1</i>Stop and push</div>
+      <div class="step" id="st2"><i>2</i>Finish it in your editor</div>
+      <div class="step" id="st3"><i>3</i>Pull and carry on</div>
+    </div>
+  </div>
+
+  <div class="win" id="sw">
+    <div class="bar"><span class="dot" style="background:#ff5f57"></span><span class="dot" style="background:#febc2e"></span><span class="dot" style="background:#28c840"></span><div class="url">slipwright.local/projects/notes-app/developments/0f32a290</div></div>
+    <div class="body">
+      <aside>
+        <div class="brand"><svg viewBox="0 0 24 24" fill="none" stroke="#3987e5" stroke-width="1.8"><path d="M4 16 L12 3 L12 16 Z"/><path d="M13 5 L20 16 L13 16 Z"/><path d="M3 18 Q12 23 21 18"/></svg>Slipwright</div>
+        <div class="nav"><b></b>Dashboard</div>
+        <div class="nav on"><b></b>Projects</div>
+        <div class="nav"><b></b>Agents</div>
+        <div class="nav"><b></b>Machines</div>
+        <div class="nav"><b></b>Models</div>
+        <div class="nav"><b></b>Sources</div>
+      </aside>
+      <main>
+        <div class="crumb">Projects / Notes app / <b>Notes can be pinned to the top of the list</b></div>
+        <div class="h1row">
+          <h1>Notes can be pinned to the top of the list</h1>
+          <span class="badge" id="state"></span>
+          <div class="acts" id="acts"></div>
+        </div>
+        <div class="meta">
+          <div>Development<span>0f32a290e324</span></div>
+          <div>Branch<span>notes-app/pin-notes-0f32a290</span></div>
+          <div>Port<span>8101</span></div>
+        </div>
+        <div class="stages">
+          <div class="stg"><b>Planning</b><span>5/5 done</span></div>
+          <div class="stg on"><b>Building</b><span id="bdone">1/3 done</span></div>
+          <div class="stg dim"><b>Testing</b><span>0/5 done</span></div>
+          <div class="stg dim"><b>Delivery</b><span>0/2 done</span></div>
+        </div>
+        <div id="panel"></div>
+        <div class="card phases" id="phases"></div>
+        <div class="shade" id="shade" style="display:none"><div class="modal" id="modal"></div></div>
+      </main>
+    </div>
+  </div>
+
+  <div class="win" id="vs">
+    <div class="bar"><span class="dot" style="background:#ff5f57"></span><span class="dot" style="background:#febc2e"></span><span class="dot" style="background:#28c840"></span><div class="t">PinButton.tsx — notes-app — Visual Studio Code</div></div>
+    <div class="body">
+      <div class="act"><b class="on"></b><b></b><b></b><b></b></div>
+      <div class="exp">
+        <div class="h">EXPLORER · NOTES-APP</div>
+        <div class="f">⌄ src</div>
+        <div class="f" style="padding-left:24px">⌄ notes</div>
+        <div class="f" style="padding-left:36px">NoteCard.tsx</div>
+        <div class="f on" style="padding-left:36px" id="fpin"><span>PinButton.tsx</span><span class="m" id="fm"></span></div>
+        <div class="f" style="padding-left:36px">NoteList.tsx</div>
+        <div class="f" style="padding-left:36px">notes.ts</div>
+        <div class="f" style="padding-left:24px">› api</div>
+        <div class="f">package.json</div>
+        <div class="f">README.md</div>
+      </div>
+      <div class="right">
+        <div class="tabs"><div class="tab">PinButton.tsx <span class="dotm" id="tabm"></span></div></div>
+        <div class="ed" id="ed"></div>
+        <div class="term"><div class="termhead">TERMINAL</div><div id="term"></div></div>
+      </div>
+    </div>
+    <div class="status"><span id="branch">⎇ main</span><span>⊗ 0 ⚠ 0</span><span style="margin-left:auto">TypeScript JSX</span></div>
+  </div>
+
+  <div id="ring" style="display:none"></div>
+  <svg id="ptr" viewBox="0 0 22 22"><path d="M3 2 L3 18 L7.5 13.8 L10.4 20 L13 18.8 L10.2 12.8 L16.2 12.6 Z" fill="#fff" stroke="#111" stroke-width="1.3" stroke-linejoin="round"/></svg>
+</div>
+
+<script>
+// -- the take, in order ---------------------------------------------------------------------
+// Each beat is [name, how long it lasts]; T[name] is when it starts and ends.
+
+const BRANCH = "notes-app/pin-notes-0f32a290";
+const CMD_FETCH = "git fetch origin";
+const CMD_CHECKOUT = "git checkout " + BRANCH;
+const CMD_COMMIT = 'git commit -am "Pin button on each note"';
+const CMD_PUSH = "git push";
+const HALF = [
+  'import { usePinNote, type Note } from "./notes";',
+  "",
+  "export function PinButton({ note }: { note: Note }) {",
+  "  const pin = usePinNote(note.id);",
+  "  // TODO: half-written when the development was stopped",
+  "}",
+];
+const TYPED = [
+  "  return (",
+  "    <button",
+  '      className={note.pinned ? "pin on" : "pin"}',
+  "      aria-pressed={note.pinned}",
+  "      onClick={() => pin.mutate(!note.pinned)}",
+  "    >",
+  '      {note.pinned ? "Unpin" : "Pin"}',
+  "    </button>",
+  "  );",
+].join("\n");
+const TYPE_MS = 26; // a keystroke while writing code
+const CMD_MS = 38; // a keystroke in the terminal
+
+const BEATS = [
+  ["running", 1600],
+  ["toStop", 800], ["pressStop", 250],
+  ["stopModal", 1500],
+  ["toStopPush", 700], ["pressStopPush", 250],
+  ["paused", 2900],
+  ["toEditor", 450],
+  ["typeFetch", CMD_FETCH.length * CMD_MS], ["fetched", 500],
+  ["typeCheckout", CMD_CHECKOUT.length * CMD_MS], ["checkedOut", 1100],
+  ["select", 700],
+  ["typeCode", TYPED.length * TYPE_MS], ["typed", 1300],
+  ["typeCommit", CMD_COMMIT.length * CMD_MS], ["committed", 700],
+  ["typePush", CMD_PUSH.length * CMD_MS], ["pushed", 1900],
+  ["toSlipwright", 450],
+  ["toCarry", 800], ["pressCarry", 250],
+  ["carryModal", 2600],
+  ["toPull", 700], ["pressPull", 250],
+  ["reading", 1900],
+  ["gate", 3200],
+  ["toApprove", 800], ["pressApprove", 250],
+  ["carrying", 3600],
+];
+const T = {};
+let at = 0;
+for (const [name, ms] of BEATS) { T[name] = [at, at + ms]; at += ms; }
+window.TOTAL = at;
+
+const from = (name) => T[name][0];
+const past = (t, name) => t >= T[name][0];
+const within = (t, name) => t >= T[name][0] && t < T[name][1];
+/** 0..1 through a beat. */
+const through = (t, name) => Math.min(1, Math.max(0, (t - T[name][0]) / (T[name][1] - T[name][0])));
+const ease = (x) => (x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2);
+const $ = (id) => document.getElementById(id);
+const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+// -- Slipwright ------------------------------------------------------------------------------
+
+function phase(n, goal, who, chip, cls, progress) {
+  const bar = progress == null ? "" : `<div class="prog"><i style="width:${progress}%"></i></div>`;
+  return `<div class="ph"><span class="n">${n}</span><div class="g">${goal}${who ? `<small>${who}</small>` : ""}${bar}</div><span class="chip ${cls}">${chip}</span></div>`;
+}
+
+function drawSlipwright(t) {
+  const stopped = past(t, "paused");
+  const pulled = past(t, "reading");
+  const atGate = past(t, "gate");
+  const going = past(t, "carrying");
+
+  let state, cls, acts;
+  if (going) [state, cls] = ["building", "b-run"];
+  else if (atGate) [state, cls] = ["needs approval of work done by hand", "b-wait"];
+  else if (pulled) [state, cls] = ["reading work done by hand", "b-read"];
+  else if (stopped) [state, cls] = ["paused", "b-pause"];
+  else [state, cls] = ["building", "b-run"];
+  $("state").className = "badge " + cls;
+  $("state").textContent = state;
+
+  const hot = (beat) => (within(t, beat) ? " hot" : "");
+  if (stopped && !pulled) acts = `<span class="btn primary${hot("pressCarry")}" id="bCarry">▷ Carry on</span><span class="btn quiet">End</span>`;
+  else if (pulled && !going) acts = "";
+  else acts = `<span class="btn${hot("pressStop")}" id="bStop">❚❚ Stop</span><span class="btn quiet">End</span>`;
+  $("acts").innerHTML = acts;
+
+  // phase 2 was being written when it was stopped; Ada finishes it, phase 3 is next
+  const p1 = phase(1, "Note model gets a pinned flag", "Backend Developer · claude sonnet", "done", "c-done");
+  let p2, p3;
+  if (going) {
+    p2 = phase(2, "Pin button on each note", "Ada · 4e1f0a2", "done by hand", "c-hand");
+    p3 = phase(3, "Pinned notes first in the list", "Backend Developer · claude sonnet", "writing", "c-run", 8 + 70 * ease(through(t, "carrying")));
+  } else if (stopped) {
+    p2 = phase(2, "Pin button on each note", "Web Developer · codex gpt-5 · stopped half-way", "paused", "c-half");
+    p3 = phase(3, "Pinned notes first in the list", "", "queued", "c-idle");
+  } else {
+    const grow = 30 + 22 * through(t, "running") + 8 * through(t, "toStop");
+    p2 = phase(2, "Pin button on each note", "Web Developer · codex gpt-5", "writing", "c-run", grow);
+    p3 = phase(3, "Pinned notes first in the list", "", "queued", "c-idle");
+  }
+  $("phases").innerHTML = p1 + p2 + p3;
+  $("phases").style.display = pulled && !going ? "none" : "";
+  $("bdone").textContent = going ? "2/3 done" : "1/3 done";
+
+  let panel = "";
+  if (stopped && !pulled) {
+    panel = `<div class="paused"><div class="l1"><strong>Paused by Ada just now</strong></div><p>The branch is pushed. To work on it:</p><pre>git fetch origin\ngit checkout ${BRANCH}</pre></div>`;
+  } else if (pulled && !atGate) {
+    const dots = ".".repeat(1 + (Math.floor((t - from("reading")) / 300) % 3));
+    panel = `<div class="card reading"><div class="av">A</div><div><b>Architect</b><span>pulled 1 commit pushed while it was paused · reading what was done by hand against the plan${dots}</span></div></div>`;
+  } else if (atGate && !going) {
+    panel = `<div class="card gate">
+      <div class="l1"><h3>Work done by hand</h3><span class="chip c-idle">Architect</span>
+        <div class="acts"><span class="btn">Send back</span><span class="btn primary${hot("pressApprove")}" id="bApprove">Approve · work done by hand</span></div></div>
+      <p>Ada finished the pin button by hand in one commit. The pinned flag it uses is already there from phase 1; the list still has to put pinned notes first.</p>
+      <table><thead><tr><th>Phase</th><th>Goal</th><th>Status</th><th>Evidence</th></tr></thead><tbody>
+        <tr><td>2</td><td>Pin button on each note</td><td><span class="chip c-hand">done by hand</span></td><td class="ev">PinButton.tsx renders the button and calls usePinNote (4e1f0a2)</td></tr>
+        <tr><td>3</td><td>Pinned notes first in the list</td><td><span class="chip c-idle">not started</span></td><td class="ev">NoteList.tsx still sorts by date only</td></tr>
+      </tbody></table>
+      <p style="color:var(--text-3);font-size:11.5px">Approving carries on with phase 3.</p></div>`;
+  }
+  $("panel").innerHTML = panel;
+  $("panel").style.display = panel ? "" : "none";
+
+  let modal = "";
+  if (past(t, "stopModal") && !past(t, "paused")) {
+    modal = `<header>Stop the development</header><div class="mb">
+      <p>It stops before its next call -- whatever is being answered now finishes -- and keeps its place: the step, the phase and everything written so far. It carries on from there when you say so.</p>
+      <p class="muted">Stop and push also sends the branch to the repository as it stands, half-written phase included, so people can check it out and work on it by hand.</p>
+      <p class="mono">${BRANCH}</p></div>
+      <footer><span class="btn">Stop</span><span class="btn primary${hot("pressStopPush")}" id="bStopPush">Stop and push</span></footer>`;
+  } else if (past(t, "carryModal") && !past(t, "reading")) {
+    modal = `<header>Carry on with the development</header><div class="mb">
+      <p>Carry on picks up exactly where it was paused. Pull and carry on first merges what people pushed to the branch meanwhile; the Architect then reads what they did against the plan, and once you approve that, the phases they finished are not built again.</p>
+      <div class="moved">Somebody has pushed to this branch since it was paused. Carrying on without those commits would build beside them, so pull them in.</div></div>
+      <footer><span class="btn">Carry on</span><span class="btn primary${hot("pressPull")}" id="bPull">Pull and carry on</span></footer>`;
+  }
+  $("modal").innerHTML = modal;
+  $("shade").style.display = modal ? "" : "none";
+}
+
+// -- the editor ------------------------------------------------------------------------------
+
+/** Colours one line of TSX the way VS Code's dark theme does, near enough to read as it. */
+function paint(line) {
+  const rules = [
+    [/^\/\/.*/, "cm"],
+    [/^"[^"]*"?/, "s"],
+    [/^(import|export|from|return)\b/, "k"],
+    [/^(function|const|type)\b/, "kw"],
+    [/^<\/?(?=[a-z])/, "pu"],
+    [/^[A-Z]\w*/, "ty"],
+    [/^\w+(?==)/, "at"],
+    [/^\w+(?=\()/, "fn"],
+    [/^\w+/, "va"],
+  ];
+  let out = "", rest = line, prevTag = false;
+  while (rest) {
+    let hit = null;
+    for (const [re, cls] of rules) {
+      const m = rest.match(re);
+      if (m && m[0]) { hit = [m[0], cls]; break; }
+    }
+    if (!hit) { out += esc(rest[0]); rest = rest.slice(1); prevTag = false; continue; }
+    let [text, cls] = hit;
+    if (prevTag && cls === "va") cls = "tg"; // the name right after "<" is a tag
+    out += `<span class="${cls}">${esc(text)}</span>`;
+    prevTag = cls === "pu";
+    rest = rest.slice(text.length);
+  }
+  return out;
+}
+
+function drawEditor(t) {
+  const typing = past(t, "typeCode");
+  const shown = typing ? Math.floor((t - from("typeCode")) / TYPE_MS) : 0;
+  const typed = TYPED.slice(0, Math.min(TYPED.length, shown));
+  const lines = typing ? [...HALF.slice(0, 4), ...typed.split("\n"), HALF[5]] : HALF;
+  const curLine = typing ? 4 + typed.split("\n").length - 1 : 4;
+  const selecting = within(t, "select");
+  const writing = typing && !past(t, "committed");
+  const blink = Math.floor(t / 500) % 2 === 0 || within(t, "typeCode");
+  $("ed").innerHTML = lines
+    .map((l, i) => {
+      const cur = i === curLine && past(t, "select");
+      const caret = cur && writing && blink ? '<span class="cur-bar"></span>' : "";
+      return `<div class="ln${cur ? " cur" : ""}${selecting && i === 4 ? " sel" : ""}"><span class="no">${i + 1}</span><span class="tx">${paint(l)}${caret}</span></div>`;
+    })
+    .join("");
+  const modified = typing && !past(t, "committed");
+  $("fm").textContent = modified ? "M" : "";
+  $("fpin").className = "f on" + (modified ? " mod" : "");
+  $("tabm").textContent = modified ? "●" : "";
+
+  // the terminal: a prompt, what is typed at it, and what comes back
+  const prompt = '<span class="pr">ada@studio</span> <span class="pa">~/code/notes-app</span> $ ';
+  const out = [];
+  const cmd = (beat, text, after) => {
+    if (!past(t, beat)) return false;
+    const n = Math.floor((t - from(beat)) / CMD_MS);
+    const done = n >= text.length;
+    out.push(prompt + esc(text.slice(0, n)) + (done ? "" : '<span class="cur-bar"></span>'));
+    if (done && past(t, after)) return true;
+    return false;
+  };
+  if (cmd("typeFetch", CMD_FETCH, "fetched")) out.push('<span class="dim">From github.com:acme/notes-app</span>', `<span class="dim"> * [new branch]      ${BRANCH} -> origin/${BRANCH}</span>`);
+  if (cmd("typeCheckout", CMD_CHECKOUT, "checkedOut")) out.push(`Switched to a new branch '${BRANCH}'`);
+  if (cmd("typeCommit", CMD_COMMIT, "committed")) out.push(`[${BRANCH} 4e1f0a2] Pin button on each note`, '<span class="dim"> 1 file changed, 9 insertions(+), 1 deletion(-)</span>');
+  if (cmd("typePush", CMD_PUSH, "pushed")) out.push('<span class="dim">To github.com:acme/notes-app.git</span>', `   9c2d7b1..4e1f0a2  ${BRANCH} -> ${BRANCH}`);
+  if (!past(t, "typeFetch")) out.push(prompt + '<span class="cur-bar"></span>');
+  $("term").innerHTML = out.slice(-8).map((l) => `<div>${l}</div>`).join("");
+  $("branch").textContent = "⎇ " + (past(t, "checkedOut") ? BRANCH : "main");
+}
+
+// -- the pointer -----------------------------------------------------------------------------
+// Where it rests, and when; between two rests it glides. A rest on an element is measured
+// from the page, at a moment that element is on screen.
+
+const RESTS = [
+  [0, [760, 330]],
+  [from("toStop"), [760, 330]],
+  [from("pressStop"), "bStop", "running"],
+  [from("toStopPush"), "bStop", "running"],
+  [from("pressStopPush"), "bStopPush", "stopModal"],
+  [from("toEditor"), "bStopPush", "stopModal"],
+  [from("typeFetch"), [820, 470]],
+  [from("toCarry"), [820, 470]],
+  [from("pressCarry"), "bCarry", "paused"],
+  [from("toPull"), "bCarry", "paused"],
+  [from("pressPull"), "bPull", "carryModal"],
+  [from("toApprove"), [700, 380]],
+  [from("pressApprove"), "bApprove", "gate"],
+  [window.TOTAL, [760, 420]],
+];
+const PRESSES = ["pressStop", "pressStopPush", "pressCarry", "pressPull", "pressApprove"];
+
+function measure() {
+  const stage = $("stage").getBoundingClientRect();
+  for (const rest of RESTS) {
+    if (typeof rest[1] !== "string") continue;
+    draw(from(rest[2]) + 1, true);
+    const r = $(rest[1]).getBoundingClientRect();
+    rest[1] = [r.left - stage.left + r.width / 2, r.top - stage.top + r.height / 2];
+  }
+}
+
+function pointerAt(t) {
+  for (let i = 0; i < RESTS.length - 1; i++) {
+    const [a, pa] = RESTS[i], [b, pb] = RESTS[i + 1];
+    if (t >= a && t <= b) {
+      const k = b > a ? ease((t - a) / (b - a)) : 1;
+      return [pa[0] + (pb[0] - pa[0]) * k, pa[1] + (pb[1] - pa[1]) * k];
+    }
+  }
+  return RESTS[RESTS.length - 1][1];
+}
+
+// -- the whole frame -------------------------------------------------------------------------
+
+function draw(t, quiet) {
+  drawSlipwright(t);
+  drawEditor(t);
+
+  // which window is in front: the editor from "toEditor" to "toSlipwright", sliding in
+  const inEditor = past(t, "toEditor") && !past(t, "toSlipwright");
+  let k = 0;
+  if (within(t, "toEditor")) k = ease(through(t, "toEditor"));
+  else if (within(t, "toSlipwright")) k = 1 - ease(through(t, "toSlipwright"));
+  else k = inEditor ? 1 : 0;
+  // the editor slides over Slipwright whole, as a window brought forward does; a cross-fade
+  // of two busy windows reads as neither
+  $("vs").style.display = k > 0 ? "" : "none";
+  $("vs").style.transform = `translateX(${(1 - k) * 1000}px)`;
+  $("sw").style.transform = `scale(${1 - k * 0.04})`;
+  $("sw").style.filter = `brightness(${1 - k * 0.5})`;
+
+  const step = past(t, "toSlipwright") ? 3 : past(t, "toEditor") ? 2 : 1;
+  for (const n of [1, 2, 3]) $("st" + n).className = "step" + (n === step ? " on" : n < step ? " done" : "");
+  if (quiet) return;
+
+  const [x, y] = pointerAt(t);
+  // the editor has its own hands: no pointer while somebody types
+  const hidden = past(t, "typeFetch") && !past(t, "toCarry");
+  $("ptr").style.display = hidden ? "none" : "";
+  $("ptr").style.left = x - 3 + "px";
+  $("ptr").style.top = y - 2 + "px";
+  const press = PRESSES.find((p) => within(t, p));
+  $("ring").style.display = press ? "" : "none";
+  if (press) {
+    const s = 0.6 + 0.6 * through(t, press);
+    Object.assign($("ring").style, { left: x + "px", top: y + "px", transform: `scale(${s})`, opacity: 1 - through(t, press) * 0.7 });
+  }
+}
+
+window.render = (t) => draw(t, false);
+window.ready = document.fonts.ready.then(() => { measure(); draw(0, false); });
+</script>
+</body>
+</html>

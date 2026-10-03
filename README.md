@@ -312,6 +312,19 @@ for you to edit, then **send to this step** (read by the agent's next call on it
 
 ### Stop, work on it by hand, carry on
 
+<img src="docs/screenshots/pause-by-hand.gif" alt="A development is stopped and its branch pushed; Ada checks it out in VS Code, finishes the half-written phase by hand and pushes; back in Slipwright, Pull and carry on brings her commit in, the Architect reads it as phase 2 done by hand, and once that is approved the development carries on with phase 3" />
+
+When you would rather write a part yourself, you do not have to wait for the agents or
+start over:
+
+1. **Stop and push.** The development stops where it is, keeps its place and pushes its
+   branch, half-written phase and all, with the two commands to check it out.
+2. **Finish it in your editor.** Open the branch in VS Code or anything else, write what
+   you want, commit and push as you always do.
+3. **Pull and carry on.** Slipwright pulls your commits, the Architect reads what you did
+   against the plan and puts it to you at a gate, and the phases you finished are marked
+   *done by hand* and never built again. It carries on from the next one.
+
 <table>
 <tr>
 <td width="50%" valign="top"><img src="docs/screenshots/paused.png" alt="A paused development: Paused by Ada, the branch is pushed, with the git commands to check it out" /></td>
