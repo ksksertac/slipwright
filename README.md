@@ -605,7 +605,13 @@ models of their own: a Claude Code or ChatGPT plan, or a key. **Settings → Mac
 lends a computer to the account so phases are written there, on that plan, side by side
 with the rest -- the owner's computers and every team member's.
 
-1. Install the **Slipwright Agent** app (`desktop/`, macOS, Windows and Linux) and open it.
+1. Install the **Slipwright Agent** app from its
+   [latest release](https://github.com/ksksertac/slipwright-agent/releases/latest) -- `Slipwright-Agent-Setup.exe` for
+   Windows, `Slipwright-Agent-mac-arm64.dmg` / `-mac-x64.dmg` for a Mac,
+   `Slipwright-Agent.AppImage` or `slipwright-agent.deb` for Linux -- and open it. A
+   server reached over SSH takes `slipwright-agent.cjs` instead, which reads a
+   `settings.json` beside it ([the app's README](https://github.com/ksksertac/slipwright-agent#on-a-server-slipwright-agent)).
+   The app has a repository and releases of its own and updates itself.
 2. **Machines → Connect a machine** makes a code; paste it into the app under
    *Slipwright team*. A member makes their own; the machine is theirs, and the owner sees
    it too.

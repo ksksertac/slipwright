@@ -238,7 +238,7 @@ def _asgi(app: Any) -> Serve:
         headers = {
             k: v
             for k, v in dict(request.get("headers") or {}).items()
-            if k.lower() in ("authorization", "content-type")
+            if k.lower() in ("authorization", "content-type", "x-slipwright-protocol")
         }
         body = crypto.unb64(str(request.get("body") or "")) if request.get("body") else b""
         transport = httpx.ASGITransport(app=app)

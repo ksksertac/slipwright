@@ -3,7 +3,8 @@
 What a machine lent to an account (Phase 17) and a Slipwright server say to each other,
 directly or through the relay. Three programs speak it and must agree byte for byte:
 the server (`slipwright/api/workers.py`, `slipwright/relay/`), the headless worker
-(`slipwright/worker_agent.py`) and the desktop app (`desktop/`). The relay (`relay/`)
+(`slipwright/worker_agent.py`) and the desktop app with its server twin, slipwright-agent
+(https://github.com/ksksertac/slipwright-agent, released on its own). The relay (`relay/`)
 only carries it and can read none of it.
 
 ## 1. The worker API
@@ -24,6 +25,19 @@ answered the same way. Every call but `pair` carries `Authorization: Bearer swk_
 | `POST /calls/{id}/fail` | `{message, kind}` (`rejected` \| `error` \| `timeout`) | `204` |
 
 `401` from anything means the machine was removed: forget the pairing.
+
+### The protocol's number
+
+The app and the server are released apart, so every request may say which version of
+this protocol it speaks: `x-slipwright-protocol: 1`. A server that no longer speaks it
+answers **426** with a `detail` to show ("update Slipwright Agent"); the machine keeps
+its pairing and asks again later. A request that says nothing -- `slipwright worker`, or
+an app from before the header -- is taken as version 1. Through the relay the header
+travels inside the sealed request like `authorization`.
+
+Changing what this document says is a new number, a change in the server and one in
+ksksertac/slipwright-agent, and the crypto vectors in `tests/test_phase17_relay.py` stay
+the same on both sides.
 
 ### Capabilities
 
