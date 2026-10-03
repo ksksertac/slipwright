@@ -72,8 +72,14 @@ slipwright/
   costs.py + prices.py  what a development cost against what it was expected to
   support.py          the support desk
   net.py              retrying a request that never left
-  workers.py          a Mac lent to an account: the connection code, the address in it
-  worker_agent.py     `slipwright worker`, the Mac's side; api/workers.py is the door
+  workers.py          a machine lent to an account: the connection code, the address in it
+  worker_agent.py     `slipwright worker`, the machine's side; api/workers.py is the door
+  providers/machine.py  a lent machine as a model provider: a phase written on its own
+                      plan, falling back to the account's model when nobody answers
+  relay/              machines on other networks: the server's room (host.py), a machine's
+                      way in (guest.py), the seal (crypto.py). The Cloudflare relay itself
+                      is the top-level relay/, the desktop app desktop/, and both follow
+                      docs/machines-protocol.md
   transfer/           an account moved to another installation on the network: a code
                       that is a SPAKE2 password (channel.py), the sender (outgoing.py),
                       the receiver's staging and all-or-nothing write (incoming.py), and
@@ -192,6 +198,7 @@ are marked `TEMPORARILY OFF` in `docker.yml`, one line each to turn back on.
 | `SLIPWRIGHT_SECRET_KEY` | generated in the state dir | encrypts stored credentials. **Required** with PostgreSQL |
 | `SLIPWRIGHT_UPDATE_IMAGE` | `ghcr.io/ksksertac/slipwright` | where releases are looked for; `off` stops asking |
 | `SLIPWRIGHT_TRANSFER` | on locally, off when hosted | moving an account to another installation (Settings → Move) |
+| `SLIPWRIGHT_RELAY` | `wss://relay.slipwright.app` | the relay machines on other networks come through; `off` never. Used only once *Machines → Reach machines on other networks* is on |
 
 ## How to write here
 
@@ -240,6 +247,15 @@ behaviour deliberately changed, rewrite it to state the new rule -- do not weake
   would take a running development or delete one only the receiver has. The ChatGPT
   sign-in is Codex's `auth.json`, not a setting: it travels as its own part, in memory,
   and is written only where the receiver has none.
+- **A machine writes, the server decides.** A phase a lent machine writes comes back as
+  the model's text and goes through `invoke_role` like any vendor's answer; the server
+  applies, builds, reviews and commits it. Never let a machine's answer skip that, and
+  never wait on a machine that is not visibly at it -- unclaimed, quiet or failed, the call
+  is taken back and the account's own model writes it (`providers/machine.py`).
+- **The relay is a door for machines only.** It is off until somebody turns it on; the
+  host serves nothing through it but `/api/worker/`, refuses a replayed or stale request,
+  and the relay reads none of it. The room and its keys are the installation's
+  (`relay.*` settings), never an account's, and never carried by a move.
 - **A lost Mac is not a red build.** `BuilderLost` sends the job back to waiting with
   `builder_resume=build_gate`: the phase is written, only its build is owed, and no attempt
   is spent. Charging it as a failure would fail developments because a laptop went to sleep.

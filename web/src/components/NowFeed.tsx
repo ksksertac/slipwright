@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import type { Job, Transition } from "../api/client";
+import type { Job, MachineCall, Transition } from "../api/client";
+import { useMachineCalls } from "../api/hooks";
 import { currentLang, useT } from "../i18n";
 import { usd } from "../pages/CostsTab";
 import { noteText } from "../i18n/notes";
@@ -46,6 +47,12 @@ export function NowFeed({ job }: { job: Job }) {
   const say = useSay();
   const calls = (job.data.invocation_log ?? []) as unknown as Call[];
   const inflight = (job.data.inflight ?? null) as InFlight | null;
+  // a phase a machine somebody lent is writing says which, and what it last said (T17.1)
+  const machines = useMachineCalls(!hasFinished(job.state));
+  const onMachine = (phase: number | null | undefined): MachineCall | undefined =>
+    phase == null
+      ? undefined
+      : machines.data?.find((c) => c.job_id === job.id && c.phase === phase);
   const plan = job.data.plan as PlanShape | null;
   const total = plan?.phases?.length ?? null;
   const entries: Entry[] = [
@@ -94,6 +101,7 @@ export function NowFeed({ job }: { job: Job }) {
               <Waiting
                 key={a.phase}
                 call={a}
+                machine={onMachine(a.phase)}
                 label={`${phaseName(tx, a.phase, total)}${
                   plan?.phases?.[a.phase - 1]?.goal
                     ? ` · ${say(plan.phases[a.phase - 1]!.goal)}`
@@ -115,7 +123,7 @@ export function NowFeed({ job }: { job: Job }) {
               </span>
             </summary>
             <ol className="now-feed">
-              {i === 0 && waiting && <Waiting call={waiting} />}
+              {i === 0 && waiting && <Waiting call={waiting} machine={onMachine(waitingPhase)} />}
               {[...s.entries]
                 .reverse()
                 .map((e, j) =>
@@ -208,7 +216,15 @@ function NowHead({ job, inflight, calls }: { job: Job; inflight: InFlight | null
 }
 
 /** The call in the air: who, on what, and a clock that keeps going until it lands. */
-function Waiting({ call, label }: { call: InFlight; label?: string }) {
+function Waiting({
+  call,
+  label,
+  machine,
+}: {
+  call: InFlight;
+  label?: string;
+  machine?: MachineCall;
+}) {
   const tx = useT();
   const seconds = useSecondsSince(call.started_at);
   return (
@@ -219,11 +235,20 @@ function Waiting({ call, label }: { call: InFlight; label?: string }) {
           <AgentIcon role={call.role} />
         </span>
         <strong>{tx(ROLE_LABEL[call.role] ?? call.role)}</strong>
-        <Model provider={call.provider} model={call.model} />
+        {machine ? (
+          <span className="tag now-machine" title={machine.progress ?? undefined}>
+            {tx("on {machine}", { machine: machine.machine ?? tx("a machine") })}
+          </span>
+        ) : (
+          <Model provider={call.provider} model={call.model} />
+        )}
         <span className="now-time mono small">{clock(seconds)}</span>
       </div>
       <div className="now-writing">
-        <span>{label ?? tx("Waiting for the answer")}</span>
+        <span>
+          {label ?? tx("Waiting for the answer")}
+          {machine?.progress ? ` · ${machine.progress}` : ""}
+        </span>
         <span className="now-dots" aria-hidden="true">
           <i />
           <i />

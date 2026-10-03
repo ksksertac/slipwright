@@ -141,7 +141,7 @@ def test_developments_from_before_names_are_given_one_when_the_database_upgrades
             # and what the revisions after it add, since those replay on top
             conn.execute(text("ALTER TABLE job_history DROP COLUMN detail_size"))  # (0014)
             conn.execute(text("DROP TABLE job_messages"))  # (0013)
-            for table in ("workers", "worker_codes", "worker_tasks"):  # (0012)
+            for table in ("workers", "worker_codes", "worker_tasks", "worker_calls"):  # (0012)
                 conn.execute(text(f"DROP TABLE {table}"))
             conn.execute(
                 text(

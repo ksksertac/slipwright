@@ -42,7 +42,7 @@ CHUNK = 4 * 1024 * 1024
 #: Settings that describe the machine rather than the account, so are never carried: the
 #: address a Mac was told to call, and bookkeeping the receiver keeps for itself.
 MACHINE_SETTINGS = frozenset({"workers.address", "jira.last_sweep", "prices.last_fetch"})
-MACHINE_PREFIXES = ("transfer.",)
+MACHINE_PREFIXES = ("transfer.", "relay.")  # the relay's room is this machine's
 
 #: The steps a person watches, on both screens: (key, what is counted).
 STEPS = ("pair", "projects", "jobs", "settings", "attachments", "standards", "repos", "finish")

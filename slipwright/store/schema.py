@@ -495,6 +495,9 @@ workers = Table(
     Column("paired_at", Text, nullable=False),
     Column("last_seen_at", Text),
     Column("revoked_at", Text),
+    # the person on the account who lent it (T17.2): they see and remove it, and so does
+    # the owner. Null for a machine paired before anybody but the owner could lend one
+    Column("lent_by", String(64)),
     Index("workers_owner", "owner_id"),
 )
 
@@ -506,6 +509,11 @@ worker_codes = Table(
     Column("owner_id", String(64), nullable=False),
     Column("created_at", Text, nullable=False),
     Column("expires_at", Text, nullable=False),
+    # who made it: the machine it pairs is theirs (T17.2)
+    Column("lent_by", String(64)),
+    # HMAC(secret, "slipwright-relay-pair"): what proves the server's key to a machine
+    # pairing through the relay (T17.3). As secret as the code itself, and gone with it
+    Column("pair_key", String(128)),
 )
 
 # One build a worker is asked for: a platform's commands against ``snapshot``, the worktree
@@ -534,6 +542,39 @@ worker_tasks = Table(
     Index("worker_tasks_job", "job_id"),
 )
 
+# One model call a machine is asked to make on its own plan (T17.1): the request exactly as
+# the server would have sent its own provider, and the answer's text exactly as it came.
+# queued -> running -> done | failed, or taken back (``cancelled``) when nobody claimed it
+# or its machine went quiet -- the server then asks its own model. ``domain`` is what a
+# machine must write to be given it (``write:<domain>``).
+worker_calls = Table(
+    "worker_calls",
+    metadata,
+    Column("id", String(64), primary_key=True),
+    Column("owner_id", String(64), nullable=False),
+    Column("job_id", String(64), nullable=False),
+    Column("phase", Integer),
+    Column("role", String(32), nullable=False),
+    Column("domain", String(16), nullable=False),
+    Column("request_json", Text, nullable=False),
+    Column("state", String(16), nullable=False, server_default="queued"),
+    Column("worker_id", String(64)),
+    Column("progress", Text),
+    Column("answer", Text),
+    Column("model", Text),
+    Column("input_tokens", Integer),
+    Column("output_tokens", Integer),
+    Column("error", Text),
+    Column("error_kind", String(16)),
+    Column("seconds", Float),
+    Column("created_at", Text, nullable=False),
+    Column("claimed_at", Text),
+    Column("heard_at", Text),
+    Column("finished_at", Text),
+    Index("worker_calls_queue", "owner_id", "state", "created_at"),
+    Index("worker_calls_job", "job_id"),
+)
+
 
 __all__ = [
     "agent_members",
@@ -560,6 +601,7 @@ __all__ = [
     "test_runs",
     "translations",
     "users",
+    "worker_calls",
     "worker_codes",
     "worker_tasks",
     "workers",

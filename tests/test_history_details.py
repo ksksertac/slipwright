@@ -123,6 +123,10 @@ def test_sizes_are_filled_in_for_the_history_written_before_them(tmp_path: Path)
         metadata.create_all(db.engine)
         with db.begin() as conn:
             conn.execute(text("ALTER TABLE job_history DROP COLUMN detail_size"))
+            conn.execute(text("DROP TABLE worker_calls"))  # (0015)
+            conn.execute(text("ALTER TABLE workers DROP COLUMN lent_by"))
+            conn.execute(text("ALTER TABLE worker_codes DROP COLUMN lent_by"))
+            conn.execute(text("ALTER TABLE worker_codes DROP COLUMN pair_key"))
             conn.execute(
                 text(
                     "INSERT INTO jobs (id, request, title, repo_path, state, created_at,"

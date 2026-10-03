@@ -25,8 +25,10 @@ a code is sometimes read off one screen and typed on another.
 from __future__ import annotations
 
 import hashlib
+import hmac
 import io
 import ipaddress
+import re
 import secrets
 import tarfile
 import zlib
@@ -61,8 +63,10 @@ _VERSION = 1
 _SECRET_BYTES = 10
 # how the address is packed: an IPv4 address and a port fit in six bytes, which is what
 # keeps a LAN code short enough to read; anything else rides as its text. A code made at
-# ``localhost`` carries only its port: "this Mac, or one near it"
-_HTTP_V4, _HTTPS_V4, _URL, _NEARBY = 1, 2, 3, 4
+# ``localhost`` carries only its port: "this Mac, or one near it". A relay code (T17.3)
+# carries the relay's host and the installation's room: "anywhere, through here"
+_HTTP_V4, _HTTPS_V4, _URL, _NEARBY, _RELAY, _RELAY_PLAIN = 1, 2, 3, 4, 5, 6
+_ROOM = re.compile(r"/v1/rooms/([0-9a-f]{32})")
 
 
 class CodeError(ValueError):
@@ -79,6 +83,13 @@ def new_secret() -> bytes:
 
 def secret_hash(secret: bytes) -> str:
     return hashlib.sha256(secret).hexdigest()
+
+
+def pair_key(secret: bytes) -> bytes:
+    """What proves the server's key to a machine pairing through the relay (T17.3): only
+    the code's holder and the server that made it can compute it, and the relay is neither.
+    Kept beside the code's hash for the code's fifteen minutes, then gone with it."""
+    return hmac.new(secret, b"slipwright-relay-pair", hashlib.sha256).digest()
 
 
 def new_token() -> str:
@@ -134,6 +145,11 @@ def unpack(code: str) -> tuple[str, bytes]:
 
 def _pack_address(address: str) -> bytes:
     parts = urlsplit(address)
+    room = _ROOM.fullmatch(parts.path)
+    if parts.scheme in ("wss", "ws") and room is not None and parts.netloc:
+        host = parts.netloc.encode()
+        kind = _RELAY if parts.scheme == "wss" else _RELAY_PLAIN  # ws: a test's own relay
+        return bytes([kind, len(host)]) + host + bytes.fromhex(room.group(1))
     if parts.scheme == "http" and not reachable(address):
         return bytes([_NEARBY]) + (parts.port or 80).to_bytes(2, "big")
     try:
@@ -159,6 +175,10 @@ def _unpack_address(packed: bytes) -> str:
         return rest.decode(errors="replace")
     if kind == _NEARBY and len(rest) == 2:
         return f"http://localhost:{int.from_bytes(rest, 'big')}"
+    if kind in (_RELAY, _RELAY_PLAIN) and rest and len(rest) == 1 + rest[0] + 16:
+        host = rest[1 : 1 + rest[0]].decode(errors="replace")
+        scheme = "wss" if kind == _RELAY else "ws"
+        return f"{scheme}://{host}/v1/rooms/{rest[1 + rest[0] :].hex()}"
     raise CodeError("this code's address cannot be read")
 
 
@@ -226,6 +246,7 @@ __all__ = [
     "live_since",
     "new_secret",
     "new_token",
+    "pair_key",
     "pack",
     "reachable",
     "secret_hash",

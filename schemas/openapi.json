@@ -823,6 +823,167 @@
         "title": "BudgetSettings",
         "type": "object"
       },
+      "CallAnswer": {
+        "additionalProperties": false,
+        "description": "The model's text exactly as it came: the server parses it as it would its own.",
+        "properties": {
+          "input_tokens": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Tokens"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "output_tokens": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Tokens"
+          },
+          "seconds": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Seconds",
+            "type": "number"
+          },
+          "text": {
+            "maxLength": 4000000,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "CallAnswer",
+        "type": "object"
+      },
+      "CallFailure": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "default": "error",
+            "enum": [
+              "rejected",
+              "error",
+              "timeout"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "message": {
+            "maxLength": 4000,
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "title": "CallFailure",
+        "type": "object"
+      },
+      "CallImage": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "description": "base64",
+            "title": "Data",
+            "type": "string"
+          },
+          "label": {
+            "default": "",
+            "title": "Label",
+            "type": "string"
+          },
+          "media_type": {
+            "title": "Media Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data",
+          "label",
+          "media_type"
+        ],
+        "title": "CallImage",
+        "type": "object"
+      },
+      "CallProgress": {
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "default": "",
+            "maxLength": 500,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "title": "CallProgress",
+        "type": "object"
+      },
+      "CallRepo": {
+        "additionalProperties": false,
+        "description": "Where the code the call was written from is. Never credentials: a machine reads it\nwith its own, or not at all.",
+        "properties": {
+          "branch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Branch"
+          },
+          "commit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commit"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "branch",
+          "commit",
+          "url"
+        ],
+        "title": "CallRepo",
+        "type": "object"
+      },
       "CarryOn": {
         "description": "Carry a paused development on; ``pull`` merges what was pushed meanwhile first.",
         "properties": {
@@ -1151,7 +1312,7 @@
             "type": "string"
           },
           "command": {
-            "description": "What to run on the Mac.",
+            "description": "What to run on the machine, without the desktop app.",
             "title": "Command",
             "type": "string"
           },
@@ -1161,7 +1322,7 @@
             "type": "string"
           },
           "install": {
-            "description": "What installs the worker on a Mac, once.",
+            "description": "What installs the headless worker, once.",
             "items": {
               "type": "string"
             },
@@ -4104,6 +4265,74 @@
         "title": "LocalRepos",
         "type": "object"
       },
+      "MachineCall": {
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "machine": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The machine writing it.",
+            "title": "Machine"
+          },
+          "phase": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phase"
+          },
+          "progress": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What it last said it was doing.",
+            "title": "Progress"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Since"
+          }
+        },
+        "required": [
+          "job_id",
+          "machine",
+          "phase",
+          "progress",
+          "role",
+          "since"
+        ],
+        "title": "MachineCall",
+        "type": "object"
+      },
       "MailSettingsIn": {
         "additionalProperties": false,
         "properties": {
@@ -6653,6 +6882,58 @@
           "feedback"
         ],
         "title": "Rejection",
+        "type": "object"
+      },
+      "RelayChange": {
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "RelayChange",
+        "type": "object"
+      },
+      "RelayState": {
+        "properties": {
+          "available": {
+            "description": "This installation may use a relay at all.",
+            "title": "Available",
+            "type": "boolean"
+          },
+          "connected": {
+            "description": "It is in its room on the relay right now.",
+            "title": "Connected",
+            "type": "boolean"
+          },
+          "enabled": {
+            "description": "Machines on other networks may reach it.",
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "required": [
+          "available",
+          "connected",
+          "enabled",
+          "url"
+        ],
+        "title": "RelayState",
         "type": "object"
       },
       "Replan": {
@@ -10188,12 +10469,36 @@
         "additionalProperties": false,
         "properties": {
           "capabilities": {
-            "description": "What it said at its last poll it can build.",
+            "description": "What it said at its last poll it can do: platforms it builds (ios, android) and domains it writes (write:backend, ...).",
             "items": {
               "type": "string"
             },
             "title": "Capabilities",
             "type": "array"
+          },
+          "doing": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What it last said it was doing, in its own words.",
+            "title": "Doing"
+          },
+          "doing_phase": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The phase it is writing.",
+            "title": "Doing Phase"
           },
           "id": {
             "title": "Id",
@@ -10211,13 +10516,36 @@
             ],
             "title": "Last Seen At"
           },
+          "lent_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The person on the account who lent it; none is the owner.",
+            "title": "Lent By"
+          },
+          "lent_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lent By Name"
+          },
           "name": {
             "title": "Name",
             "type": "string"
           },
           "online": {
             "default": false,
-            "description": "Seen recently enough to be given a build.",
+            "description": "Seen recently enough to be given work.",
             "title": "Online",
             "type": "boolean"
           },
@@ -10249,19 +10577,172 @@
               }
             ],
             "title": "Revoked At"
+          },
+          "writing": {
+            "default": false,
+            "description": "It is writing a phase right now.",
+            "title": "Writing",
+            "type": "boolean"
           }
         },
         "required": [
           "capabilities",
+          "doing",
+          "doing_phase",
           "id",
           "last_seen_at",
+          "lent_by",
+          "lent_by_name",
           "name",
           "online",
           "owner_id",
           "paired_at",
-          "revoked_at"
+          "revoked_at",
+          "writing"
         ],
         "title": "Worker",
+        "type": "object"
+      },
+      "WorkerCall": {
+        "additionalProperties": false,
+        "description": "One model call as a machine is given it: the request the server would have sent its\nown provider, and what the call is for, so the machine can say so.",
+        "properties": {
+          "domain": {
+            "title": "Domain",
+            "type": "string"
+          },
+          "goal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "images": {
+            "items": {
+              "$ref": "#/components/schemas/CallImage"
+            },
+            "title": "Images",
+            "type": "array"
+          },
+          "jira_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Jira Key"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "kind": {
+            "const": "write",
+            "default": "write",
+            "title": "Kind",
+            "type": "string"
+          },
+          "output_schema": {
+            "additionalProperties": true,
+            "title": "Output Schema",
+            "type": "object"
+          },
+          "phase": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phase"
+          },
+          "phases": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phases"
+          },
+          "project": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project"
+          },
+          "prompt": {
+            "title": "Prompt",
+            "type": "string"
+          },
+          "repo": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CallRepo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "system": {
+            "title": "System",
+            "type": "string"
+          },
+          "thinking_depth": {
+            "title": "Thinking Depth",
+            "type": "string"
+          },
+          "timeout_s": {
+            "title": "Timeout S",
+            "type": "number"
+          }
+        },
+        "required": [
+          "domain",
+          "goal",
+          "id",
+          "images",
+          "jira_key",
+          "job_id",
+          "kind",
+          "output_schema",
+          "phase",
+          "phases",
+          "project",
+          "prompt",
+          "repo",
+          "role",
+          "system",
+          "thinking_depth",
+          "timeout_s"
+        ],
+        "title": "WorkerCall",
         "type": "object"
       },
       "WorkerTask": {
@@ -10294,6 +10775,12 @@
             "title": "Job Id",
             "type": "string"
           },
+          "kind": {
+            "const": "build",
+            "default": "build",
+            "title": "Kind",
+            "type": "string"
+          },
           "platform": {
             "title": "Platform",
             "type": "string"
@@ -10307,6 +10794,7 @@
           "commands",
           "id",
           "job_id",
+          "kind",
           "platform",
           "timeout_s"
         ],
@@ -17698,6 +18186,144 @@
         "summary": "Get Version"
       }
     },
+    "/api/worker/calls/{call_id}/answer": {
+      "post": {
+        "description": "The model's answer, as it came. Only the machine holding the call may give it, and\nonly once; the server reads and checks it as it would its own provider's.",
+        "operationId": "call_answer_api_worker_calls__call_id__answer_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "call_id",
+            "required": true,
+            "schema": {
+              "title": "Call Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CallAnswer"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Call Answer",
+        "tags": [
+          "workers"
+        ]
+      }
+    },
+    "/api/worker/calls/{call_id}/fail": {
+      "post": {
+        "description": "The machine could not write it -- its plan ran out, its model refused, it crashed.\nThe server's own model writes it instead; nothing is charged to the development.",
+        "operationId": "call_fail_api_worker_calls__call_id__fail_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "call_id",
+            "required": true,
+            "schema": {
+              "title": "Call Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CallFailure"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Call Fail",
+        "tags": [
+          "workers"
+        ]
+      }
+    },
+    "/api/worker/calls/{call_id}/progress": {
+      "post": {
+        "description": "Still writing, and what it last did. 409 when the call is no longer this machine's\n-- taken back because it went quiet, or its development stopped -- and it should stop.",
+        "operationId": "call_progress_api_worker_calls__call_id__progress_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "call_id",
+            "required": true,
+            "schema": {
+              "title": "Call Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CallProgress"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Call Progress",
+        "tags": [
+          "workers"
+        ]
+      }
+    },
     "/api/worker/heartbeat": {
       "post": {
         "description": "Still here, still building: sent while a long build runs.",
@@ -17757,7 +18383,7 @@
     },
     "/api/worker/poll": {
       "post": {
-        "description": "Say what this machine can build, and wait a while for a build of its account.\nDoubles as the heartbeat; an empty answer (204) means ask again.",
+        "description": "Say what this machine can do, and wait a while for a build or a call of its account.\nDoubles as the heartbeat; an empty answer (204) means ask again. A build first: a\ndevelopment waiting on a platform has nowhere else to go, a call does.",
         "operationId": "poll_api_worker_poll_post",
         "requestBody": {
           "content": {
@@ -17774,14 +18400,22 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WorkerTask"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/WorkerTask"
+                    },
+                    {
+                      "$ref": "#/components/schemas/WorkerCall"
+                    }
+                  ],
+                  "title": "Response 200 Poll Api Worker Poll Post"
                 }
               }
             },
             "description": "Successful Response"
           },
           "204": {
-            "description": "nothing to build yet"
+            "description": "nothing to do yet"
           },
           "422": {
             "content": {
@@ -17889,7 +18523,7 @@
     },
     "/api/workers": {
       "get": {
-        "description": "The machines this account has paired, and whether each is there now.",
+        "description": "The machines of this account, whether each is there now, who lent it and what it is\nwriting. A member is shown their own.",
         "operationId": "list_workers_api_workers_get",
         "responses": {
           "200": {
@@ -17908,6 +18542,32 @@
           }
         },
         "summary": "List Workers",
+        "tags": [
+          "workers"
+        ]
+      }
+    },
+    "/api/workers/calls": {
+      "get": {
+        "description": "The phases machines of this account are writing now: which job and phase, which\nmachine, and what it last said. What *Right now* shows beside the server's own calls.",
+        "operationId": "open_calls_api_workers_calls_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MachineCall"
+                  },
+                  "title": "Response Open Calls Api Workers Calls Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Open Calls",
         "tags": [
           "workers"
         ]
@@ -17955,9 +18615,71 @@
         ]
       }
     },
+    "/api/workers/relay": {
+      "get": {
+        "description": "Whether machines on other networks can reach this installation, and whether it is\nin its room right now.",
+        "operationId": "relay_state_api_workers_relay_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RelayState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Relay State",
+        "tags": [
+          "workers"
+        ]
+      },
+      "put": {
+        "description": "Let machines on other networks in, or stop. The installation's to decide -- it opens\na connection out of this machine -- so the administrator's, on a server with accounts;\nany code made before is unchanged, and a machine paired through the relay waits.",
+        "operationId": "change_relay_api_workers_relay_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RelayChange"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RelayState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Change Relay",
+        "tags": [
+          "workers"
+        ]
+      }
+    },
     "/api/workers/{worker_id}": {
       "delete": {
-        "description": "Take a machine away. Its next poll is refused and what it was building goes back\nin the queue. Another account's worker is not found.",
+        "description": "Take a machine away. Its next poll is refused, what it was building goes back in\nthe queue and what it was writing is written by the server instead. Another account's\nworker is not found, and neither -- for a member -- is one somebody else lent.",
         "operationId": "revoke_worker_api_workers__worker_id__delete",
         "parameters": [
           {

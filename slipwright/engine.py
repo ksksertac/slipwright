@@ -29,6 +29,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
 from typing import Any, Literal, cast
+from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 from pydantic import ValidationError
@@ -65,8 +66,10 @@ from slipwright.notify.core import (
 from slipwright.orchestrator import IllegalTransitionError, Orchestrator
 from slipwright.pipeline import StepCard, StepStatus, lane_for
 from slipwright.providers import ModelProvider, ProviderUnavailableError
+from slipwright.providers import machine as machine_provider
 from slipwright.providers.codex import Logins
 from slipwright.providers.evren import EvrenProvider, Terms
+from slipwright.providers.machine import MachineProvider
 from slipwright.providers.registry import (
     CHATGPT,
     DEFAULT_PROVIDER,
@@ -559,6 +562,11 @@ class Engine:
         self.gate_timeout_s = gate_timeout_s
         # how often a build sent to a Mac is looked in on; tests make it quick
         self.worker_poll_s = 1.0
+        # how long a phase offered to a lent machine waits to be taken, and how long a
+        # machine that took it may go unheard of, before the server writes it (T17.1)
+        self.machine_claim_s = machine_provider.CLAIM_S
+        self.machine_quiet_s = machine_provider.QUIET_S
+        self.machine_tick_s = machine_provider.TICK_S
         # whether this installation moves accounts to and from others on its network
         # (slipwright/transfer); build_engine turns it off for a hosted one
         self.transfer_enabled = True
@@ -4432,6 +4440,69 @@ class Engine:
         finally:
             slot.release()
 
+    def _machine_for(
+        self, job: Job, role: RoleName, run: Callable[..., RoleResult]
+    ) -> MachineProvider | None:
+        """A machine of the job's account to write this call on, when one is there (T17.1).
+
+        Only a phase being written -- the specialist's answer, in turn or ahead -- and only
+        when a machine that writes the phase's domain was heard from just now. Asking first
+        is what keeps a call from waiting out the claim window for a machine that does not
+        exist; the window is only for the one that was there and stopped answering."""
+        if run is not developer.run:
+            return None
+        phases = self._phases(job)
+        index = job.data.phase_index
+        if index >= len(phases):
+            return None
+        phase = phases[index]
+        domain = str(phase.get("domain") or "general")
+        if not self.store.writers_free(job.owner_id, domain, live_since=workers.live_since()):
+            return None
+        project = self._project_of(job)
+        task = phase.get("task_id")
+        meta: dict[str, Any] = {
+            "project": project.name if project is not None else None,
+            "phases": len(phases),
+            "goal": str(phase.get("goal") or "")[:500] or None,
+            "jira_key": job.data.jira_keys.get(str(task)) if task else None,
+            "repo": self._public_repo(job),
+        }
+        return MachineProvider(
+            self.store,
+            job.owner_id,
+            job.id,
+            domain=domain,
+            phase=index + 1,
+            fallback=self.provider_for(job.owner_id),
+            meta=meta,
+            stopping=lambda: job.id in self._stopping,
+            claim_s=self.machine_claim_s,
+            quiet_s=self.machine_quiet_s,
+            tick_s=self.machine_tick_s,
+        )
+
+    def _public_repo(self, job: Job) -> dict[str, Any] | None:
+        """Where the phase's code is, for a machine that may read it with its own access:
+        the remote without whatever credentials the server's own checkout carries, the
+        branch, and the commit the answer is written from. None without a remote."""
+        try:
+            worktree = require_worktree(job)
+        except Exception:  # noqa: BLE001 - no checkout (the demo): nothing to point at
+            return None
+        found = g.run(worktree, "remote", "get-url", "origin", check=False)
+        if found.returncode != 0 or not found.stdout.strip():
+            return None
+        url = found.stdout.strip()
+        parts = urlsplit(url)
+        if parts.scheme in ("http", "https") and (parts.username or parts.password):
+            # a token in the URL is the server's, never the machine's
+            host = parts.hostname or ""
+            netloc = f"{host}:{parts.port}" if parts.port else host
+            url = urlunsplit(parts._replace(netloc=netloc))
+        commit = g.run(worktree, "rev-parse", "HEAD", check=False).stdout.strip() or None
+        return {"url": url, "branch": job.branch, "commit": commit}
+
     def _call_with_retries(
         self, role: RoleName, run: Callable[..., RoleResult], job: Job, retries: int, **kw: Any
     ) -> RoleResult:
@@ -4462,8 +4533,11 @@ class Engine:
             result.usage = Usage(input_tokens=burned[0], output_tokens=burned[1])
             return result
 
-        # whose keys pay for this: the account that owns the job, never the server's
-        mine = self.provider_for(job.owner_id)
+        # whose keys pay for this: the account that owns the job, never the server's --
+        # or, for a phase, a machine somebody on the account lent, on its own plan (T17.1).
+        # The machine falls back to the account's provider by itself when nobody answers
+        machine = self._machine_for(job, role, run)
+        mine = machine or self.provider_for(job.owner_id)
         provider: ModelProvider = mine
         while True:
             # a step is not one call: the developer is asked, the gate runs, the developer
@@ -4473,7 +4547,10 @@ class Engine:
             if job.id in self._stopping:
                 raise _Stopped
             attempt += 1
-            with self._provider_slot(job, role):
+            # a machine's call takes no place among the account's calls on its provider: it
+            # is not spending there, and an hour on somebody's laptop would hold the place
+            slot = contextlib.nullcontext() if machine else self._provider_slot(job, role)
+            with slot:
                 result = run(job, provider=provider, timeout_s=self.timeout_s, **kw)
             result.attempts = attempt
             if (
