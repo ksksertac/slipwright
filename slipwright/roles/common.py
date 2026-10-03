@@ -12,6 +12,7 @@ from collections.abc import Collection, Iterable
 from pathlib import Path
 from typing import Any
 
+from slipwright.gates import toolchains
 from slipwright.roles.results import FileChange
 from slipwright.schemas.job import Job
 from slipwright.schemas.profile import Permission, Profile, RoleName
@@ -171,6 +172,28 @@ def writing_rules(language: str) -> str:
         "sentences saying what was done and what they should look at — no file lists, "
         "no internal jargon, no restating the rules you followed."
     )
+
+
+def where_it_runs() -> dict[str, Any]:
+    """Where the project's build and test commands run, for every role that writes code or
+    tests that run there.
+
+    Only the Architect used to be told. QA, never told, wrote a mobile app's tests to launch
+    the APK on an API 23 and an API 35 emulator and read it with TalkBack -- on a server with
+    no device, no emulator and nothing it may install -- and the build gate failed the same
+    way three times running, each round paid for, because nothing in what QA read said the
+    test could never pass there.
+    """
+    return {
+        "rules": (
+            "The project's build and test commands run on a server, as an ordinary user, on "
+            "a bare checkout: nothing can be installed (no system package manager, no SDK or "
+            "emulator download), and no device, emulator or simulator is attached or can be "
+            "started. A test that needs one can never pass there. Beyond git, curl, Python "
+            "with uv and Node with npm, only what `installed` lists is there."
+        ),
+        "installed": toolchains.installed(),
+    }
 
 
 def base_context(
