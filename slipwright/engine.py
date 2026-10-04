@@ -6394,36 +6394,52 @@ class Engine:
         )
 
     def _qa_write(self, job: Job) -> Job:
-        """Stage two: write tests for the approved list, then pass the same build gate."""
+        """Stage two: write tests for the approved list, then pass the same build gate.
+
+        A red gate here is not always QA's to fix. The whole project is built and tested
+        for the first time with every phase in it, so what fails is as often the code as
+        the tests -- and it used to go back to QA every time: QA, rightly, said its tests
+        were fine (or had written none at all), the same red came back three times and the
+        development stopped with nobody having looked at the code. Now the failure is read
+        first: a test that is wrong is QA's to correct; anything else goes to the
+        specialist, as a red CI run does, and the gate runs again.
+        """
         profile = self._profile(job)
         worktree = require_worktree(job)
         diff = self._branch_diff(job)
+        written: set[str] = set()
+        summary = ""
+        blame: str | None = None
+        fixed = 0
+        write = True
         while True:
-            result = self._invoke(RoleName.QA, qa.run, job, profile=profile, branch_diff=diff)
-            if not result.ok:
-                return self._invocation_failed(job, result)
-            assert isinstance(result.output, QAResult)
-            try:
-                touched = apply_changes(job, profile, RoleName.QA, result.output.changes)
-            except EditMismatch as exc:
-                return self._fail(job, "qa's tests could not be applied", detail=str(exc))
+            if write:
+                result = self._invoke(RoleName.QA, qa.run, job, profile=profile, branch_diff=diff)
+                if not result.ok:
+                    return self._invocation_failed(job, result)
+                assert isinstance(result.output, QAResult)
+                try:
+                    written |= set(apply_changes(job, profile, RoleName.QA, result.output.changes))
+                except EditMismatch as exc:
+                    return self._fail(job, "qa's tests could not be applied", detail=str(exc))
+                summary = result.output.summary
             g.stage_all(worktree)
             test_diff = g.staged_diff(worktree)
             gate = self._final_gate(job)
             if gate.ok:
-                if g.commit(worktree, "slipwright: tests"):
+                message = "slipwright: tests" + (" and the fixes they found" if fixed else "")
+                if g.commit(worktree, message):
                     self._push(job, worktree, "qa: tests")
                 job.data.feedback = None
                 job.data.build_attempts = 0
                 job.data.last_build_output = None
+                job.data.qa_diagnosis = None
                 self.store.save(job)
+                found = f", {fixed} fix(es) to the code" if fixed else ""
                 return self.orchestrator.transition(
                     job,
                     JobState.AWAITING_TEST_APPROVAL,
-                    note=(
-                        f"qa: tests written and green ({len(touched)} files) — "
-                        f"{result.output.summary}"
-                    ),
+                    note=f"qa: tests written and green ({len(written)} files{found}) — {summary}",
                     detail=(test_diff or "(no changes)") + "\n\n" + gate.tail,
                 )
             job.data.build_attempts += 1
@@ -6435,6 +6451,77 @@ class Engine:
                     f"qa tests failed the build gate {job.data.build_attempts} times",
                     detail=gate.tail,
                 )
+            blame = self._final_gate_blame(job, gate.for_model, written, before=blame)
+            if blame is None:
+                write = True  # the tests were wrong: QA writes them again, seeing the failure
+                continue
+            job = self._fix_what_the_tests_found(job, blame, gate.for_model)
+            if job.state is not JobState.QA:
+                return job  # the fix could not be asked for or written: already failed
+            fixed += 1
+            write = False
+
+    def _final_gate_blame(
+        self, job: Job, output: str, written: set[str], *, before: str | None = None
+    ) -> str | None:
+        """Whose a red final gate is: None for QA's tests, else QA's reading of what the
+        code must do differently. Tests QA did not write cannot be QA's fault, so with
+        none written the code is wrong without asking. ``before`` is the last round's
+        reading: a fix that did not mend it gets the same failure read the same way, which
+        the loop check turns away, and that is not a reason to blame the tests instead."""
+        if not written:
+            reading = "QA wrote no tests this round, so the code is what fails"
+            self._record_gate_note(job, f"qa: the build gate is red — {reading}", output[-2000:])
+            return reading
+        result = self._invoke(
+            RoleName.QA,
+            qa.triage,
+            job,
+            profile=self._profile(job),
+            build_failure=output[-8000:],
+            phase={"number": None, "goal": "the whole project, with QA's tests in it"},
+            branch_diff=self._branch_diff(job),
+        )
+        if not result.ok or not isinstance(result.output, QAResult):
+            if before and result.error and result.error.kind is InvokeErrorKind.LOOP:
+                return before  # read as last time: still the code's
+            return None  # nobody read it: QA tries its tests again, as it always did
+        out = result.output
+        if out.gate_verdict == "test_is_wrong":
+            self._record_gate_note(job, f"qa: the test was wrong — {out.summary}", output[-2000:])
+            return None
+        self._record_gate_note(
+            job, f"qa: the code is wrong, not the test — {out.summary}", output[-2000:]
+        )
+        return out.summary or "the code fails the project's tests"
+
+    def _fix_what_the_tests_found(self, job: Job, reading: str, output: str) -> Job:
+        """The specialist fixes the code the final gate found failing, with QA's reading
+        of the failure in front of the log -- the same call a red CI run gets."""
+        profile = self._profile(job)
+        fixer = self._last_specialist(job)
+        fix = self._invoke(
+            fixer,
+            developer.run,
+            job,
+            profile=profile,
+            ci_failure=f"QA read this failure: {reading}\n\n{output}",
+            as_role=fixer,
+        )
+        if not fix.ok:
+            return self._invocation_failed(job, fix)
+        assert isinstance(fix.output, DeveloperResult)
+        try:
+            touched = apply_changes(job, profile, fixer, fix.output.changes)
+        except EditMismatch as exc:
+            return self._fail(job, "the fix for the failing tests could not be applied", str(exc))
+        self._record_gate_note(
+            job,
+            f"{fixer.value}: fixed what the tests found ({len(touched)} files) — "
+            f"{fix.output.summary}",
+            None,
+        )
+        return job
 
     def _deployment_files(self, job: Job) -> dict[str, str]:
         """What the branch already holds under the deployment folder."""

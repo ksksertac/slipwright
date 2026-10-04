@@ -326,6 +326,13 @@ behaviour deliberately changed, rewrite it to state the new rule -- do not weake
   phase written ahead (T16.3) runs on an old copy, its retry note put a job that had gone
   on to review back in developing, and the run's next save crashed it -- "save() cannot
   change state (developing -> review)". `update_state` is for moves only.
+- **A red gate after QA's tests is read before anyone fixes it.** It is the first time the
+  whole project is built and tested together, so the code fails there as often as the
+  tests. It used to go back to QA every time; QA said its tests were fine (or wrote none),
+  and the development died at "qa tests failed the build gate 3 times" with nobody having
+  looked at the code. `_final_gate_blame` decides: no tests written, or QA reads
+  `code_is_wrong`, and the specialist fixes it with QA's reading in front of the log
+  (`_fix_what_the_tests_found`, the red-CI call); only `test_is_wrong` goes back to QA.
 - **A re-plan asked while a phase runs is a halt that carries on** (`_Halt("redirect")`):
   the run stops before its next call and goes to the Architect with the built phases kept
   (`_replan_from`), instead of ending. A stop or a pause that overtakes it marks it

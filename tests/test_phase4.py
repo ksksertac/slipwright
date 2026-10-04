@@ -198,17 +198,30 @@ def test_stage_two_tests_go_through_the_build_gate(
     assert job.data.build_attempts == 0
 
 
-def test_stage_two_exhausts_gate_attempts(
+def test_stage_two_hands_code_its_tests_break_to_the_specialist(
     store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
 ) -> None:
+    # the red gate is read as the code's fault (the canned triage), so the specialist is
+    # asked to fix it rather than QA to rewrite; a specialist that sends the same fix that
+    # did not mend it is stopped by the loop check and a person decides, as on a red CI
     provider = _provider(seed, _qa_reply(lambda _: [{"path": "OK", "content": "no\n"}]))
+    provider.replies[RoleName.BACKEND] = lambda req: {
+        "summary": "fixed",
+        "phase_complete": True,
+        "changes": [
+            {"path": "OK", "content": "no\n" if '"ci_failure":' in req.prompt else "yes\n"}
+        ],
+    }
     engine = _engine(store, worktrees_root, seed, provider)
     job = engine.approve(_to_test_gate(engine, repo).id)
 
-    # QA writes the same failing tests twice: the loop check hands it to a human (T9.7)
     assert job.state is JobState.AWAITING_DECISION
-    assert job.history[-1].note == "loop detected: qa produced the same output twice in a row"
-    assert job.data.resume_state == "qa" and job.data.build_attempts == 1
+    assert job.history[-1].note == "loop detected: backend produced the same output twice in a row"
+    assert job.data.resume_state == "qa" and job.data.build_attempts == 2
+    fixes = [r for r in _requests(provider, RoleName.BACKEND) if '"ci_failure":' in r.prompt]
+    assert len(fixes) == 2
+    qa_writes = [r for r in _requests(provider, RoleName.QA) if '"stage":2' in r.prompt]
+    assert len(qa_writes) == 1  # QA was not sent the code's failure to rewrite its tests
 
 
 def test_reject_reruns_the_current_stage_with_feedback(
