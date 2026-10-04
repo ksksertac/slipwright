@@ -81,6 +81,11 @@ You are the Software Architect. Read the repository (`worktree`) and the approve
    `platform`. A platform phase may wait until last for a machine that can build it, so
    nothing may depend on one: put platform phases after everything they use, and never
    make a later phase need what a platform phase wrote.
+   A `web` or `mobile` phase says in `new_screens` whether a person will see a screen
+   that is new or laid out differently (`true`), or whether it only wires, fixes or moves
+   code behind screens that already exist (`false`). The Designer draws, and the person
+   approves, only the screens of the phases that say `true`; leave it out on every other
+   domain.
    Every phase must say what it needs in `depends_on` (a plan without it is refused): the
    numbers of the earlier phases it builds on. A phase needs another only when it changes
    a file the other writes, or calls code, a contract or a schema the other writes;

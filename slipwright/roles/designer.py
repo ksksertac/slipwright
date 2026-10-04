@@ -20,6 +20,7 @@ from typing import Any
 from slipwright.invoke import RoleResult, invoke_role, may_be_blind
 from slipwright.providers import ImageInput, ModelProvider
 from slipwright.roles.common import base_context, plan_outline
+from slipwright.roles.results import draws_screens
 from slipwright.schemas.job import Job
 from slipwright.schemas.profile import Profile, RoleName
 
@@ -123,7 +124,8 @@ def run(
 
 def ui_phases(job: Job) -> list[dict[str, Any]]:
     """The phases a screen could belong to. A plan with none of these needs no design, and
-    the engine skips the step rather than asking for screens nobody will build."""
+    the engine skips the step rather than asking for screens nobody will build. A web or
+    mobile phase the Architect said draws no new screen is not one of them."""
     phases = (job.data.plan or {}).get("phases", [])
     return [
         {
@@ -133,7 +135,7 @@ def ui_phases(job: Job) -> list[dict[str, Any]]:
             "task_id": p.get("task_id"),
         }
         for i, p in enumerate(phases)
-        if p.get("domain") in ("web", "mobile")
+        if draws_screens(p)
     ]
 
 

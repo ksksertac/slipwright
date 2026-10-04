@@ -119,6 +119,7 @@ from slipwright.roles.results import (
     ReconcileResult,
     StackChoice,
     SupervisorResult,
+    draws_screens,
     unbuilt_platforms,
 )
 from slipwright.roles.specialists import specialist_for
@@ -5436,10 +5437,11 @@ class Engine:
 
         The screens are signed off one at a time, and the wait is put where it costs the
         least: a development builds its backend phases while the design is still being
-        looked at, and only the first web or mobile phase stops. A development with no
-        screens, or one whose screens are all approved, never sees this.
+        looked at, and only the first phase that draws a screen stops -- one that only wires
+        a screen already there has nothing to wait for. A development with no screens, or
+        one whose screens are all approved, never sees this.
         """
-        if phase.get("domain") not in ("web", "mobile"):
+        if not draws_screens(phase):
             return None
         pending = designer.pending_screens(job)
         if not pending:
