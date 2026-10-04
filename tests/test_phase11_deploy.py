@@ -503,7 +503,7 @@ def test_the_deployment_is_written_in_parts_when_one_answer_will_not_hold_it(
     assert "truncated" in params and "continuation" in params
 
     engine_src = Path("slipwright/engine.py").read_text(encoding="utf-8")
-    write = engine_src[engine_src.index("def _write_deployment") :][:4000]
+    write = engine_src[engine_src.index("def _write_deployment") :][:7000]
     assert "continuation=continuation" in write, "the second call must know what is written"
     assert "phase_complete" in write, "and must stop when DevOps says it is done"
 

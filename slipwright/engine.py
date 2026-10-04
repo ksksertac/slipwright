@@ -6661,7 +6661,10 @@ class Engine:
         prefix = f"{devops.DEPLOY_FOLDER}/"
         source = self._source_of(job)
         pipeline = devops.ci_path(source)
-        for part in range(1, self.max_phase_parts + 1):
+        problem: str | None = None
+        part = 0
+        while part < self.max_phase_parts:
+            part += 1
             result = self._invoke(
                 RoleName.DEVOPS,
                 devops.write_deployment,
@@ -6670,6 +6673,7 @@ class Engine:
                 existing=self._deployment_files(job),
                 continuation=continuation,
                 source=self._source_of(job),
+                problem=problem,
             )
             if not result.ok:
                 return self._invocation_failed(job, result)
@@ -6688,6 +6692,30 @@ class Engine:
                 return self._fail(job, f"devops: {exc}")
             touched.extend(t for t in written if t not in touched)
             summaries.append(result.output.summary)
+            if not written:
+                # A part that writes nothing will not write anything on the next part
+                # either: it once said five times over that the context lacked what it
+                # needed and the development failed. Asked once more, with the reason
+                # spelled out -- then it stops, rather than spending parts on refusals.
+                if touched or problem is not None:
+                    break
+                problem = (
+                    "You wrote no files. Every approved path in `deploy` must be written: "
+                    "take the commands from `project_files` (the manifests, the current "
+                    "pipeline and the phases' files) and `project`, and never answer that "
+                    "the context is missing something instead of writing the files."
+                )
+                self.store.note(
+                    job.id,
+                    note="devops: wrote no files; asking once more",
+                    detail=result.output.summary,
+                )
+                job.history = self.store.get(job.id).history
+                job.data.output_hashes = {}  # the refusal changes the input: not a loop
+                self.store.save(job)
+                part -= 1  # a refusal is not a part of the work
+                continue
+            problem = None
             if result.output.phase_complete or part == self.max_phase_parts:
                 break
             g.stage_all(worktree)

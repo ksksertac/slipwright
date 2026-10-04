@@ -337,6 +337,12 @@ behaviour deliberately changed, rewrite it to state the new rule -- do not weake
   looked at the code. `_final_gate_blame` decides: no tests written, or QA reads
   `code_is_wrong`, and the specialist fixes it with QA's reading in front of the log
   (`_fix_what_the_tests_found`, the red-CI call); only `test_is_wrong` goes back to QA.
+- **DevOps writes from the project, not from `deployment/` alone.** Both its stages get
+  `project_files` (`devops.project_view`): the tree, the manifests, the pipeline the host
+  already runs and the files the plan's phases wrote. Shown only its own folder, it once
+  refused five parts in a row -- "package.json and the current CI are not in the
+  context" -- and failed the development. A part that writes nothing is asked once more
+  with the reason, then the loop stops instead of spending parts on refusals.
 - **A re-plan asked while a phase runs is a halt that carries on** (`_Halt("redirect")`):
   the run stops before its next call and goes to the Architect with the built phases kept
   (`_replan_from`), instead of ending. A stop or a pause that overtakes it marks it
