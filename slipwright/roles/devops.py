@@ -16,7 +16,15 @@ from typing import Any
 
 from slipwright.invoke import RoleResult, invoke_role
 from slipwright.providers import ModelProvider
-from slipwright.roles.common import base_context, plan_outline, project_facts, where_it_runs
+from slipwright.roles.common import (
+    MANIFEST_FILES,
+    base_context,
+    list_tree,
+    plan_outline,
+    project_facts,
+    read_files,
+    where_it_runs,
+)
 from slipwright.roles.developer import IN_PARTS
 from slipwright.roles.results import DeployPlan, DeveloperResult
 from slipwright.schemas.job import Job, JobState
@@ -92,6 +100,48 @@ def outside(paths: Iterable[str], source: str) -> list[str]:
     )
 
 
+#: How many of the files the plan's phases name are sent along, and how much of each: the
+#: package scripts, the checks and the tools the phases wrote are what a pipeline runs.
+PHASE_FILES = 30
+PHASE_FILE_BYTES = 6_000
+
+
+def project_view(worktree: Path | None, plan: dict[str, Any] | None, source: str) -> dict[str, Any]:
+    """What DevOps reads of the project before it plans or writes a pipeline: the tree,
+    the manifests (``package.json``, ``pyproject.toml`` ...), the pipeline the host
+    already runs, and the files the plan's phases wrote.
+
+    It used to see only ``deployment/``. Asked for a pipeline that packages a desktop app
+    for three platforms, it had no ``package.json`` to take the commands from and no
+    existing workflow whose checks it must keep, said so five times over -- "the packaging
+    commands, the archive paths and the current CI are not in the context" -- wrote
+    nothing, and the development failed at DevOps.
+    """
+    if worktree is None or not worktree.is_dir():
+        return {}
+    ci = ci_path(source)
+    pipelines: list[str] = []
+    if ci.endswith("/") and (worktree / ci).is_dir():
+        pipelines = sorted(
+            f"{ci}{p.name}" for p in (worktree / ci).iterdir() if p.suffix in (".yml", ".yaml")
+        )
+    elif ci:
+        pipelines = [ci]
+    named = [
+        str(f)
+        for phase in (plan or {}).get("phases", [])
+        for f in phase.get("files", []) or []
+        if isinstance(f, str)
+    ]
+    wanted = [f for f in dict.fromkeys(named) if f not in MANIFEST_FILES][:PHASE_FILES]
+    return {
+        "tree": list_tree(worktree, first=wanted),
+        "manifests": read_files(worktree, MANIFEST_FILES),
+        "current_pipeline": read_files(worktree, pipelines),
+        "phase_files": read_files(worktree, wanted, max_bytes=PHASE_FILE_BYTES),
+    }
+
+
 PLAN_INSTRUCTIONS = """\
 Read the architecture and propose how this project is deployed. Pick the `target` the
 project already points at — its existing infrastructure files, SDKs and services decide
@@ -128,7 +178,10 @@ accounts, secrets, domains, quotas.
 
 A person reads this and can change it before a single file is written, so say what you
 mean in `summary`: what will be deployed where, and what it will cost them to run --
-in money per month, not in adjectives."""
+in money per month, not in adjectives.
+`project_files` is the project as it stands: its `tree`, its `manifests` (the build and
+package scripts are there), the `current_pipeline` and the files the phases wrote. Read
+the commands from there."""
 
 WRITE_INSTRUCTIONS = """\
 Write the deployment files that were approved in `deploy`, exactly those paths and
@@ -141,7 +194,16 @@ written into a file. Take the build, test and run commands from `project`, and t
 region, service names and sizing from the approved plan. Include the README the plan
 names, at `deployment/README.md`, written for someone deploying this for the first time:
 what to install, what to set, what to run, in order. If a file in `existing` is already
-right, return it unchanged rather than inventing a second one."""
+right, return it unchanged rather than inventing a second one.
+`project_files` holds what you need to write them: the `tree`, the `manifests` with the
+project's own scripts (`package.json`'s `scripts`, `pyproject.toml`, the Makefile), the
+`current_pipeline` -- keep every check it already runs when you rewrite it -- and the
+`phase_files` the developers wrote, the packaging and verification tools among them.
+Take every command from there or from `project`. Never answer that something is missing
+from the context and write nothing: a pipeline that runs the project's own build and test
+commands is always possible, and is the least this answer must contain. If a detail
+really cannot be known -- a secret, an account -- read it from the host's secret store or
+an input and say so in the deployment README."""
 
 
 def plan_deploy(
@@ -181,6 +243,7 @@ def plan_deploy(
     context["where_it_runs"] = where_it_runs()
     context["pipeline_file"] = pipeline
     context["existing"] = sorted(existing or {})
+    context["project_files"] = project_view(job.worktree_path, job.data.plan, source)
     context["previous_proposal"] = job.data.deploy
     if problem:
         context["previous_answer_problem"] = problem
@@ -202,6 +265,7 @@ def write_deployment(
     truncated: str | None = None,
     continuation: dict[str, Any] | None = None,
     source: str = "github",
+    problem: str | None = None,
 ) -> RoleResult:
     """Stage two: write the approved scripts into the project's deployment folder.
 
@@ -214,18 +278,26 @@ def write_deployment(
     instructions = WRITE_INSTRUCTIONS
     if truncated or continuation:
         instructions += IN_PARTS
+    if problem:
+        instructions += (
+            "\nYour previous answer was rejected (`previous_answer_problem`); answer again "
+            "and fix exactly that."
+        )
     context = base_context(job, instructions=instructions, jira=jira, standards=standards)
     context["where_it_runs"] = where_it_runs()
     if truncated:
         context["output_was_truncated"] = truncated
     if continuation:
         context["continuation"] = continuation
+    if problem:
+        context["previous_answer_problem"] = problem
     context["deploy"] = job.data.deploy
     context["plan"] = plan_outline(job.data.plan)
     context["project"] = project_facts(profile)
     context["deployment_folder"] = DEPLOY_FOLDER
     context["pipeline_file"] = pipeline_file(source, job.worktree_path) or DEPLOY_FOLDER + "/"
     context["existing"] = existing or {}
+    context["project_files"] = project_view(job.worktree_path, job.data.plan, source)
     kwargs = {} if timeout_s is None else {"timeout_s": timeout_s}
     return invoke_role(
         RoleName.DEVOPS,
