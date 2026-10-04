@@ -289,6 +289,10 @@ behaviour deliberately changed, rewrite it to state the new rule -- do not weake
 - **Nothing may depend on a platform phase.** Phases nothing here can build are moved
   behind the rest (`_put_unbuildable_last`); the Architect is told so. A plan where a
   backend phase needs what an iOS phase wrote would wait forever on a Windows server.
+- **A web phase is not a screen.** The Designer and its gate follow `draws_screens`
+  (`roles/results.py`): a web or mobile phase whose `new_screens` is `false` only wires
+  screens that exist, and is neither drawn for nor stopped. Ask "is this a screen?" through
+  it, never through `domain` alone. A stored phase that does not say is drawn for.
 - **Alembic is quiet on purpose.** It narrates at INFO, which once landed in a CLI's
   stdout and corrupted a token it printed. `store/migrate.py` sets it to WARNING.
 - **A new database is created and stamped in one transaction.** Both engines run DDL

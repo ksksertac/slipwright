@@ -127,12 +127,26 @@ class PlanPhase(BaseModel):
         "None for mobile code shared by both (React Native, Flutter) and for every other "
         "domain. The phase is built with that platform's commands, where it can be built.",
     )
+    new_screens: bool | None = Field(
+        default=None,
+        description="For a web or mobile phase: true when a person will see a screen that "
+        "is new or laid out differently, false when it only wires, fixes or moves code "
+        "behind screens that already exist. None for every other domain.",
+    )
 
     @model_validator(mode="after")
     def _platform_is_mobile(self) -> PlanPhase:
         if self.platform is not None and self.domain != "mobile":
             raise ValueError(f"only a mobile phase names a platform, not a {self.domain} one")
         return self
+
+
+def draws_screens(phase: dict[str, Any]) -> bool:
+    """Whether a stored phase is one the Designer draws for. A web phase that only wired an
+    existing screen to a desktop bridge once cost a drawing and a thirteen-minute approval
+    of screens nobody was going to change; the Architect now says which phases those are.
+    A phase that does not say (a plan from before it) is drawn for, as it always was."""
+    return phase.get("domain") in ("web", "mobile") and phase.get("new_screens") is not False
 
 
 def unbuilt_platforms(phases: list[PlanPhase], profile: Profile) -> list[str]:

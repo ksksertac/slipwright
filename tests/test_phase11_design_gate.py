@@ -94,6 +94,51 @@ def test_a_backend_only_plan_never_stops_for_screens(
     assert not any(t.to_state is JobState.AWAITING_DESIGN_APPROVAL for t in job.history)
 
 
+def test_a_web_phase_that_draws_no_new_screen_is_not_designed_for(
+    store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
+) -> None:
+    """Wiring a screen that already exists to a desktop bridge once cost a drawing of it
+    and a thirteen-minute wait for a yes to a screen nobody was changing."""
+    provider = full_provider(seed, phases=2)
+    set_plan(
+        provider,
+        seed,
+        [
+            {"goal": "the bridge", "files": ["OK"], "domain": "backend"},
+            {"goal": "wire the screen", "files": ["OK"], "domain": "web", "new_screens": False},
+        ],
+    )
+    engine = full_engine(store, worktrees_root, seed, provider)
+    job = _to_the_gate(engine, repo)
+
+    assert not any(t.to_state is JobState.DESIGN for t in job.history)
+    assert not any(t.to_state is JobState.AWAITING_DESIGN_APPROVAL for t in job.history)
+    assert [r for r in provider.requests if r.role is RoleName.DESIGNER] == []
+    assert job.state is JobState.AWAITING_TEST_APPROVAL  # both phases built, no stop
+
+
+def test_only_the_phase_that_draws_waits_for_the_screens(
+    store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
+) -> None:
+    provider = full_provider(seed, phases=2)
+    set_plan(
+        provider,
+        seed,
+        [
+            {"goal": "wire the old screen", "files": ["OK"], "domain": "web", "new_screens": False},
+            {"goal": "the new screen", "files": ["OK"], "domain": "web", "new_screens": True},
+        ],
+    )
+    engine = full_engine(store, worktrees_root, seed, provider)
+    job = _to_the_gate(engine, repo)
+
+    # the Designer is asked for the new screen only, not the one being wired
+    assert [p["goal"] for p in designer.ui_phases(job)] == ["the new screen"]
+    assert any(r.role is RoleName.DESIGNER for r in provider.requests)
+    assert job.state is JobState.AWAITING_DESIGN_APPROVAL
+    assert job.data.phase_index == 1  # the wiring phase did not wait
+
+
 def test_approving_the_last_screen_carries_the_development_on(
     store: JobStore, repo: Path, worktrees_root: Path, seed: Profile
 ) -> None:
